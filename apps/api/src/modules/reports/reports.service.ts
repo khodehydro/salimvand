@@ -1,12 +1,20 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service';
+
+function parseReportDate(value: string | undefined, field: string): Date | undefined {
+  if (!value) return undefined;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) throw new BadRequestException(`${field} تاریخ معتبر نیست`);
+  return date;
+}
 
 @Injectable()
 export class ReportsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async sales(from?: string, to?: string) {
-    const where = { status: 'issued' as const, ...(from || to ? { issuedAt: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } } : {}) };
+    const fromDate = parseReportDate(from, 'از'); const toDate = parseReportDate(to, 'تا');
+    const where = { status: 'issued' as const, ...(fromDate || toDate ? { issuedAt: { ...(fromDate ? { gte: fromDate } : {}), ...(toDate ? { lte: toDate } : {}) } } : {}) };
     const invoices = await this.prisma.invoice.findMany({ where, orderBy: { issuedAt: 'asc' }, select: { id: true, number: true, issuedAt: true, total: true, paidAmount: true, paymentStatus: true, items: { select: { productName: true, quantity: true, lineTotal: true } } } }) as Array<{ id: string; number: string; issuedAt: Date; total: bigint; paidAmount: bigint; paymentStatus: string; items: Array<{ productName: string; quantity: number; lineTotal: bigint }> }>;
     const products = new Map<string, { name: string; quantity: number; revenue: bigint }>();
     for (const invoice of invoices) for (const item of invoice.items) { const current = products.get(item.productName) ?? { name: item.productName, quantity: 0, revenue: 0n }; current.quantity += item.quantity; current.revenue += item.lineTotal; products.set(item.productName, current); }
@@ -37,7 +45,8 @@ export class ReportsService {
   }
 
   async profit(from?: string, to?: string) {
-    const where = { status: 'issued' as const, ...(from || to ? { issuedAt: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } } : {}) };
+    const fromDate = parseReportDate(from, 'از'); const toDate = parseReportDate(to, 'تا');
+    const where = { status: 'issued' as const, ...(fromDate || toDate ? { issuedAt: { ...(fromDate ? { gte: fromDate } : {}), ...(toDate ? { lte: toDate } : {}) } } : {}) };
     const invoices = await this.prisma.invoice.findMany({ where, select: { items: { select: { productName: true, quantity: true, unitPrice: true, inventoryItem: { select: { purchasePrice: true, brand: { select: { name: true } } } } } } } });
     const byBrand = new Map<string, { brand: string; quantity: number; revenue: bigint; cost: bigint; profit: bigint }>();
     for (const invoice of invoices) for (const item of invoice.items) { const brand = item.inventoryItem.brand.name; const row = byBrand.get(brand) ?? { brand, quantity: 0, revenue: 0n, cost: 0n, profit: 0n }; const quantity = BigInt(item.quantity); row.quantity += item.quantity; row.revenue += item.unitPrice * quantity; row.cost += item.inventoryItem.purchasePrice * quantity; row.profit += (item.unitPrice - item.inventoryItem.purchasePrice) * quantity; byBrand.set(brand, row); }
