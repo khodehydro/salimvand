@@ -1,10 +1,11 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service';
 
-function parseReportDate(value: string | undefined, field: string): Date | undefined {
+function parseReportDate(value: string | undefined, field: string, endOfDay = false): Date | undefined {
   if (!value) return undefined;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) throw new BadRequestException(`${field} تاریخ معتبر نیست`);
+  if (endOfDay && /^\d{4}-\d{2}-\d{2}$/.test(value)) date.setUTCHours(23, 59, 59, 999);
   return date;
 }
 
@@ -13,7 +14,7 @@ export class ReportsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async sales(from?: string, to?: string) {
-    const fromDate = parseReportDate(from, 'از'); const toDate = parseReportDate(to, 'تا');
+    const fromDate = parseReportDate(from, 'از'); const toDate = parseReportDate(to, 'تا', true);
     if (fromDate && toDate && fromDate > toDate) throw new BadRequestException('بازهٔ تاریخ گزارش نامعتبر است');
     const where = { status: 'issued' as const, ...(fromDate || toDate ? { issuedAt: { ...(fromDate ? { gte: fromDate } : {}), ...(toDate ? { lte: toDate } : {}) } } : {}) };
     const invoices = await this.prisma.invoice.findMany({ where, orderBy: { issuedAt: 'asc' }, select: { id: true, number: true, issuedAt: true, total: true, paidAmount: true, paymentStatus: true, items: { select: { productName: true, quantity: true, lineTotal: true } } } }) as Array<{ id: string; number: string; issuedAt: Date; total: bigint; paidAmount: bigint; paymentStatus: string; items: Array<{ productName: string; quantity: number; lineTotal: bigint }> }>;
@@ -46,7 +47,7 @@ export class ReportsService {
   }
 
   async profit(from?: string, to?: string) {
-    const fromDate = parseReportDate(from, 'از'); const toDate = parseReportDate(to, 'تا');
+    const fromDate = parseReportDate(from, 'از'); const toDate = parseReportDate(to, 'تا', true);
     if (fromDate && toDate && fromDate > toDate) throw new BadRequestException('بازهٔ تاریخ گزارش نامعتبر است');
     const where = { status: 'issued' as const, ...(fromDate || toDate ? { issuedAt: { ...(fromDate ? { gte: fromDate } : {}), ...(toDate ? { lte: toDate } : {}) } } : {}) };
     const invoices = await this.prisma.invoice.findMany({ where, select: { items: { select: { productName: true, quantity: true, unitPrice: true, inventoryItem: { select: { purchasePrice: true, brand: { select: { name: true } } } } } } } });
