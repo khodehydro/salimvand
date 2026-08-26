@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
+import { writeAudit } from '../../common/audit/audit-log';
 import { calculateInvoiceTotals, InvoiceLineInput } from './invoice.rules';
 import { createPublicToken, hashPublicToken } from './public-token';
 
@@ -37,6 +38,7 @@ export class InvoiceService {
       const created = await tx.invoice.create({ data: { number, publicTokenHash: publicToken.hash, customerName: input.customerName?.trim() || undefined, customerMobile: input.customerMobile?.trim() || undefined, subtotal: totals.subtotal, discount: totals.discount, total: totals.total, issuedById: userId, items: { create: lines.map((line) => ({ inventoryItemId: line.inventoryItemId, productName: line.productName, quantity: line.quantity, unitPrice: line.unitPrice, lineTotal: BigInt(line.quantity) * line.unitPrice })) } }, include: { items: true } });
       for (const line of lines) await tx.inventoryTransaction.create({ data: { itemId: line.inventoryItemId, type: 'sale', quantityChange: -line.quantity, quantityAfter: 0, userId, refType: 'invoice', refId: created.id, reason: `صدور فاکتور ${number}` } });
       // Refresh quantityAfter from the transactionally updated rows.
+      await writeAudit(tx, { userId, action: 'issue', entityType: 'invoice', entityId: created.id, after: { number, total: totals.total.toString() } });
       for (const line of lines) { const item = await tx.inventoryItem.findUniqueOrThrow({ where: { id: line.inventoryItemId }, select: { quantity: true } }); await tx.inventoryTransaction.updateMany({ where: { itemId: line.inventoryItemId, refId: created.id }, data: { quantityAfter: item.quantity } }); }
       return created;
     });
@@ -68,6 +70,7 @@ export class InvoiceService {
         await tx.inventoryTransaction.create({ data: { itemId: item.id, type: 'return', quantityChange: line.quantity, quantityAfter: item.quantity, userId, refType: 'invoice', refId: invoice.id, reason: `ابطال فاکتور ${invoice.number}` } });
       }
       const updated = await tx.invoice.update({ where: { id }, data: { status: 'voided', voidedAt: new Date() }, include: { items: true } });
+      await writeAudit(tx, { userId, action: 'void', entityType: 'invoice', entityId: id, before: { status: invoice.status, number: invoice.number }, after: { status: updated.status } });
       return { ok: true, data: updated };
     });
   }
