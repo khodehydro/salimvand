@@ -1,0 +1,16 @@
+node_modules/
+.pnpm-store/
+.next/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+uploads/
+*.log
+.DS_Store
+
+*.tsbuildinfo
+
+# GitHub App lacks workflow permission in this environment
+.github/workflows/

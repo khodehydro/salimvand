@@ -1,0 +1,31 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: parts_store
+      POSTGRES_USER: parts_store
+      POSTGRES_PASSWORD: parts_store_dev
+    ports: ['5432:5432']
+    volumes: [postgres_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U parts_store -d parts_store']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --requirepass redis_dev --appendonly yes
+    ports: ['6379:6379']
+    volumes: [redis_data:/data]
+    healthcheck:
+      test: ['CMD', 'redis-cli', '-a', 'redis_dev', '--no-auth-warning', 'PING']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+volumes:
+  postgres_data:
+  redis_data:

@@ -1,0 +1,22 @@
+{
+  "name": "salimvand",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Salim Vand auto parts catalog and store ERP",
+  "packageManager": "pnpm@9.15.0",
+  "engines": { "node": ">=20.0.0" },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @salimvand/api --filter @salimvand/website --filter @salimvand/admin dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.30",
+    "prettier": "^3.5.3",
+    "typescript": "^5.8.2"
+  }
+}

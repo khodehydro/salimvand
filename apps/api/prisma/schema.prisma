@@ -1,0 +1,316 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ProductStatus {
+  active
+  hidden
+}
+enum AvailabilityOverride {
+  coming_soon
+  discontinued
+}
+enum LocationType {
+  warehouse
+  aisle
+  shelf
+  level
+  box
+}
+enum InventoryTransactionType {
+  initial
+  purchase
+  sale
+  return
+  adjustment
+  transfer
+}
+enum InvoiceStatus {
+  issued
+  voided
+}
+enum PaymentStatus {
+  paid
+  partial
+  unpaid
+}
+enum PaymentMethod {
+  cash
+  card
+  transfer
+  credit
+}
+enum UserRole {
+  super_admin
+  manager
+  seller
+  warehouse
+  accountant
+}
+
+enum AuditAction {
+  create
+  update
+  delete
+  restore
+  adjust
+  issue
+  void
+  pay
+  return
+  login
+}
+
+model Category {
+  id        String     @id @default(uuid()) @db.Uuid
+  parentId  String?    @db.Uuid
+  name      String     @db.VarChar(100)
+  slug      String     @unique @db.VarChar(100)
+  code      String     @unique @db.VarChar(10)
+  sort      Int        @default(0)
+  isActive  Boolean    @default(true)
+  products  Product[]
+  parent    Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children  Category[] @relation("CategoryTree")
+  createdAt DateTime   @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime   @updatedAt @db.Timestamptz(6)
+  @@index([parentId, isActive])
+  @@map("categories")
+}
+
+model Brand {
+  id             String          @id @default(uuid()) @db.Uuid
+  name           String          @unique @db.VarChar(100)
+  isActive       Boolean         @default(true)
+  inventoryItems InventoryItem[]
+  createdAt      DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime        @updatedAt @db.Timestamptz(6)
+  @@map("brands")
+}
+
+model Product {
+  id                    String                 @id @default(uuid()) @db.Uuid
+  code                  String                 @unique @db.VarChar(30)
+  slug                  String                 @unique @db.VarChar(220)
+  name                  String                 @db.VarChar(200)
+  categoryId            String                 @db.Uuid
+  description           String?
+  specs                 Json?
+  partNumber            String?                @db.VarChar(60)
+  aparatVideoId         String?                @db.VarChar(30)
+  status                ProductStatus          @default(active)
+  availabilityOverride  AvailabilityOverride?
+  seoTitle              String?                @db.VarChar(255)
+  seoDescription        String?                @db.VarChar(320)
+  seoKeywords           String[]               @default([])
+  deletedAt             DateTime?              @db.Timestamptz(6)
+  category              Category               @relation(fields: [categoryId], references: [id])
+  images                ProductImage[]
+  compatibilities       ProductVehicleCompat[]
+  inventoryItems        InventoryItem[]
+  createdAt             DateTime               @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime               @updatedAt @db.Timestamptz(6)
+  @@index([categoryId, deletedAt])
+  @@index([partNumber])
+  @@map("products")
+}
+
+model ProductImage {
+  id        String   @id @default(uuid()) @db.Uuid
+  productId String   @db.Uuid
+  path      String   @db.VarChar(255)
+  alt       String?  @db.VarChar(255)
+  sort      Int      @default(0)
+  isPrimary Boolean  @default(false)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  @@index([productId, sort])
+  @@map("product_images")
+}
+
+model VehicleMake {
+  id      String         @id @default(uuid()) @db.Uuid
+  name    String         @unique @db.VarChar(100)
+  models  VehicleModel[]
+  @@map("vehicle_makes")
+}
+
+model VehicleModel {
+  id             String                 @id @default(uuid()) @db.Uuid
+  makeId         String                 @db.Uuid
+  name           String                 @db.VarChar(100)
+  productionFrom Int?
+  productionTo   Int?
+  make           VehicleMake            @relation(fields: [makeId], references: [id])
+  trims          VehicleTrim[]
+  compatibilities ProductVehicleCompat[]
+  @@unique([makeId, name])
+  @@map("vehicle_models")
+}
+
+model VehicleTrim {
+  id              String                 @id @default(uuid()) @db.Uuid
+  modelId         String                 @db.Uuid
+  name            String                 @db.VarChar(100)
+  model           VehicleModel            @relation(fields: [modelId], references: [id])
+  compatibilities ProductVehicleCompat[]
+  @@unique([modelId, name])
+  @@map("vehicle_trims")
+}
+
+model ProductVehicleCompat {
+  id        String       @id @default(uuid()) @db.Uuid
+  productId String       @db.Uuid
+  modelId   String       @db.Uuid
+  trimId    String?      @db.Uuid
+  product   Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  model     VehicleModel @relation(fields: [modelId], references: [id])
+  trim      VehicleTrim?  @relation(fields: [trimId], references: [id])
+  @@unique([productId, modelId, trimId])
+  @@index([modelId, trimId])
+  @@map("product_vehicle_compat")
+}
+
+model Location {
+  id       String      @id @default(uuid()) @db.Uuid
+  parentId String?     @db.Uuid
+  type     LocationType
+  code     String      @db.VarChar(20)
+  name     String      @db.VarChar(100)
+  parent   Location?   @relation("LocationTree", fields: [parentId], references: [id])
+  children Location[]  @relation("LocationTree")
+  items    InventoryItem[]
+  @@unique([parentId, code])
+  @@map("locations")
+}
+
+model InventoryItem {
+  id           String                 @id @default(uuid()) @db.Uuid
+  productId    String                 @db.Uuid
+  brandId      String                 @db.Uuid
+  barcode      String                 @unique @db.VarChar(20)
+  quantity     Int                    @default(0)
+  purchasePrice BigInt                @default(0)
+  salePrice    BigInt                 @default(0)
+  minStock     Int?
+  locationId   String?                @db.Uuid
+  notes        String?
+  isActive     Boolean                @default(true)
+  product      Product                @relation(fields: [productId], references: [id])
+  brand        Brand                  @relation(fields: [brandId], references: [id])
+  location     Location?              @relation(fields: [locationId], references: [id])
+  transactions InventoryTransaction[]
+  invoiceItems InvoiceItem[]
+  @@unique([productId, brandId])
+  @@index([productId])
+  @@index([locationId])
+  @@map("inventory_items")
+}
+
+model InventoryTransaction {
+  id             BigInt                    @id @default(autoincrement())
+  itemId         String                    @db.Uuid
+  type           InventoryTransactionType
+  quantityChange Int
+  quantityAfter  Int
+  refType        String?                   @db.VarChar(30)
+  refId          String?                   @db.Uuid
+  reason         String?                   @db.VarChar(255)
+  userId         String                    @db.Uuid
+  item           InventoryItem             @relation(fields: [itemId], references: [id])
+  user           User                      @relation(fields: [userId], references: [id])
+  createdAt      DateTime                  @default(now()) @db.Timestamptz(6)
+  @@index([itemId, createdAt(sort: Desc)])
+  @@map("inventory_transactions")
+}
+
+model User {
+  id           String                 @id @default(uuid()) @db.Uuid
+  name         String                 @db.VarChar(150)
+  username     String                 @unique @db.VarChar(100)
+  passwordHash String
+  role         UserRole
+  mobile       String?                @db.VarChar(20)
+  isActive     Boolean                @default(true)
+  lastLoginAt  DateTime?              @db.Timestamptz(6)
+  transactions InventoryTransaction[]
+  refreshTokens RefreshToken[]
+  auditLogs AuditLog[]
+  invoices Invoice[]
+  createdAt    DateTime               @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime               @updatedAt @db.Timestamptz(6)
+  @@map("users")
+}
+
+model Counter {
+  key       String @id @db.VarChar(100)
+  lastValue BigInt @default(0)
+  @@map("counters")
+}
+
+
+model Invoice {
+  id           String        @id @default(uuid()) @db.Uuid
+  number       String        @unique @db.VarChar(30)
+  publicTokenHash String     @unique @db.VarChar(128)
+  status       InvoiceStatus @default(issued)
+  customerName String?       @db.VarChar(150)
+  customerMobile String?     @db.VarChar(20)
+  subtotal     BigInt        @default(0)
+  discount     BigInt        @default(0)
+  total        BigInt        @default(0)
+  issuedById   String        @db.Uuid
+  issuedBy     User          @relation(fields: [issuedById], references: [id])
+  items        InvoiceItem[]
+  issuedAt     DateTime      @default(now()) @db.Timestamptz(6)
+  voidedAt     DateTime?     @db.Timestamptz(6)
+  @@index([status, issuedAt])
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id           String        @id @default(uuid()) @db.Uuid
+  invoiceId    String        @db.Uuid
+  inventoryItemId String     @db.Uuid
+  productName  String        @db.VarChar(200)
+  quantity     Int
+  unitPrice    BigInt
+  lineTotal    BigInt
+  invoice      Invoice       @relation(fields: [invoiceId], references: [id])
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  @@index([invoiceId])
+  @@map("invoice_items")
+}
+
+model RefreshToken {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @db.Uuid
+  tokenHash   String   @unique
+  expiresAt   DateTime @db.Timestamptz(6)
+  revokedAt   DateTime? @db.Timestamptz(6)
+  createdByIp String?  @db.VarChar(64)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+  @@index([userId, revokedAt])
+  @@map("refresh_tokens")
+}
+
+model AuditLog {
+  id         BigInt   @id @default(autoincrement())
+  userId     String?  @db.Uuid
+  action     String   @db.VarChar(60)
+  entityType String   @db.VarChar(60)
+  entityId   String?  @db.Uuid
+  before     Json?
+  after      Json?
+  ip         String?  @db.VarChar(64)
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

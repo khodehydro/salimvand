@@ -1,0 +1,18 @@
+[Unit]
+Description=Salim Vand API
+After=network-online.target postgresql.service redis.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=salimvand
+Group=salimvand
+WorkingDirectory=/opt/salimvand
+EnvironmentFile=/opt/salimvand/.env
+ExecStart=/usr/bin/node /opt/salimvand/apps/api/dist/main.js
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
