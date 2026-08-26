@@ -26,7 +26,8 @@ export TZ=UTC
 echo "Fetching $BRANCH..."
 git fetch --prune origin "$BRANCH"
 git checkout --detach "origin/$BRANCH"
-"${PNPM[@]}" install --frozen-lockfile
+# Build, Prisma CLI and seed use devDependencies; production mode must not omit them.
+"${PNPM[@]}" install --frozen-lockfile --prod=false
 "${PNPM[@]}" --filter @salimvand/api exec prisma generate
 "${PNPM[@]}" --filter @salimvand/api exec prisma migrate deploy
 "${PNPM[@]}" --filter @salimvand/api prisma:seed
