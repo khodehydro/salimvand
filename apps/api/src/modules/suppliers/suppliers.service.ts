@@ -1,0 +1,34 @@
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { PrismaService } from '../../prisma.service';
+import { writeAudit } from '../../common/audit/audit-log';
+
+type SupplierInput = { name?: string; mobile?: string; phone?: string; address?: string; taxId?: string; notes?: string };
+
+@Injectable()
+export class SuppliersService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async list() {
+    const suppliers = await this.prisma.supplier.findMany({ where: { deletedAt: null }, orderBy: { createdAt: 'desc' } });
+    return { ok: true, data: suppliers };
+  }
+
+  async create(input: SupplierInput, actorId: string, ip?: string) {
+    const name = input.name?.trim();
+    if (!name) throw new BadRequestException('نام تأمین‌کننده الزامی است');
+    const supplier = await this.prisma.supplier.create({ data: { name, mobile: input.mobile?.trim() || null, phone: input.phone?.trim() || null, address: input.address?.trim() || null, taxId: input.taxId?.trim() || null, notes: input.notes?.trim() || null } });
+    await writeAudit(this.prisma, { userId: actorId, ip, action: 'create', entityType: 'supplier', entityId: supplier.id, after: { name: supplier.name } });
+    return { ok: true, data: supplier };
+  }
+
+  async update(id: string, input: SupplierInput & { isActive?: boolean }, actorId: string, ip?: string) {
+    const before = await this.prisma.supplier.findFirst({ where: { id, deletedAt: null } });
+    if (!before) throw new NotFoundException('تأمین‌کننده پیدا نشد');
+    const data = { ...(input.name !== undefined ? { name: input.name.trim() } : {}), ...(input.mobile !== undefined ? { mobile: input.mobile.trim() || null } : {}), ...(input.phone !== undefined ? { phone: input.phone.trim() || null } : {}), ...(input.address !== undefined ? { address: input.address.trim() || null } : {}), ...(input.taxId !== undefined ? { taxId: input.taxId.trim() || null } : {}), ...(input.notes !== undefined ? { notes: input.notes.trim() || null } : {}), ...(input.isActive !== undefined ? { isActive: input.isActive } : {}) };
+    if (data.name === '') throw new BadRequestException('نام تأمین‌کننده الزامی است');
+    if (!Object.keys(data).length) throw new BadRequestException('تغییری برای ذخیره ارسال نشده است');
+    const supplier = await this.prisma.supplier.update({ where: { id }, data });
+    await writeAudit(this.prisma, { userId: actorId, ip, action: 'update', entityType: 'supplier', entityId: id, before: { name: before.name, isActive: before.isActive }, after: { name: supplier.name, isActive: supplier.isActive } });
+    return { ok: true, data: supplier };
+  }
+}
