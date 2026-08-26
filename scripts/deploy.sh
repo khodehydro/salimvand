@@ -61,5 +61,13 @@ systemctl daemon-reload
 systemctl enable --now salimvand-api.service salimvand-website.service salimvand-worker.service
 systemctl restart salimvand-api.service salimvand-website.service salimvand-worker.service
 
-curl --fail --silent --show-error --retry 10 --retry-delay 2 http://127.0.0.1:4000/api/v1/health/ready >/dev/null
-echo "Release $(git rev-parse --short HEAD) is live."
+for attempt in $(seq 1 30); do
+  if curl --fail --silent --show-error http://127.0.0.1:4000/api/v1/health/ready >/dev/null; then
+    echo "Release $(git rev-parse --short HEAD) is live."
+    exit 0
+  fi
+  sleep 2
+done
+echo 'API did not become ready within 60 seconds.' >&2
+systemctl status salimvand-api.service --no-pager -l >&2 || true
+exit 1
