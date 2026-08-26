@@ -3,6 +3,7 @@ import { PrismaService } from '../../prisma.service';
 import { Prisma } from '@prisma/client';
 import { createEan13 } from '@salimvand/shared';
 import { calculateNextQuantity } from './inventory.rules';
+import { writeAudit } from '../../common/audit/audit-log';
 
 export type StockMutation = { itemId: string; quantity: number; userId: string; reason?: string; refType?: string; refId?: string };
 
@@ -73,6 +74,7 @@ export class InventoryService {
       const next = calculateNextQuantity(item.quantity, input.quantity, input.reason);
       const updated = await tx.inventoryItem.update({ where: { id: item.id }, data: { quantity: next } });
       const transaction = await tx.inventoryTransaction.create({ data: { itemId: item.id, type, quantityChange: input.quantity, quantityAfter: next, userId: input.userId, reason: input.reason, refType: input.refType, refId: input.refId } });
+      await writeAudit(tx, { userId: input.userId, action: type === 'purchase' ? 'receive' : 'adjust', entityType: 'inventory_item', entityId: item.id, before: { quantity: item.quantity }, after: { quantity: next, transactionId: String(transaction.id) } });
       return { ok: true, data: { item: updated, transaction } };
     });
   }
