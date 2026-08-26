@@ -34,6 +34,10 @@ enum InvoiceStatus {
   issued
   voided
 }
+enum PurchaseStatus {
+  issued
+  voided
+}
 enum PaymentStatus {
   paid
   partial
@@ -205,6 +209,7 @@ model InventoryItem {
   location     Location?              @relation(fields: [locationId], references: [id])
   transactions InventoryTransaction[]
   invoiceItems InvoiceItem[]
+  purchaseItems PurchaseInvoiceItem[]
   @@unique([productId, brandId])
   @@index([productId])
   @@index([locationId])
@@ -241,6 +246,7 @@ model User {
   refreshTokens RefreshToken[]
   auditLogs AuditLog[]
   settings  Setting[]
+  purchaseInvoices PurchaseInvoice[]
   invoices Invoice[]
   payments Payment[]
   customerPayments CustomerPayment[]
@@ -298,7 +304,40 @@ model Supplier {
   createdAt DateTime @default(now()) @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @db.Timestamptz(6)
   @@index([isActive, deletedAt])
+  purchases PurchaseInvoice[]
   @@map("suppliers")
+}
+
+model PurchaseInvoice {
+  id             String         @id @default(uuid()) @db.Uuid
+  number         String         @unique @db.VarChar(30)
+  supplierId     String         @db.Uuid
+  supplierName   String         @db.VarChar(150)
+  subtotal       BigInt         @default(0)
+  total          BigInt         @default(0)
+  paidAmount     BigInt         @default(0)
+  status         PurchaseStatus @default(issued)
+  issuedById     String         @db.Uuid
+  supplier       Supplier       @relation(fields: [supplierId], references: [id])
+  issuedBy       User           @relation(fields: [issuedById], references: [id])
+  items          PurchaseInvoiceItem[]
+  issuedAt       DateTime       @default(now()) @db.Timestamptz(6)
+  @@index([supplierId, issuedAt])
+  @@map("purchase_invoices")
+}
+
+model PurchaseInvoiceItem {
+  id               String         @id @default(uuid()) @db.Uuid
+  invoiceId        String         @db.Uuid
+  inventoryItemId  String         @db.Uuid
+  productName      String         @db.VarChar(200)
+  quantity         Int
+  unitPrice        BigInt
+  lineTotal        BigInt
+  invoice          PurchaseInvoice @relation(fields: [invoiceId], references: [id])
+  inventoryItem    InventoryItem   @relation(fields: [inventoryItemId], references: [id])
+  @@index([invoiceId])
+  @@map("purchase_invoice_items")
 }
 
 model Customer {
