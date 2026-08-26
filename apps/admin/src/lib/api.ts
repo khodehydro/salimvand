@@ -1,5 +1,12 @@
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:4000/api/v1';
 
+export async function downloadFile(path: string, filename: string): Promise<void> {
+  const token = localStorage.getItem('salimvand.accessToken');
+  const response = await fetch(`${API_URL}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : undefined, credentials: 'include' });
+  if (!response.ok) throw new Error('دریافت فایل گزارش ناموفق بود');
+  const blob = await response.blob(); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = filename; link.click(); URL.revokeObjectURL(url);
+}
+
 async function refreshAccessToken(): Promise<string | null> {
   const response = await fetch(`${API_URL}/auth/refresh`, { method: 'POST', credentials: 'include' });
   if (!response.ok) return null;
