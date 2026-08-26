@@ -10,7 +10,7 @@
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint",
-    "test": "corepack pnpm --filter @salimvand/shared build && corepack pnpm -r test",
+    "test": "pnpm --filter @salimvand/shared build && pnpm -r test",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "check:production": "bash scripts/check-production.sh"
