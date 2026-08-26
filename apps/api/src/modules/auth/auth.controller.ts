@@ -50,8 +50,9 @@ export class AuthController {
   }
 
   @Post('logout')
-  async logout(@Req() request: Request, @Res({ passthrough: true }) response: Response) {
+  logout(@Req() request: Request, @Res({ passthrough: true }) response: Response) {
     const token = (request.cookies as Record<string, string> | undefined)?.['salimvand.refresh'];
-    if (token) await this.prisma.refreshToken.updateMany({ where: { tokenHash: this.auth.hashRefreshToken(token), revokedAt: null }, data: { revokedAt: new Date() } });
-    response.clearCookie('salimvand.refresh', { httpOnly: true, sameSite: 'strict', path: '/api/v1/auth' }); return { ok: true, data: null }; }
+    response.clearCookie('salimvand.refresh', { httpOnly: true, sameSite: 'strict', path: '/api/v1/auth' });
+    if (!token) return { ok: true, data: null };
+    return this.prisma.refreshToken.updateMany({ where: { tokenHash: this.auth.hashRefreshToken(token), revokedAt: null }, data: { revokedAt: new Date() } }).then(() => ({ ok: true, data: null })); }
 }

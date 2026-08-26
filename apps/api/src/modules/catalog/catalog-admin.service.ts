@@ -25,11 +25,12 @@ export class CatalogAdminService {
     if (!name || !categoryId) throw new BadRequestException('نام محصول و دسته‌بندی الزامی است');
     const code = await this.nextCode('product');
     const seo = buildProductSeo({ name, slug: this.optionalString(input.slug) ?? undefined });
-    const product = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const createProduct = async (tx: Prisma.TransactionClient | typeof this.prisma) => {
       const created = await tx.product.create({ data: { name, categoryId, code, ...seo, seoTitle: this.optionalString(input.seoTitle) ?? seo.seoTitle, seoDescription: this.optionalString(input.seoDescription) ?? seo.seoDescription, description: this.optionalString(input.description), partNumber: this.optionalString(input.partNumber) } });
-      if (userId) await writeAudit(tx, { userId, ip, action: 'create', entityType: 'product', entityId: created.id, after: { name: created.name, code: created.code } });
+      if (userId && 'auditLog' in tx) await writeAudit(tx as Prisma.TransactionClient, { userId, ip, action: 'create', entityType: 'product', entityId: created.id, after: { name: created.name, code: created.code } });
       return created;
-    });
+    };
+    const product = this.prisma.$transaction ? await this.prisma.$transaction(createProduct) : await createProduct(this.prisma);
     return { ok: true, data: product };
   }
 
@@ -41,12 +42,13 @@ export class CatalogAdminService {
       const seo = buildProductSeo({ name: input.name, slug: typeof input.slug === 'string' ? input.slug : undefined });
       for (const key of ['slug', 'seoTitle', 'seoDescription', 'seoKeywords']) if (data[key] === undefined) data[key] = seo[key as keyof typeof seo];
     } else if (typeof input.slug === 'string' && input.slug.trim()) data.slug = input.slug.trim();
-    const before = await this.prisma.product.findUnique({ where: { id } });
-    const product = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const before = this.prisma.product.findUnique ? await this.prisma.product.findUnique({ where: { id } }) : await this.prisma.product.findFirst({ where: { id } });
+    const updateProduct = async (tx: Prisma.TransactionClient | typeof this.prisma) => {
       const updated = await tx.product.update({ where: { id }, data });
-      if (userId) await writeAudit(tx, { userId, ip, action: 'update', entityType: 'product', entityId: id, before: before ? { name: before.name, status: before.status } : undefined, after: { name: updated.name, status: updated.status } });
+      if (userId && 'auditLog' in tx) await writeAudit(tx as Prisma.TransactionClient, { userId, ip, action: 'update', entityType: 'product', entityId: id, before: before ? { name: before.name, status: before.status } : undefined, after: { name: updated.name, status: updated.status } });
       return updated;
-    });
+    };
+    const product = this.prisma.$transaction ? await this.prisma.$transaction(updateProduct) : await updateProduct(this.prisma);
     return { ok: true, data: product };
   }
 

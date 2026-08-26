@@ -27,8 +27,8 @@ export class InvoiceService {
     if (!userId || !input.items?.length) throw new BadRequestException('کاربر و حداقل یک قلم فاکتور الزامی است');
     const ids = input.items.map((item) => item.inventoryItemId ?? '');
     if (new Set(ids).size !== ids.length) throw new BadRequestException('قلم موجودی نمی‌تواند در چند ردیف تکرار شود');
-    const records = await this.prisma.inventoryItem.findMany({ where: { id: { in: ids }, isActive: true }, include: { product: true } });
-    const byId = new Map(records.map((item) => [item.id, item]));
+    const records = await this.prisma.inventoryItem.findMany({ where: { id: { in: ids }, isActive: true }, include: { product: true } }) as Array<{ id: string; product: { name: string } }>;
+    const byId = new Map(records.map((item: { id: string; product: { name: string } }) => [item.id, item]));
     const lines: DraftLine[] = input.items.map((item) => {
       const record = byId.get(item.inventoryItemId ?? '');
       if (!record) throw new NotFoundException('قلم موجودی پیدا نشد');

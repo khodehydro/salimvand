@@ -53,7 +53,7 @@ export class InventoryService {
 
   async lowStock() {
     const items = await this.prisma.inventoryItem.findMany({ where: { isActive: true }, orderBy: { quantity: 'asc' }, include: { product: true, brand: true, location: true } });
-    return { ok: true, data: items.filter((item) => item.quantity <= (item.minStock ?? 0)) };
+    return { ok: true, data: items.filter((item: { quantity: number; minStock: number | null }) => item.quantity <= (item.minStock ?? 0)) };
   }
 
   async byBarcode(barcode: string) {

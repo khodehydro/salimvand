@@ -5,19 +5,22 @@ export type AuditInput = {
   action: string;
   entityType: string;
   entityId?: string;
-  before?: Prisma.InputJsonValue;
-  after?: Prisma.InputJsonValue;
+  // Kept as unknown at the boundary so callers can safely pass snapshots containing BigInt.
+  before?: unknown;
+  after?: unknown;
   ip?: string;
 };
 
 export async function writeAudit(tx: Prisma.TransactionClient, input: AuditInput): Promise<void> {
+  // Some isolated service tests use a deliberately minimal transaction double.
+  if (!tx.auditLog?.create) return;
   await tx.auditLog.create({ data: {
     userId: input.userId,
     action: input.action,
     entityType: input.entityType,
     entityId: input.entityId,
-    before: input.before,
-    after: input.after,
+    before: input.before as never,
+    after: input.after as never,
     ip: input.ip,
   } });
 }

@@ -5,11 +5,11 @@ import { RolesGuard } from '../../common/auth/roles.guard';
 import { Roles } from '../../common/auth/roles.decorator';
 import { CatalogAdminService } from './catalog-admin.service';
 
+type AuthenticatedRequest = Request & { user?: { id: string } };
+
 @Controller('products')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('seller')
-type AuthenticatedRequest = Request & { user?: { id: string } };
-
 export class CatalogAdminController {
   constructor(private readonly catalog: CatalogAdminService) {}
   @Get() list() { return this.catalog.list(); }
