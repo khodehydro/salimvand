@@ -23,3 +23,9 @@ export class InvoiceController {
   @Post()
   create(@Body() body: Parameters<InvoiceService['create']>[0], @Req() request: AuthenticatedRequest) { return this.invoices.create(body, request.user?.id ?? ''); }
 }
+
+@Controller('public/invoices')
+export class PublicInvoiceController {
+  constructor(private readonly invoices: InvoiceService) {}
+  @Get(':token') get(@Param('token') token: string) { return this.invoices.getPublic(token); }
+}
