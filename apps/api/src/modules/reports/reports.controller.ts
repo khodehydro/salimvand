@@ -7,7 +7,7 @@ import { ReportsService } from './reports.service';
 
 @Controller('reports')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('manager')
+@Roles('manager', 'accountant')
 export class ReportsController {
   constructor(private readonly reports: ReportsService) {}
   @Get('sales') sales(@Query('from') from?: string, @Query('to') to?: string) { return this.reports.sales(from, to); }
