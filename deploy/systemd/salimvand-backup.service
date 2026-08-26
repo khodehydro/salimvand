@@ -1,0 +1,7 @@
+[Unit]
+Description=Salim Vand PostgreSQL backup
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/opt/salimvand/scripts/backup.sh
