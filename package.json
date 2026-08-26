@@ -12,7 +12,8 @@
     "lint": "pnpm -r lint",
     "test": "corepack pnpm --filter @salimvand/shared build && corepack pnpm -r test",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "check:production": "bash scripts/check-production.sh"
   },
   "devDependencies": {
     "@types/node": "^20.17.30",
