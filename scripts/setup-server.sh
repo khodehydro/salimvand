@@ -8,7 +8,7 @@ if command -v dnf >/dev/null 2>&1; then
   # AlmaLinux AppStream already provides Node.js 20 on this host. Ignore any
   # leftover NodeSource repositories to avoid a nodejs-full-i18n module conflict.
   dnf update -y --disablerepo='nodesource*'
-  dnf install -y --disablerepo='nodesource*' ca-certificates curl git nginx postgresql postgresql-server redis redis-tools certbot python3-certbot-nginx gnupg firewalld
+  dnf install -y --disablerepo='nodesource*' ca-certificates curl git nginx postgresql postgresql-server redis certbot python3-certbot-nginx gnupg firewalld
   systemctl enable --now firewalld
 else
   apt-get update
