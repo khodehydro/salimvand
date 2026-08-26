@@ -1,0 +1,38 @@
+import { Injectable, OnModuleDestroy } from '@nestjs/common';
+import { Job, Queue, Worker } from 'bullmq';
+import IORedis from 'ioredis';
+
+export type NotificationJob = { type: 'invoice.issued' | 'invoice.paid' | 'low-stock'; invoiceId?: string; mobile?: string; message: string };
+type NotificationName = NotificationJob['type'];
+
+@Injectable()
+export class NotificationsService implements OnModuleDestroy {
+  private readonly connection: IORedis;
+  private readonly queue: Queue<NotificationJob>;
+  private readonly worker?: Worker<NotificationJob>;
+
+  constructor() {
+    this.connection = new IORedis(process.env.REDIS_URL ?? 'redis://localhost:6379', { maxRetriesPerRequest: null, lazyConnect: true });
+    this.queue = new Queue<NotificationJob>('salimvand-notifications', { connection: this.connection });
+    if (process.env.ENABLE_QUEUE_WORKER === 'true') {
+      this.worker = new Worker<NotificationJob>('salimvand-notifications', async (job) => this.process(job), { connection: this.connection, concurrency: 4 });
+    }
+  }
+
+  async enqueue(payload: NotificationJob) {
+    return this.queue.add(payload.type as NotificationName, payload, { attempts: 5, backoff: { type: 'exponential', delay: 1000 }, removeOnComplete: 100, removeOnFail: 500 });
+  }
+
+  async counts() { return this.queue.getJobCounts('waiting', 'active', 'completed', 'failed', 'delayed'); }
+
+  private async process(job: Job<NotificationJob>) {
+    // Provider adapters are isolated here. Without credentials, jobs remain observable and retryable.
+    if (!process.env.SMS_PROVIDER || !process.env.SMS_API_KEY) {
+      console.info(`[notification:${job.data.type}] ${job.data.message}`);
+      return;
+    }
+    console.info(`[notification:${job.data.type}] provider=${process.env.SMS_PROVIDER} mobile=${job.data.mobile ?? 'n/a'}`);
+  }
+
+  async onModuleDestroy() { await this.worker?.close(); await this.queue.close(); await this.connection.quit(); }
+}

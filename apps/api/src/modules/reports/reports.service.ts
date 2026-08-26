@@ -1,0 +1,20 @@
+import { Injectable } from '@nestjs/common';
+import { PrismaService } from '../../prisma.service';
+
+@Injectable()
+export class ReportsService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async sales(from?: string, to?: string) {
+    const where = { status: 'issued' as const, ...(from || to ? { issuedAt: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } } : {}) };
+    const invoices = await this.prisma.invoice.findMany({ where, orderBy: { issuedAt: 'asc' }, select: { id: true, number: true, issuedAt: true, total: true, paidAmount: true, paymentStatus: true, items: { select: { productName: true, quantity: true, lineTotal: true } } } }) as Array<{ id: string; number: string; issuedAt: Date; total: bigint; paidAmount: bigint; paymentStatus: string; items: Array<{ productName: string; quantity: number; lineTotal: bigint }> }>;
+    const products = new Map<string, { name: string; quantity: number; revenue: bigint }>();
+    for (const invoice of invoices) for (const item of invoice.items) { const current = products.get(item.productName) ?? { name: item.productName, quantity: 0, revenue: 0n }; current.quantity += item.quantity; current.revenue += item.lineTotal; products.set(item.productName, current); }
+    return { ok: true, data: { summary: { invoiceCount: invoices.length, revenue: invoices.reduce((sum, row) => sum + row.total, 0n), paid: invoices.reduce((sum, row) => sum + row.paidAmount, 0n), outstanding: invoices.reduce((sum, row) => sum + row.total - row.paidAmount, 0n) }, products: [...products.values()], invoices } };
+  }
+
+  async inventory() {
+    const [items, transactions] = await Promise.all([this.prisma.inventoryItem.findMany({ where: { isActive: true }, include: { product: { select: { name: true, code: true } }, brand: { select: { name: true } }, location: true }, orderBy: { quantity: 'asc' } }), this.prisma.inventoryTransaction.findMany({ orderBy: { createdAt: 'desc' }, take: 500, include: { item: { include: { product: true, brand: true } } } })]);
+    return { ok: true, data: { items, transactions } };
+  }
+}

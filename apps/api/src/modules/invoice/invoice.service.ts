@@ -1,4 +1,5 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { NotificationsService } from '../notifications/notifications.service';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
 import { writeAudit } from '../../common/audit/audit-log';
@@ -10,7 +11,7 @@ type CreateInput = { customerName?: string; customerMobile?: string; discount?: 
 
 @Injectable()
 export class InvoiceService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, @Optional() private readonly notifications?: NotificationsService) {}
 
   buildDraft(number: string, lines: readonly DraftLine[], discount = 0n) {
     if (!/^INV-[0-9]{4,}$/.test(number)) throw new Error('شماره فاکتور معتبر نیست');
@@ -53,6 +54,7 @@ export class InvoiceService {
       for (const line of lines) { const item = await tx.inventoryItem.findUniqueOrThrow({ where: { id: line.inventoryItemId }, select: { quantity: true } }); await tx.inventoryTransaction.updateMany({ where: { itemId: line.inventoryItemId, refId: created.id }, data: { quantityAfter: item.quantity } }); }
       return created;
     });
+    if (this.notifications && input.customerMobile) await this.notifications.enqueue({ type: 'invoice.issued', invoiceId: invoice.id, mobile: input.customerMobile, message: `فاکتور ${invoice.number} صادر شد. مبلغ: ${totals.total.toString()} ریال` });
     return { ok: true, data: { ...invoice, publicToken: publicToken.token } };
   }
 
@@ -80,6 +82,7 @@ export class InvoiceService {
       const status = nextPaid === invoice.total ? 'paid' : 'partial';
       const updated = await tx.invoice.update({ where: { id }, data: { paidAmount: nextPaid, paymentStatus: status, paymentMethod: method, paidAt: status === 'paid' ? new Date() : invoice.paidAt }, include: { items: true } });
       await writeAudit(tx, { userId, action: 'pay', entityType: 'invoice', entityId: id, before: { paidAmount: invoice.paidAmount.toString(), paymentStatus: invoice.paymentStatus }, after: { paidAmount: nextPaid.toString(), paymentStatus: status, method } });
+      if (this.notifications && invoice.customerMobile) await this.notifications.enqueue({ type: 'invoice.paid', invoiceId: id, mobile: invoice.customerMobile, message: `پرداخت فاکتور ${invoice.number} ثبت شد. مبلغ: ${paidAmount.toString()} ریال` });
       return { ok: true, data: updated };
     });
   }

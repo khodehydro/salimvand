@@ -6,6 +6,8 @@ import { InventoryModule } from './modules/inventory/inventory.module';
 import { MediaModule } from './modules/media/media.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { InvoiceModule } from './modules/invoice/invoice.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
+import { ReportsModule } from './modules/reports/reports.module';
 import { APP_NAME, API_PREFIX } from '@salimvand/shared';
 import { PrismaService } from './prisma.service';
 import { ServiceUnavailableException } from '@nestjs/common';
@@ -30,5 +32,5 @@ class SystemController {
   }
 }
 
-@Module({ imports: [PrismaModule, CatalogModule, AuthModule, InventoryModule, MediaModule, DashboardModule, InvoiceModule], controllers: [SystemController] })
+@Module({ imports: [PrismaModule, CatalogModule, AuthModule, InventoryModule, MediaModule, DashboardModule, InvoiceModule, NotificationsModule, ReportsModule], controllers: [SystemController] })
 export class AppModule {}

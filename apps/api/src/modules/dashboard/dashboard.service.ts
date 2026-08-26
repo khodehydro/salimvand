@@ -4,6 +4,13 @@ import { PrismaService } from '../../prisma.service';
 @Injectable()
 export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
+  async audit(page = 1, pageSize = 50, entityType?: string) {
+    const safePage = Math.max(1, page); const safeSize = Math.min(100, Math.max(1, pageSize));
+    const where = entityType ? { entityType } : {};
+    const [rows, total] = await Promise.all([this.prisma.auditLog.findMany({ where, orderBy: { createdAt: 'desc' }, skip: (safePage - 1) * safeSize, take: safeSize, include: { user: { select: { name: true, username: true, role: true } } } }), this.prisma.auditLog.count({ where })]);
+    return { ok: true, data: rows, meta: { page: safePage, pageSize: safeSize, total, totalPages: Math.ceil(total / safeSize) } };
+  }
+
   async summary() {
     const [products, inventoryItems, lowStock, recentTransactions] = await Promise.all([
       this.prisma.product.count({ where: { deletedAt: null, status: 'active' } }),
