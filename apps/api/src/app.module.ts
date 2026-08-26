@@ -11,6 +11,7 @@ import { ReportsModule } from './modules/reports/reports.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { SearchModule } from './modules/search/search.module';
 import { UsersModule } from './modules/users/users.module';
+import { CustomersModule } from './modules/customers/customers.module';
 import { APP_NAME, API_PREFIX } from '@salimvand/shared';
 import { PrismaService } from './prisma.service';
 import { ServiceUnavailableException } from '@nestjs/common';
@@ -35,5 +36,5 @@ class SystemController {
   }
 }
 
-@Module({ imports: [PrismaModule, CatalogModule, AuthModule, InventoryModule, MediaModule, DashboardModule, InvoiceModule, NotificationsModule, ReportsModule, SettingsModule, SearchModule, UsersModule], controllers: [SystemController] })
+@Module({ imports: [PrismaModule, CatalogModule, AuthModule, InventoryModule, MediaModule, DashboardModule, InvoiceModule, NotificationsModule, ReportsModule, SettingsModule, SearchModule, UsersModule, CustomersModule], controllers: [SystemController] })
 export class AppModule {}
