@@ -243,6 +243,7 @@ model User {
   settings  Setting[]
   invoices Invoice[]
   payments Payment[]
+  customerPayments CustomerPayment[]
   returns ReturnRecord[]
   createdAt    DateTime               @default(now()) @db.Timestamptz(6)
   updatedAt    DateTime               @updatedAt @db.Timestamptz(6)
@@ -276,6 +277,7 @@ model Invoice {
   customer     Customer?     @relation(fields: [customerId], references: [id])
   items        InvoiceItem[]
   payments     Payment[]
+  customerPayments CustomerPayment[]
   returns      ReturnRecord[]
   issuedAt     DateTime      @default(now()) @db.Timestamptz(6)
   voidedAt     DateTime?     @db.Timestamptz(6)
@@ -290,10 +292,27 @@ model Customer {
   notes       String?
   isActive    Boolean   @default(true)
   invoices    Invoice[]
+  payments    CustomerPayment[]
   createdAt   DateTime  @default(now()) @db.Timestamptz(6)
   updatedAt   DateTime  @updatedAt @db.Timestamptz(6)
   @@index([name])
   @@map("customers")
+}
+
+model CustomerPayment {
+  id          String        @id @default(uuid()) @db.Uuid
+  customerId  String        @db.Uuid
+  invoiceId   String?       @db.Uuid
+  amount      BigInt
+  method      PaymentMethod
+  notes       String?
+  receivedById String       @db.Uuid
+  paidAt      DateTime      @default(now()) @db.Timestamptz(6)
+  customer    Customer      @relation(fields: [customerId], references: [id])
+  invoice     Invoice?      @relation(fields: [invoiceId], references: [id])
+  receivedBy  User          @relation(fields: [receivedById], references: [id])
+  @@index([customerId, paidAt])
+  @@map("customer_payments")
 }
 
 model Payment {

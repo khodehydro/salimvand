@@ -16,4 +16,5 @@ export class CustomersController {
   @Get(':id') get(@Param('id') id: string) { return this.customers.get(id); }
   @Post() create(@Body() body: { name?: string; mobile?: string; notes?: string }, @Req() request: AuthRequest) { return this.customers.create(body, request.user?.id, request.ip); }
   @Patch(':id') update(@Param('id') id: string, @Body() body: { name?: string; mobile?: string; notes?: string; isActive?: boolean }, @Req() request: AuthRequest) { return this.customers.update(id, body, request.user?.id, request.ip); }
+  @Post(':id/payments') payment(@Param('id') id: string, @Body() body: { amount?: string | number; method?: string; invoiceId?: string; notes?: string }, @Req() request: AuthRequest) { return this.customers.payment(id, body, request.user?.id ?? '', request.ip); }
 }
