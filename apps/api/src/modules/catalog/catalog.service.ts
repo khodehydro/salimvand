@@ -49,6 +49,12 @@ export class CatalogService {
     return { ok: true, data: { products, categories, vehicles: vehicles.flatMap((make: { name: string; models: Array<{ name: string; id: string }> }) => make.models.map((model) => ({ id: model.id, slug: `${make.name}-${model.name}`.toLowerCase().replace(/\s+/g, '-'), name: `${make.name} ${model.name}` }))) } };
   }
 
+  async meta() {
+    const rows = await this.prisma.setting.findMany({ where: { key: { in: ['store.profile', 'store.trust_video', 'integrations.telegram', 'integrations.bale'] } }, select: { key: true, value: true } });
+    const values = Object.fromEntries(rows.map((row) => [row.key, row.value]));
+    return { ok: true, data: { profile: values['store.profile'] ?? {}, trustVideo: values['store.trust_video'] ?? null, telegram: values['integrations.telegram'] ?? {}, bale: values['integrations.bale'] ?? {} } };
+  }
+
   async listFilters() {
     const [categories, vehicles, brands] = await Promise.all([
       this.prisma.category.findMany({ where: { isActive: true }, orderBy: { sort: 'asc' }, select: { id: true, name: true, slug: true, parentId: true } }),

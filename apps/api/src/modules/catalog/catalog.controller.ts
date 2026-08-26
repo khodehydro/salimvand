@@ -5,6 +5,9 @@ import { CatalogService } from './catalog.service';
 export class CatalogController {
   constructor(private readonly catalog: CatalogService) {}
 
+  @Get('public/meta')
+  meta() { return this.catalog.meta(); }
+
   @Get('public/products')
   products(@Query('q') q?: string, @Query('categoryId') categoryId?: string, @Query('vehicleModelId') vehicleModelId?: string, @Query('brandId') brandId?: string, @Query('page') page?: string, @Query('pageSize') pageSize?: string, @Query('inStock') inStock?: string) {
     return this.catalog.listPublicProducts({ q, categoryId, vehicleModelId, brandId, page: Number(page ?? 1), pageSize: Number(pageSize ?? 24), inStock: inStock === 'true' });
