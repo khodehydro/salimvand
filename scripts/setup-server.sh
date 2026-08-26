@@ -24,9 +24,16 @@ command -v node >/dev/null || { echo 'Install Node.js 20+ before running this sc
 node -e "if (Number(process.versions.node.split('.')[0]) < 20) process.exit(1)" || { echo 'Node.js 20+ is required.' >&2; exit 1; }
 if command -v corepack >/dev/null 2>&1; then corepack enable; fi
 command -v pnpm >/dev/null 2>&1 || echo "pnpm is not installed yet; install it before deploy."
-install -m 0644 deploy/nginx/salimvand.conf /etc/nginx/sites-available/salimvand.conf
-ln -sfn /etc/nginx/sites-available/salimvand.conf /etc/nginx/sites-enabled/salimvand.conf
-rm -f /etc/nginx/sites-enabled/default
+if grep -q 'sites-enabled' /etc/nginx/nginx.conf 2>/dev/null; then
+  install -d /etc/nginx/sites-available /etc/nginx/sites-enabled
+  install -m 0644 deploy/nginx/salimvand.conf /etc/nginx/sites-available/salimvand.conf
+  ln -sfn /etc/nginx/sites-available/salimvand.conf /etc/nginx/sites-enabled/salimvand.conf
+  rm -f /etc/nginx/sites-enabled/default
+else
+  # AlmaLinux/RHEL uses /etc/nginx/conf.d by default.
+  install -d /etc/nginx/conf.d
+  install -m 0644 deploy/nginx/salimvand.conf /etc/nginx/conf.d/salimvand.conf
+fi
 nginx -t
 systemctl reload nginx
 
