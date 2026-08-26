@@ -35,6 +35,20 @@ git checkout --detach "origin/$BRANCH"
 "${PNPM[@]}" test
 "${PNPM[@]}" build
 
+# Next standalone is nested because this is a workspace monorepo. Copy runtime assets
+# beside the standalone server as required by Next.js production output.
+STANDALONE="$ROOT_DIR/apps/website/.next/standalone"
+if [[ -d "$ROOT_DIR/apps/website/.next/static" ]]; then
+  install -d "$STANDALONE/apps/website/.next"
+  rm -rf "$STANDALONE/apps/website/.next/static"
+  cp -a "$ROOT_DIR/apps/website/.next/static" "$STANDALONE/apps/website/.next/static"
+fi
+if [[ -d "$ROOT_DIR/apps/website/public" ]]; then
+  rm -rf "$STANDALONE/public"
+  cp -a "$ROOT_DIR/apps/website/public" "$STANDALONE/public"
+fi
+chown -R salimvand:salimvand "$STANDALONE"
+
 install -d -o salimvand -g salimvand "$ROOT_DIR/uploads/products"
 install -m 0644 deploy/systemd/salimvand-api.service /etc/systemd/system/salimvand-api.service
 install -m 0644 deploy/systemd/salimvand-website.service /etc/systemd/system/salimvand-website.service
