@@ -26,3 +26,4 @@ html[data-theme=dark]{--a-bg:#050b14;--a-surface:#0d1826;--a-surface-2:#111f31;-
 @media(max-width:700px){.user-form{grid-template-columns:1fr}.user-form h2,.user-form button{grid-column:auto}}
 .customer-form{grid-template-columns:repeat(3,minmax(0,1fr))}.customer-form h2,.customer-form button{grid-column:1/-1}.customer-head,.customer-row{grid-template-columns:1.5fr 1.2fr .7fr 1.4fr 1fr;min-width:720px}.customer-search{align-items:center}.customer-search input{flex:1}
 @media(max-width:700px){.customer-form{grid-template-columns:1fr}.customer-form h2,.customer-form button{grid-column:auto}}
+.customer-payment{display:grid;gap:14px}.customer-payment input,.customer-payment select{border:1px solid var(--a-border);background:var(--a-surface-2);color:var(--a-text);padding:11px;border-radius:8px;font:13px Vazirmatn}.customer-payment .button-primary{border:0;padding:11px;border-radius:8px;font:13px Vazirmatn;cursor:pointer}
