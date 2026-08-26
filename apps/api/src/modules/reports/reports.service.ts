@@ -13,6 +13,12 @@ export class ReportsService {
     return { ok: true, data: { summary: { invoiceCount: invoices.length, revenue: invoices.reduce((sum, row) => sum + row.total, 0n), paid: invoices.reduce((sum, row) => sum + row.paidAmount, 0n), outstanding: invoices.reduce((sum, row) => sum + row.total - row.paidAmount, 0n) }, products: [...products.values()], invoices } };
   }
 
+  async exportInventory() {
+    const items = await this.prisma.inventoryItem.findMany({ where: { isActive: true }, select: { barcode: true, quantity: true, minStock: true, salePrice: true, product: { select: { name: true, code: true } }, brand: { select: { name: true } }, location: { select: { code: true, name: true } } }, orderBy: { quantity: 'asc' } });
+    const cell = (value: string | number | bigint | null) => { const text = String(value ?? ''); return /^[=+\-@]/.test(text) ? `'${text}` : `"${text.replaceAll('"', '""')}"`; };
+    return ['محصول,کد,برند,بارکد,موجودی,حداقل,قیمت فروش,قفسه', ...items.map((item) => [item.product.name, item.product.code, item.brand.name, item.barcode, item.quantity, item.minStock ?? '', item.salePrice, item.location ? `${item.location.code} ${item.location.name}` : ''].map(cell).join(','))].join('\n');
+  }
+
   async inventory() {
     const [items, transactions] = await Promise.all([this.prisma.inventoryItem.findMany({ where: { isActive: true }, include: { product: { select: { name: true, code: true } }, brand: { select: { name: true } }, location: true }, orderBy: { quantity: 'asc' } }), this.prisma.inventoryTransaction.findMany({ orderBy: { createdAt: 'desc' }, take: 500, include: { item: { include: { product: true, brand: true } } } })]);
     return { ok: true, data: { items, transactions } };

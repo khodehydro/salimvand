@@ -12,6 +12,7 @@ export class ReportsController {
   constructor(private readonly reports: ReportsService) {}
   @Get('sales') sales(@Query('from') from?: string, @Query('to') to?: string) { return this.reports.sales(from, to); }
   @Get('inventory') inventory() { return this.reports.inventory(); }
+  @Get('inventory/export') async exportInventory(@Res() response: Response) { const csv = await this.reports.exportInventory(); response.setHeader('Content-Type', 'text/csv; charset=utf-8'); response.setHeader('Content-Disposition', 'attachment; filename="salimvand-inventory.csv"'); return response.send(`\uFEFF${csv}`); }
   @Get('profit') profit(@Query('from') from?: string, @Query('to') to?: string) { return this.reports.profit(from, to); }
   @Get('customers') customers() { return this.reports.customers(); }
   @Get('sales/export') async exportSales(@Res() response: Response) { const csv = await this.reports.exportSales(); response.setHeader('Content-Type', 'text/csv; charset=utf-8'); response.setHeader('Content-Disposition', 'attachment; filename="salimvand-sales.csv"'); return response.send(`\\uFEFF${csv}`); }
