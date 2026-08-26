@@ -10,6 +10,10 @@ flock -n 9 || { echo 'Another deployment is already running.' >&2; exit 1; }
 
 cd "$ROOT_DIR"
 [[ -f .env ]] || { echo "Missing $ROOT_DIR/.env; refusing to deploy." >&2; exit 1; }
+# Load production values for Prisma seed, migration and build-time tooling.
+set -a
+. "$ROOT_DIR/.env"
+set +a
 if command -v corepack >/dev/null 2>&1; then
   PNPM=(corepack pnpm)
 elif command -v pnpm >/dev/null 2>&1; then
