@@ -5,8 +5,10 @@ set -Eeuo pipefail
 [[ "${EUID}" -eq 0 ]] || { echo 'Run as root.' >&2; exit 1; }
 APP_DIR=/opt/salimvand
 if command -v dnf >/dev/null 2>&1; then
-  dnf update -y
-  dnf install -y ca-certificates curl git nginx postgresql postgresql-server redis redis-tools certbot python3-certbot-nginx gnupg firewalld
+  # AlmaLinux AppStream already provides Node.js 20 on this host. Ignore any
+  # leftover NodeSource repositories to avoid a nodejs-full-i18n module conflict.
+  dnf update -y --disablerepo='nodesource*'
+  dnf install -y --disablerepo='nodesource*' ca-certificates curl git nginx postgresql postgresql-server redis redis-tools certbot python3-certbot-nginx gnupg firewalld
   systemctl enable --now firewalld
 else
   apt-get update
