@@ -23,18 +23,21 @@ export class PurchaseService {
   async create(supplierId: string, lines: PurchaseLine[], paidAmount: number | string | undefined, actorId: string, ip?: string) {
     if (!supplierId || !Array.isArray(lines) || !lines.length) throw new BadRequestException('تأمین‌کننده و حداقل یک قلم خرید الزامی است');
     const amounts = lines.map((line) => ({ itemId: line.inventoryItemId, quantity: Number(line.quantity), unitPrice: parseMoney(line.unitPrice, 'قیمت خرید') }));
-    if (amounts.some((line) => !line.itemId || !Number.isInteger(line.quantity) || line.quantity <= 0 || line.unitPrice < 0n)) throw new BadRequestException('اقلام خرید معتبر نیستند');
+    if (amounts.some((line) => !line.itemId || !Number.isInteger(line.quantity) || line.quantity <= 0)) throw new BadRequestException('اقلام خرید معتبر نیستند');
+    const unique = new Map<string, { itemId: string; quantity: number; unitPrice: bigint }>();
+    for (const line of normalized) { const current = unique.get(line.itemId!); if (current && current.unitPrice !== line.unitPrice) throw new BadRequestException('برای هر قلم فقط یک قیمت خرید مجاز است'); unique.set(line.itemId!, current ? { ...current, quantity: current.quantity + line.quantity } : { itemId: line.itemId!, quantity: line.quantity, unitPrice: line.unitPrice }); }
+    const normalized = [...unique.values()];
     const paid = parseMoney(paidAmount, 'مبلغ پرداخت');
     if (paid < 0n) throw new BadRequestException('مبلغ پرداخت معتبر نیست');
     return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const supplier = await tx.supplier.findFirst({ where: { id: supplierId, isActive: true, deletedAt: null } });
       if (!supplier) throw new NotFoundException('تأمین‌کننده پیدا نشد');
-      const inventory = await Promise.all(amounts.map((line) => tx.inventoryItem.findUnique({ where: { id: line.itemId }, include: { product: true } })));
+      const inventory = await Promise.all(normalized.map((line) => tx.inventoryItem.findUnique({ where: { id: line.itemId }, include: { product: true } })));
       if (inventory.some((item) => !item)) throw new NotFoundException('قلم موجودی پیدا نشد');
-      const total = amounts.reduce((sum, line) => sum + BigInt(line.quantity) * line.unitPrice, 0n);
+      const total = normalized.reduce((sum, line) => sum + BigInt(line.quantity) * line.unitPrice, 0n);
       if (paid > total) throw new BadRequestException('مبلغ پرداخت بیشتر از مبلغ فاکتور است');
-      const invoice = await tx.purchaseInvoice.create({ data: { number: `PUR-${Date.now()}`, supplierId, supplierName: supplier.name, subtotal: total, total, paidAmount: paid, issuedById: actorId, items: { create: amounts.map((line, index) => ({ inventoryItemId: line.itemId!, productName: inventory[index]!.product.name, quantity: line.quantity, unitPrice: line.unitPrice, lineTotal: BigInt(line.quantity) * line.unitPrice })) } }, include: { items: true } });
-      for (const line of amounts) { const current = await tx.inventoryItem.findUnique({ where: { id: line.itemId } }); const next = current!.quantity + line.quantity; await tx.inventoryItem.update({ where: { id: line.itemId }, data: { quantity: next, purchasePrice: line.unitPrice } }); await tx.inventoryTransaction.create({ data: { itemId: line.itemId!, type: 'purchase', quantityChange: line.quantity, quantityAfter: next, refType: 'purchase_invoice', refId: invoice.id, userId: actorId, reason: `خرید ${invoice.number}` } }); }
+      const invoice = await tx.purchaseInvoice.create({ data: { number: `PUR-${Date.now()}`, supplierId, supplierName: supplier.name, subtotal: total, total, paidAmount: paid, issuedById: actorId, items: { create: normalized.map((line, index) => ({ inventoryItemId: line.itemId!, productName: inventory[index]!.product.name, quantity: line.quantity, unitPrice: line.unitPrice, lineTotal: BigInt(line.quantity) * line.unitPrice })) } }, include: { items: true } });
+      for (const line of normalized) { const current = await tx.inventoryItem.findUnique({ where: { id: line.itemId } }); const next = current!.quantity + line.quantity; await tx.inventoryItem.update({ where: { id: line.itemId }, data: { quantity: next, purchasePrice: line.unitPrice } }); await tx.inventoryTransaction.create({ data: { itemId: line.itemId!, type: 'purchase', quantityChange: line.quantity, quantityAfter: next, refType: 'purchase_invoice', refId: invoice.id, userId: actorId, reason: `خرید ${invoice.number}` } }); }
       await writeAudit(tx, { userId: actorId, ip, action: 'create', entityType: 'purchase_invoice', entityId: invoice.id, after: { number: invoice.number, supplierId, total: String(total) } });
       return { ok: true, data: invoice };
     });
