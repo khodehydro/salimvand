@@ -49,5 +49,28 @@ export class InvoiceService {
     return { ok: true, data: invoice };
   }
 
+  async pay(id: string, amount: string | number, method: 'cash' | 'card' | 'transfer' | 'credit') {
+    const paidAmount = BigInt(amount);
+    if (paidAmount < 0n) throw new BadRequestException('مبلغ پرداخت نمی‌تواند منفی باشد');
+    const invoice = await this.prisma.invoice.findUnique({ where: { id } });
+    if (!invoice || invoice.status === 'voided') throw new NotFoundException('فاکتور پیدا نشد');
+    if (paidAmount > invoice.total) throw new BadRequestException('مبلغ پرداخت بیشتر از مبلغ فاکتور است');
+    const status = paidAmount === invoice.total ? 'paid' : paidAmount > 0n ? 'partial' : 'unpaid';
+    return { ok: true, data: await this.prisma.invoice.update({ where: { id }, data: { paidAmount, paymentStatus: status, paymentMethod: method, paidAt: paidAmount > 0n ? new Date() : null }, include: { items: true } }) };
+  }
+
+  async void(id: string, userId: string) {
+    const invoice = await this.prisma.invoice.findUnique({ where: { id }, include: { items: true } });
+    if (!invoice || invoice.status === 'voided') throw new NotFoundException('فاکتور فعال پیدا نشد');
+    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      for (const line of invoice.items) {
+        const item = await tx.inventoryItem.update({ where: { id: line.inventoryItemId }, data: { quantity: { increment: line.quantity } } });
+        await tx.inventoryTransaction.create({ data: { itemId: item.id, type: 'return', quantityChange: line.quantity, quantityAfter: item.quantity, userId, refType: 'invoice', refId: invoice.id, reason: `ابطال فاکتور ${invoice.number}` } });
+      }
+      const updated = await tx.invoice.update({ where: { id }, data: { status: 'voided', voidedAt: new Date() }, include: { items: true } });
+      return { ok: true, data: updated };
+    });
+  }
+
   async list() { return { ok: true, data: await this.prisma.invoice.findMany({ orderBy: { issuedAt: 'desc' }, include: { items: true } }) }; }
 }

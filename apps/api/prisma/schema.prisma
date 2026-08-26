@@ -263,6 +263,10 @@ model Invoice {
   subtotal     BigInt        @default(0)
   discount     BigInt        @default(0)
   total        BigInt        @default(0)
+  paymentStatus PaymentStatus @default(unpaid)
+  paymentMethod PaymentMethod?
+  paidAmount   BigInt        @default(0)
+  paidAt       DateTime?     @db.Timestamptz(6)
   issuedById   String        @db.Uuid
   issuedBy     User          @relation(fields: [issuedById], references: [id])
   items        InvoiceItem[]
