@@ -8,8 +8,9 @@ type SupplierInput = { name?: string; mobile?: string; phone?: string; address?:
 export class SuppliersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list() {
-    const suppliers = await this.prisma.supplier.findMany({ where: { deletedAt: null }, orderBy: { createdAt: 'desc' } });
+  async list(search?: string) {
+    const term = search?.trim();
+    const suppliers = await this.prisma.supplier.findMany({ where: { deletedAt: null, ...(term ? { OR: [{ name: { contains: term, mode: 'insensitive' } }, { mobile: { contains: term, mode: 'insensitive' } }, { phone: { contains: term, mode: 'insensitive' } }] } : {}) }, orderBy: { createdAt: 'desc' } });
     return { ok: true, data: suppliers };
   }
 
