@@ -47,6 +47,9 @@ export class InvoiceController {
   @Roles('manager')
   @Post(':id/void')
   void(@Param('id') id: string, @Req() request: AuthenticatedRequest) { return this.invoices.void(id, request.user?.id ?? ''); }
+
+  @Post(':id/returns')
+  returns(@Param('id') id: string, @Body() body: { invoiceItemId?: string; quantity?: number; reason?: string; restock?: boolean }, @Req() request: AuthenticatedRequest) { return this.invoices.returnItems(id, body, request.user?.id ?? ''); }
 }
 
 @Controller('public/invoices')

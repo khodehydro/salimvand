@@ -107,6 +107,25 @@ export class InvoiceService {
     });
   }
 
+  async returnItems(id: string, input: { invoiceItemId?: string; quantity?: number; reason?: string; restock?: boolean }, userId: string) {
+    const quantity = Number(input.quantity); const reason = input.reason?.trim();
+    if (!userId || !input.invoiceItemId || !Number.isInteger(quantity) || quantity <= 0 || !reason) throw new BadRequestException('قلم، تعداد صحیح مثبت و دلیل مرجوعی الزامی است');
+    return this.prisma.$transaction(async (tx) => {
+      const invoice = await tx.invoice.findUnique({ where: { id }, include: { items: true } });
+      if (!invoice || invoice.status === 'voided') throw new NotFoundException('فاکتور فعال پیدا نشد');
+      const line = invoice.items.find((item) => item.id === input.invoiceItemId);
+      if (!line) throw new NotFoundException('ردیف فاکتور پیدا نشد');
+      const previous = await tx.returnRecord.aggregate({ where: { invoiceItemId: line.id }, _sum: { quantity: true, refundAmount: true } });
+      const alreadyReturned = previous._sum.quantity ?? 0; if (alreadyReturned + quantity > line.quantity) throw new BadRequestException('تعداد مرجوعی بیشتر از تعداد خریداری‌شده است');
+      const refundAmount = BigInt(quantity) * line.unitPrice;
+      let quantityAfter = 0;
+      if (input.restock !== false) { const item = await tx.inventoryItem.update({ where: { id: line.inventoryItemId }, data: { quantity: { increment: quantity } }, select: { quantity: true } }); quantityAfter = item.quantity; await tx.inventoryTransaction.create({ data: { itemId: line.inventoryItemId, type: 'return', quantityChange: quantity, quantityAfter, userId, refType: 'return', refId: id, reason } }); }
+      const record = await tx.returnRecord.create({ data: { invoiceId: id, invoiceItemId: line.id, quantity, refundAmount, reason, restock: input.restock !== false, userId } });
+      await writeAudit(tx, { userId, action: 'return', entityType: 'invoice', entityId: id, after: { invoiceItemId: line.id, quantity, refundAmount: refundAmount.toString(), restock: input.restock !== false } });
+      return { ok: true, data: { ...record, quantityAfter } };
+    });
+  }
+
   async void(id: string, userId: string) {
     const invoice = await this.prisma.invoice.findUnique({ where: { id }, include: { items: true } });
     if (!invoice || invoice.status === 'voided') throw new NotFoundException('فاکتور فعال پیدا نشد');
