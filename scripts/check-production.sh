@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-BASE_URL="${BASE_URL:-http://127.0.0.1}"
+BASE_URL="${BASE_URL:-http://127.0.0.1:3000}"
 API_URL="${API_URL:-http://127.0.0.1:4000}"
 
 for service in salimvand-api.service salimvand-website.service salimvand-worker.service nginx fail2ban; do
