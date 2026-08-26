@@ -5,6 +5,12 @@ import { writeAudit } from '../../common/audit/audit-log';
 
 type PurchaseLine = { inventoryItemId?: string; quantity?: number; unitPrice?: number | string };
 
+function parseMoney(value: number | string | undefined, label: string): bigint {
+  const text = String(value ?? 0).trim();
+  if (!/^\d+$/.test(text)) throw new BadRequestException(`${label} معتبر نیست`);
+  return BigInt(text);
+}
+
 @Injectable()
 export class PurchaseService {
   constructor(private readonly prisma: PrismaService) {}
@@ -16,9 +22,9 @@ export class PurchaseService {
 
   async create(supplierId: string, lines: PurchaseLine[], paidAmount: number | string | undefined, actorId: string, ip?: string) {
     if (!supplierId || !Array.isArray(lines) || !lines.length) throw new BadRequestException('تأمین‌کننده و حداقل یک قلم خرید الزامی است');
-    const amounts = lines.map((line) => ({ itemId: line.inventoryItemId, quantity: Number(line.quantity), unitPrice: BigInt(line.unitPrice ?? 0) }));
+    const amounts = lines.map((line) => ({ itemId: line.inventoryItemId, quantity: Number(line.quantity), unitPrice: parseMoney(line.unitPrice, 'قیمت خرید') }));
     if (amounts.some((line) => !line.itemId || !Number.isInteger(line.quantity) || line.quantity <= 0 || line.unitPrice < 0n)) throw new BadRequestException('اقلام خرید معتبر نیستند');
-    const paid = BigInt(paidAmount ?? 0);
+    const paid = parseMoney(paidAmount, 'مبلغ پرداخت');
     if (paid < 0n) throw new BadRequestException('مبلغ پرداخت معتبر نیست');
     return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const supplier = await tx.supplier.findFirst({ where: { id: supplierId, isActive: true, deletedAt: null } });
