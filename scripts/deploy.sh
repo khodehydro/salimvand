@@ -75,6 +75,11 @@ for attempt in $(seq 1 30); do
     systemctl is-active --quiet salimvand-website.service
     systemctl is-active --quiet salimvand-worker.service
     curl --fail --silent --show-error --max-time 10 http://127.0.0.1:3000/ >/dev/null
+    if ss -ltnH 'sport = :4000' | grep -qvE '127\.0\.0\.1:4000|\[::1\]:4000'; then
+      echo 'API is listening on a non-loopback address; refusing to mark release live.' >&2
+      ss -ltnH 'sport = :4000' >&2 || true
+      exit 1
+    fi
     echo "Release $(git rev-parse --short HEAD) is live."
     exit 0
   fi
