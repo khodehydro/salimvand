@@ -12,6 +12,17 @@ type CreateInput = { customerName?: string; customerMobile?: string; discount?: 
 export class InvoiceService {
   constructor(private readonly prisma: PrismaService) {}
 
+  buildDraft(number: string, lines: readonly DraftLine[], discount = 0n) {
+    if (!/^INV-[0-9]{4,}$/.test(number)) throw new Error('شماره فاکتور معتبر نیست');
+    if (lines.length === 0) throw new Error('فاکتور باید حداقل یک ردیف داشته باشد');
+    if (lines.length > 100) throw new Error('تعداد ردیف‌های فاکتور بیش از حد مجاز است');
+    if (new Set(lines.map((line) => line.inventoryItemId)).size !== lines.length) throw new Error('قلم موجودی نمی‌تواند در چند ردیف تکرار شود');
+    if (lines.some((line) => !line.productName.trim())) throw new Error('نام محصول الزامی است');
+    const totals = calculateInvoiceTotals(lines, discount);
+    const publicToken = createPublicToken();
+    return { ...totals, number, publicToken: publicToken.token, publicTokenHash: publicToken.hash, items: lines.map((line) => ({ ...line, lineTotal: BigInt(line.quantity) * line.unitPrice })) };
+  }
+
   async create(input: CreateInput, userId: string) {
     if (!userId || !input.items?.length) throw new BadRequestException('کاربر و حداقل یک قلم فاکتور الزامی است');
     const ids = input.items.map((item) => item.inventoryItemId ?? '');
