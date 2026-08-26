@@ -20,13 +20,18 @@ export class InvoiceController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('seller')
+  @Get('options')
+  options() { return this.invoices.options(); }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('seller')
   @Post()
   create(@Body() body: Parameters<InvoiceService['create']>[0], @Req() request: AuthenticatedRequest) { return this.invoices.create(body, request.user?.id ?? ''); }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('accountant')
   @Post(':id/pay')
-  pay(@Param('id') id: string, @Body() body: { amount?: string | number; method?: 'cash' | 'card' | 'transfer' | 'credit' }) { return this.invoices.pay(id, body.amount ?? 0, body.method ?? 'cash'); }
+  pay(@Param('id') id: string, @Body() body: { amount?: string | number; method?: 'cash' | 'card' | 'transfer' | 'credit' }, @Req() request: AuthenticatedRequest) { return this.invoices.pay(id, body.amount ?? 0, body.method ?? 'cash', request.user?.id ?? ''); }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('manager')

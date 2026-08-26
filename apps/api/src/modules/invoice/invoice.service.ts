@@ -57,19 +57,31 @@ export class InvoiceService {
   }
 
   async getPublic(token: string) {
-    const invoice = await this.prisma.invoice.findUnique({ where: { publicTokenHash: hashPublicToken(token) }, include: { items: true } });
+    const invoice = await this.prisma.invoice.findUnique({ where: { publicTokenHash: hashPublicToken(token) }, select: { id: true, number: true, status: true, customerName: true, customerMobile: true, subtotal: true, discount: true, total: true, paymentStatus: true, paidAmount: true, paymentMethod: true, paidAt: true, issuedAt: true, voidedAt: true, items: true } });
     if (!invoice || invoice.status === 'voided') throw new NotFoundException('فاکتور پیدا نشد');
     return { ok: true, data: invoice };
   }
 
-  async pay(id: string, amount: string | number, method: 'cash' | 'card' | 'transfer' | 'credit') {
-    const paidAmount = BigInt(amount);
-    if (paidAmount < 0n) throw new BadRequestException('مبلغ پرداخت نمی‌تواند منفی باشد');
-    const invoice = await this.prisma.invoice.findUnique({ where: { id } });
-    if (!invoice || invoice.status === 'voided') throw new NotFoundException('فاکتور پیدا نشد');
-    if (paidAmount > invoice.total) throw new BadRequestException('مبلغ پرداخت بیشتر از مبلغ فاکتور است');
-    const status = paidAmount === invoice.total ? 'paid' : paidAmount > 0n ? 'partial' : 'unpaid';
-    return { ok: true, data: await this.prisma.invoice.update({ where: { id }, data: { paidAmount, paymentStatus: status, paymentMethod: method, paidAt: paidAmount > 0n ? new Date() : null }, include: { items: true } }) };
+  async options() {
+    const items = await this.prisma.inventoryItem.findMany({ where: { isActive: true, product: { deletedAt: null, status: 'active' } }, orderBy: { product: { name: 'asc' } }, select: { id: true, barcode: true, quantity: true, salePrice: true, product: { select: { name: true, code: true } }, brand: { select: { name: true } } } });
+    return { ok: true, data: items };
+  }
+
+  async pay(id: string, amount: string | number, method: 'cash' | 'card' | 'transfer' | 'credit', userId: string) {
+    if (!userId || !['cash', 'card', 'transfer', 'credit'].includes(method)) throw new BadRequestException('کاربر و روش پرداخت معتبر الزامی است');
+    let paidAmount: bigint;
+    try { paidAmount = BigInt(amount); } catch { throw new BadRequestException('مبلغ پرداخت معتبر نیست'); }
+    if (paidAmount <= 0n) throw new BadRequestException('مبلغ پرداخت باید مثبت باشد');
+    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const invoice = await tx.invoice.findUnique({ where: { id } });
+      if (!invoice || invoice.status === 'voided') throw new NotFoundException('فاکتور پیدا نشد');
+      const nextPaid = invoice.paidAmount + paidAmount;
+      if (nextPaid > invoice.total) throw new BadRequestException('مجموع پرداخت بیشتر از مبلغ فاکتور است');
+      const status = nextPaid === invoice.total ? 'paid' : 'partial';
+      const updated = await tx.invoice.update({ where: { id }, data: { paidAmount: nextPaid, paymentStatus: status, paymentMethod: method, paidAt: status === 'paid' ? new Date() : invoice.paidAt }, include: { items: true } });
+      await writeAudit(tx, { userId, action: 'pay', entityType: 'invoice', entityId: id, before: { paidAmount: invoice.paidAmount.toString(), paymentStatus: invoice.paymentStatus }, after: { paidAmount: nextPaid.toString(), paymentStatus: status, method } });
+      return { ok: true, data: updated };
+    });
   }
 
   async void(id: string, userId: string) {
