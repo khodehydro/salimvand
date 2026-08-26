@@ -59,6 +59,14 @@ install -m 0644 deploy/systemd/salimvand-website.service /etc/systemd/system/sal
 install -m 0644 deploy/systemd/salimvand-worker.service /etc/systemd/system/salimvand-worker.service
 systemctl daemon-reload
 systemctl enable --now salimvand-api.service salimvand-website.service salimvand-worker.service
+
+# Keep SSH brute-force protection consistent across releases when Fail2ban is installed.
+if command -v fail2ban-client >/dev/null 2>&1; then
+  install -d /etc/fail2ban/jail.d
+  install -m 0644 "$ROOT_DIR/deploy/fail2ban/sshd.local" /etc/fail2ban/jail.d/sshd-salimvand.local
+  systemctl enable --now fail2ban
+  fail2ban-client reload
+fi
 systemctl restart salimvand-api.service salimvand-website.service salimvand-worker.service
 
 for attempt in $(seq 1 30); do
