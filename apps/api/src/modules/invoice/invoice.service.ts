@@ -47,7 +47,13 @@ export class InvoiceService {
         const updated = await tx.inventoryItem.updateMany({ where: { id: line.inventoryItemId, quantity: { gte: line.quantity }, isActive: true }, data: { quantity: { decrement: line.quantity } } });
         if (updated.count !== 1) throw new ConflictException({ code: 'INSUFFICIENT_STOCK', message: 'موجودی کافی نیست', itemId: line.inventoryItemId });
       }
-      const created = await tx.invoice.create({ data: { number, publicTokenHash: publicToken.hash, customerName: input.customerName?.trim() || undefined, customerMobile: input.customerMobile?.trim() || undefined, subtotal: totals.subtotal, discount: totals.discount, total: totals.total, issuedById: userId, items: { create: lines.map((line) => ({ inventoryItemId: line.inventoryItemId, productName: line.productName, quantity: line.quantity, unitPrice: line.unitPrice, lineTotal: BigInt(line.quantity) * line.unitPrice })) } }, include: { items: true } });
+      const customerName = input.customerName?.trim();
+      const customerMobile = input.customerMobile?.trim();
+      const created = await tx.invoice.create({ data: { number, publicTokenHash: publicToken.hash, customerName: customerName || undefined, customerMobile: customerMobile || undefined, subtotal: totals.subtotal, discount: totals.discount, total: totals.total, issuedById: userId, items: { create: lines.map((line) => ({ inventoryItemId: line.inventoryItemId, productName: line.productName, quantity: line.quantity, unitPrice: line.unitPrice, lineTotal: BigInt(line.quantity) * line.unitPrice })) } }, include: { items: true } });
+      if (customerName && customerMobile) {
+        const customer = await this.queryRaw<{ id: string }>(tx, 'INSERT INTO "customers" ("name", "mobile") VALUES ($1, $2) ON CONFLICT ("mobile") DO UPDATE SET "name" = EXCLUDED."name", "updatedAt" = CURRENT_TIMESTAMP RETURNING "id"', customerName, customerMobile);
+        if (customer[0]) await this.executeRaw(tx, 'UPDATE "invoices" SET "customerId" = $1 WHERE "id" = $2', customer[0].id, created.id);
+      }
       for (const line of lines) await tx.inventoryTransaction.create({ data: { itemId: line.inventoryItemId, type: 'sale', quantityChange: -line.quantity, quantityAfter: 0, userId, refType: 'invoice', refId: created.id, reason: `صدور فاکتور ${number}` } });
       // Refresh quantityAfter from the transactionally updated rows.
       await writeAudit(tx, { userId, action: 'issue', entityType: 'invoice', entityId: created.id, after: { number, total: totals.total.toString() } });
@@ -62,6 +68,19 @@ export class InvoiceService {
     const invoice = await this.prisma.invoice.findUnique({ where: { publicTokenHash: hashPublicToken(token) }, select: { id: true, number: true, status: true, customerName: true, customerMobile: true, subtotal: true, discount: true, total: true, paymentStatus: true, paidAmount: true, paymentMethod: true, paidAt: true, issuedAt: true, voidedAt: true, items: true } });
     if (!invoice || invoice.status === 'voided') throw new NotFoundException('فاکتور پیدا نشد');
     return { ok: true, data: invoice };
+  }
+
+  async customers(search?: string) {
+    const pattern = search?.trim() ? `%${search.trim()}%` : '%';
+    const rows = await this.queryRaw<{ id: string; name: string; mobile: string; notes: string | null; isActive: boolean; createdAt: Date }>(this.prisma as unknown as { $queryRawUnsafe: unknown }, 'SELECT "id", "name", "mobile", "notes", "isActive", "createdAt" FROM "customers" WHERE "isActive" = true AND ("name" ILIKE $1 OR "mobile" ILIKE $1) ORDER BY "createdAt" DESC LIMIT 100', pattern);
+    return { ok: true, data: rows };
+  }
+
+  async createCustomer(input: { name?: string; mobile?: string; notes?: string }) {
+    const name = input.name?.trim(); const mobile = input.mobile?.trim();
+    if (!name || !mobile) throw new BadRequestException('نام و موبایل مشتری الزامی است');
+    const rows = await this.queryRaw<{ id: string; name: string; mobile: string; notes: string | null }>(this.prisma as unknown as { $queryRawUnsafe: unknown }, 'INSERT INTO "customers" ("name", "mobile", "notes") VALUES ($1, $2, $3) ON CONFLICT ("mobile") DO UPDATE SET "name" = EXCLUDED."name", "notes" = EXCLUDED."notes", "updatedAt" = CURRENT_TIMESTAMP RETURNING "id", "name", "mobile", "notes"', name, mobile, input.notes?.trim() || null);
+    return { ok: true, data: rows[0] };
   }
 
   async options() {
@@ -81,6 +100,7 @@ export class InvoiceService {
       if (nextPaid > invoice.total) throw new BadRequestException('مجموع پرداخت بیشتر از مبلغ فاکتور است');
       const status = nextPaid === invoice.total ? 'paid' : 'partial';
       const updated = await tx.invoice.update({ where: { id }, data: { paidAmount: nextPaid, paymentStatus: status, paymentMethod: method, paidAt: status === 'paid' ? new Date() : invoice.paidAt }, include: { items: true } });
+      await this.executeRaw(tx, 'INSERT INTO "payments" ("invoiceId", "amount", "method", "receivedById") VALUES ($1, $2, CAST($3 AS "PaymentMethod"), $4)', id, paidAmount, method, userId);
       await writeAudit(tx, { userId, action: 'pay', entityType: 'invoice', entityId: id, before: { paidAmount: invoice.paidAmount.toString(), paymentStatus: invoice.paymentStatus }, after: { paidAmount: nextPaid.toString(), paymentStatus: status, method } });
       if (this.notifications && invoice.customerMobile) await this.notifications.enqueue({ type: 'invoice.paid', invoiceId: id, mobile: invoice.customerMobile, message: `پرداخت فاکتور ${invoice.number} ثبت شد. مبلغ: ${paidAmount.toString()} ریال` });
       return { ok: true, data: updated };
@@ -99,6 +119,16 @@ export class InvoiceService {
       await writeAudit(tx, { userId, action: 'void', entityType: 'invoice', entityId: id, before: { status: invoice.status, number: invoice.number }, after: { status: updated.status } });
       return { ok: true, data: updated };
     });
+  }
+
+  private async queryRaw<T>(client: { $queryRawUnsafe: unknown }, query: string, ...values: unknown[]): Promise<T[]> {
+    const execute = client.$queryRawUnsafe as (...args: unknown[]) => Promise<T[]>;
+    return execute(query, ...values);
+  }
+
+  private async executeRaw(client: { $executeRawUnsafe: unknown }, query: string, ...values: unknown[]): Promise<number> {
+    const execute = client.$executeRawUnsafe as (...args: unknown[]) => Promise<number>;
+    return execute(query, ...values);
   }
 
   async list() { return { ok: true, data: await this.prisma.invoice.findMany({ orderBy: { issuedAt: 'desc' }, include: { items: true } }) }; }

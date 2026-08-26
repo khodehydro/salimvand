@@ -27,11 +27,13 @@ export class NotificationsService implements OnModuleDestroy {
 
   private async process(job: Job<NotificationJob>) {
     // Provider adapters are isolated here. Without credentials, jobs remain observable and retryable.
-    if (!process.env.SMS_PROVIDER || !process.env.SMS_API_KEY) {
+    const endpoint = process.env.SMS_API_URL;
+    if (!process.env.SMS_PROVIDER || !process.env.SMS_API_KEY || !endpoint || !job.data.mobile) {
       console.info(`[notification:${job.data.type}] ${job.data.message}`);
       return;
     }
-    console.info(`[notification:${job.data.type}] provider=${process.env.SMS_PROVIDER} mobile=${job.data.mobile ?? 'n/a'}`);
+    const response = await fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${process.env.SMS_API_KEY}` }, body: JSON.stringify({ to: job.data.mobile, message: job.data.message, provider: process.env.SMS_PROVIDER }) });
+    if (!response.ok) throw new Error(`SMS provider returned ${response.status}`);
   }
 
   async onModuleDestroy() { await this.worker?.close(); await this.queue.close(); await this.connection.quit(); }

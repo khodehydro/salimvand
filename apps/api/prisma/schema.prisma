@@ -241,6 +241,7 @@ model User {
   refreshTokens RefreshToken[]
   auditLogs AuditLog[]
   invoices Invoice[]
+  payments Payment[]
   createdAt    DateTime               @default(now()) @db.Timestamptz(6)
   updatedAt    DateTime               @updatedAt @db.Timestamptz(6)
   @@map("users")
@@ -258,6 +259,7 @@ model Invoice {
   number       String        @unique @db.VarChar(30)
   publicTokenHash String     @unique @db.VarChar(128)
   status       InvoiceStatus @default(issued)
+  customerId   String?       @db.Uuid
   customerName String?       @db.VarChar(150)
   customerMobile String?     @db.VarChar(20)
   subtotal     BigInt        @default(0)
@@ -269,11 +271,39 @@ model Invoice {
   paidAt       DateTime?     @db.Timestamptz(6)
   issuedById   String        @db.Uuid
   issuedBy     User          @relation(fields: [issuedById], references: [id])
+  customer     Customer?     @relation(fields: [customerId], references: [id])
   items        InvoiceItem[]
+  payments     Payment[]
   issuedAt     DateTime      @default(now()) @db.Timestamptz(6)
   voidedAt     DateTime?     @db.Timestamptz(6)
   @@index([status, issuedAt])
   @@map("invoices")
+}
+
+model Customer {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String    @db.VarChar(150)
+  mobile      String    @unique @db.VarChar(20)
+  notes       String?
+  isActive    Boolean   @default(true)
+  invoices    Invoice[]
+  createdAt   DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @db.Timestamptz(6)
+  @@index([name])
+  @@map("customers")
+}
+
+model Payment {
+  id          String        @id @default(uuid()) @db.Uuid
+  invoiceId   String        @db.Uuid
+  amount      BigInt
+  method      PaymentMethod
+  receivedById String       @db.Uuid
+  receivedAt  DateTime      @default(now()) @db.Timestamptz(6)
+  invoice     Invoice       @relation(fields: [invoiceId], references: [id])
+  receivedBy  User          @relation(fields: [receivedById], references: [id])
+  @@index([invoiceId, receivedAt])
+  @@map("payments")
 }
 
 model InvoiceItem {

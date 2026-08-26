@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
 import { RolesGuard } from '../../common/auth/roles.guard';
@@ -17,6 +17,16 @@ export class InvoiceController {
   @Roles('seller')
   @Get()
   list() { return this.invoices.list(); }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('seller')
+  @Get('customers')
+  customers(@Query('search') search?: string) { return this.invoices.customers(search); }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('seller')
+  @Post('customers')
+  createCustomer(@Body() body: { name?: string; mobile?: string; notes?: string }) { return this.invoices.createCustomer(body); }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('seller')
