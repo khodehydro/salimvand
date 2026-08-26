@@ -17,4 +17,13 @@ export class ReportsService {
     const [items, transactions] = await Promise.all([this.prisma.inventoryItem.findMany({ where: { isActive: true }, include: { product: { select: { name: true, code: true } }, brand: { select: { name: true } }, location: true }, orderBy: { quantity: 'asc' } }), this.prisma.inventoryTransaction.findMany({ orderBy: { createdAt: 'desc' }, take: 500, include: { item: { include: { product: true, brand: true } } } })]);
     return { ok: true, data: { items, transactions } };
   }
+
+  async profit(from?: string, to?: string) {
+    const where = { status: 'issued' as const, ...(from || to ? { issuedAt: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } } : {}) };
+    const invoices = await this.prisma.invoice.findMany({ where, select: { items: { select: { productName: true, quantity: true, unitPrice: true, inventoryItem: { select: { purchasePrice: true, brand: { select: { name: true } } } } } } } });
+    const byBrand = new Map<string, { brand: string; quantity: number; revenue: bigint; cost: bigint; profit: bigint }>();
+    for (const invoice of invoices) for (const item of invoice.items) { const brand = item.inventoryItem.brand.name; const row = byBrand.get(brand) ?? { brand, quantity: 0, revenue: 0n, cost: 0n, profit: 0n }; const quantity = BigInt(item.quantity); row.quantity += item.quantity; row.revenue += item.unitPrice * quantity; row.cost += item.inventoryItem.purchasePrice * quantity; row.profit += (item.unitPrice - item.inventoryItem.purchasePrice) * quantity; byBrand.set(brand, row); }
+    const rows = [...byBrand.values()];
+    return { ok: true, data: { summary: { revenue: rows.reduce((sum, row) => sum + row.revenue, 0n), cost: rows.reduce((sum, row) => sum + row.cost, 0n), profit: rows.reduce((sum, row) => sum + row.profit, 0n) }, brands: rows } };
+  }
 }
