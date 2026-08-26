@@ -9,6 +9,7 @@ User=salimvand
 Group=salimvand
 WorkingDirectory=/opt/salimvand
 EnvironmentFile=/opt/salimvand/.env
+Environment=API_HOST=127.0.0.1
 ExecStart=/usr/bin/node /opt/salimvand/apps/api/dist/main.js
 Restart=always
 RestartSec=5

@@ -17,7 +17,7 @@ async function bootstrap() {
   app.useGlobalFilters(new ApiExceptionFilter());
   app.enableCors({ origin: corsOrigins(process.env.CORS_ORIGINS), credentials: true });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
-  await app.listen(Number(process.env.API_PORT ?? 4000), '0.0.0.0');
+  await app.listen(Number(process.env.API_PORT ?? 4000), process.env.API_HOST ?? '127.0.0.1');
 }
 
 void bootstrap();
