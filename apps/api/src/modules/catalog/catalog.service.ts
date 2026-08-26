@@ -12,13 +12,13 @@ type PublicProduct = {
 export class CatalogService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async listPublicProducts(query: { q?: string; categoryId?: string; vehicleModelId?: string; brandId?: string; slug?: string; inStock?: boolean; page?: number; pageSize?: number }) {
+  async listPublicProducts(query: { q?: string; categoryId?: string; vehicleModelId?: string; vehicleTrimId?: string; brandId?: string; slug?: string; inStock?: boolean; page?: number; pageSize?: number }) {
     const where = {
       status: 'active',
       deletedAt: null,
       ...(query.slug ? { slug: query.slug } : {}),
       ...(query.categoryId ? { categoryId: query.categoryId } : {}),
-      ...(query.vehicleModelId ? { compatibilities: { some: { modelId: query.vehicleModelId } } } : {}),
+      ...(query.vehicleModelId || query.vehicleTrimId ? { compatibilities: { some: { ...(query.vehicleModelId ? { modelId: query.vehicleModelId } : {}), ...(query.vehicleTrimId ? { trimId: query.vehicleTrimId } : {}) } } } : {}),
       ...(query.q ? { OR: [{ name: { contains: query.q, mode: 'insensitive' } }, { partNumber: { contains: query.q, mode: 'insensitive' } }] } : {}),
       ...(query.inStock || query.brandId ? { inventoryItems: { some: { ...(query.inStock ? { quantity: { gt: 0 } } : {}), ...(query.brandId ? { brandId: query.brandId } : {}), isActive: true } } } : {}),
     };

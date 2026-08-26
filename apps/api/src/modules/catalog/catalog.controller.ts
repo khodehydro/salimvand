@@ -9,8 +9,8 @@ export class CatalogController {
   meta() { return this.catalog.meta(); }
 
   @Get('public/products')
-  products(@Query('q') q?: string, @Query('categoryId') categoryId?: string, @Query('vehicleModelId') vehicleModelId?: string, @Query('brandId') brandId?: string, @Query('page') page?: string, @Query('pageSize') pageSize?: string, @Query('inStock') inStock?: string) {
-    return this.catalog.listPublicProducts({ q, categoryId, vehicleModelId, brandId, page: Number(page ?? 1), pageSize: Number(pageSize ?? 24), inStock: inStock === 'true' });
+  products(@Query('q') q?: string, @Query('categoryId') categoryId?: string, @Query('vehicleModelId') vehicleModelId?: string, @Query('vehicleTrimId') vehicleTrimId?: string, @Query('brandId') brandId?: string, @Query('page') page?: string, @Query('pageSize') pageSize?: string, @Query('inStock') inStock?: string) {
+    return this.catalog.listPublicProducts({ q, categoryId, vehicleModelId, vehicleTrimId, brandId, page: Number(page ?? 1), pageSize: Number(pageSize ?? 24), inStock: inStock === 'true' });
   }
 
   @Get('public/products/:slug')
