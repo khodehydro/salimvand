@@ -1,4 +1,6 @@
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:4000/api/v1';
+// In production the CMS and API share the same origin through the reverse proxy.
+// Never ship a browser-facing localhost URL as a fallback.
+const API_URL = import.meta.env.VITE_API_URL ?? '/api/v1';
 
 export async function downloadFile(path: string, filename: string): Promise<void> {
   const token = localStorage.getItem('salimvand.accessToken');
