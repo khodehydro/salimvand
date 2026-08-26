@@ -36,6 +36,17 @@ sudo APP_DIR=/opt/salimvand DEPLOY_BRANCH=arena/01a038b2-salimvand ./scripts/dep
 
 فرمان بالا به‌ترتیب Fetch، Checkout نسخهٔ Branch، Install قفل‌شده، Prisma Generate، Migration Deploy، Seed، Typecheck، Test، Build، فعال‌سازی Systemd، Restart و Health Check را انجام می‌دهد. در پایان علاوه بر API Readiness، فعال‌بودن API، Website و Worker و پاسخ‌گویی Website نیز بررسی می‌شود؛ همچنین Deploy اگر API روی آدرس عمومی Bind شده باشد، ناموفق اعلام می‌شود.
 
+## Smoke Check پس از Deploy
+
+برای بررسی مستقل سلامت سرویس‌ها روی VPS:
+
+```bash
+cd /opt/salimvand
+bash scripts/check-production.sh
+```
+
+این بررسی باید پیام `Production checks passed.` را نمایش دهد و فعال‌بودن API، Website، Worker، Nginx، Fail2ban و Bind داخلی API را کنترل می‌کند.
+
 ## Backup و بازبینی
 
 Backup روزانه با `salimvand-backup.timer` اجرا می‌شود و ۱۴ روز نگهداری می‌گردد. در صورت تنظیم `BACKUP_ENCRYPTION_KEY`، خروجی PostgreSQL با AES-256 رمز می‌شود:
