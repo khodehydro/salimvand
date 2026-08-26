@@ -20,7 +20,8 @@ install -d -o root -g root -m 0750 /var/backups/salimvand
 # Node 20 and pnpm are intentionally installed by the host's approved runtime policy.
 command -v node >/dev/null || { echo 'Install Node.js 20+ before running this script.' >&2; exit 1; }
 node -e "if (Number(process.versions.node.split('.')[0]) < 20) process.exit(1)" || { echo 'Node.js 20+ is required.' >&2; exit 1; }
-corepack enable
+if command -v corepack >/dev/null 2>&1; then corepack enable; fi
+command -v pnpm >/dev/null 2>&1 || echo "pnpm is not installed yet; install it before deploy."
 install -m 0644 deploy/nginx/salimvand.conf /etc/nginx/sites-available/salimvand.conf
 ln -sfn /etc/nginx/sites-available/salimvand.conf /etc/nginx/sites-enabled/salimvand.conf
 rm -f /etc/nginx/sites-enabled/default

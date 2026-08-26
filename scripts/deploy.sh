@@ -10,7 +10,14 @@ flock -n 9 || { echo 'Another deployment is already running.' >&2; exit 1; }
 
 cd "$ROOT_DIR"
 [[ -f .env ]] || { echo "Missing $ROOT_DIR/.env; refusing to deploy." >&2; exit 1; }
-command -v corepack >/dev/null || { echo 'Node.js/corepack is required.' >&2; exit 1; }
+if command -v corepack >/dev/null 2>&1; then
+  PNPM=(corepack pnpm)
+elif command -v pnpm >/dev/null 2>&1; then
+  PNPM=(pnpm)
+else
+  echo 'pnpm or corepack is required.' >&2
+  exit 1
+fi
 command -v pg_isready >/dev/null || { echo 'PostgreSQL client is required.' >&2; exit 1; }
 
 export NODE_ENV=production
@@ -19,13 +26,13 @@ export TZ=UTC
 echo "Fetching $BRANCH..."
 git fetch --prune origin "$BRANCH"
 git checkout --detach "origin/$BRANCH"
-corepack pnpm install --frozen-lockfile
-corepack pnpm --filter @salimvand/api exec prisma generate
-corepack pnpm --filter @salimvand/api exec prisma migrate deploy
-corepack pnpm --filter @salimvand/api prisma:seed
-corepack pnpm typecheck
-corepack pnpm test
-corepack pnpm build
+"${PNPM[@]}" install --frozen-lockfile
+"${PNPM[@]}" --filter @salimvand/api exec prisma generate
+"${PNPM[@]}" --filter @salimvand/api exec prisma migrate deploy
+"${PNPM[@]}" --filter @salimvand/api prisma:seed
+"${PNPM[@]}" typecheck
+"${PNPM[@]}" test
+"${PNPM[@]}" build
 
 install -d -o salimvand -g salimvand "$ROOT_DIR/uploads/products"
 systemctl daemon-reload
