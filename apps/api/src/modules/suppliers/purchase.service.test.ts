@@ -16,4 +16,8 @@ describe('PurchaseService validation', () => {
   it('rejects negative paid amounts', async () => {
     await expect(service.create('supplier-id', [{ inventoryItemId: 'item-id', quantity: 1, unitPrice: 100 }], -1, 'actor-id')).rejects.toThrow('مبلغ پرداخت معتبر نیست');
   });
+
+  it('rejects duplicate lines with conflicting prices', async () => {
+    await expect(service.create('supplier-id', [{ inventoryItemId: 'item-id', quantity: 1, unitPrice: 100 }, { inventoryItemId: 'item-id', quantity: 1, unitPrice: 120 }], 0, 'actor-id')).rejects.toThrow('برای هر قلم فقط یک قیمت خرید مجاز است');
+  });
 });

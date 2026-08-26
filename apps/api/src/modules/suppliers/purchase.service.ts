@@ -25,7 +25,7 @@ export class PurchaseService {
     const amounts = lines.map((line) => ({ itemId: line.inventoryItemId, quantity: Number(line.quantity), unitPrice: parseMoney(line.unitPrice, 'قیمت خرید') }));
     if (amounts.some((line) => !line.itemId || !Number.isInteger(line.quantity) || line.quantity <= 0)) throw new BadRequestException('اقلام خرید معتبر نیستند');
     const unique = new Map<string, { itemId: string; quantity: number; unitPrice: bigint }>();
-    for (const line of normalized) { const current = unique.get(line.itemId!); if (current && current.unitPrice !== line.unitPrice) throw new BadRequestException('برای هر قلم فقط یک قیمت خرید مجاز است'); unique.set(line.itemId!, current ? { ...current, quantity: current.quantity + line.quantity } : { itemId: line.itemId!, quantity: line.quantity, unitPrice: line.unitPrice }); }
+    for (const line of amounts) { const current = unique.get(line.itemId!); if (current && current.unitPrice !== line.unitPrice) throw new BadRequestException('برای هر قلم فقط یک قیمت خرید مجاز است'); unique.set(line.itemId!, current ? { ...current, quantity: current.quantity + line.quantity } : { itemId: line.itemId!, quantity: line.quantity, unitPrice: line.unitPrice }); }
     const normalized = [...unique.values()];
     const paid = parseMoney(paidAmount, 'مبلغ پرداخت');
     if (paid < 0n) throw new BadRequestException('مبلغ پرداخت معتبر نیست');
