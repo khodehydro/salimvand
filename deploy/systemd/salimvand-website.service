@@ -9,7 +9,9 @@ User=salimvand
 Group=salimvand
 WorkingDirectory=/opt/salimvand/apps/website
 EnvironmentFile=/opt/salimvand/.env
-ExecStart=/usr/bin/npm run start
+Environment=PORT=3000
+Environment=HOSTNAME=127.0.0.1
+ExecStart=/usr/bin/node /opt/salimvand/apps/website/.next/standalone/server.js
 Restart=always
 RestartSec=5
 NoNewPrivileges=true
