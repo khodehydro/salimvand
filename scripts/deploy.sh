@@ -36,6 +36,9 @@ git checkout --detach "origin/$BRANCH"
 "${PNPM[@]}" build
 
 install -d -o salimvand -g salimvand "$ROOT_DIR/uploads/products"
+install -m 0644 deploy/systemd/salimvand-api.service /etc/systemd/system/salimvand-api.service
+install -m 0644 deploy/systemd/salimvand-website.service /etc/systemd/system/salimvand-website.service
+install -m 0644 deploy/systemd/salimvand-worker.service /etc/systemd/system/salimvand-worker.service
 systemctl daemon-reload
 systemctl enable --now salimvand-api.service salimvand-website.service salimvand-worker.service
 systemctl restart salimvand-api.service salimvand-website.service salimvand-worker.service
