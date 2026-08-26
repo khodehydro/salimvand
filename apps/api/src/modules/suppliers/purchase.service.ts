@@ -15,8 +15,8 @@ function parseMoney(value: number | string | undefined, label: string): bigint {
 export class PurchaseService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list() {
-    const invoices = await this.prisma.purchaseInvoice.findMany({ orderBy: { issuedAt: 'desc' }, include: { supplier: true, items: true } });
+  async list(supplierId?: string) {
+    const invoices = await this.prisma.purchaseInvoice.findMany({ where: supplierId ? { supplierId } : undefined, orderBy: { issuedAt: 'desc' }, include: { supplier: true, items: true } });
     return { ok: true, data: invoices };
   }
 
