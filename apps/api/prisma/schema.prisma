@@ -240,6 +240,7 @@ model User {
   transactions InventoryTransaction[]
   refreshTokens RefreshToken[]
   auditLogs AuditLog[]
+  settings  Setting[]
   invoices Invoice[]
   payments Payment[]
   createdAt    DateTime               @default(now()) @db.Timestamptz(6)
@@ -331,6 +332,15 @@ model RefreshToken {
   createdAt   DateTime @default(now()) @db.Timestamptz(6)
   @@index([userId, revokedAt])
   @@map("refresh_tokens")
+}
+
+model Setting {
+  key        String   @id @db.VarChar(100)
+  value      Json
+  updatedById String?  @db.Uuid
+  updatedBy  User?     @relation(fields: [updatedById], references: [id], onDelete: SetNull)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(6)
+  @@map("settings")
 }
 
 model AuditLog {
