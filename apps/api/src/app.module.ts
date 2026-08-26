@@ -22,7 +22,7 @@ class SystemController {
 
   @Get('health')
   health() {
-    return { ok: true, data: { service: 'api', name: APP_NAME, prefix: API_PREFIX, database: 'pending' } };
+    return { ok: true, data: { service: 'api', name: APP_NAME, prefix: API_PREFIX, database: 'configured' } };
   }
 
   @Get('health/ready')
