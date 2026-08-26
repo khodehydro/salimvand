@@ -1,4 +1,5 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, Res, UseGuards } from '@nestjs/common';
+import type { Response } from 'express';
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
 import { RolesGuard } from '../../common/auth/roles.guard';
 import { Roles } from '../../common/auth/roles.decorator';
@@ -13,4 +14,5 @@ export class ReportsController {
   @Get('inventory') inventory() { return this.reports.inventory(); }
   @Get('profit') profit(@Query('from') from?: string, @Query('to') to?: string) { return this.reports.profit(from, to); }
   @Get('customers') customers() { return this.reports.customers(); }
+  @Get('sales/export') async exportSales(@Res() response: Response) { const csv = await this.reports.exportSales(); response.setHeader('Content-Type', 'text/csv; charset=utf-8'); response.setHeader('Content-Disposition', 'attachment; filename="salimvand-sales.csv"'); return response.send(`\\uFEFF${csv}`); }
 }

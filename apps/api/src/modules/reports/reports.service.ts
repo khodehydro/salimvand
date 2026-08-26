@@ -18,6 +18,12 @@ export class ReportsService {
     return { ok: true, data: { items, transactions } };
   }
 
+  async exportSales() {
+    const invoices = await this.prisma.invoice.findMany({ where: { status: 'issued' }, orderBy: { issuedAt: 'desc' }, select: { number: true, customerName: true, customerMobile: true, total: true, paidAmount: true, paymentStatus: true, issuedAt: true } });
+    const cell = (value: string | number | bigint | null) => { const text = String(value ?? ''); return /^[=+\-@]/.test(text) ? `'${text}` : `"${text.replaceAll('"', '""')}"`; };
+    return ['شماره فاکتور,نام مشتری,موبایل,مبلغ,پرداخت‌شده,وضعیت,تاریخ', ...invoices.map((row) => [row.number, row.customerName, row.customerMobile, row.total, row.paidAmount, row.paymentStatus, row.issuedAt.toISOString()].map(cell).join(','))].join('\n');
+  }
+
   async customers() {
     const rows = await this.prisma.customer.findMany({ where: { isActive: true }, include: { invoices: { where: { status: 'issued' }, select: { total: true, paidAmount: true } } }, orderBy: { createdAt: 'desc' }, take: 500 });
     const data = rows.map((customer) => ({ id: customer.id, name: customer.name, mobile: customer.mobile, invoiceCount: customer.invoices.length, purchased: customer.invoices.reduce((sum, invoice) => sum + invoice.total, 0n), debt: customer.invoices.reduce((sum, invoice) => sum + invoice.total - invoice.paidAmount, 0n) }));
