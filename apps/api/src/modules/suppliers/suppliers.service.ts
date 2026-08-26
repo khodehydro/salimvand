@@ -21,6 +21,14 @@ export class SuppliersService {
     return { ok: true, data: supplier };
   }
 
+  async remove(id: string, actorId: string, ip?: string) {
+    const supplier = await this.prisma.supplier.findFirst({ where: { id, deletedAt: null } });
+    if (!supplier) throw new NotFoundException('تأمین‌کننده پیدا نشد');
+    await this.prisma.supplier.update({ where: { id }, data: { isActive: false, deletedAt: new Date() } });
+    await writeAudit(this.prisma, { userId: actorId, ip, action: 'delete', entityType: 'supplier', entityId: id, before: { name: supplier.name, isActive: supplier.isActive }, after: { isActive: false } });
+    return { ok: true, data: { id, deleted: true } };
+  }
+
   async update(id: string, input: SupplierInput & { isActive?: boolean }, actorId: string, ip?: string) {
     const before = await this.prisma.supplier.findFirst({ where: { id, deletedAt: null } });
     if (!before) throw new NotFoundException('تأمین‌کننده پیدا نشد');
