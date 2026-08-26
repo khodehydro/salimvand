@@ -10,6 +10,7 @@ import { corsOrigins, validateRuntimeConfig } from './common/config/runtime-conf
 async function bootstrap() {
   validateRuntimeConfig();
   const app = await NestFactory.create(AppModule);
+  app.getHttpAdapter().getInstance().set('json replacer', (_key: string, value: unknown) => typeof value === 'bigint' ? value.toString() : value);
   app.setGlobalPrefix('api/v1');
   app.use(cookieParser());
   app.use(helmet());
