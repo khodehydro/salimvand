@@ -40,6 +40,12 @@ export class ReportsService {
     return ['شماره فاکتور,نام مشتری,موبایل,مبلغ,پرداخت‌شده,وضعیت,تاریخ', ...invoices.map((row) => [row.number, row.customerName, row.customerMobile, row.total, row.paidAmount, row.paymentStatus, row.issuedAt.toISOString()].map(cell).join(','))].join('\n');
   }
 
+  async purchaseDebts() {
+    const rows = await this.prisma.purchaseInvoice.groupBy({ by: ['supplierId', 'supplierName'], where: { status: 'issued' }, _sum: { total: true, paidAmount: true }, _count: { id: true }, orderBy: { supplierName: 'asc' } });
+    const suppliers = rows.map((row) => ({ supplierId: row.supplierId, supplierName: row.supplierName, invoiceCount: row._count.id, total: row._sum.total ?? 0n, paidAmount: row._sum.paidAmount ?? 0n, debt: (row._sum.total ?? 0n) - (row._sum.paidAmount ?? 0n) }));
+    return { ok: true, data: { suppliers, totalDebt: suppliers.reduce((sum, row) => sum + row.debt, 0n) } };
+  }
+
   async customers() {
     const rows = await this.prisma.customer.findMany({ where: { isActive: true }, include: { invoices: { where: { status: 'issued' }, select: { total: true, paidAmount: true } } }, orderBy: { createdAt: 'desc' }, take: 500 });
     const data = rows.map((customer) => ({ id: customer.id, name: customer.name, mobile: customer.mobile, invoiceCount: customer.invoices.length, purchased: customer.invoices.reduce((sum, invoice) => sum + invoice.total, 0n), debt: customer.invoices.reduce((sum, invoice) => sum + invoice.total - invoice.paidAmount, 0n) }));
