@@ -12,4 +12,5 @@ export class ReportsController {
   @Get('sales') sales(@Query('from') from?: string, @Query('to') to?: string) { return this.reports.sales(from, to); }
   @Get('inventory') inventory() { return this.reports.inventory(); }
   @Get('profit') profit(@Query('from') from?: string, @Query('to') to?: string) { return this.reports.profit(from, to); }
+  @Get('customers') customers() { return this.reports.customers(); }
 }

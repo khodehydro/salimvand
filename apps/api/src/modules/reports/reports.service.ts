@@ -18,6 +18,12 @@ export class ReportsService {
     return { ok: true, data: { items, transactions } };
   }
 
+  async customers() {
+    const rows = await this.prisma.customer.findMany({ where: { isActive: true }, include: { invoices: { where: { status: 'issued' }, select: { total: true, paidAmount: true } } }, orderBy: { createdAt: 'desc' }, take: 500 });
+    const data = rows.map((customer) => ({ id: customer.id, name: customer.name, mobile: customer.mobile, invoiceCount: customer.invoices.length, purchased: customer.invoices.reduce((sum, invoice) => sum + invoice.total, 0n), debt: customer.invoices.reduce((sum, invoice) => sum + invoice.total - invoice.paidAmount, 0n) }));
+    return { ok: true, data: { customers: data, debtors: data.filter((customer) => customer.debt > 0n).sort((a, b) => (a.debt > b.debt ? -1 : 1)) } };
+  }
+
   async profit(from?: string, to?: string) {
     const where = { status: 'issued' as const, ...(from || to ? { issuedAt: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } } : {}) };
     const invoices = await this.prisma.invoice.findMany({ where, select: { items: { select: { productName: true, quantity: true, unitPrice: true, inventoryItem: { select: { purchasePrice: true, brand: { select: { name: true } } } } } } } });
