@@ -16,5 +16,6 @@ export class ReportsController {
   @Get('profit') profit(@Query('from') from?: string, @Query('to') to?: string) { return this.reports.profit(from, to); }
   @Get('customers') customers() { return this.reports.customers(); }
   @Get('purchase-debts') purchaseDebts() { return this.reports.purchaseDebts(); }
+  @Get('purchase-debts/export') async exportPurchaseDebts(@Res() response: Response) { const csv = await this.reports.exportPurchaseDebts(); response.setHeader('Content-Type', 'text/csv; charset=utf-8'); response.setHeader('Content-Disposition', 'attachment; filename="salimvand-supplier-debts.csv"'); return response.send(`\uFEFF${csv}`); }
   @Get('sales/export') async exportSales(@Res() response: Response) { const csv = await this.reports.exportSales(); response.setHeader('Content-Type', 'text/csv; charset=utf-8'); response.setHeader('Content-Disposition', 'attachment; filename="salimvand-sales.csv"'); return response.send(`\\uFEFF${csv}`); }
 }

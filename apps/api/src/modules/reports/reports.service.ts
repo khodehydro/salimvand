@@ -46,6 +46,12 @@ export class ReportsService {
     return { ok: true, data: { suppliers, totalDebt: suppliers.reduce((sum, row) => sum + row.debt, 0n) } };
   }
 
+  async exportPurchaseDebts() {
+    const report = await this.purchaseDebts();
+    const cell = (value: string | number | bigint | null) => { const text = String(value ?? ''); return /^[=+\-@]/.test(text) ? `'${text}` : `"${text.replaceAll('"', '""')}"`; };
+    return ['تأمین‌کننده,تعداد فاکتور,مجموع خرید,پرداخت‌شده,بدهی', ...report.data.suppliers.map((row) => [row.supplierName, row.invoiceCount, row.total, row.paidAmount, row.debt].map(cell).join(','))].join('\n');
+  }
+
   async customers() {
     const rows = await this.prisma.customer.findMany({ where: { isActive: true }, include: { invoices: { where: { status: 'issued' }, select: { total: true, paidAmount: true } } }, orderBy: { createdAt: 'desc' }, take: 500 });
     const data = rows.map((customer) => ({ id: customer.id, name: customer.name, mobile: customer.mobile, invoiceCount: customer.invoices.length, purchased: customer.invoices.reduce((sum, invoice) => sum + invoice.total, 0n), debt: customer.invoices.reduce((sum, invoice) => sum + invoice.total - invoice.paidAmount, 0n) }));
