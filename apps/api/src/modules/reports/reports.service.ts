@@ -14,6 +14,7 @@ export class ReportsService {
 
   async sales(from?: string, to?: string) {
     const fromDate = parseReportDate(from, 'از'); const toDate = parseReportDate(to, 'تا');
+    if (fromDate && toDate && fromDate > toDate) throw new BadRequestException('بازهٔ تاریخ گزارش نامعتبر است');
     const where = { status: 'issued' as const, ...(fromDate || toDate ? { issuedAt: { ...(fromDate ? { gte: fromDate } : {}), ...(toDate ? { lte: toDate } : {}) } } : {}) };
     const invoices = await this.prisma.invoice.findMany({ where, orderBy: { issuedAt: 'asc' }, select: { id: true, number: true, issuedAt: true, total: true, paidAmount: true, paymentStatus: true, items: { select: { productName: true, quantity: true, lineTotal: true } } } }) as Array<{ id: string; number: string; issuedAt: Date; total: bigint; paidAmount: bigint; paymentStatus: string; items: Array<{ productName: string; quantity: number; lineTotal: bigint }> }>;
     const products = new Map<string, { name: string; quantity: number; revenue: bigint }>();
@@ -46,6 +47,7 @@ export class ReportsService {
 
   async profit(from?: string, to?: string) {
     const fromDate = parseReportDate(from, 'از'); const toDate = parseReportDate(to, 'تا');
+    if (fromDate && toDate && fromDate > toDate) throw new BadRequestException('بازهٔ تاریخ گزارش نامعتبر است');
     const where = { status: 'issued' as const, ...(fromDate || toDate ? { issuedAt: { ...(fromDate ? { gte: fromDate } : {}), ...(toDate ? { lte: toDate } : {}) } } : {}) };
     const invoices = await this.prisma.invoice.findMany({ where, select: { items: { select: { productName: true, quantity: true, unitPrice: true, inventoryItem: { select: { purchasePrice: true, brand: { select: { name: true } } } } } } } });
     const byBrand = new Map<string, { brand: string; quantity: number; revenue: bigint; cost: bigint; profit: bigint }>();
