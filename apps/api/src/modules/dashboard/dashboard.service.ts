@@ -31,6 +31,16 @@ export class DashboardService {
     return { ok: true, data: [...days.values()] };
   }
 
+  async profitTrend(from?: string, to?: string) {
+    const fromDate = from ? new Date(from) : undefined; const toDate = to ? new Date(to) : undefined;
+    if ((fromDate && Number.isNaN(fromDate.getTime())) || (toDate && Number.isNaN(toDate.getTime())) || (fromDate && toDate && fromDate > toDate)) throw new BadRequestException('بازهٔ تاریخ نمودار نامعتبر است');
+    if (toDate && /^\\d{4}-\\d{2}-\\d{2}$/.test(to ?? '')) toDate.setUTCHours(23, 59, 59, 999);
+    const invoices = await this.prisma.invoice.findMany({ where: { status: 'issued', ...(fromDate || toDate ? { issuedAt: { ...(fromDate ? { gte: fromDate } : {}), ...(toDate ? { lte: toDate } : {}) } } : {}) }, orderBy: { issuedAt: 'asc' }, select: { issuedAt: true, items: { select: { quantity: true, unitPrice: true, inventoryItem: { select: { purchasePrice: true } } } } } });
+    const days = new Map<string, { date: string; revenue: bigint; cost: bigint; profit: bigint }>();
+    for (const invoice of invoices) { const date = invoice.issuedAt.toISOString().slice(0, 10); const day = days.get(date) ?? { date, revenue: 0n, cost: 0n, profit: 0n }; for (const item of invoice.items) { const quantity = BigInt(item.quantity); day.revenue += item.unitPrice * quantity; day.cost += item.inventoryItem.purchasePrice * quantity; } day.profit = day.revenue - day.cost; days.set(date, day); }
+    return { ok: true, data: [...days.values()].map((row) => ({ ...row, revenue: row.revenue.toString(), cost: row.cost.toString(), profit: row.profit.toString() })) };
+  }
+
   async summary() {
     const [products, inventoryItems, lowStockItems, recentTransactions] = await Promise.all([
       this.prisma.product.count({ where: { deletedAt: null, status: 'active' } }),

@@ -22,4 +22,10 @@ describe('DashboardService', () => {
     prisma.inventoryTransaction.findMany.mockResolvedValue([{ createdAt: new Date('2026-08-01T10:00:00Z'), quantityChange: 5, type: 'purchase' }, { createdAt: new Date('2026-08-01T11:00:00Z'), quantityChange: -2, type: 'sale' }, { createdAt: new Date('2026-08-01T12:00:00Z'), quantityChange: 1, type: 'return' }]);
     await expect(service.inventoryTrend('2026-08-01', '2026-08-01')).resolves.toEqual({ ok: true, data: [{ date: '2026-08-01', inbound: 5, outbound: 2, returns: 1 }] });
   });
+
+  it('calculates daily revenue, cost and gross profit', async () => {
+    const { service, prisma } = makeService();
+    prisma.invoice.findMany.mockResolvedValue([{ issuedAt: new Date('2026-08-01T10:00:00Z'), items: [{ quantity: 2, unitPrice: 100n, inventoryItem: { purchasePrice: 60n } }] }]);
+    await expect(service.profitTrend('2026-08-01', '2026-08-01')).resolves.toEqual({ ok: true, data: [{ date: '2026-08-01', revenue: '200', cost: '120', profit: '80' }] });
+  });
 });
