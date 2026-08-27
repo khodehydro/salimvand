@@ -44,6 +44,11 @@ export class NotificationsService implements OnModuleDestroy {
 
   async counts() { return this.queue.getJobCounts('waiting', 'active', 'completed', 'failed', 'delayed'); }
 
+  async health() {
+    const counts = await this.counts();
+    return { channels: { sms: { configured: integrationConfigured('sms'), provider: process.env.SMS_PROVIDER ?? null }, telegram: { configured: integrationConfigured('telegram'), provider: 'telegram' }, bale: { configured: integrationConfigured('bale'), provider: 'bale' } }, queue: counts };
+  }
+
   async failed(limit = 50) {
     const jobs = await this.queue.getFailed(0, Math.min(100, Math.max(1, limit)) - 1);
     return jobs.map((job) => ({ id: job.id, name: job.name, type: job.data.type, mobile: job.data.mobile ? `${job.data.mobile.slice(0, 3)}***${job.data.mobile.slice(-2)}` : null, failedReason: job.failedReason ?? 'خطای نامشخص', attemptsMade: job.attemptsMade, timestamp: job.timestamp }));

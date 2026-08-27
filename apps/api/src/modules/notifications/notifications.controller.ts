@@ -10,6 +10,7 @@ import { NotificationsService } from './notifications.service';
 export class NotificationsController {
   constructor(private readonly notifications: NotificationsService) {}
   @Get('queue') queue() { return this.notifications.counts().then((counts) => ({ ok: true, data: counts })); }
+  @Get('health') health() { return this.notifications.health().then((health) => ({ ok: true, data: health })); }
   @Get('failed') failed(@Query('limit') limit?: string) { return this.notifications.failed(Number(limit ?? 50)).then((jobs) => ({ ok: true, data: jobs })); }
   @Post('failed/:id/retry') async retry(@Param('id') id: string) { const retried = await this.notifications.retry(id); return { ok: retried, data: { retried } }; }
 }
