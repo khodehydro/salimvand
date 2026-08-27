@@ -11,9 +11,11 @@ export type StockMutation = { itemId: string; quantity: number; userId: string; 
 export class InventoryService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list() {
-    const items = await this.prisma.inventoryItem.findMany({ where: { isActive: true }, orderBy: { id: 'desc' }, include: { product: true, brand: true, location: true } });
-    return { ok: true, data: items };
+  async list(filters: { q?: string; brandId?: string; locationId?: string; status?: 'low' | 'out' } = {}) {
+    const q = filters.q?.trim();
+    const items = await this.prisma.inventoryItem.findMany({ where: { isActive: true, ...(filters.brandId ? { brandId: filters.brandId } : {}), ...(filters.locationId ? { locationId: filters.locationId } : {}), ...(q ? { OR: [{ barcode: { contains: q } }, { product: { name: { contains: q, mode: 'insensitive' } } }] } : {}) }, orderBy: { id: 'desc' }, include: { product: true, brand: true, location: true } });
+    const filtered = filters.status === 'out' ? items.filter((item) => item.quantity <= 0) : filters.status === 'low' ? items.filter((item) => item.quantity <= (item.minStock ?? 0)) : items;
+    return { ok: true, data: filtered };
   }
 
   async create(input: { productId?: string; brandId?: string; barcode?: string; purchasePrice?: number; salePrice?: number; minStock?: number; locationId?: string; initialQuantity?: number; userId?: string }) {

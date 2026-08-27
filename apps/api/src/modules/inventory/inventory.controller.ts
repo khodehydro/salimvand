@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 type AuthenticatedRequest = Request & { user?: { id: string } };
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
@@ -12,7 +12,7 @@ import { AdjustInventoryDto, CreateInventoryItemDto, ReceiveInventoryDto, Transf
 @Roles('warehouse')
 export class InventoryController {
   constructor(private readonly inventory: InventoryService) {}
-  @Get('items') list() { return this.inventory.list(); }
+  @Get('items') list(@Query('q') q?: string, @Query('brandId') brandId?: string, @Query('locationId') locationId?: string, @Query('status') status?: 'low' | 'out') { return this.inventory.list({ q, brandId, locationId, status }); }
   @Post('items') create(@Body() body: CreateInventoryItemDto, @Req() request: AuthenticatedRequest) { return this.inventory.create({ ...body, userId: request.user?.id }); }
   @Post('items/:id/adjust') adjust(@Param('id') itemId: string, @Body() body: AdjustInventoryDto, @Req() request: AuthenticatedRequest) { return this.inventory.adjust({ itemId, quantity: Number(body.quantity), userId: request.user?.id ?? '', reason: body.reason }); }
   @Post('receive') receive(@Body() body: ReceiveInventoryDto, @Req() request: AuthenticatedRequest) { return this.inventory.receive({ itemId: body.itemId ?? '', quantity: Number(body.quantity), userId: request.user?.id ?? '', reason: body.reason }); }
