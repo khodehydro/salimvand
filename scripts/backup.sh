@@ -7,7 +7,19 @@ BACKUP_DIR="${BACKUP_DIR:-/var/backups/salimvand}"
 set -a; . "$ROOT_DIR/.env"; set +a
 command -v pg_dump >/dev/null || { echo 'pg_dump is required.' >&2; exit 1; }
 install -d -m 0700 "$BACKUP_DIR"
+STATUS_FILE="${BACKUP_STATUS_FILE:-/var/lib/salimvand/backup-status.json}"
+install -d -m 0700 "$(dirname "$STATUS_FILE")"
 stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+backup_status="failed"
+backup_file=""
+encrypted=false
+write_status() {
+  local exit_code=$?
+  printf '{"status":"%s","createdAt":"%s","file":"%s","encrypted":%s,"exitCode":%s}\n' "$backup_status" "$stamp" "$(basename "$backup_file")" "$encrypted" "$exit_code" > "$STATUS_FILE"
+  chmod 0600 "$STATUS_FILE"
+  exit "$exit_code"
+}
+trap write_status EXIT
 archive="$BACKUP_DIR/postgres-$stamp.sql.gz"
 pg_dump "$DATABASE_URL" --format=plain --no-owner --no-privileges | gzip -9 > "$archive"
 chmod 0600 "$archive"
@@ -25,6 +37,7 @@ checksum="$(sha256sum "$backup_file" | awk '{print $1}')"
 manifest="$backup_file.manifest"
 printf 'version=1\\ncreated_at=%s\\nfile=%s\\nsha256=%s\\nencrypted=%s\\n' "$stamp" "$(basename "$backup_file")" "$checksum" "$encrypted" > "$manifest"
 chmod 0600 "$manifest"
+backup_status="success"
 find "$BACKUP_DIR" -type f -mtime +14 -delete
 echo "Backup created in $BACKUP_DIR"
 echo "Manifest: $manifest"

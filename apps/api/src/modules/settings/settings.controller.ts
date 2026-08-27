@@ -13,5 +13,6 @@ type AuthRequest = Request & { user?: { id: string } };
 export class SettingsController {
   constructor(private readonly settings: SettingsService) {}
   @Get() list() { return this.settings.list(); }
+  @Get('backup/status') backupStatus() { return this.settings.backupStatus(); }
   @Put() update(@Body() body: Record<string, unknown>, @Req() request: AuthRequest) { return this.settings.update(body, request.user?.id ?? '', request.ip); }
 }

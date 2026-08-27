@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { readFile } from 'node:fs/promises';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
 import { writeAudit } from '../../common/audit/audit-log';
@@ -12,6 +13,13 @@ export class SettingsService {
   async list() {
     const rows = await this.prisma.setting.findMany({ orderBy: { key: 'asc' } });
     return { ok: true, data: Object.fromEntries(rows.map((row) => [row.key, row.value])) };
+  }
+
+  async backupStatus() {
+    try {
+      const raw = await readFile(process.env.BACKUP_STATUS_FILE ?? '/var/lib/salimvand/backup-status.json', 'utf8');
+      return { ok: true, data: JSON.parse(raw) as { status: string; createdAt: string; file: string; encrypted: boolean; exitCode: number } };
+    } catch { return { ok: true, data: null }; }
   }
 
   async update(values: Record<string, unknown>, userId: string, ip?: string) {
