@@ -12,12 +12,13 @@ export class DashboardService {
   }
 
   async summary() {
-    const [products, inventoryItems, lowStock, recentTransactions] = await Promise.all([
+    const [products, inventoryItems, lowStockItems, recentTransactions] = await Promise.all([
       this.prisma.product.count({ where: { deletedAt: null, status: 'active' } }),
       this.prisma.inventoryItem.count({ where: { isActive: true } }),
-      this.prisma.inventoryItem.count({ where: { isActive: true, quantity: { lte: 0 } } }),
+      this.prisma.inventoryItem.findMany({ where: { isActive: true }, orderBy: { quantity: 'asc' }, take: 20, select: { id: true, quantity: true, minStock: true, product: { select: { name: true, code: true } }, brand: { select: { name: true } }, location: { select: { code: true, name: true } } } }),
       this.prisma.inventoryTransaction.findMany({ orderBy: { createdAt: 'desc' }, take: 8, include: { item: { include: { product: true, brand: true } } } }),
     ]);
-    return { ok: true, data: { products, inventoryItems, lowStock, recentTransactions } };
+    const lowStock = lowStockItems.filter((item) => item.quantity <= (item.minStock ?? 0));
+    return { ok: true, data: { products, inventoryItems, lowStock: lowStock.length, lowStockItems: lowStock, recentTransactions } };
   }
 }
