@@ -1,0 +1,64 @@
+# نقشهٔ ۱۰ قدمی تکمیل پروژه — سلیم‌وند
+
+تاریخ تدوین: ۲۰۲۶-۰۸-۲۷ · شاخهٔ اجرا: `arena/01a0438f-salimvand`
+
+این سند فاصلهٔ **کد فعلی ریپازیتوری** را با **اسناد مرجع کارفرما** به ۱۰ قدم قابل اجرا تبدیل می‌کند.
+هر قدم یک کامیت مجزا دارد و پس از اجرای تست‌ها push می‌شود.
+
+## منابع بررسی‌شده در این بازنگری
+
+| سند | لینک | وضعیت بررسی |
+|---|---|---|
+| سند مادر معماری (نسخهٔ ۱.۰، ۱۰ بخش) | https://paste.opensuse.org/pastes/8da8303e19c3/raw | خوانده شد (بخش‌های ۱ تا ۱۰) |
+| سند تحویل بصری و چک‌لیست پذیرش | https://paste.opensuse.org/pastes/ef68d069f192/raw | خوانده شد و در `docs/delivery-spec.md` کامیت شد |
+| مرجع بصری UI Concept (HTML) | https://paste.opensuse.org/pastes/c6a9c450aab0/raw | محتوا استخراج شد؛ فایل خام HTML در این sandbox قابل دانلود نیست ( TLS به paste بسته است) |
+
+> نکته: `docs/implementation-audit.md` قبلی به شناسه‌های قدیمی paste اشاره می‌کرد
+> (`3376f62b83e9`, `bf6d7216aaa3`, `5a2caa495097`) و وضعیت چند حوزه (تأمین‌کنندگان، خرید، تنظیمات، جست‌وجو)
+> را «وجود ندارد» نوشته بود در حالی که کد آن‌ها اکنون موجود است. این سند جایگزین آن ارزیابی کهنه است.
+
+## وضعیت راستی‌آزمایی‌شدهٔ فعلی (با دستور واقعی)
+
+| بررسی | نتیجه |
+|---|---|
+| `pnpm install --frozen-lockfile` | موفق (۳۸۷ بسته) |
+| `pnpm test` | موفق — ۳۶ فایل تست، **۱۲۸ تست API** + تست‌های shared |
+| `pnpm typecheck` | **شکست** فقط به دلیل تولید‌نشدن Prisma Client (اتصال به `binaries.prisma.sh` در sandbox بسته است؛ `docs/prisma-ci-troubleshooting.md`) |
+| `.github/workflows` | **وجود ندارد** — CI/CD سند مادر (§۸.۶) پیاده نشده |
+| پوستهٔ تاریک سایت عمومی | **وجود ندارد** — `grep data-theme apps/website/src/app/styles.css` → ۰ نتیجه |
+| رنگ خام در پنل | `apps/admin/src/styles.css` با hex خام شروع می‌شود؛ ۲۹۱ hex در سورس اپ‌ها |
+| `docs/ui-reference.html` | ۳.۸ کیلوبایت placeholder، نه مرجع بصری کامل |
+| `packages/ui` | ۲۸ خط — فقط btn/badge/card/field/input؛ بدون kpi-card/table/sheet/modal/palette/tl/stockbar/toast/skeleton/charts |
+| مدل‌های Prisma | ۲۶ مدل؛ `customer_vehicles`, `sms_logs`, `telegram_logs`, `backup_jobs` (سند §۳.۶ و §۳.۷) **کم دارند** |
+
+## ده قدم
+
+| # | قدم | فاز سند | خروجی کلیدی |
+|---|---|---|---|
+| ۱ | تثبیت مستندات مرجع داخل ریپازیتوری + همین نقشه | ۰ | `docs/delivery-spec.md`, `docs/roadmap-10-steps.md`, به‌روزرسانی `docs/architecture.md` |
+| ۲ | سیستم طراحی کامل در `packages/ui` (توکن دوپوسته + اجزای پایه + فونت vazirmatn از npm) | ۰ | توکن‌ها، ThemeProvider، ۲۰+ کامپوننت، تست توکن/کامپوننت |
+| ۳ | سایت عمومی: توکن‌محوری + پوستهٔ تاریک + نقشه/بله/فوتر + تست contract «بدون قیمت» | ۱ | حذف hex خام، `data-theme`، بخش تماس کامل |
+| ۴ | صفحهٔ فاکتور عمومی: QR، متای کامل، جعبه‌های پرداخت، رفع باگ چاپ تکراری | ۲ | `/invoice/[token]` مطابق مرجع |
+| ۵ | شِل پنل با توکن: سایدبار سرمه‌ای، شمارنده، FAB، نوار موبایل، پالت گروه‌بندی‌شده ۱..۵ | ۳ | حذف ۲۹۱ hex، هر دو پوسته |
+| ۶ | صفحهٔ «صدور فاکتور» کامل + مودال موفقیت + پیامک مجدد | ۲ | مهم‌ترین صفحهٔ پنل |
+| ۷ | محصول (۵ تب) + انبار (stockbar، شیت اصلاح، مسیر قفسه) | ۱ | مطابق نقشهٔ صفحه‌ها |
+| ۸ | داشبورد کامل + گزارش‌ها + تنظیمات + کارت سلامت یکپارچه‌سازی‌ها | ۳ و ۴ | KPI/دونات/تایم‌لاین/بدهکاران |
+| ۹ | API: مدل‌ها و اندپوینت‌های جاافتاده + تست | ۲ تا ۴ | `customer_vehicles`, `sms_logs`, `telegram_logs`, `backup_jobs`, `/audit-logs`, `/backups/*`, `/sms/logs`, `/users/:id/activity`, `resend-sms`, token toggle, `PUT /products/:id/compat`, `PATCH /inventory/items/:id`, `/customers/:id/vehicles`, CRUD مرجع‌ها |
+| ۱۰ | یکپارچه‌سازی‌ها (SMS/تلگرام/کانال/بکاپ درایو) + CI/CD و پذیرش نهایی | ۴ و ۵ | `.github/workflows/ci.yml` + `deploy.yml`، Playwright، `docs/acceptance-matrix.md` نهایی |
+
+## انباشت کار (Backlog) جزئی که در قدم‌ها حل می‌شود
+
+- اندپوینت‌های غایب نسبت به سند §۴: `/audit-logs`، `/backups/drive|download|import|jobs`، `/sms/logs`،
+  `/integrations/telegram/test`، `/webhooks/telegram/:secret`، `/users/:id/activity`،
+  `/invoices/:id/resend-sms`، `PATCH /invoices/:id/token`، `PATCH /inventory/items/:id`،
+  `PUT /products/:id/compat`، `/customers/:id/vehicles`، CRUD کامل `/categories`، `/brands`، `/vehicles/*`.
+- جاب سازش روزانهٔ موجودی (Reconciliation) طبق §۳.۴.
+- صفحهٔ فاکتور عمومی: دکمهٔ «چاپ» دو بار رندر می‌شود و QR/فروشنده/خودرو/اعتبار لینک ندارد.
+- `packages/shared`: فرمت‌کنندهٔ تاریخ شمسی مشترک ندارد (سند §۲.۴).
+
+## قانون اجرا
+
+۱) هر قدم = کامیت جدا با پیام Conventional (انگلیسی) و push به همان شاخه.
+۲) قبل از اعلام پایان هر قدم، `pnpm test` اجرا و نتیجهٔ واقعی ثبت می‌شود.
+۳) `pnpm typecheck` کامل API تا زمان دسترسی به `binaries.prisma.sh` (CI/VPS) ممکن نیست؛ این محدودیت
+   در هر گزارش تکرار می‌شود و با خاموش‌کردن strict دور زده نمی‌شود.
