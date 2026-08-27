@@ -7,6 +7,7 @@ import { MediaModule } from './modules/media/media.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { InvoiceModule } from './modules/invoice/invoice.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { NotificationsService } from './modules/notifications/notifications.service';
 import { ReportsModule } from './modules/reports/reports.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { SearchModule } from './modules/search/search.module';
@@ -21,7 +22,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 
 @Controller()
 class SystemController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly notifications: NotificationsService) {}
 
   @Get('health')
   health() {
@@ -31,8 +32,8 @@ class SystemController {
   @Get('health/ready')
   async readiness() {
     try {
-      await this.prisma.$queryRaw`SELECT 1`;
-      return { ok: true, data: { service: 'api', database: 'ready' } };
+      await Promise.all([this.prisma.$queryRaw`SELECT 1`, this.notifications.checkQueueConnection()]);
+      return { ok: true, data: { service: 'api', database: 'ready', queue: 'ready' } };
     } catch {
       throw new ServiceUnavailableException('پایگاه داده در دسترس نیست');
     }

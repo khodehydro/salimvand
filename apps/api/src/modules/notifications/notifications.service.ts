@@ -77,6 +77,11 @@ export class NotificationsService implements OnModuleDestroy {
 
   async counts() { return this.queue.getJobCounts('waiting', 'active', 'completed', 'failed', 'delayed'); }
 
+  async checkQueueConnection() {
+    await this.connection.ping();
+    return true;
+  }
+
   async health() {
     const counts = await this.counts();
     return { channels: { sms: { configured: integrationConfigured('sms'), provider: process.env.SMS_PROVIDER ?? null }, telegram: { configured: integrationConfigured('telegram'), provider: 'telegram' }, bale: { configured: integrationConfigured('bale'), provider: 'bale' } }, queue: counts };
