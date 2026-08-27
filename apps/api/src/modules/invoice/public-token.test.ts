@@ -9,3 +9,11 @@ describe('public invoice token', () => {
   it('matches the original token without accepting a different token', () => { const created = createPublicToken(); expect(matchesPublicToken(created.token, created.hash)).toBe(true); expect(matchesPublicToken(`${created.token}x`, created.hash)).toBe(false); });
   it('produces deterministic hashes for database lookup', () => { expect(hashPublicToken('sample')).toBe(hashPublicToken('sample')); expect(hashPublicToken('sample')).not.toBe(hashPublicToken('other')); });
 });
+
+it('creates a short URL-safe code and a matching hash', async () => {
+  const { createPublicShortCode, matchesPublicToken } = await import('./public-token');
+  const result = createPublicShortCode();
+  expect(result.code).toMatch(/^[A-Za-z0-9]+$/);
+  expect(result.code).toHaveLength(10);
+  expect(matchesPublicToken(result.code, result.hash)).toBe(true);
+});

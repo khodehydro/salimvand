@@ -268,6 +268,7 @@ model Invoice {
   id           String        @id @default(uuid()) @db.Uuid
   number       String        @unique @db.VarChar(30)
   publicTokenHash      String     @unique @db.VarChar(128)
+  publicShortCodeHash  String?    @unique @db.VarChar(128)
   publicTokenExpiresAt DateTime?  @db.Timestamptz(6)
   status       InvoiceStatus @default(issued)
   customerId   String?       @db.Uuid

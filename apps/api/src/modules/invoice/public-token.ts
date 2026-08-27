@@ -1,5 +1,13 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 
+const SHORT_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+
+export function createPublicShortCode(length = 10): { code: string; hash: string } {
+  const bytes = randomBytes(length);
+  const code = Array.from(bytes, (byte) => SHORT_CODE_ALPHABET[byte % SHORT_CODE_ALPHABET.length]).join('');
+  return { code, hash: hashPublicToken(code) };
+}
+
 export function createPublicToken(): { token: string; hash: string } {
   const token = randomBytes(32).toString('base64url');
   return { token, hash: hashPublicToken(token) };

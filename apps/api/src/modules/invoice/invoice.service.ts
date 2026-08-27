@@ -4,7 +4,8 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
 import { writeAudit } from '../../common/audit/audit-log';
 import { calculateInvoiceTotals, InvoiceLineInput } from './invoice.rules';
-import { createPublicToken, hashPublicToken } from './public-token';
+import QRCode from 'qrcode';
+import { createPublicShortCode, createPublicToken, hashPublicToken } from './public-token';
 
 type DraftLine = InvoiceLineInput & { inventoryItemId: string; productName: string };
 type CreateInput = { customerName?: string; customerMobile?: string; discount?: string | number; items?: Array<{ inventoryItemId?: string; quantity?: number; unitPrice?: string | number }> };
@@ -40,6 +41,7 @@ export class InvoiceService {
     const discount = BigInt(input.discount ?? 0);
     const totals = calculateInvoiceTotals(lines, discount);
     const publicToken = createPublicToken();
+    const publicShortCode = createPublicShortCode();
     const publicTokenExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     const invoice = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const counter = await tx.counter.upsert({ where: { key: 'invoice' }, update: { lastValue: { increment: 1 } }, create: { key: 'invoice', lastValue: 1 } });
@@ -50,7 +52,7 @@ export class InvoiceService {
       }
       const customerName = input.customerName?.trim();
       const customerMobile = input.customerMobile?.trim();
-      const created = await tx.invoice.create({ data: { number, publicTokenHash: publicToken.hash, publicTokenExpiresAt, customerName: customerName || undefined, customerMobile: customerMobile || undefined, subtotal: totals.subtotal, discount: totals.discount, total: totals.total, issuedById: userId, items: { create: lines.map((line) => ({ inventoryItemId: line.inventoryItemId, productName: line.productName, quantity: line.quantity, unitPrice: line.unitPrice, lineTotal: BigInt(line.quantity) * line.unitPrice })) } }, include: { items: true } });
+      const created = await tx.invoice.create({ data: { number, publicTokenHash: publicToken.hash, publicShortCodeHash: publicShortCode.hash, publicTokenExpiresAt, customerName: customerName || undefined, customerMobile: customerMobile || undefined, subtotal: totals.subtotal, discount: totals.discount, total: totals.total, issuedById: userId, items: { create: lines.map((line) => ({ inventoryItemId: line.inventoryItemId, productName: line.productName, quantity: line.quantity, unitPrice: line.unitPrice, lineTotal: BigInt(line.quantity) * line.unitPrice })) } }, include: { items: true } });
       if (customerName && customerMobile) {
         const customer = await this.queryRaw<{ id: string }>(tx, 'INSERT INTO "customers" ("name", "mobile") VALUES ($1, $2) ON CONFLICT ("mobile") DO UPDATE SET "name" = EXCLUDED."name", "updatedAt" = CURRENT_TIMESTAMP RETURNING "id"', customerName, customerMobile);
         if (customer[0]) await this.executeRaw(tx, 'UPDATE "invoices" SET "customerId" = $1 WHERE "id" = $2', customer[0].id, created.id);
@@ -62,13 +64,22 @@ export class InvoiceService {
       return created;
     });
     if (this.notifications && input.customerMobile) await this.notifications.enqueue({ type: 'invoice.issued', invoiceId: invoice.id, mobile: input.customerMobile, message: `فاکتور ${invoice.number} صادر شد. مبلغ: ${totals.total.toString()} ریال` });
-    return { ok: true, data: { ...invoice, publicToken: publicToken.token } };
+    return { ok: true, data: { ...invoice, publicToken: publicToken.token, publicShortCode: publicShortCode.code } };
   }
 
   async getPublic(token: string) {
-    const invoice = await this.prisma.invoice.findUnique({ where: { publicTokenHash: hashPublicToken(token) }, select: { id: true, number: true, status: true, publicTokenExpiresAt: true, customerName: true, customerMobile: true, subtotal: true, discount: true, total: true, paymentStatus: true, paidAmount: true, paymentMethod: true, paidAt: true, issuedAt: true, voidedAt: true, items: { select: { productName: true, quantity: true, unitPrice: true, lineTotal: true, inventoryItem: { select: { brand: { select: { name: true } } } } } } } });
+    const invoice = await this.prisma.invoice.findFirst({ where: { OR: [{ publicTokenHash: hashPublicToken(token) }, { publicShortCodeHash: hashPublicToken(token) }] }, select: { id: true, number: true, status: true, publicTokenExpiresAt: true, customerName: true, customerMobile: true, subtotal: true, discount: true, total: true, paymentStatus: true, paidAmount: true, paymentMethod: true, paidAt: true, issuedAt: true, voidedAt: true, items: { select: { productName: true, quantity: true, unitPrice: true, lineTotal: true, inventoryItem: { select: { brand: { select: { name: true } } } } } } } });
     if (!invoice || invoice.status === 'voided' || (invoice.publicTokenExpiresAt && invoice.publicTokenExpiresAt.getTime() <= Date.now())) throw new NotFoundException('فاکتور پیدا نشد');
     return { ok: true, data: { ...invoice, items: invoice.items.map((item: { productName: string; quantity: number; unitPrice: bigint; lineTotal: bigint; inventoryItem: { brand: { name: string } } }) => ({ productName: item.productName, brand: item.inventoryItem.brand.name, quantity: item.quantity, unitPrice: item.unitPrice, lineTotal: item.lineTotal })) } };
+  }
+
+  async qr(shortCode: string) {
+    const invoice = await this.prisma.invoice.findFirst({ where: { publicShortCodeHash: hashPublicToken(shortCode) }, select: { publicTokenExpiresAt: true } });
+    if (!invoice || (invoice.publicTokenExpiresAt && invoice.publicTokenExpiresAt.getTime() <= Date.now())) throw new NotFoundException('فاکتور پیدا نشد');
+    const siteUrl = (process.env.PUBLIC_SITE_URL ?? 'https://selimvand.ir').replace(/\\/$/, '');
+    const url = `${siteUrl}/i/${encodeURIComponent(shortCode)}`;
+    const dataUrl = await QRCode.toDataURL(url, { errorCorrectionLevel: 'M', width: 320, margin: 2 });
+    return { ok: true, data: { url, dataUrl } };
   }
 
   async customers(search?: string) {

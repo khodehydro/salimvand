@@ -57,5 +57,7 @@ export class InvoiceController {
 @Controller('public/invoices')
 export class PublicInvoiceController {
   constructor(private readonly invoices: InvoiceService) {}
+  @Get('qr/:shortCode') qr(@Param('shortCode') shortCode: string) { return this.invoices.qr(shortCode); }
+  @Get('short/:shortCode') getShort(@Param('shortCode') shortCode: string) { return this.invoices.getPublic(shortCode); }
   @Get(':token') get(@Param('token') token: string) { return this.invoices.getPublic(token); }
 }
