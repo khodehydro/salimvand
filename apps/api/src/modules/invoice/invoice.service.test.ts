@@ -64,4 +64,50 @@ describe('InvoiceService', () => {
     expect(invoiceCreate).not.toHaveBeenCalled();
     expect(tx.inventoryItem.updateMany).toHaveBeenCalledTimes(2);
   });
+  it('rejects a payment that would exceed the invoice total', async () => {
+    const update = vi.fn();
+    const tx = { invoice: { findUnique: vi.fn(async () => ({ id: 'invoice-1', status: 'issued', paidAmount: 800n, total: 1000n })) , update }, payments: { create: vi.fn() } };
+    const prisma = { $transaction: vi.fn(async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx)) };
+    await expect(new InvoiceService(prisma as never).pay('invoice-1', 201, 'cash', 'user-1')).rejects.toThrow('مجموع پرداخت بیشتر از مبلغ فاکتور است');
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('records a partial payment atomically', async () => {
+    const update = vi.fn(async () => ({ id: 'invoice-1', paymentStatus: 'partial', paidAmount: 600n, items: [] }));
+    const executeRaw = vi.fn(async () => 1);
+    const tx = { invoice: { findUnique: vi.fn(async () => ({ id: 'invoice-1', number: 'INV-1', status: 'issued', paidAmount: 500n, total: 1000n, paymentStatus: 'unpaid', customerMobile: null })), update }, payments: { create: vi.fn() }, $executeRawUnsafe: executeRaw };
+    const prisma = { $transaction: vi.fn(async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx)) };
+    const result = await new InvoiceService(prisma as never).pay('invoice-1', 100, 'card', 'user-1');
+    expect(result.data.paymentStatus).toBe('partial');
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ paidAmount: 600n, paymentStatus: 'partial', paymentMethod: 'card' }) }));
+    expect(executeRaw).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects a return greater than the purchased quantity', async () => {
+    const tx = { invoice: { findUnique: vi.fn(async () => ({ status: 'issued', items: [{ id: 'line-1', quantity: 2, unitPrice: 100n, inventoryItemId: 'item-1' }] })) , }, returnRecord: { aggregate: vi.fn(async () => ({ _sum: { quantity: 2, refundAmount: 200n } })) } };
+    const prisma = { $transaction: vi.fn(async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx)) };
+    await expect(new InvoiceService(prisma as never).returnItems('invoice-1', { invoiceItemId: 'line-1', quantity: 1, reason: 'تعویض' }, 'user-1')).rejects.toThrow('تعداد مرجوعی بیشتر از تعداد خریداری‌شده است');
+  });
+
+  it('restocks a valid partial return inside the transaction', async () => {
+    const inventoryUpdate = vi.fn(async () => ({ quantity: 6 }));
+    const returnCreate = vi.fn(async () => ({ id: 'return-1', quantity: 1, refundAmount: 100n }));
+    const tx = { invoice: { findUnique: vi.fn(async () => ({ id: 'invoice-1', status: 'issued', items: [{ id: 'line-1', quantity: 2, unitPrice: 100n, inventoryItemId: 'item-1' }] })) }, returnRecord: { aggregate: vi.fn(async () => ({ _sum: { quantity: 0, refundAmount: 0n } })), create: returnCreate }, inventoryItem: { update: inventoryUpdate }, inventoryTransaction: { create: vi.fn() } };
+    const prisma = { $transaction: vi.fn(async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx)) };
+    const result = await new InvoiceService(prisma as never).returnItems('invoice-1', { invoiceItemId: 'line-1', quantity: 1, reason: 'تعویض' }, 'user-1');
+    expect(result.data.quantityAfter).toBe(6);
+    expect(inventoryUpdate).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'item-1' }, data: { quantity: { increment: 1 } } }));
+    expect(returnCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it('restores all invoice quantities when voiding', async () => {
+    const updates = vi.fn(async ({ where }: { where: { id: string } }) => ({ id: where.id, quantity: 4 }));
+    const invoiceUpdate = vi.fn(async () => ({ id: 'invoice-1', status: 'voided', items: [] }));
+    const tx = { inventoryItem: { update: updates }, inventoryTransaction: { create: vi.fn() }, invoice: { update: invoiceUpdate } };
+    const prisma = { invoice: { findUnique: vi.fn(async () => ({ id: 'invoice-1', status: 'issued', number: 'INV-1', items: [{ inventoryItemId: 'item-1', quantity: 2 }, { inventoryItemId: 'item-2', quantity: 1 }] })) }, $transaction: vi.fn(async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx)) };
+    const result = await new InvoiceService(prisma as never).void('invoice-1', 'user-1');
+    expect(result.data.status).toBe('voided');
+    expect(updates).toHaveBeenCalledTimes(2);
+    expect(invoiceUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: 'voided' }) }));
+  });
 });
