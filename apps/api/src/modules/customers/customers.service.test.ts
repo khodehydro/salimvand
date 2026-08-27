@@ -30,6 +30,18 @@ describe('customer payment accounting', () => {
     expect(paymentCreate).toHaveBeenCalledTimes(2);
   });
 
+  it('allocates a payment to the requested invoice only', async () => {
+    const invoiceUpdate = vi.fn(async () => ({}));
+    const tx = {
+      customer: { findFirst: vi.fn(async () => ({ id: 'customer-1', invoices: [{ id: 'invoice-1', total: 1000n, paidAmount: 0n, paymentStatus: 'unpaid' }, { id: 'invoice-2', total: 500n, paidAmount: 0n, paymentStatus: 'unpaid' }] })) },
+      customerPayment: { create: vi.fn(async () => ({ id: 'receipt-1' })) }, invoice: { update: invoiceUpdate }, payment: { create: vi.fn() },
+    };
+    const prisma = { $transaction: vi.fn(async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx)) };
+    await new CustomersService(prisma as never).payment('customer-1', { amount: 300, method: 'card', invoiceId: 'invoice-2' }, 'user-1');
+    expect(invoiceUpdate).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'invoice-2' }, data: expect.objectContaining({ paidAmount: 300n }) }));
+    expect(invoiceUpdate).not.toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'invoice-1' } }));
+  });
+
   it('rejects a customer payment above total outstanding debt', async () => {
     const receiptCreate = vi.fn();
     const tx = {
