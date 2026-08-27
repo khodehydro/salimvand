@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildInvoiceMessage, integrationConfigured, integrationUrl, notificationChannels } from './notifications.service';
+import { buildInvoiceMessage, integrationConfigured, integrationUrl, notificationChannels, NOTIFICATION_QUEUE_NAME, notificationJobOptions } from './notifications.service';
 
 describe('notification messages', () => {
   it('uses the short invoice URL and never the long token', () => {
@@ -20,6 +20,10 @@ describe('notification messages', () => {
     const message = buildInvoiceMessage('INV-0002', 'Q9mAb7kP2x', '500000', true);
     expect(message).toContain('پرداخت فاکتور INV-0002 ثبت شد');
     expect(message).toContain('/i/Q9mAb7kP2x');
+  });
+  it('keeps the queue retry contract explicit', () => {
+    expect(NOTIFICATION_QUEUE_NAME).toBe('salimvand-notifications');
+    expect(notificationJobOptions).toEqual({ attempts: 5, backoff: { type: 'exponential', delay: 1000 }, removeOnComplete: 100, removeOnFail: 500 });
   });
   it('selects all configured channels for a normal invoice notification', () => {
     const env = { SMS_PROVIDER: 'generic', SMS_API_URL: 'https://sms.test', SMS_API_KEY: 'sms', TELEGRAM_BOT_TOKEN: 'telegram', TELEGRAM_CHAT_ID: 'chat', BALE_BOT_TOKEN: 'bale', BALE_CHAT_ID: 'bale-chat' };

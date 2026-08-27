@@ -17,6 +17,14 @@ export function integrationUrl(channel: Exclude<Channel, 'sms'>, env: NodeJS.Pro
 }
 type NotificationName = NotificationJob['type'];
 
+export const NOTIFICATION_QUEUE_NAME = 'salimvand-notifications';
+export const notificationJobOptions = {
+  attempts: 5,
+  backoff: { type: 'exponential' as const, delay: 1000 },
+  removeOnComplete: 100,
+  removeOnFail: 500,
+};
+
 export function notificationChannels(job: NotificationJob, env: NodeJS.ProcessEnv = process.env): Channel[] {
   const channels: Channel[] = [];
   if (job.mobile && (!job.testChannel || job.testChannel === 'sms') && integrationConfigured('sms', env)) channels.push('sms');
@@ -41,14 +49,14 @@ export class NotificationsService implements OnModuleDestroy {
 
   constructor() {
     this.connection = new IORedis(process.env.REDIS_URL ?? 'redis://localhost:6379', { maxRetriesPerRequest: null, lazyConnect: true });
-    this.queue = new Queue<NotificationJob>('salimvand-notifications', { connection: this.connection });
+    this.queue = new Queue<NotificationJob>(NOTIFICATION_QUEUE_NAME, { connection: this.connection });
     if (process.env.ENABLE_QUEUE_WORKER === 'true') {
       this.worker = new Worker<NotificationJob>('salimvand-notifications', async (job) => this.process(job), { connection: this.connection, concurrency: 4 });
     }
   }
 
   async enqueue(payload: NotificationJob) {
-    return this.queue.add(payload.type as NotificationName, payload, { attempts: 5, backoff: { type: 'exponential', delay: 1000 }, removeOnComplete: 100, removeOnFail: 500 });
+    return this.queue.add(payload.type as NotificationName, payload, notificationJobOptions);
   }
 
   async enqueueTest(channel: Channel, message: string, mobile?: string) {
