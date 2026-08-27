@@ -6,6 +6,7 @@ import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
 import { RolesGuard } from '../../common/auth/roles.guard';
 import { Roles } from '../../common/auth/roles.decorator';
 import { InvoiceService } from './invoice.service';
+import { CreateInvoiceDto, PayInvoiceDto, ReturnInvoiceItemDto } from './invoice.dto';
 
 type AuthenticatedRequest = Request & { user?: { id: string } };
 
@@ -38,12 +39,12 @@ export class InvoiceController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('seller')
   @Post()
-  create(@Body() body: Parameters<InvoiceService['create']>[0], @Req() request: AuthenticatedRequest) { return this.invoices.create(body, request.user?.id ?? ''); }
+  create(@Body() body: CreateInvoiceDto, @Req() request: AuthenticatedRequest) { return this.invoices.create(body, request.user?.id ?? ''); }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('accountant')
   @Post(':id/pay')
-  pay(@Param('id') id: string, @Body() body: { amount?: string | number; method?: 'cash' | 'card' | 'transfer' | 'credit' }, @Req() request: AuthenticatedRequest) { return this.invoices.pay(id, body.amount ?? 0, body.method ?? 'cash', request.user?.id ?? ''); }
+  pay(@Param('id') id: string, @Body() body: PayInvoiceDto, @Req() request: AuthenticatedRequest) { return this.invoices.pay(id, body.amount ?? 0, body.method ?? 'cash', request.user?.id ?? ''); }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('manager')
@@ -53,7 +54,7 @@ export class InvoiceController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('manager', 'warehouse', 'accountant')
   @Post(':id/returns')
-  returns(@Param('id') id: string, @Body() body: { invoiceItemId?: string; quantity?: number; reason?: string; restock?: boolean }, @Req() request: AuthenticatedRequest) { return this.invoices.returnItems(id, body, request.user?.id ?? ''); }
+  returns(@Param('id') id: string, @Body() body: ReturnInvoiceItemDto, @Req() request: AuthenticatedRequest) { return this.invoices.returnItems(id, body, request.user?.id ?? ''); }
 }
 
 @Controller('public/invoices')
