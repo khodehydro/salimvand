@@ -3,7 +3,8 @@ set -Eeuo pipefail
 
 # One-shot, repeatable production release. Run as root on the VPS after .env is configured.
 ROOT_DIR="${APP_DIR:-/opt/salimvand}"
-BRANCH="${DEPLOY_BRANCH:-arena/01a038b2-salimvand}"
+# Production deploys the reviewed main branch by default; override only for a planned release.
+BRANCH="${DEPLOY_BRANCH:-main}"
 LOCK_FILE=/var/lock/salimvand-deploy.lock
 exec 9>"$LOCK_FILE"
 flock -n 9 || { echo 'Another deployment is already running.' >&2; exit 1; }

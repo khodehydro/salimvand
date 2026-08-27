@@ -31,7 +31,7 @@ sudo CERTBOT_EMAIL=admin@example.com ./scripts/enable-tls.sh
 پس از آماده‌سازی اولیه، هر Release فقط با یک فرمان انجام می‌شود:
 
 ```bash
-sudo APP_DIR=/opt/salimvand DEPLOY_BRANCH=arena/01a038b2-salimvand ./scripts/deploy.sh
+sudo APP_DIR=/opt/salimvand DEPLOY_BRANCH=main ./scripts/deploy.sh
 ```
 
 فرمان بالا به‌ترتیب Fetch، Checkout نسخهٔ Branch، Install قفل‌شده، Prisma Generate، Migration Deploy، Seed، Typecheck، Test، Build، فعال‌سازی Systemd، Restart و Health Check را انجام می‌دهد. در پایان علاوه بر API Readiness، فعال‌بودن API، Website و Worker و پاسخ‌گویی Website نیز بررسی می‌شود؛ همچنین Deploy اگر API روی آدرس عمومی Bind شده باشد، ناموفق اعلام می‌شود.
