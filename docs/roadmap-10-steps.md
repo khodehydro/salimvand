@@ -83,7 +83,16 @@
 
 | ۸ | `feat(admin): dashboard debtors, health card and report charts` | داشبورد: KPI چهارم (بدهی مشتریان)، کارت سلامت یکپارچه‌سازی‌ها با وضعیت صف، دونات ترکیب موجودی بر اساس برند، جدول بدهکاران با ارسال پیامک یادآوری · گزارش‌ها: نمودار ماهانهٔ شمسی و دونات سهم برندها از سود · تنظیمات: لینک کانال بله و قالب پیامک پرداخت با متغیرها · منطق تجمیع در `dashboard-metrics.ts` و `report-metrics.ts` با ۸ تست جدید |
 
+| ۹ (بخش ۱) | `feat(api): enrich the public invoice payload` | `getPublic` اکنون `salesPerson` (نام صادرکننده)، فهرست واقعی `payments` (مبلغ/روش/تاریخ) و `linkExpiresAt` را برمی‌گرداند و همچنان `id` و هر دو hash را پنهان می‌کند — ۲ تست جدید + تست contract عمومی سبز · نوع `PublicInvoice` در سایت از قبل همین فیلدها را می‌خواند، پس فروشنده/پرداخت‌ها/اعتبار لینک بدون تغییر UI رندر می‌شوند |
+
 وضعیت تست‌ها پس از قدم ۸: `pnpm test` → ۴۲ فایل تست، ۱۶۶ تست موفق
 (shared ۵ · ui ۷ · api ۱۴۰ · admin ۱۴).
+
+باقی‌ماندهٔ قدم ۹: مدل‌های `customer_vehicles`, `sms_logs`, `telegram_logs`, `backup_jobs` و مهاجرت آن‌ها،
+اندپوینت‌های `/audit-logs`, `/backups/*`, `/sms/logs`, `/users/:id/activity`, `PATCH /inventory/items/:id`,
+`/customers/:id/vehicles`، فیلد `vehicle` در فاکتور عمومی، توکنی‌کردن رنگ‌های PDF و WebP دو اندازه.
+
+وضعیت تست‌ها پس از بخش ۱ قدم ۹: `pnpm test` → ۴۲ فایل تست، ۱۶۸ تست موفق
+(shared ۵ · ui ۷ · api ۱۴۲ · admin ۱۴).
 `pnpm typecheck` برای `apps/api` همچنان فقط به دلیل تولیدنشدن Prisma Client در این sandbox شکست می‌خورد
 (اتصال TLS به `binaries.prisma.sh` بسته است)؛ typecheck بقیهٔ بسته‌ها پاک است.

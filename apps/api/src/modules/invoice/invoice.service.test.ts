@@ -159,3 +159,31 @@ describe('InvoiceService.resendSms', () => {
     await expect(new InvoiceService(prisma as never).resendSms('inv-9', 'user-1')).rejects.toThrow('صف اعلان‌ها');
   });
 });
+
+describe('InvoiceService.getPublic document payload', () => {
+  const invoice = {
+    id: 'inv-1', number: 'INV-0007', status: 'issued', publicTokenExpiresAt: new Date(Date.now() + 86_400_000),
+    customerName: 'علی', customerMobile: '09123456789', subtotal: 300n, discount: 0n, total: 300n, paymentStatus: 'partial',
+    paymentMethod: 'cash', paidAmount: 100n, paidAt: null, issuedAt: new Date(), voidedAt: null,
+    items: [{ productName: 'لنت', quantity: 1, unitPrice: 300n, lineTotal: 300n, inventoryItem: { brand: { name: 'اصلی' } } }],
+    payments: [{ amount: 100n, method: 'card', receivedAt: new Date('2026-08-20T10:00:00Z') }],
+    issuedBy: { name: 'رضا سلیم‌وند' },
+  };
+
+  it('adds the sales person, the payment list and the link expiry', async () => {
+    const prisma = { invoice: { findFirst: async () => invoice } };
+    const { data } = await new InvoiceService(prisma as never).getPublic('short-code');
+    expect(data.salesPerson).toBe('رضا سلیم‌وند');
+    expect(data.payments).toEqual([ { amount: 100n, method: 'card', paidAt: new Date('2026-08-20T10:00:00Z') } ]);
+    expect(data.linkExpiresAt).toEqual(invoice.publicTokenExpiresAt);
+  });
+
+  it('still hides the row id and every token hash', async () => {
+    const prisma = { invoice: { findFirst: async () => ({ ...invoice, publicTokenHash: 'deadbeef', publicShortCodeHash: 'cafe' }) } };
+    const { data } = await new InvoiceService(prisma as never).getPublic('short-code');
+    expect(data).not.toHaveProperty('id');
+    expect(data).not.toHaveProperty('publicTokenHash');
+    expect(data).not.toHaveProperty('publicShortCodeHash');
+    expect(JSON.stringify(data, (_key, value) => typeof value === 'bigint' ? value.toString() : value)).not.toContain('deadbeef');
+  });
+});

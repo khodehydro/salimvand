@@ -70,7 +70,7 @@ export class InvoiceService {
   }
 
   async getPublic(token: string) {
-    const invoice = await this.prisma.invoice.findFirst({ where: { OR: [{ publicTokenHash: hashPublicToken(token) }, { publicShortCodeHash: hashPublicToken(token) }] }, select: { id: true, number: true, status: true, publicTokenExpiresAt: true, customerName: true, customerMobile: true, subtotal: true, discount: true, total: true, paymentStatus: true, paidAmount: true, paymentMethod: true, paidAt: true, issuedAt: true, voidedAt: true, items: { select: { productName: true, quantity: true, unitPrice: true, lineTotal: true, inventoryItem: { select: { brand: { select: { name: true } } } } } } } });
+    const invoice = await this.prisma.invoice.findFirst({ where: { OR: [{ publicTokenHash: hashPublicToken(token) }, { publicShortCodeHash: hashPublicToken(token) }] }, select: { id: true, number: true, status: true, publicTokenExpiresAt: true, customerName: true, customerMobile: true, subtotal: true, discount: true, total: true, paymentStatus: true, paidAmount: true, paymentMethod: true, paidAt: true, issuedAt: true, voidedAt: true, items: { select: { productName: true, quantity: true, unitPrice: true, lineTotal: true, inventoryItem: { select: { brand: { select: { name: true } } } } } }, payments: { orderBy: { receivedAt: 'asc' }, select: { amount: true, method: true, receivedAt: true } }, issuedBy: { select: { name: true } } } });
     if (!invoice || invoice.status === 'voided' || (invoice.publicTokenExpiresAt && invoice.publicTokenExpiresAt.getTime() <= Date.now())) throw new NotFoundException('فاکتور پیدا نشد');
     // Never spread internal identifiers into the public payload: strip the row id,
     // the link expiry and every token hash explicitly (see public-contract.test.ts).
@@ -81,7 +81,19 @@ export class InvoiceService {
       publicShortCodeHash: _shortCodeHash,
       ...publicInvoice
     } = invoice as typeof invoice & { publicTokenHash?: string; publicShortCodeHash?: string };
-    return { ok: true, data: { ...publicInvoice, items: invoice.items.map((item: { productName: string; quantity: number; unitPrice: bigint; lineTotal: bigint; inventoryItem: { brand: { name: string } } }) => ({ productName: item.productName, brand: item.inventoryItem.brand.name, quantity: item.quantity, unitPrice: item.unitPrice, lineTotal: item.lineTotal })) } };
+    const payments = (invoice as unknown as { payments?: Array<{ amount: bigint; method: string; receivedAt: Date }> }).payments ?? [];
+    const issuedBy = (invoice as unknown as { issuedBy?: { name: string } | null }).issuedBy;
+    return {
+      ok: true,
+      data: {
+        ...publicInvoice,
+        items: invoice.items.map((item: { productName: string; quantity: number; unitPrice: bigint; lineTotal: bigint; inventoryItem: { brand: { name: string } } }) => ({ productName: item.productName, brand: item.inventoryItem.brand.name, quantity: item.quantity, unitPrice: item.unitPrice, lineTotal: item.lineTotal })),
+        // The document shows who issued it, how it was paid and when the link dies.
+        salesPerson: issuedBy?.name ?? null,
+        payments: payments.map((payment) => ({ amount: payment.amount, method: payment.method, paidAt: payment.receivedAt })),
+        linkExpiresAt: invoice.publicTokenExpiresAt ?? null,
+      },
+    };
   }
 
   async qr(shortCode: string) {
