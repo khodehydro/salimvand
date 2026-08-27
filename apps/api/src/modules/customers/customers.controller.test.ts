@@ -31,4 +31,17 @@ describe('CustomersController', () => {
     expect(update).toHaveBeenCalledWith('customer-1', { isActive: false }, 'user-1', '127.0.0.1');
     expect(payment).toHaveBeenCalledWith('customer-1', paymentBody, 'user-1', '127.0.0.1');
   });
+
+  it('routes customer vehicles', async () => {
+    const vehicles = vi.fn(async () => ({ ok: true, data: [] }));
+    const addVehicle = vi.fn(async () => ({ ok: true, data: { id: 'v-1' } }));
+    const removeVehicle = vi.fn(async () => ({ ok: true, data: { id: 'v-1' } }));
+    const controller = new CustomersController({ vehicles, addVehicle, removeVehicle } as never);
+    await controller.vehicles('customer-1');
+    await controller.addVehicle('customer-1', { plate: '12-345-67' }, request);
+    await controller.removeVehicle('customer-1', 'v-1', request);
+    expect(vehicles).toHaveBeenCalledWith('customer-1');
+    expect(addVehicle).toHaveBeenCalledWith('customer-1', { plate: '12-345-67' }, 'user-1');
+    expect(removeVehicle).toHaveBeenCalledWith('customer-1', 'v-1', 'user-1');
+  });
 });

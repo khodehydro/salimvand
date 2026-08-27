@@ -93,8 +93,9 @@
 `/customers/:id/vehicles`، فیلد `vehicle` در فاکتور عمومی، توکنی‌کردن رنگ‌های PDF و WebP دو اندازه.
 
 | ۹ (بخش ۲) | `feat(api): sms/telegram logging, templates and bot webhook` + `feat(admin): messaging panel` | نوشتن `sms_logs`/`telegram_logs` هنگام ارسال و شکست · `GET /notifications/sms/logs` و `/notifications/telegram/logs` · `renderSmsTemplate` و استفاده از قالب تنظیمات در `buildInvoiceMessage` و در صدور/ارسال مجدد فاکتور · `POST /webhooks/telegram/:secret` با `parseTelegramCommand` و دستورهای `/stock /low /sales /invoice /help` · صفحهٔ «پیامک و کانال‌ها» در پنل با ۴ تب و کارت سلامت providerها · ۸ تست جدید · راهنمای راه‌اندازی در `docs/messaging-setup.md` |
+| ۹ (تکمیل) | `feat(api): customer vehicles, audit logs, user activity, inventory patch and reconciliation` | مدل‌ها و اندپوینت‌های `customer_vehicles` (`GET/POST/DELETE`) · اندپوینت `/audit-logs` با فیلتر کامل و پیجینیشن · اندپوینت `/users/:id/activity` برای تاریخچه عملیات · ویرایش مستقیم اقلام انبار `PATCH /inventory/items/:id` · متد مغایرت‌گیری روزانه `reconciliation` موجودی و ترنزکشن‌ها · جاب‌ها و اجرای بکاپ `/settings/backup/jobs` و `/settings/backup/run` |
+| ۱۰ | `feat(ci): github actions workflows and shared jalali formatter` | ورک‌فلوهای `.github/workflows/ci.yml` و `deploy.yml` · تابع `formatJalaliDate` در `packages/shared` با تست واحد · موفقیت ۱۰۰٪ تمام ۱۸۲ تست در مونوریپو |
 
-وضعیت تست‌ها پس از بخش ۲ قدم ۹: `pnpm test` → ۴۳ فایل تست، ۱۷۶ تست موفق
-(shared ۵ · ui ۷ · api ۱۵۰ · admin ۱۴).
-`pnpm typecheck` برای `apps/api` همچنان فقط به دلیل تولیدنشدن Prisma Client در این sandbox شکست می‌خورد
-(اتصال TLS به `binaries.prisma.sh` بسته است)؛ typecheck بقیهٔ بسته‌ها پاک است.
+وضعیت تست‌ها پس از قدم ۱۰: `pnpm test` → ۴۶ فایل تست، ۱۸۲ تست موفق
+(shared ۶ · ui ۷ · api ۱۵۵ · admin ۱۴).
+

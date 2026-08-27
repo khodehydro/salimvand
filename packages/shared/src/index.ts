@@ -38,3 +38,20 @@ export function createEan13(seed: string): string {
   const sum = base.split('').reduce((total, digit, index) => total + Number(digit) * (index % 2 === 0 ? 1 : 3), 0);
   return `${base}${(10 - (sum % 10)) % 10}`;
 }
+
+export function formatJalaliDate(
+  dateInput: Date | string | number,
+  mode: 'date' | 'time' | 'dateTime' = 'date'
+): string {
+  const date = dateInput instanceof Date ? dateInput : new Date(dateInput);
+  if (isNaN(date.getTime())) return '';
+  const options: Intl.DateTimeFormatOptions = mode === 'time'
+    ? { hour: '2-digit', minute: '2-digit', hour12: false }
+    : mode === 'dateTime'
+    ? { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }
+    : { year: 'numeric', month: '2-digit', day: '2-digit' };
+
+  const formatter = new Intl.DateTimeFormat('fa-IR-u-ca-persian', options);
+  return formatter.format(date);
+}
+
