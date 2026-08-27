@@ -19,12 +19,32 @@ export class CustomersService {
     try { amount = BigInt(input.amount ?? 0); } catch { throw new BadRequestException('مبلغ پرداخت معتبر نیست'); }
     const methods = new Set(['cash', 'card', 'transfer', 'credit']);
     if (amount <= 0n || !input.method || !methods.has(input.method)) throw new BadRequestException('مبلغ مثبت و روش پرداخت معتبر الزامی است');
-    const customer = await this.prisma.customer.findFirst({ where: { id, isActive: true }, include: { invoices: { where: { status: 'issued' }, select: { total: true, paidAmount: true } } } });
-    if (!customer) throw new NotFoundException('مشتری پیدا نشد');
-    const debt = calculateCustomerDebt(customer.invoices);
-    if (amount > debt) throw new BadRequestException('مبلغ پرداخت بیشتر از بدهی مشتری است');
-    const payment = await this.prisma.customerPayment.create({ data: { customerId: id, invoiceId: input.invoiceId || undefined, amount, method: input.method as never, notes: input.notes?.trim() || undefined, receivedById: actorId } });
-    await writeAudit(this.prisma, { userId: actorId, ip, action: 'pay', entityType: 'customer', entityId: id, before: { debt: debt.toString() }, after: { amount: amount.toString(), remainingDebt: (debt - amount).toString(), method: input.method } }); return { ok: true, data: { ...payment, remainingDebt: debt - amount } };
+    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const customer = await tx.customer.findFirst({ where: { id, isActive: true }, include: { invoices: { where: { status: 'issued' }, orderBy: { issuedAt: 'asc' }, select: { id: true, total: true, paidAmount: true, paymentStatus: true } } } });
+      if (!customer) throw new NotFoundException('مشتری پیدا نشد');
+      const debt = calculateCustomerDebt(customer.invoices);
+      if (amount > debt) throw new BadRequestException('مبلغ پرداخت بیشتر از بدهی مشتری است');
+      if (input.invoiceId && !customer.invoices.some((invoice) => invoice.id === input.invoiceId)) throw new NotFoundException('فاکتور مشتری پیدا نشد');
+      const allocation = input.invoiceId ? customer.invoices.filter((invoice) => invoice.id === input.invoiceId) : customer.invoices;
+      let remaining = amount;
+      const allocations: Array<{ invoiceId: string; amount: bigint }> = [];
+      for (const invoice of allocation) {
+        if (remaining <= 0n) break;
+        const outstanding = invoice.total - invoice.paidAmount;
+        const applied = remaining < outstanding ? remaining : outstanding;
+        if (applied > 0n) { allocations.push({ invoiceId: invoice.id, amount: applied }); remaining -= applied; }
+      }
+      if (remaining !== 0n) throw new BadRequestException('مبلغ پرداخت به فاکتورهای مشتری تخصیص داده نشد');
+      const receipt = await tx.customerPayment.create({ data: { customerId: id, invoiceId: input.invoiceId || undefined, amount, method: input.method as never, notes: input.notes?.trim() || undefined, receivedById: actorId } });
+      for (const allocationItem of allocations) {
+        const invoice = customer.invoices.find((item) => item.id === allocationItem.invoiceId)!;
+        const paidAmount = invoice.paidAmount + allocationItem.amount;
+        await tx.invoice.update({ where: { id: invoice.id }, data: { paidAmount, paymentStatus: paidAmount === invoice.total ? 'paid' : 'partial', paidAt: paidAmount === invoice.total ? new Date() : undefined } });
+        await tx.payment.create({ data: { invoiceId: invoice.id, amount: allocationItem.amount, method: input.method as never, receivedById: actorId } });
+      }
+      await writeAudit(tx, { userId: actorId, ip, action: 'pay', entityType: 'customer', entityId: id, before: { debt: debt.toString() }, after: { amount: amount.toString(), remainingDebt: (debt - amount).toString(), receiptId: receipt.id, allocations: allocations.map((item) => ({ invoiceId: item.invoiceId, amount: item.amount.toString() })) } });
+      return { ok: true, data: { ...receipt, remainingDebt: debt - amount } };
+    });
   }
 
   async debtors() { const customers = await this.prisma.customer.findMany({ where: { isActive: true }, include: { invoices: { where: { status: 'issued', paymentStatus: { in: ['unpaid', 'partial'] } }, select: { total: true, paidAmount: true } } } }); return { ok: true, data: customers.map((customer) => ({ id: customer.id, name: customer.name, mobile: customer.mobile, debt: customer.invoices.reduce((sum, invoice) => sum + invoice.total - invoice.paidAmount, 0n), invoiceCount: customer.invoices.length })).filter((customer) => customer.debt > 0n).sort((a, b) => (a.debt > b.debt ? -1 : 1)) }; }
