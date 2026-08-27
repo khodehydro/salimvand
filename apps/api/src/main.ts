@@ -17,7 +17,7 @@ async function bootstrap() {
   app.useGlobalFilters(new ApiExceptionFilter());
   app.enableCors({ origin: corsOrigins(process.env.CORS_ORIGINS), credentials: true });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true, transformOptions: { enableImplicitConversion: true } }));
-  await app.listen(Number(process.env.API_PORT ?? 4000), process.env.API_HOST ?? '0.0.0.0');
+  await app.listen(Number(process.env.API_PORT ?? 4000), process.env.API_HOST ?? (process.env.NODE_ENV === 'production' ? '127.0.0.1' : '0.0.0.0'));
 }
 
 void bootstrap();
