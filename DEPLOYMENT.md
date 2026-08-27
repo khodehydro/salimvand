@@ -85,3 +85,13 @@ export CONFIRM_RESTORE=RESTORE_TO_TARGET
 ```
 
 `restore.sh` در صورت برابر بودن دیتابیس مقصد و Production، نبود manifest، checksum نامعتبر، نبود کلید رمزگشایی یا خطای SQL متوقف می‌شود. پیش از Restore واقعی، سرویس‌های API و Worker را متوقف و بعد از Restore، migration و smoke check را اجرا کنید.
+
+## تست سریع محیط توسعه
+
+پس از اجرای `docker compose -f docker-compose.dev.yml up -d` و بالا آمدن API، تست smoke محلی را اجرا کنید:
+
+```bash
+./scripts/check-local.sh
+```
+
+این فرمان فقط PostgreSQL و Redis محلی Compose و health endpoint API را بررسی می‌کند و به Production متصل نمی‌شود. مقادیر `VITE_API_URL` در `.env.example` نیز عمداً localhost هستند؛ قبل از Build Production باید با URL واقعی API جایگزین شوند.
