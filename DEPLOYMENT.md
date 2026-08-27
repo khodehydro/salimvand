@@ -95,3 +95,13 @@ export CONFIRM_RESTORE=RESTORE_TO_TARGET
 ```
 
 این فرمان فقط PostgreSQL و Redis محلی Compose و health endpoint API را بررسی می‌کند و به Production متصل نمی‌شود. مقادیر `VITE_API_URL` در `.env.example` نیز عمداً localhost هستند؛ قبل از Build Production باید با URL واقعی API جایگزین شوند.
+
+## کنترل کیفیت CI/CD
+
+برای اجرای دقیق همان کنترل‌هایی که باید قبل از Release انجام شوند:
+
+```bash
+pnpm ci:check
+```
+
+`ci-check.sh` ابتدا Client و schema Prisma را با دیتابیس/نسخهٔ Prisma پروژه هماهنگ می‌کند، سپس به‌ترتیب typecheck، test، build و format را اجرا می‌کند. در صورت خطای network هنگام دانلود Prisma Engine، pipeline عمداً متوقف می‌شود و نباید Release ناقص ساخته شود.

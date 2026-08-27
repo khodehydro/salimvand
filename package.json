@@ -13,7 +13,8 @@
     "test": "pnpm --filter @salimvand/shared build && pnpm -r test",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "check:production": "bash scripts/check-production.sh"
+    "check:production": "bash scripts/check-production.sh",
+    "ci:check": "bash scripts/ci-check.sh"
   },
   "devDependencies": {
     "@types/node": "^20.17.30",
