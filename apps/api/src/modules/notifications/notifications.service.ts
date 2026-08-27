@@ -32,6 +32,18 @@ export class NotificationsService implements OnModuleDestroy {
 
   async counts() { return this.queue.getJobCounts('waiting', 'active', 'completed', 'failed', 'delayed'); }
 
+  async failed(limit = 50) {
+    const jobs = await this.queue.getFailed(0, Math.min(100, Math.max(1, limit)) - 1);
+    return jobs.map((job) => ({ id: job.id, name: job.name, type: job.data.type, mobile: job.data.mobile ? `${job.data.mobile.slice(0, 3)}***${job.data.mobile.slice(-2)}` : null, failedReason: job.failedReason ?? 'خطای نامشخص', attemptsMade: job.attemptsMade, timestamp: job.timestamp }));
+  }
+
+  async retry(id: string) {
+    const job = await this.queue.getJob(id);
+    if (!job) return false;
+    await job.retry('failed');
+    return true;
+  }
+
   private async process(job: Job<NotificationJob>) {
     // Provider adapters are isolated here. Without credentials, jobs remain observable and retryable.
     const endpoint = process.env.SMS_API_URL;

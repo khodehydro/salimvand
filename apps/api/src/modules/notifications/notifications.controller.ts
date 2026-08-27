@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
 import { RolesGuard } from '../../common/auth/roles.guard';
 import { Roles } from '../../common/auth/roles.decorator';
@@ -10,4 +10,6 @@ import { NotificationsService } from './notifications.service';
 export class NotificationsController {
   constructor(private readonly notifications: NotificationsService) {}
   @Get('queue') queue() { return this.notifications.counts().then((counts) => ({ ok: true, data: counts })); }
+  @Get('failed') failed(@Query('limit') limit?: string) { return this.notifications.failed(Number(limit ?? 50)).then((jobs) => ({ ok: true, data: jobs })); }
+  @Post('failed/:id/retry') async retry(@Param('id') id: string) { const retried = await this.notifications.retry(id); return { ok: retried, data: { retried } }; }
 }
