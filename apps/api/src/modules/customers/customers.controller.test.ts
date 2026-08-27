@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { CustomersController } from './customers.controller';
+import { CustomerPaymentMethod } from './customers.dto';
 
 const request = { user: { id: 'user-1' }, ip: '127.0.0.1' } as never;
 
@@ -22,7 +23,7 @@ describe('CustomersController', () => {
     const payment = vi.fn(async () => ({ ok: true, data: { remainingDebt: 0n } }));
     const controller = new CustomersController({ create, update, payment } as never);
     const customer = { name: 'علی', mobile: '09120000000' };
-    const paymentBody = { amount: '500', method: 'cash', invoiceId: 'invoice-1' };
+    const paymentBody = { amount: '500', method: CustomerPaymentMethod.cash, invoiceId: 'invoice-1' };
     await expect(controller.create(customer, request)).resolves.toEqual({ ok: true, data: { id: 'customer-1' } });
     await expect(controller.update('customer-1', { isActive: false }, request)).resolves.toEqual({ ok: true, data: { id: 'customer-1', isActive: false } });
     await expect(controller.payment('customer-1', paymentBody, request)).resolves.toEqual({ ok: true, data: { remainingDebt: 0n } });

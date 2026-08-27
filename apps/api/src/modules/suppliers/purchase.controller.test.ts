@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { PurchaseController } from './purchase.controller';
+import { SupplierPaymentMethod } from './purchase.dto';
 
 const request = { user: { id: 'user-1' }, ip: '127.0.0.1' } as never;
 
@@ -25,7 +26,7 @@ describe('PurchaseController', () => {
   it('routes supplier payment with method and notes', async () => {
     const pay = vi.fn(async () => ({ ok: true, data: { invoice: { paidAmount: 700n } } }));
     const controller = new PurchaseController({ pay } as never);
-    const body = { amount: '300', method: 'transfer', notes: 'تسویه' };
+    const body = { amount: '300', method: SupplierPaymentMethod.transfer, notes: 'تسویه' };
     await expect(controller.pay('purchase-1', body, request)).resolves.toEqual({ ok: true, data: { invoice: { paidAmount: 700n } } });
     expect(pay).toHaveBeenCalledWith('purchase-1', '300', 'transfer', 'تسویه', 'user-1', '127.0.0.1');
   });

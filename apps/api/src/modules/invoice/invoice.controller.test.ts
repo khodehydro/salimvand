@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { InvoiceController, PublicInvoiceController } from './invoice.controller';
+import { InvoicePaymentMethod } from './invoice.dto';
 
 const request = { user: { id: 'user-1' } } as never;
 
@@ -9,7 +10,7 @@ describe('InvoiceController', () => {
     const pay = vi.fn(async () => ({ ok: true, data: { paymentStatus: 'paid' } }));
     const controller = new InvoiceController({ create, pay } as never);
     await expect(controller.create({ items: [{ inventoryItemId: 'item-1', quantity: 1, unitPrice: '100' }] }, request)).resolves.toEqual({ ok: true, data: { number: 'INV-1' } });
-    await expect(controller.pay('invoice-1', { amount: '100', method: 'cash' }, request)).resolves.toEqual({ ok: true, data: { paymentStatus: 'paid' } });
+    await expect(controller.pay('invoice-1', { amount: '100', method: InvoicePaymentMethod.cash }, request)).resolves.toEqual({ ok: true, data: { paymentStatus: 'paid' } });
     expect(create).toHaveBeenCalledWith({ items: [{ inventoryItemId: 'item-1', quantity: 1, unitPrice: '100' }] }, 'user-1');
     expect(pay).toHaveBeenCalledWith('invoice-1', '100', 'cash', 'user-1');
   });
