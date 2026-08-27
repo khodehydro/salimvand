@@ -27,6 +27,7 @@ command -v pg_isready >/dev/null || { echo 'PostgreSQL client is required.' >&2;
 
 export NODE_ENV=production
 export TZ=UTC
+bash "$ROOT_DIR/scripts/verify-production-config.sh"
 
 echo "Fetching $BRANCH..."
 git fetch --prune origin "$BRANCH"
