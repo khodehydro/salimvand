@@ -67,3 +67,21 @@ sudo /opt/salimvand/scripts/verify-backup.sh /var/backups/salimvand/postgres-YYY
 ```
 
 اگر `BACKUP_ENCRYPTION_KEY` فعال باشد، manifest مربوط به فایل `.gpg` checksum همان فایل رمزنگاری‌شده را بررسی می‌کند؛ پس از verification، فایل را با کلید Production رمزگشایی و سپس Restore کنید. Backup معتبر به‌تنهایی جایگزین Restore Test نیست؛ ماهانه یک Restore روی دیتابیس جداگانه انجام شود.
+
+## بازیابی امن Backup
+
+Restore هرگز از `DATABASE_URL` استفاده نمی‌کند و فقط با دیتابیس مقصدی که جداگانه در `TARGET_DATABASE_URL` مشخص شده انجام می‌شود. ابتدا checksum و manifest بررسی می‌شوند:
+
+```bash
+export TARGET_DATABASE_URL='postgresql://parts_store:password@127.0.0.1:5432/parts_store_restore'
+./scripts/restore.sh /var/backups/salimvand/postgres-YYYYMMDDTHHMMSSZ.sql.gz --dry-run
+```
+
+برای Restore واقعی، تأیید صریح لازم است:
+
+```bash
+export CONFIRM_RESTORE=RESTORE_TO_TARGET
+./scripts/restore.sh /var/backups/salimvand/postgres-YYYYMMDDTHHMMSSZ.sql.gz
+```
+
+`restore.sh` در صورت برابر بودن دیتابیس مقصد و Production، نبود manifest، checksum نامعتبر، نبود کلید رمزگشایی یا خطای SQL متوقف می‌شود. پیش از Restore واقعی، سرویس‌های API و Worker را متوقف و بعد از Restore، migration و smoke check را اجرا کنید.
