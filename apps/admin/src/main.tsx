@@ -1,4 +1,6 @@
 import { createRoot } from 'react-dom/client';
+import { installDesignSystemCss } from '@salimvand/ui';
+import { DesignSystemRoute } from './DesignSystemRoute';
 import { useEffect, useState } from 'react';
 import { APP_NAME, type UserRole } from '@salimvand/shared';
 import { MediaPage } from './pages/MediaPage';
@@ -41,4 +43,10 @@ function App() {
   const navigate = (next: Page) => { setPage(next); setMobileOpen(false); };
   return <div className={`admin ${dark ? 'theme-dark' : ''}`}><aside className={mobileOpen ? 'open' : ''}><div className="aside-brand"><span className="brand-mark">س</span><span><strong>سلیم‌وند</strong><small>ERP فروشگاه</small></span></div><nav>{visibleItems.map((item) => <button className={page === item.id ? 'active' : ''} key={item.id} onClick={() => navigate(item.id)}><span className="nav-icon">{item.icon}</span>{item.label}{item.id === 'inventory' && <i className="nav-count">!</i>}</button>)}</nav><div className="aside-footer"><span className="online-dot" /> سیستم آنلاین</div></aside><main><header className="admin-topbar"><button className="mobile-menu" onClick={() => setMobileOpen(!mobileOpen)} aria-label="باز کردن منو">☰</button><div className="topbar-title"><span>مدیریت</span><b>{pageTitles[page]}</b></div><button className="global-search" onClick={() => setPaletteOpen(true)}>⌕ <span>جست‌وجوی سریع</span><kbd>Ctrl K</kbd></button><button className="theme-button" onClick={() => setDark(!dark)} aria-label="تغییر پوسته">{dark ? '☀' : '☾'}</button><span className="notification">♧<i /></span><div className="user-chip"><span className="avatar">{role === 'super_admin' ? 'م' : 'ک'}</span><span><b>{APP_NAME}</b><small>{role === 'super_admin' ? 'مدیر کل' : role === 'manager' ? 'مدیر' : 'کاربر پنل'}</small></span></div><button className="logout" onClick={() => { void api('/auth/logout', { method: 'POST' }).finally(() => { localStorage.removeItem('salimvand.accessToken'); setAuthenticated(false); }); }}>خروج</button></header>{page === 'dashboard' ? <DashboardPage /> : page === 'products' ? <ProductsPage /> : page === 'invoices' ? <InvoicesPage /> : page === 'media' ? <MediaPage /> : page === 'inventory' ? <InventoryPage /> : page === 'reports' ? <ReportsPage /> : page === 'settings' ? <SettingsPage /> : page === 'users' ? <UsersPage /> : page === 'customers' ? <CustomersPage /> : page === 'suppliers' ? <SuppliersPage /> : page === 'purchases' ? <PurchasesPage /> : <ReferencesPage />}</main>{paletteOpen && <CommandPalette items={visibleItems} onSelect={navigate} onClose={() => setPaletteOpen(false)} />}<nav className="mobile-nav">{visibleItems.slice(0, 4).map((item) => <button className={page === item.id ? 'active' : ''} key={item.id} onClick={() => navigate(item.id)}><span>{item.icon}</span>{item.label}</button>)}</nav></div>;
 }
-createRoot(document.getElementById('root')!).render(<App />);
+installDesignSystemCss();
+const rootElement = createRoot(document.getElementById('root')!);
+if (window.location.hash === '#design-system') {
+  rootElement.render(<DesignSystemRoute initialTheme={localStorage.getItem('salimvand.theme') === 'dark' ? 'dark' : 'light'} />);
+} else {
+  rootElement.render(<App />);
+}
