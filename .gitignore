@@ -12,5 +12,4 @@ uploads/
 
 *.tsbuildinfo
 
-# GitHub App lacks workflow permission in this environment
-.github/workflows/
+# GitHub Actions are source-controlled; local action caches are ignored separately.

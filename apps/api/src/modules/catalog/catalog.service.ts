@@ -4,7 +4,7 @@ import { PrismaService } from '../../prisma.service';
 type PublicProduct = {
   slug: string;
   availabilityOverride: string | null;
-  inventoryItems: Array<{ quantity: number; brand: { name: string } }>;
+  inventoryItems: Array<{ quantity: number; minStock: number | null; brand: { name: string } }>;
   [key: string]: unknown;
 };
 
@@ -25,7 +25,7 @@ export class CatalogService {
     const page = Math.max(1, query.page ?? 1); const pageSize = Math.min(50, Math.max(1, query.pageSize ?? 24));
     const [products, total] = await Promise.all([this.prisma.product.findMany({
       where: where as never, orderBy: { createdAt: 'desc' }, skip: (page - 1) * pageSize, take: pageSize,
-      select: { id: true, code: true, slug: true, name: true, description: true, seoTitle: true, seoDescription: true, status: true, availabilityOverride: true, category: { select: { name: true, slug: true } }, images: { orderBy: { sort: 'asc' }, select: { path: true, alt: true, isPrimary: true } }, inventoryItems: { where: { isActive: true }, select: { quantity: true, brand: { select: { name: true } } } }, compatibilities: { select: { model: { select: { name: true, make: { select: { name: true } } }, }, trim: { select: { name: true } } } } },
+      select: { id: true, code: true, slug: true, name: true, description: true, seoTitle: true, seoDescription: true, status: true, availabilityOverride: true, category: { select: { name: true, slug: true } }, images: { orderBy: { sort: 'asc' }, select: { path: true, alt: true, isPrimary: true } }, inventoryItems: { where: { isActive: true }, select: { quantity: true, minStock: true, brand: { select: { name: true } } } }, compatibilities: { select: { model: { select: { name: true, make: { select: { name: true } } }, }, trim: { select: { name: true } } } } },
     }), this.prisma.product.count({ where: where as never })]);
     const publicProducts = products as unknown as PublicProduct[];
     return { ok: true, data: publicProducts.map((product) => ({ ...product, availability: this.availability(product.inventoryItems, product.availabilityOverride), brands: product.inventoryItems.map((item) => ({ name: item.brand.name, inStock: item.quantity > 0 })), inventoryItems: undefined })), meta: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) } };
@@ -40,6 +40,7 @@ export class CatalogService {
 
   private availability(items: Array<{ quantity: number }>, override: string | null) {
     if (override === 'coming_soon' || override === 'discontinued') return override;
+    if (items.some((item) => item.quantity > 0 && item.minStock !== null && item.quantity <= item.minStock)) return 'low_stock';
     return items.some((item) => item.quantity > 0) ? 'in_stock' : 'out_of_stock';
   }
 
