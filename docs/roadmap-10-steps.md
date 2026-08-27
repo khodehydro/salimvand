@@ -25,7 +25,7 @@
 | `pnpm test` | موفق — ۳۶ فایل تست، **۱۲۸ تست API** + تست‌های shared |
 | `pnpm typecheck` | **شکست** فقط به دلیل تولید‌نشدن Prisma Client (اتصال به `binaries.prisma.sh` در sandbox بسته است؛ `docs/prisma-ci-troubleshooting.md`) |
 | `.github/workflows` | **وجود ندارد** — CI/CD سند مادر (§۸.۶) پیاده نشده |
-| پوستهٔ تاریک سایت عمومی | **وجود ندارد** — `grep data-theme apps/website/src/app/styles.css` → ۰ نتیجه |
+| پوستهٔ تاریک سایت عمومی | قبل از این قدم فقط با `@media(prefers-color-scheme:dark)` فعال می‌شد؛ `data-theme` و سوییچ کاربر نداشت (`grep data-theme apps/website/src/app/styles.css` → ۰ نتیجه) — در قدم ۳ اصلاح شد |
 | رنگ خام در پنل | `apps/admin/src/styles.css` با hex خام شروع می‌شود؛ ۲۹۱ hex در سورس اپ‌ها |
 | `docs/ui-reference.html` | ۳.۸ کیلوبایت placeholder، نه مرجع بصری کامل |
 | `packages/ui` | ۲۸ خط — فقط btn/badge/card/field/input؛ بدون kpi-card/table/sheet/modal/palette/tl/stockbar/toast/skeleton/charts |
@@ -35,10 +35,10 @@
 
 | # | قدم | فاز سند | خروجی کلیدی |
 |---|---|---|---|
-| ۱ | تثبیت مستندات مرجع داخل ریپازیتوری + همین نقشه | ۰ | `docs/delivery-spec.md`, `docs/roadmap-10-steps.md`, به‌روزرسانی `docs/architecture.md` |
-| ۲ | سیستم طراحی کامل در `packages/ui` (توکن دوپوسته + اجزای پایه + فونت vazirmatn از npm) | ۰ | توکن‌ها، ThemeProvider، ۲۰+ کامپوننت، تست توکن/کامپوننت |
-| ۳ | سایت عمومی: توکن‌محوری + پوستهٔ تاریک + نقشه/بله/فوتر + تست contract «بدون قیمت» | ۱ | حذف hex خام، `data-theme`، بخش تماس کامل |
-| ۴ | صفحهٔ فاکتور عمومی: QR، متای کامل، جعبه‌های پرداخت، رفع باگ چاپ تکراری | ۲ | `/invoice/[token]` مطابق مرجع |
+| ۱ ✅ | تثبیت مستندات مرجع داخل ریپازیتوری + همین نقشه | ۰ | `docs/delivery-spec.md`, `docs/roadmap-10-steps.md`, به‌روزرسانی `docs/architecture.md` |
+| ۲ ✅ | سیستم طراحی کامل در `packages/ui` (توکن دوپوسته + اجزای پایه + فونت vazirmatn از npm) | ۰ | توکن‌ها، ThemeProvider، ۲۰+ کامپوننت، تست توکن/کامپوننت |
+| ۳ ✅ | سایت عمومی: توکن‌محوری + پوستهٔ تاریک + نقشه/بله/فوتر + تست contract «بدون قیمت» | ۱ | حذف hex خام، `data-theme`، بخش تماس کامل |
+| ۴ ✅ | صفحهٔ فاکتور عمومی: QR، متای کامل، جعبه‌های پرداخت، رفع باگ چاپ تکراری | ۲ | `/invoice/[token]` مطابق مرجع |
 | ۵ | شِل پنل با توکن: سایدبار سرمه‌ای، شمارنده، FAB، نوار موبایل، پالت گروه‌بندی‌شده ۱..۵ | ۳ | حذف ۲۹۱ hex، هر دو پوسته |
 | ۶ | صفحهٔ «صدور فاکتور» کامل + مودال موفقیت + پیامک مجدد | ۲ | مهم‌ترین صفحهٔ پنل |
 | ۷ | محصول (۵ تب) + انبار (stockbar، شیت اصلاح، مسیر قفسه) | ۱ | مطابق نقشهٔ صفحه‌ها |
@@ -62,3 +62,17 @@
 ۲) قبل از اعلام پایان هر قدم، `pnpm test` اجرا و نتیجهٔ واقعی ثبت می‌شود.
 ۳) `pnpm typecheck` کامل API تا زمان دسترسی به `binaries.prisma.sh` (CI/VPS) ممکن نیست؛ این محدودیت
    در هر گزارش تکرار می‌شود و با خاموش‌کردن strict دور زده نمی‌شود.
+
+
+## گزارش اجرا (به‌روز می‌شود)
+
+| قدم | کامیت | نتیجهٔ راستی‌آزمایی |
+|---|---|---|
+| ۱ | `docs: pin reference documents and add 10-step completion roadmap` | `docs/delivery-spec.md` و همین فایل کامیت و push شد |
+| ۲ | `feat(ui): build token-based design system with dual-theme components` | `pnpm --filter @salimvand/ui typecheck` پاک · ۷ تست جدید · `pnpm --filter @salimvand/admin build` موفق · گالری در `/#design-system` |
+| ۳ | `feat(website): token-only theming with data-theme switch and contact upgrades` | ۰ hex خارج از توکن‌ها در CSS سایت · ۴ تست contract جدید · باگ نشت `publicTokenHash` در سریالایزر فاکتور عمومی رفع شد · `next build` موفق (۷ صفحه) |
+| ۴ | `feat(website): rebuild public invoice document with QR, payments and shared component` | `next build` بدون warning · تست‌ها: shared ۵ + ui ۷ + api ۱۳۲ |
+
+وضعیت تست‌ها پس از قدم ۴: `pnpm test` → ۳۹ فایل تست، ۱۴۴ تست موفق.
+`pnpm typecheck` برای `apps/api` همچنان فقط به دلیل تولیدنشدن Prisma Client در این sandbox شکست می‌خورد
+(اتصال TLS به `binaries.prisma.sh` بسته است)؛ typecheck بقیهٔ بسته‌ها پاک است.
