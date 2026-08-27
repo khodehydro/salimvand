@@ -564,25 +564,36 @@ export function CommandPalette({
   groups,
   onClose,
   placeholder = 'جست‌وجوی سراسری...',
+  query: controlledQuery,
+  onQueryChange,
+  filterLocally = true,
 }: {
   open: boolean;
   groups: PaletteGroup[];
   onClose: () => void;
   placeholder?: string;
+  /** Controlled mode: the app owns the query (server-side search) and passes results in. */
+  query?: string;
+  onQueryChange?: (query: string) => void;
+  filterLocally?: boolean;
 }) {
-  const [query, setQuery] = useState('');
-  const filtered = useMemo(
-    () =>
-      groups
-        .map((group) => ({
-          ...group,
-          items: group.items.filter(
-            (item) => !query.trim() || item.label.includes(query.trim()) || (item.detail ?? '').includes(query.trim()),
-          ),
-        }))
-        .filter((group) => group.items.length > 0),
-    [groups, query],
-  );
+  const [internalQuery, setInternalQuery] = useState('');
+  const query = controlledQuery ?? internalQuery;
+  const setQuery = (value: string) => {
+    setInternalQuery(value);
+    onQueryChange?.(value);
+  };
+  const filtered = useMemo(() => {
+    if (!filterLocally) return groups.filter((group) => group.items.length > 0);
+    return groups
+      .map((group) => ({
+        ...group,
+        items: group.items.filter(
+          (item) => !query.trim() || item.label.includes(query.trim()) || (item.detail ?? '').includes(query.trim()),
+        ),
+      }))
+      .filter((group) => group.items.length > 0);
+  }, [groups, query, filterLocally]);
   const run = useCallback(
     (item: { onSelect: () => void }) => {
       item.onSelect();

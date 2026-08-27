@@ -24,10 +24,10 @@ import {
 describe('design tokens', () => {
   it('keeps light and dark palettes key-for-key complete', () => {
     const keys = Object.keys(lightTokens) as Array<keyof typeof lightTokens>;
-    expect(keys.length).toBeGreaterThanOrEqual(20);
+    expect(keys.length).toBeGreaterThanOrEqual(26);
     for (const key of keys) {
-      expect(lightTokens[key]).toMatch(/^#[0-9a-f]{6}$/i);
-      expect(darkTokens[key]).toMatch(/^#[0-9a-f]{6}$/i);
+      expect(lightTokens[key]).toMatch(/^#[0-9a-f]{6}([0-9a-f]{2})?$/i);
+      expect(darkTokens[key]).toMatch(/^#[0-9a-f]{6}([0-9a-f]{2})?$/i);
     }
     expect(Object.keys(darkTokens)).toEqual(keys);
   });

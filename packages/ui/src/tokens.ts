@@ -40,6 +40,14 @@ export type SemanticTokens = {
   danger: string;
   dangerSoft: string;
   sidebar: string;
+  /** Text/icon colour that sits on navy or primary surfaces (constant in both skins). */
+  onBrand: string;
+  onNavy: string;
+  /** Translucent overlays + shadow tints, derived from brand-950 so they stay on-palette. */
+  overlay: string;
+  scrim: string;
+  shadowColor: string;
+  shadowSoft: string;
 };
 
 export const lightTokens: SemanticTokens = {
@@ -63,6 +71,12 @@ export const lightTokens: SemanticTokens = {
   danger: '#c8383c',
   dangerSoft: '#fbe7e8',
   sidebar: brand[900],
+  onBrand: '#ffffff',
+  onNavy: '#eaf1f9',
+  overlay: '#ffffff21',
+  scrim: '#04121f8c',
+  shadowColor: '#04121f55',
+  shadowSoft: '#04121f21',
 };
 
 export const darkTokens: SemanticTokens = {
@@ -86,6 +100,12 @@ export const darkTokens: SemanticTokens = {
   danger: '#ff7a7f',
   dangerSoft: '#3a1618',
   sidebar: brand[900],
+  onBrand: '#ffffff',
+  onNavy: '#eaf1f9',
+  overlay: '#ffffff21',
+  scrim: '#04121f8c',
+  shadowColor: '#04121f55',
+  shadowSoft: '#04121f21',
 };
 
 export const geometry = {
@@ -137,6 +157,12 @@ const cssVarNames: Record<keyof SemanticTokens, string> = {
   danger: '--sv-danger',
   dangerSoft: '--sv-danger-soft',
   sidebar: '--sv-sidebar',
+  onBrand: '--sv-on-brand',
+  onNavy: '--sv-on-navy',
+  overlay: '--sv-overlay',
+  scrim: '--sv-scrim',
+  shadowColor: '--sv-shadow-color',
+  shadowSoft: '--sv-shadow-soft',
 };
 
 export const tokenCssVarNames = cssVarNames;
