@@ -4,6 +4,10 @@ import { writeAudit } from '../../common/audit/audit-log';
 
 type SupplierInput = { name?: string; mobile?: string; phone?: string; address?: string; taxId?: string; notes?: string };
 
+export function calculateSupplierDebt(invoices: ReadonlyArray<{ total: bigint; paidAmount: bigint }>): bigint {
+  return invoices.reduce((sum, invoice) => sum + invoice.total - invoice.paidAmount, 0n);
+}
+
 @Injectable()
 export class SuppliersService {
   constructor(private readonly prisma: PrismaService) {}
@@ -12,6 +16,11 @@ export class SuppliersService {
     const term = search?.trim();
     const suppliers = await this.prisma.supplier.findMany({ where: { deletedAt: null, ...(term ? { OR: [{ name: { contains: term, mode: 'insensitive' } }, { mobile: { contains: term, mode: 'insensitive' } }, { phone: { contains: term, mode: 'insensitive' } }] } : {}) }, orderBy: { createdAt: 'desc' } });
     return { ok: true, data: suppliers };
+  }
+
+  async debtors() {
+    const suppliers = await this.prisma.supplier.findMany({ where: { isActive: true, deletedAt: null }, include: { purchases: { where: { status: 'issued' }, select: { total: true, paidAmount: true } } } });
+    return { ok: true, data: suppliers.map((supplier) => ({ id: supplier.id, name: supplier.name, mobile: supplier.mobile, debt: calculateSupplierDebt(supplier.purchases), invoiceCount: supplier.purchases.length })).filter((supplier) => supplier.debt > 0n).sort((a, b) => (a.debt > b.debt ? -1 : 1)) };
   }
 
   async create(input: SupplierInput, actorId: string, ip?: string) {
