@@ -16,6 +16,8 @@ import { SuppliersModule } from './modules/suppliers/suppliers.module';
 import { APP_NAME, API_PREFIX } from '@salimvand/shared';
 import { PrismaService } from './prisma.service';
 import { ServiceUnavailableException } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 
 @Controller()
 class SystemController {
@@ -37,5 +39,9 @@ class SystemController {
   }
 }
 
-@Module({ imports: [PrismaModule, CatalogModule, AuthModule, InventoryModule, MediaModule, DashboardModule, InvoiceModule, NotificationsModule, ReportsModule, SettingsModule, SearchModule, UsersModule, CustomersModule, SuppliersModule], controllers: [SystemController] })
+@Module({
+  imports: [ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]), PrismaModule, CatalogModule, AuthModule, InventoryModule, MediaModule, DashboardModule, InvoiceModule, NotificationsModule, ReportsModule, SettingsModule, SearchModule, UsersModule, CustomersModule, SuppliersModule],
+  controllers: [SystemController],
+  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
+})
 export class AppModule {}

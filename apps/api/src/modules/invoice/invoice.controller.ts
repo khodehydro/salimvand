@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
@@ -56,6 +57,7 @@ export class InvoiceController {
 }
 
 @Controller('public/invoices')
+@Throttle({ default: { limit: 30, ttl: 60_000 } })
 export class PublicInvoiceController {
   constructor(private readonly invoices: InvoiceService) {}
   @Get('qr/:shortCode') qr(@Param('shortCode') shortCode: string) { return this.invoices.qr(shortCode); }

@@ -1,7 +1,9 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { CatalogService } from './catalog.service';
 
 @Controller()
+@Throttle({ default: { limit: 90, ttl: 60_000 } })
 export class CatalogController {
   constructor(private readonly catalog: CatalogService) {}
 
