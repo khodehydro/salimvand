@@ -3,6 +3,10 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
 import { writeAudit } from '../../common/audit/audit-log';
 
+export function calculateCustomerDebt(invoices: ReadonlyArray<{ total: bigint; paidAmount: bigint }>): bigint {
+  return invoices.reduce((sum, invoice) => sum + invoice.total - invoice.paidAmount, 0n);
+}
+
 @Injectable()
 export class CustomersService {
   constructor(private readonly prisma: PrismaService) {}
@@ -11,11 +15,16 @@ export class CustomersService {
   async create(input: { name?: string; mobile?: string; notes?: string }, actorId?: string, ip?: string) { const name = input.name?.trim(); const mobile = input.mobile?.trim(); if (!name || !mobile || !/^09\d{9}$/.test(mobile)) throw new BadRequestException('نام و شماره موبایل معتبر الزامی است'); const customer = await this.prisma.customer.create({ data: { name, mobile, notes: input.notes?.trim() || undefined } }); if (actorId) await writeAudit(this.prisma, { userId: actorId, ip, action: 'create', entityType: 'customer', entityId: customer.id, after: { name, mobile } }); return { ok: true, data: customer }; }
   async update(id: string, input: { name?: string; mobile?: string; notes?: string; isActive?: boolean }, actorId?: string, ip?: string) { const before = await this.prisma.customer.findUnique({ where: { id } }); if (!before) throw new NotFoundException('مشتری پیدا نشد'); const data: Prisma.CustomerUpdateInput = {}; if (input.name?.trim()) data.name = input.name.trim(); if (input.mobile !== undefined) { if (!/^09\d{9}$/.test(input.mobile)) throw new BadRequestException('شماره موبایل معتبر نیست'); data.mobile = input.mobile; } if (input.notes !== undefined) data.notes = input.notes.trim() || null; if (input.isActive !== undefined) data.isActive = input.isActive; const customer = await this.prisma.customer.update({ where: { id }, data }); if (actorId) await writeAudit(this.prisma, { userId: actorId, ip, action: input.isActive === false ? 'delete' : 'update', entityType: 'customer', entityId: id, before: { name: before.name, isActive: before.isActive }, after: { name: customer.name, isActive: customer.isActive } }); return { ok: true, data: customer }; }
   async payment(id: string, input: { amount?: string | number; method?: string; invoiceId?: string; notes?: string }, actorId: string, ip?: string) {
-    const amount = BigInt(input.amount ?? 0); const methods = new Set(['cash', 'card', 'transfer', 'credit']);
+    let amount: bigint;
+    try { amount = BigInt(input.amount ?? 0); } catch { throw new BadRequestException('مبلغ پرداخت معتبر نیست'); }
+    const methods = new Set(['cash', 'card', 'transfer', 'credit']);
     if (amount <= 0n || !input.method || !methods.has(input.method)) throw new BadRequestException('مبلغ مثبت و روش پرداخت معتبر الزامی است');
-    const customer = await this.prisma.customer.findFirst({ where: { id, isActive: true } }); if (!customer) throw new NotFoundException('مشتری پیدا نشد');
+    const customer = await this.prisma.customer.findFirst({ where: { id, isActive: true }, include: { invoices: { where: { status: 'issued' }, select: { total: true, paidAmount: true } } } });
+    if (!customer) throw new NotFoundException('مشتری پیدا نشد');
+    const debt = calculateCustomerDebt(customer.invoices);
+    if (amount > debt) throw new BadRequestException('مبلغ پرداخت بیشتر از بدهی مشتری است');
     const payment = await this.prisma.customerPayment.create({ data: { customerId: id, invoiceId: input.invoiceId || undefined, amount, method: input.method as never, notes: input.notes?.trim() || undefined, receivedById: actorId } });
-    await writeAudit(this.prisma, { userId: actorId, ip, action: 'pay', entityType: 'customer', entityId: id, after: { amount: amount.toString(), method: input.method } }); return { ok: true, data: payment };
+    await writeAudit(this.prisma, { userId: actorId, ip, action: 'pay', entityType: 'customer', entityId: id, before: { debt: debt.toString() }, after: { amount: amount.toString(), remainingDebt: (debt - amount).toString(), method: input.method } }); return { ok: true, data: { ...payment, remainingDebt: debt - amount } };
   }
 
   async debtors() { const customers = await this.prisma.customer.findMany({ where: { isActive: true }, include: { invoices: { where: { status: 'issued', paymentStatus: { in: ['unpaid', 'partial'] } }, select: { total: true, paidAmount: true } } } }); return { ok: true, data: customers.map((customer) => ({ id: customer.id, name: customer.name, mobile: customer.mobile, debt: customer.invoices.reduce((sum, invoice) => sum + invoice.total - invoice.paidAmount, 0n), invoiceCount: customer.invoices.length })).filter((customer) => customer.debt > 0n).sort((a, b) => (a.debt > b.debt ? -1 : 1)) }; }
