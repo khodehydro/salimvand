@@ -17,6 +17,15 @@ export function integrationUrl(channel: Exclude<Channel, 'sms'>, env: NodeJS.Pro
 }
 type NotificationName = NotificationJob['type'];
 
+export function notificationChannels(job: NotificationJob, env: NodeJS.ProcessEnv = process.env): Channel[] {
+  const channels: Channel[] = [];
+  if (job.mobile && (!job.testChannel || job.testChannel === 'sms') && integrationConfigured('sms', env)) channels.push('sms');
+  for (const channel of ['telegram', 'bale'] as const) {
+    if ((!job.testChannel || job.testChannel === channel) && integrationConfigured(channel, env)) channels.push(channel);
+  }
+  return channels;
+}
+
 export function buildInvoiceMessage(number: string, shortCode: string, total: string, paid = false): string {
   const siteUrl = (process.env.PUBLIC_SITE_URL ?? 'https://selimvand.ir').replace(/\/$/, '');
   return paid
@@ -70,13 +79,13 @@ export class NotificationsService implements OnModuleDestroy {
   private async process(job: Job<NotificationJob>) {
     // Each adapter fails the job on provider errors so BullMQ can retry it.
     let delivered = false;
-    if (job.data.mobile && (!job.data.testChannel || job.data.testChannel === 'sms') && integrationConfigured('sms')) {
-      const response = await fetch(process.env.SMS_API_URL!, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${process.env.SMS_API_KEY!}` }, body: JSON.stringify({ to: job.data.mobile, message: job.data.message, provider: process.env.SMS_PROVIDER }) });
-      if (!response.ok) throw new Error(`SMS provider returned ${response.status}`);
-      delivered = true;
-    }
-    for (const channel of ['telegram', 'bale'] as const) {
-      if ((job.data.testChannel && job.data.testChannel !== channel) || !integrationConfigured(channel)) continue;
+    for (const channel of notificationChannels(job.data)) {
+      if (channel === 'sms') {
+        const response = await fetch(process.env.SMS_API_URL!, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${process.env.SMS_API_KEY!}` }, body: JSON.stringify({ to: job.data.mobile, message: job.data.message, provider: process.env.SMS_PROVIDER }) });
+        if (!response.ok) throw new Error(`SMS provider returned ${response.status}`);
+        delivered = true;
+        continue;
+      }
       const chatId = channel === 'telegram' ? process.env.TELEGRAM_CHAT_ID! : process.env.BALE_CHAT_ID!;
       const response = await fetch(integrationUrl(channel), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ chat_id: chatId, text: job.data.message, disable_web_page_preview: true }) });
       if (!response.ok) throw new Error(`${channel} provider returned ${response.status}`);
