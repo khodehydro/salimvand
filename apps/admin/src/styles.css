@@ -35,6 +35,9 @@ body,.admin,.admin input,.admin select,.admin button{font-family:Vazirmatn,Tahom
 .sheet-meta dd{margin:0;font-size:13px;color:var(--sv-text)}
 .sheet-body label{display:grid;gap:6px;color:var(--sv-text-2);font-size:13px}
 .sheet-body input{border:1px solid var(--sv-border-2);border-radius:var(--sv-radius-button);padding:10px;font:13px Vazirmatn;color:var(--sv-text);background:var(--sv-surface-2)}
+.messaging-head{grid-template-columns:1.1fr 1.7fr 1.3fr .8fr 1.1fr}
+.messaging-wide{grid-column:1/-1}
+.form-grid select,.form-grid textarea{border:1px solid var(--sv-border-2);background:var(--sv-surface-2);color:var(--sv-text);border-radius:var(--sv-radius-button);padding:10px;font:13px Vazirmatn;min-width:0}
 .tabs{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--sv-border);padding-bottom:8px;margin:10px 0 16px}
 .tab{border:1px solid transparent;background:transparent;color:var(--sv-text-2);border-radius:999px;padding:8px 16px;font:13px Vazirmatn;cursor:pointer}
 .tab:hover{background:var(--sv-surface-2);color:var(--sv-text)}

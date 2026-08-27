@@ -1,0 +1,69 @@
+# راه‌اندازی پیامک، تلگرام و بله
+
+این سند فقط کارهایی را فهرست می‌کند که **روی سرور** باید انجام شود؛ کد مربوطه در ریپازیتوری است.
+
+## ۱) اعمال مهاجرت جدول‌های جدید
+
+```powershell
+ssh root@YOUR_SERVER
+cd /var/www/parts-store/current/apps/api
+pnpm prisma migrate deploy      # جداول sms_logs, telegram_logs, backup_jobs, customer_vehicles
+pnpm prisma generate
+```
+
+## ۲) متغیرهای Environment (`/var/www/parts-store/shared/.env`)
+
+| متغیر | کاربرد | نمونه |
+|---|---|---|
+| `SMS_PROVIDER` | نام provider (kavenegar / melipayamak / …) | `kavenegar` |
+| `SMS_API_KEY` | کلید API پیامک | `xxxx` |
+| `SMS_API_URL` | نشانی endpoint ارسال | `https://api.kavenegar.com/v1/.../send.json` |
+| `TELEGRAM_BOT_TOKEN` | توکن ربات تلگرام | `123456:ABC` |
+| `TELEGRAM_CHAT_ID` | chat/کانال مقصد اعلان‌ها | `-1001234567890` |
+| `BALE_BOT_TOKEN` / `BALE_CHAT_ID` | معادل بله | — |
+| `TELEGRAM_WEBHOOK_SECRET` | رمز مشترک webhook (خودتان تولید کنید) | `openssl rand -hex 24` |
+| `PUBLIC_SITE_URL` | دامنهٔ سایت عمومی برای لینک فاکتور | `https://selimvand.ir` |
+| `REDIS_URL` | صف BullMQ | `redis://127.0.0.1:6379` |
+| `ENABLE_QUEUE_WORKER` | worker باید روی یک فرایند فعال باشد | `true` |
+
+فایل باید `chmod 600` و مالک آن کاربر سرویس باشد. بدون `SMS_PROVIDER`/`SMS_API_KEY`/`SMS_API_URL`
+هیچ پیامکی ارسال نمی‌شود و کارت سلامت در پنل «پیکربندی نشده» نشان می‌دهد (رفتار عمدی).
+
+```bash
+sudo systemctl restart salimvand-api
+curl -s -H "Authorization: Bearer $TOKEN" https://admin.YOUR_DOMAIN/api/v1/notifications/health
+```
+
+## ۳) ثبت webhook ربات تلگرام
+
+نشانی webhook = `https://admin.YOUR_DOMAIN/api/v1/webhooks/telegram/<TELEGRAM_WEBHOOK_SECRET>`
+
+```bash
+curl -F "url=https://admin.YOUR_DOMAIN/api/v1/webhooks/telegram/$TELEGRAM_WEBHOOK_SECRET" \
+     -F "allowed_updates=[\"message\"]" \
+     "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook"
+curl -s "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/getWebhookInfo"
+```
+
+برای بله همان فرمان با `https://tapi.bale.ai/bot$BALE_BOT_TOKEN/setWebhook`.
+دستورهای پشتیبانی‌شده: `/stock` `/low` `/sales` `/invoice <کد کوتاه>` `/help`.
+هر فراخوانی با secret اشتباه `403` می‌گیرد و هیچ پاسخی تولید نمی‌شود.
+
+## ۴) قالب پیامک
+
+در پنل → تنظیمات → «قالب پیامک فاکتور» و «قالب پیامک پرداخت».
+متغیرها: `{invoice_number}` `{amount}` `{link}` `{store}`.
+اگر قالب خالی باشد، متن پیش‌فرض داخلی استفاده می‌شود.
+
+## ۵) بررسی سریع
+
+1. پنل → «پیامک و کانال‌ها» → تب «ارسال آزمایشی» → کانال پیامک + شمارهٔ خودتان.
+2. همان صفحه → تب «پیامک‌ها»: باید یک ردیف `sent` با شمارهٔ ماسک‌شده (`091***89`) ببینید.
+3. صدور یک فاکتور با موبایل مشتری → باید پیامک حاوی لینک `/i/<کد>` ارسال شود.
+4. خطاها در تب «صف و خطاها» با دکمهٔ «تلاش مجدد» قابل بازفرستادن هستند (۵ تلاش با backoff نمایی).
+
+## ۶) اگر worker اجرا نمی‌شود
+
+`ENABLE_QUEUE_WORKER=true` فقط روی یک فرایند؛ در غیر این صورت پیام‌ها در صف می‌مانند
+(در تب «صف و خطاها» شمارندهٔ `waiting` بالا می‌رود). بررسی اتصال:
+`redis-cli ping` باید `PONG` بدهد.

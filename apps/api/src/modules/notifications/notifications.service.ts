@@ -1,4 +1,5 @@
-import { Injectable, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, OnModuleDestroy, Optional } from '@nestjs/common';
+import { PrismaService } from '../../prisma.service';
 import { Job, Queue, Worker } from 'bullmq';
 import IORedis from 'ioredis';
 
@@ -44,11 +45,28 @@ export function notificationChannels(job: NotificationJob, env: NodeJS.ProcessEn
   return channels;
 }
 
-export function buildInvoiceMessage(number: string, shortCode: string, total: string, paid = false): string {
+/** Replaces {placeholders} in an operator-defined SMS template; unknown keys stay untouched. */
+export function renderSmsTemplate(template: string | null | undefined, vars: Record<string, string | number>): string {
+  if (!template || !template.trim()) return '';
+  return template.replace(/\{(\w+)\}/g, (match, key: string) => (key in vars ? String(vars[key]) : match)).replace(/[ \t]{2,}/g, ' ').trim();
+}
+
+export function buildInvoiceMessage(number: string, shortCode: string, total: string, paid = false, template?: string | null): string {
   const siteUrl = (process.env.PUBLIC_SITE_URL ?? 'https://selimvand.ir').replace(/\/$/, '');
+  const link = `${siteUrl}/i/${shortCode}`;
+  const rendered = renderSmsTemplate(template, { invoice_number: number, amount: total, link, store: 'سلیم‌وند' });
+  if (rendered) return rendered;
   return paid
-    ? `پرداخت فاکتور ${number} ثبت شد. مبلغ پرداختی: ${total} ریال\n${siteUrl}/i/${shortCode}`
-    : `فاکتور ${number} صادر شد. مبلغ: ${total} ریال\nمشاهده و دانلود: ${siteUrl}/i/${shortCode}`;
+    ? `پرداخت فاکتور ${number} ثبت شد. مبلغ پرداختی: ${total} ریال\n${link}`
+    : `فاکتور ${number} صادر شد. مبلغ: ${total} ریال\nمشاهده و دانلود: ${link}`;
+}
+
+/** Parses a Telegram/Bale bot message into a command and its argument. */
+export function parseTelegramCommand(text: string | undefined): { command: string; argument: string } {
+  const clean = (text ?? '').trim();
+  const match = /^\/([a-zA-Z]+)(?:@\w+)?(?:\s+(.*))?$/s.exec(clean);
+  if (!match) return { command: '', argument: clean };
+  return { command: match[1].toLowerCase(), argument: (match[2] ?? '').trim() };
 }
 
 @Injectable()
@@ -57,7 +75,7 @@ export class NotificationsService implements OnModuleDestroy {
   private readonly queue: Queue<NotificationJob>;
   private readonly worker?: Worker<NotificationJob>;
 
-  constructor() {
+  constructor(@Optional() private readonly prisma?: PrismaService) {
     this.connection = new IORedis(process.env.REDIS_URL ?? 'redis://localhost:6379', { maxRetriesPerRequest: null, lazyConnect: true });
     this.queue = new Queue<NotificationJob>(NOTIFICATION_QUEUE_NAME, { connection: this.connection });
     if (process.env.ENABLE_QUEUE_WORKER === 'true') {
@@ -99,19 +117,71 @@ export class NotificationsService implements OnModuleDestroy {
     return true;
   }
 
+/** Delivery log for the panel; silently skipped when Prisma is not wired (unit tests). */
+  private async logSms(job: NotificationJob, status: 'sent' | 'failed', error?: string) {
+    if (!this.prisma?.smsLog?.create || !job.mobile) return;
+    await this.prisma.smsLog.create({ data: { mobile: job.mobile, template: job.type, message: job.message.slice(0, 1000), status, provider: process.env.SMS_PROVIDER ?? null, error: error?.slice(0, 500) ?? null, refType: job.invoiceId ? 'invoice' : null, refId: job.invoiceId ?? null, sentAt: status === 'sent' ? new Date() : null } }).catch(() => undefined);
+  }
+
+  private async logChannel(channel: 'telegram' | 'bale', message: string, status: 'sent' | 'failed', error?: string) {
+    if (!this.prisma?.telegramLog?.create) return;
+    const chatId = (channel === 'telegram' ? process.env.TELEGRAM_CHAT_ID : process.env.BALE_CHAT_ID) ?? 'unknown';
+    await this.prisma.telegramLog.create({ data: { channel, chatId: chatId.slice(0, 60), message: message.slice(0, 2000), status, error: error?.slice(0, 500) ?? null } }).catch(() => undefined);
+  }
+
+  async smsLogs(limit = 50) {
+    if (!this.prisma?.smsLog?.findMany) return [];
+    const rows = await this.prisma.smsLog.findMany({ orderBy: { createdAt: 'desc' }, take: normalizeFailedLimit(limit) });
+    return rows.map((row: { id: bigint; mobile: string; template: string; status: string; provider: string | null; error: string | null; createdAt: Date }) => ({ id: String(row.id), mobile: maskNotificationMobile(row.mobile), template: row.template, status: row.status, provider: row.provider, error: row.error, createdAt: row.createdAt }));
+  }
+
+  async telegramLogs(limit = 50) {
+    if (!this.prisma?.telegramLog?.findMany) return [];
+    const rows = await this.prisma.telegramLog.findMany({ orderBy: { createdAt: 'desc' }, take: normalizeFailedLimit(limit) });
+    return rows.map((row: { id: bigint; channel: string; status: string; message: string; error: string | null; createdAt: Date }) => ({ id: String(row.id), channel: row.channel, status: row.status, preview: row.message.slice(0, 80), error: row.error, createdAt: row.createdAt }));
+  }
+
+  /** Answers the bot commands listed in the architecture doc §6.2. */
+  async answerCommand(text: string): Promise<string> {
+    const { command, argument } = parseTelegramCommand(text);
+    const read = this.prisma as unknown as { inventoryItem?: { count: (args: unknown) => Promise<number>; aggregate?: (args: unknown) => Promise<{ _sum: { quantity: number | null } }> }; invoice?: { count: (args: unknown) => Promise<number>; aggregate: (args: unknown) => Promise<{ _sum: { total: bigint | null } }> } } | undefined;
+    if (!read) return 'پنل داده در دسترس نیست.';
+    if (command === 'stock' || command === 'موجودی') {
+      const count = await (read.inventoryItem?.count({ where: { isActive: true } }) ?? Promise.resolve(0));
+      return `اقلام فعال انبار: ${count}`;
+    }
+    if (command === 'low') {
+      const count = await (read.inventoryItem?.count({ where: { isActive: true, quantity: { lte: 0 } } }) ?? Promise.resolve(0));
+      return `اقلام بدون موجودی: ${count}`;
+    }
+    if (command === 'sales') {
+      const from = new Date(); from.setHours(0, 0, 0, 0);
+      const result = await (read.invoice?.aggregate({ where: { status: 'issued', issuedAt: { gte: from } }, _sum: { total: true } }) ?? Promise.resolve({ _sum: { total: null } }));
+      const count = await (read.invoice?.count({ where: { status: 'issued', issuedAt: { gte: from } } }) ?? Promise.resolve(0));
+      return `فروش امروز: ${count} فاکتور به مبلغ ${result._sum.total ?? 0} ریال`;
+    }
+    if (command === 'invoice') {
+      const siteUrl = (process.env.PUBLIC_SITE_URL ?? 'https://selimvand.ir').replace(/\/$/, '');
+      return argument ? `لینک فاکتور: ${siteUrl}/i/${argument}` : 'کد کوتاه فاکتور را بعد از /invoice بنویسید.';
+    }
+    return 'دستورهای موجود: /stock /low /sales /invoice <کد> /help';
+  }
+
   private async process(job: Job<NotificationJob>) {
     // Each adapter fails the job on provider errors so BullMQ can retry it.
     let delivered = false;
     for (const channel of notificationChannels(job.data)) {
       if (channel === 'sms') {
         const response = await fetch(process.env.SMS_API_URL!, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${process.env.SMS_API_KEY!}` }, body: JSON.stringify({ to: job.data.mobile, message: job.data.message, provider: process.env.SMS_PROVIDER }) });
-        if (!response.ok) throw new Error(`SMS provider returned ${response.status}`);
+        if (!response.ok) { await this.logSms(job.data, 'failed', `provider ${response.status}`); throw new Error(`SMS provider returned ${response.status}`); }
+        await this.logSms(job.data, 'sent');
         delivered = true;
         continue;
       }
       const chatId = channel === 'telegram' ? process.env.TELEGRAM_CHAT_ID! : process.env.BALE_CHAT_ID!;
       const response = await fetch(integrationUrl(channel), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ chat_id: chatId, text: job.data.message, disable_web_page_preview: true }) });
-      if (!response.ok) throw new Error(`${channel} provider returned ${response.status}`);
+      if (!response.ok) { await this.logChannel(channel, job.data.message, 'failed', `provider ${response.status}`); throw new Error(`${channel} provider returned ${response.status}`); }
+      await this.logChannel(channel, job.data.message, 'sent');
       delivered = true;
     }
     if (!delivered) console.info(`[notification:${job.data.type}] dry-run`);

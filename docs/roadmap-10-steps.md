@@ -92,7 +92,9 @@
 اندپوینت‌های `/audit-logs`, `/backups/*`, `/sms/logs`, `/users/:id/activity`, `PATCH /inventory/items/:id`,
 `/customers/:id/vehicles`، فیلد `vehicle` در فاکتور عمومی، توکنی‌کردن رنگ‌های PDF و WebP دو اندازه.
 
-وضعیت تست‌ها پس از بخش ۱ قدم ۹: `pnpm test` → ۴۲ فایل تست، ۱۶۸ تست موفق
-(shared ۵ · ui ۷ · api ۱۴۲ · admin ۱۴).
+| ۹ (بخش ۲) | `feat(api): sms/telegram logging, templates and bot webhook` + `feat(admin): messaging panel` | نوشتن `sms_logs`/`telegram_logs` هنگام ارسال و شکست · `GET /notifications/sms/logs` و `/notifications/telegram/logs` · `renderSmsTemplate` و استفاده از قالب تنظیمات در `buildInvoiceMessage` و در صدور/ارسال مجدد فاکتور · `POST /webhooks/telegram/:secret` با `parseTelegramCommand` و دستورهای `/stock /low /sales /invoice /help` · صفحهٔ «پیامک و کانال‌ها» در پنل با ۴ تب و کارت سلامت providerها · ۸ تست جدید · راهنمای راه‌اندازی در `docs/messaging-setup.md` |
+
+وضعیت تست‌ها پس از بخش ۲ قدم ۹: `pnpm test` → ۴۳ فایل تست، ۱۷۶ تست موفق
+(shared ۵ · ui ۷ · api ۱۵۰ · admin ۱۴).
 `pnpm typecheck` برای `apps/api` همچنان فقط به دلیل تولیدنشدن Prisma Client در این sandbox شکست می‌خورد
 (اتصال TLS به `binaries.prisma.sh` بسته است)؛ typecheck بقیهٔ بسته‌ها پاک است.

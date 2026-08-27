@@ -65,7 +65,7 @@ export class InvoiceService {
       for (const line of lines) { const item = await tx.inventoryItem.findUniqueOrThrow({ where: { id: line.inventoryItemId }, select: { quantity: true } }); await tx.inventoryTransaction.updateMany({ where: { itemId: line.inventoryItemId, refId: created.id }, data: { quantityAfter: item.quantity } }); }
       return created;
     });
-    if (this.notifications && (input.customerMobile || integrationConfigured('telegram') || integrationConfigured('bale'))) await this.notifications.enqueue({ type: 'invoice.issued', invoiceId: invoice.id, mobile: input.customerMobile, message: buildInvoiceMessage(invoice.number, publicShortCode.code, totals.total.toString()) });
+    if (this.notifications && (input.customerMobile || integrationConfigured('telegram') || integrationConfigured('bale'))) await this.notifications.enqueue({ type: 'invoice.issued', invoiceId: invoice.id, mobile: input.customerMobile, message: buildInvoiceMessage(invoice.number, publicShortCode.code, totals.total.toString(), false, await this.smsTemplate('invoice')) });
     return { ok: true, data: { ...invoice, publicToken: publicToken.token, publicShortCode: publicShortCode.code } };
   }
 
@@ -219,8 +219,19 @@ export class InvoiceService {
       await tx.invoice.update({ where: { id }, data: { publicShortCodeHash: shortCode.hash, publicTokenHash: token.hash, publicTokenExpiresAt: linkExpiresAt, ...(mobile === invoice.customerMobile ? {} : { customerMobile: mobile }) } });
       await writeAudit(tx, { userId, ip, action: 'update', entityType: 'invoice', entityId: id, before: { publicLink: 'rotated' }, after: { publicShortCode: shortCode.code, linkExpiresAt: linkExpiresAt.toISOString() } });
     });
-    await this.notifications.enqueue({ type: 'invoice.issued', invoiceId: id, mobile, message: buildInvoiceMessage(invoice.number, shortCode.code, invoice.total.toString()) });
+    await this.notifications.enqueue({ type: 'invoice.issued', invoiceId: id, mobile, message: buildInvoiceMessage(invoice.number, shortCode.code, invoice.total.toString(), false, await this.smsTemplate('invoice')) });
     return { ok: true, data: { publicShortCode: shortCode.code, publicToken: token.token, linkExpiresAt, mobile, queued: true } };
+  }
+
+  /** Operator-defined SMS template stored in settings; absent settings fall back to the built-in text. */
+  private async smsTemplate(kind: 'invoice' | 'paid'): Promise<string | null> {
+    const settings = this.prisma as unknown as { setting?: { findUnique: (args: { where: { key: string } }) => Promise<{ value: unknown } | null> } };
+    if (!settings.setting?.findUnique) return null;
+    try {
+      const row = await settings.setting.findUnique({ where: { key: 'sms.templates' } });
+      const templates = row?.value as { invoice?: string; paid?: string } | null;
+      return (kind === 'paid' ? templates?.paid : templates?.invoice) ?? null;
+    } catch { return null; }
   }
 
   private async queryRaw<T>(client: { $queryRawUnsafe: unknown }, query: string, ...values: unknown[]): Promise<T[]> {
