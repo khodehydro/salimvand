@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { NotificationsService, buildInvoiceMessage, parseTelegramCommand, renderSmsTemplate } from './notifications.service';
 
-function serviceWith(prisma: unknown) { return new NotificationsService(prisma as never); }
+function serviceWith(prisma: unknown) {
+  const service = Object.create(NotificationsService.prototype) as NotificationsService;
+  Object.assign(service as unknown as Record<string, unknown>, { prisma });
+  return service;
+}
 
 describe('SMS templates', () => {
   it('renders known placeholders and leaves unknown ones untouched', () => {

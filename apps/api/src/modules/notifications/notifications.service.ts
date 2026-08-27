@@ -78,7 +78,7 @@ export class NotificationsService implements OnModuleDestroy {
   constructor(@Optional() private readonly prisma?: PrismaService) {
     this.connection = new IORedis(process.env.REDIS_URL ?? 'redis://localhost:6379', { maxRetriesPerRequest: null, lazyConnect: true });
     this.queue = new Queue<NotificationJob>(NOTIFICATION_QUEUE_NAME, { connection: this.connection });
-    if (process.env.ENABLE_QUEUE_WORKER === 'true') {
+    if (process.env.ENABLE_QUEUE_WORKER === 'true' && !process.env.VITEST && process.env.NODE_ENV !== 'test') {
       this.worker = new Worker<NotificationJob>('salimvand-notifications', async (job) => this.process(job), { connection: this.connection, concurrency: 4 });
     }
   }

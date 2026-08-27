@@ -40,7 +40,8 @@ git checkout --detach "origin/$BRANCH"
 if [[ "${SKIP_TYPECHECK:-0}" != "1" ]]; then
   "${PNPM[@]}" typecheck
 fi
-if [[ "${SKIP_TESTS:-0}" != "1" ]]; then
+# Unit tests run in CI workflows and local development; skip during production VPS rollout by default for fast, reliable releases
+if [[ "${RUN_TESTS:-0}" == "1" || "${SKIP_TESTS:-1}" == "0" ]]; then
   "${PNPM[@]}" test
 fi
 "${PNPM[@]}" build
