@@ -20,7 +20,7 @@ async function getVehicle(slug: string): Promise<{ vehicle: VehicleModel; produc
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const data = await getVehicle((await params).slug);
-  return { title: data ? `قطعات مناسب ${data.vehicle.name} | فروشگاه سلیم وند` : 'خودرو پیدا نشد', description: data ? `کاتالوگ لوازم داخلی و قطعات مناسب ${data.vehicle.name} از فروشگاه سلیم وند میاندوآب.` : undefined };
+  return { title: data ? `قطعات مناسب ${data.vehicle.name} | فروشگاه سلیم وند` : 'خودرو پیدا نشد', description: data ? `کاتالوگ لوازم داخلی و قطعات مناسب ${data.vehicle.name} از فروشگاه سلیم وند میاندوآب.` : undefined, alternates: data ? { canonical: `/vehicle/${data.vehicle.slug}` } : undefined };
 }
 
 export default async function VehiclePage({ params }: { params: Promise<{ slug: string }> }) {
