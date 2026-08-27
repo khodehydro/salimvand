@@ -5,6 +5,13 @@ import IORedis from 'ioredis';
 export type NotificationJob = { type: 'invoice.issued' | 'invoice.paid' | 'low-stock'; invoiceId?: string; mobile?: string; message: string };
 type NotificationName = NotificationJob['type'];
 
+export function buildInvoiceMessage(number: string, shortCode: string, total: string, paid = false): string {
+  const siteUrl = (process.env.PUBLIC_SITE_URL ?? 'https://selimvand.ir').replace(/\/$/, '');
+  return paid
+    ? `پرداخت فاکتور ${number} ثبت شد. مبلغ پرداختی: ${total} ریال\n${siteUrl}/i/${shortCode}`
+    : `فاکتور ${number} صادر شد. مبلغ: ${total} ریال\nمشاهده و دانلود: ${siteUrl}/i/${shortCode}`;
+}
+
 @Injectable()
 export class NotificationsService implements OnModuleDestroy {
   private readonly connection: IORedis;
