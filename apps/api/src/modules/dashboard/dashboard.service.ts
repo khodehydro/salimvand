@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service';
 
 @Injectable()
@@ -9,6 +9,16 @@ export class DashboardService {
     const where = entityType ? { entityType } : {};
     const [rows, total] = await Promise.all([this.prisma.auditLog.findMany({ where, orderBy: { createdAt: 'desc' }, skip: (safePage - 1) * safeSize, take: safeSize, include: { user: { select: { name: true, username: true, role: true } } } }), this.prisma.auditLog.count({ where })]);
     return { ok: true, data: rows, meta: { page: safePage, pageSize: safeSize, total, totalPages: Math.ceil(total / safeSize) } };
+  }
+
+  async salesTrend(from?: string, to?: string) {
+    const fromDate = from ? new Date(from) : undefined; const toDate = to ? new Date(to) : undefined;
+    if ((fromDate && Number.isNaN(fromDate.getTime())) || (toDate && Number.isNaN(toDate.getTime())) || (fromDate && toDate && fromDate > toDate)) throw new BadRequestException('بازهٔ تاریخ نمودار نامعتبر است');
+    if (toDate && /^\\d{4}-\\d{2}-\\d{2}$/.test(to ?? '')) toDate.setUTCHours(23, 59, 59, 999);
+    const invoices = await this.prisma.invoice.findMany({ where: { status: 'issued', ...(fromDate || toDate ? { issuedAt: { ...(fromDate ? { gte: fromDate } : {}), ...(toDate ? { lte: toDate } : {}) } } : {}) }, orderBy: { issuedAt: 'asc' }, select: { issuedAt: true, total: true, paidAmount: true } });
+    const days = new Map<string, { date: string; revenue: bigint; paid: bigint; invoiceCount: number }>();
+    for (const invoice of invoices) { const date = invoice.issuedAt.toISOString().slice(0, 10); const row = days.get(date) ?? { date, revenue: 0n, paid: 0n, invoiceCount: 0 }; row.revenue += invoice.total; row.paid += invoice.paidAmount; row.invoiceCount += 1; days.set(date, row); }
+    return { ok: true, data: [...days.values()].map((row) => ({ ...row, revenue: row.revenue.toString(), paid: row.paid.toString() })) };
   }
 
   async summary() {
