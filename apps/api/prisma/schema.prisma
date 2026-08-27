@@ -162,6 +162,7 @@ model VehicleTrim {
   name            String                 @db.VarChar(100)
   model           VehicleModel            @relation(fields: [modelId], references: [id])
   compatibilities ProductVehicleCompat[]
+  customerVehicles CustomerVehicle[]
   @@unique([modelId, name])
   @@map("vehicle_trims")
 }
@@ -370,6 +371,7 @@ model Customer {
   isActive    Boolean   @default(true)
   invoices    Invoice[]
   payments    CustomerPayment[]
+  vehicles    CustomerVehicle[]
   createdAt   DateTime  @default(now()) @db.Timestamptz(6)
   updatedAt   DateTime  @updatedAt @db.Timestamptz(6)
   @@index([name])
@@ -473,4 +475,71 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+model CustomerVehicle {
+  id         String       @id @default(uuid()) @db.Uuid
+  customerId String       @db.Uuid
+  trimId     String?      @db.Uuid
+  plate      String?      @db.VarChar(20)
+  chassis    String?      @db.VarChar(40)
+  year       Int?
+  notes      String?      @db.VarChar(255)
+  customer   Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  trim       VehicleTrim? @relation(fields: [trimId], references: [id], onDelete: SetNull)
+  createdAt  DateTime     @default(now()) @db.Timestamptz(6)
+  @@unique([customerId, trimId, plate])
+  @@index([customerId])
+  @@map("customer_vehicles")
+}
+
+enum SmsStatus {
+  queued
+  sent
+  failed
+}
+
+model SmsLog {
+  id          BigInt    @id @default(autoincrement())
+  mobile      String    @db.VarChar(20)
+  template    String    @db.VarChar(60)
+  message     String    @db.VarChar(1000)
+  status      SmsStatus @default(queued)
+  provider    String?   @db.VarChar(40)
+  providerRef String?   @db.VarChar(120)
+  error       String?   @db.VarChar(500)
+  refType     String?   @db.VarChar(40)
+  refId       String?   @db.Uuid
+  sentAt      DateTime? @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(6)
+  @@index([mobile, createdAt])
+  @@index([status, createdAt])
+  @@map("sms_logs")
+}
+
+model TelegramLog {
+  id        BigInt    @id @default(autoincrement())
+  channel   String    @db.VarChar(20)
+  chatId    String    @db.VarChar(60)
+  message   String    @db.VarChar(2000)
+  status    SmsStatus @default(queued)
+  error     String?   @db.VarChar(500)
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  @@index([channel, createdAt])
+  @@map("telegram_logs")
+}
+
+model BackupJob {
+  id          BigInt    @id @default(autoincrement())
+  kind        String    @default("database") @db.VarChar(30)
+  status      String    @db.VarChar(20)
+  file        String?   @db.VarChar(255)
+  sizeBytes   BigInt    @default(0)
+  encrypted   Boolean   @default(true)
+  destination String?   @db.VarChar(60)
+  error       String?   @db.VarChar(500)
+  startedAt   DateTime  @default(now()) @db.Timestamptz(6)
+  finishedAt  DateTime? @db.Timestamptz(6)
+  @@index([startedAt])
+  @@map("backup_jobs")
 }
