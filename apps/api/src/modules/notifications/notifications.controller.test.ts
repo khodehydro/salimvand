@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { NotificationsController } from './notifications.controller';
+import { NotificationTestChannel, TestNotificationDto } from './notifications.dto';
 
 describe('NotificationsController', () => {
   function setup() {
@@ -15,7 +16,8 @@ describe('NotificationsController', () => {
 
   it('queues a guarded provider test message', async () => {
     const { controller, notifications } = setup();
-    const result = await controller.test({ channel: 'telegram', message: 'پیام تست', mobile: undefined });
+    const body: TestNotificationDto = { channel: NotificationTestChannel.telegram, message: 'پیام تست', mobile: undefined };
+    const result = await controller.test(body);
     expect(result).toEqual({ ok: true, data: { jobId: 'job-1', channel: 'telegram', queued: true } });
     expect(notifications.enqueueTest).toHaveBeenCalledWith('telegram', 'پیام تست', undefined);
   });

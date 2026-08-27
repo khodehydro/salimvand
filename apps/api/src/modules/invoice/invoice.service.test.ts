@@ -16,7 +16,7 @@ describe('InvoiceService', () => {
   it('rejects malformed or unsafe invoice drafts', () => { const service = new InvoiceService({} as never); const line = { inventoryItemId: 'i1', productName: 'قطعه', quantity: 1, unitPrice: 100n }; expect(() => service.buildDraft('bad', [line])).toThrow(); expect(() => service.buildDraft('INV-0003', [])).toThrow(); expect(() => service.buildDraft('INV-0004', [line, line])).toThrow('قلم موجودی نمی‌تواند در چند ردیف تکرار شود'); });
   it('atomically decrements every stock item before creating the invoice', async () => {
     const invoiceCreate = vi.fn(async () => ({ id: 'invoice-1', number: 'INV-000001', items: [] }));
-    const decrements = vi.fn(async () => ({ count: 1 }));
+    const decrements = vi.fn(async (_args: unknown) => ({ count: 1 }));
     const tx = {
       counter: { upsert: vi.fn(async () => ({ lastValue: 1 })) },
       inventoryItem: { updateMany: decrements, findUniqueOrThrow: vi.fn(async () => ({ quantity: 3 })) },
@@ -31,8 +31,8 @@ describe('InvoiceService', () => {
       $transaction: vi.fn(async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx)),
     };
     const result = await new InvoiceService(prisma as never).create({ items: [
-      { inventoryItemId: 'item-1', quantity: 2, unitPrice: 100n },
-      { inventoryItemId: 'item-2', quantity: 1, unitPrice: 200n },
+      { inventoryItemId: 'item-1', quantity: 2, unitPrice: 100 },
+      { inventoryItemId: 'item-2', quantity: 1, unitPrice: 200 },
     ] }, 'user-1');
     expect(result.data.number).toBe('INV-000001');
     expect(decrements).toHaveBeenCalledTimes(2);
@@ -58,8 +58,8 @@ describe('InvoiceService', () => {
       $transaction: vi.fn(async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx)),
     };
     await expect(new InvoiceService(prisma as never).create({ items: [
-      { inventoryItemId: 'item-1', quantity: 2, unitPrice: 100n },
-      { inventoryItemId: 'item-2', quantity: 1, unitPrice: 200n },
+      { inventoryItemId: 'item-1', quantity: 2, unitPrice: 100 },
+      { inventoryItemId: 'item-2', quantity: 1, unitPrice: 200 },
     ] }, 'user-1')).rejects.toMatchObject({ response: { code: 'INSUFFICIENT_STOCK' } });
     expect(invoiceCreate).not.toHaveBeenCalled();
     expect(tx.inventoryItem.updateMany).toHaveBeenCalledTimes(2);
