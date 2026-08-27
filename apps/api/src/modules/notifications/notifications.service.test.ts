@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildInvoiceMessage, integrationConfigured, integrationUrl, notificationChannels, NOTIFICATION_QUEUE_NAME, notificationJobOptions } from './notifications.service';
+import { buildInvoiceMessage, integrationConfigured, integrationUrl, maskNotificationMobile, normalizeFailedLimit, notificationChannels, NOTIFICATION_QUEUE_NAME, notificationJobOptions } from './notifications.service';
 
 describe('notification messages', () => {
   it('uses the short invoice URL and never the long token', () => {
@@ -20,6 +20,17 @@ describe('notification messages', () => {
     const message = buildInvoiceMessage('INV-0002', 'Q9mAb7kP2x', '500000', true);
     expect(message).toContain('پرداخت فاکتور INV-0002 ثبت شد');
     expect(message).toContain('/i/Q9mAb7kP2x');
+  });
+  it('masks failed-job mobile numbers without exposing the full value', () => {
+    expect(maskNotificationMobile('09121234567')).toBe('091***67');
+    expect(maskNotificationMobile('1234')).toBe('1***');
+    expect(maskNotificationMobile(undefined)).toBeNull();
+  });
+  it('normalizes failed-job limits to a safe range', () => {
+    expect(normalizeFailedLimit(0)).toBe(1);
+    expect(normalizeFailedLimit(25.9)).toBe(25);
+    expect(normalizeFailedLimit(500)).toBe(100);
+    expect(normalizeFailedLimit(Number.NaN)).toBe(50);
   });
   it('keeps the queue retry contract explicit', () => {
     expect(NOTIFICATION_QUEUE_NAME).toBe('salimvand-notifications');

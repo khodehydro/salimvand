@@ -25,6 +25,16 @@ export const notificationJobOptions = {
   removeOnFail: 500,
 };
 
+export function maskNotificationMobile(mobile: string | undefined): string | null {
+  if (!mobile) return null;
+  if (mobile.length <= 5) return `${mobile.slice(0, 1)}***`;
+  return `${mobile.slice(0, 3)}***${mobile.slice(-2)}`;
+}
+
+export function normalizeFailedLimit(value: number): number {
+  return Math.min(100, Math.max(1, Number.isFinite(value) ? Math.trunc(value) : 50));
+}
+
 export function notificationChannels(job: NotificationJob, env: NodeJS.ProcessEnv = process.env): Channel[] {
   const channels: Channel[] = [];
   if (job.mobile && (!job.testChannel || job.testChannel === 'sms') && integrationConfigured('sms', env)) channels.push('sms');
@@ -73,8 +83,8 @@ export class NotificationsService implements OnModuleDestroy {
   }
 
   async failed(limit = 50) {
-    const jobs = await this.queue.getFailed(0, Math.min(100, Math.max(1, limit)) - 1);
-    return jobs.map((job) => ({ id: job.id, name: job.name, type: job.data.type, mobile: job.data.mobile ? `${job.data.mobile.slice(0, 3)}***${job.data.mobile.slice(-2)}` : null, failedReason: job.failedReason ?? 'خطای نامشخص', attemptsMade: job.attemptsMade, timestamp: job.timestamp }));
+    const jobs = await this.queue.getFailed(0, normalizeFailedLimit(limit) - 1);
+    return jobs.map((job) => ({ id: job.id, name: job.name, type: job.data.type, mobile: maskNotificationMobile(job.data.mobile), failedReason: job.failedReason ?? 'خطای نامشخص', attemptsMade: job.attemptsMade, timestamp: job.timestamp }));
   }
 
   async retry(id: string) {
