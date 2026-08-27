@@ -20,6 +20,20 @@ export class PurchaseService {
     return { ok: true, data: invoices };
   }
 
+  async pay(invoiceId: string, amount: number | string, method: 'cash' | 'card' | 'transfer' | 'credit', notes: string | undefined, actorId: string, ip?: string) {
+    const paymentAmount = parseMoney(amount, 'مبلغ پرداخت');
+    if (paymentAmount <= 0n) throw new BadRequestException('مبلغ پرداخت باید مثبت باشد');
+    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const invoice = await tx.purchaseInvoice.findUnique({ where: { id: invoiceId } });
+      if (!invoice || invoice.status !== 'issued') throw new NotFoundException('فاکتور خرید پیدا نشد');
+      if (invoice.paidAmount + paymentAmount > invoice.total) throw new BadRequestException('مبلغ پرداخت بیشتر از بدهی فاکتور است');
+      const payment = await tx.supplierPayment.create({ data: { supplierId: invoice.supplierId, invoiceId, amount: paymentAmount, method, notes: notes?.trim() || null, receivedById: actorId } });
+      const updated = await tx.purchaseInvoice.update({ where: { id: invoiceId }, data: { paidAmount: { increment: paymentAmount } } });
+      await writeAudit(tx, { userId: actorId, ip, action: 'pay', entityType: 'purchase_invoice', entityId: invoiceId, before: { paidAmount: String(invoice.paidAmount) }, after: { paidAmount: String(updated.paidAmount), paymentId: payment.id } });
+      return { ok: true, data: { invoice: updated, payment } };
+    });
+  }
+
   async create(supplierId: string, lines: PurchaseLine[], paidAmount: number | string | undefined, actorId: string, ip?: string) {
     if (!supplierId || !Array.isArray(lines) || !lines.length) throw new BadRequestException('تأمین‌کننده و حداقل یک قلم خرید الزامی است');
     const amounts = lines.map((line) => ({ itemId: line.inventoryItemId, quantity: Number(line.quantity), unitPrice: parseMoney(line.unitPrice, 'قیمت خرید') }));

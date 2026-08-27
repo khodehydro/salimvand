@@ -247,6 +247,7 @@ model User {
   auditLogs AuditLog[]
   settings  Setting[]
   purchaseInvoices PurchaseInvoice[]
+  supplierPayments SupplierPayment[]
   invoices Invoice[]
   payments Payment[]
   customerPayments CustomerPayment[]
@@ -305,6 +306,7 @@ model Supplier {
   updatedAt DateTime @updatedAt @db.Timestamptz(6)
   @@index([isActive, deletedAt])
   purchases PurchaseInvoice[]
+  supplierPayments SupplierPayment[]
   @@map("suppliers")
 }
 
@@ -321,9 +323,27 @@ model PurchaseInvoice {
   supplier       Supplier       @relation(fields: [supplierId], references: [id])
   issuedBy       User           @relation(fields: [issuedById], references: [id])
   items          PurchaseInvoiceItem[]
+  payments       SupplierPayment[]
   issuedAt       DateTime       @default(now()) @db.Timestamptz(6)
   @@index([supplierId, issuedAt])
   @@map("purchase_invoices")
+}
+
+model SupplierPayment {
+  id           String          @id @default(uuid()) @db.Uuid
+  supplierId   String          @db.Uuid
+  invoiceId    String          @db.Uuid
+  amount       BigInt
+  method       PaymentMethod
+  notes        String?
+  paidAt       DateTime        @default(now()) @db.Timestamptz(6)
+  receivedById String          @db.Uuid
+  supplier     Supplier        @relation(fields: [supplierId], references: [id])
+  invoice      PurchaseInvoice @relation(fields: [invoiceId], references: [id])
+  receivedBy   User            @relation(fields: [receivedById], references: [id])
+  @@index([supplierId, paidAt])
+  @@index([invoiceId, paidAt])
+  @@map("supplier_payments")
 }
 
 model PurchaseInvoiceItem {
