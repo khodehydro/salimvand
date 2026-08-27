@@ -105,3 +105,13 @@ pnpm ci:check
 ```
 
 `ci-check.sh` ابتدا Client و schema Prisma را با دیتابیس/نسخهٔ Prisma پروژه هماهنگ می‌کند، سپس به‌ترتیب typecheck، test، build و format را اجرا می‌کند. در صورت خطای network هنگام دانلود Prisma Engine، pipeline عمداً متوقف می‌شود و نباید Release ناقص ساخته شود.
+
+## تست Integration با PostgreSQL و Redis
+
+برای اجرای migration، seed و readiness واقعی API روی سرویس‌های محلی:
+
+```bash
+pnpm integration:check
+```
+
+این فرمان `docker-compose.dev.yml` را بالا می‌آورد، Prisma Client را تولید می‌کند، migrationهای deploy را اجرا می‌کند، seed را اعمال می‌کند، API را موقتاً اجرا می‌کند و `GET /api/v1/health/ready` را بررسی می‌کند. در پایان سرویس‌های تست را پاک می‌کند. این تست به Docker و دسترسی شبکه برای Prisma Engine نیاز دارد و برای Production از `DATABASE_URL` جداگانه استفاده نمی‌کند.
