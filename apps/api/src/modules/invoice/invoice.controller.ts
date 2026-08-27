@@ -68,5 +68,10 @@ export class PublicInvoiceController {
     return response.end(file);
   }
   @Get('short/:shortCode') getShort(@Param('shortCode') shortCode: string) { return this.invoices.getPublic(shortCode); }
+  @Get(':token/pdf') async pdf(@Param('token') token: string, @Res() response: Response) {
+    const file = await this.invoices.pdf(token);
+    response.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="invoice-${token}.pdf"`, 'Content-Length': file.length });
+    return response.end(file);
+  }
   @Get(':token') get(@Param('token') token: string) { return this.invoices.getPublic(token); }
 }

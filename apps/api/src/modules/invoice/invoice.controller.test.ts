@@ -34,6 +34,15 @@ describe('InvoiceController', () => {
 });
 
 describe('PublicInvoiceController', () => {
+  it('renders PDF for a token and sets download headers', async () => {
+    const pdf = vi.fn(async () => Buffer.from('pdf'));
+    const response = { set: vi.fn(), end: vi.fn((file: Buffer) => file) };
+    const controller = new PublicInvoiceController({ pdf } as never);
+    await expect(controller.pdf('secure-token', response as never)).resolves.toEqual(Buffer.from('pdf'));
+    expect(pdf).toHaveBeenCalledWith('secure-token');
+    expect(response.set).toHaveBeenCalledWith(expect.objectContaining({ 'Content-Type': 'application/pdf' }));
+  });
+
   it('routes QR and short-code invoice requests', async () => {
     const qr = vi.fn(async (code: string) => ({ ok: true, data: { code } }));
     const getPublic = vi.fn(async (code: string) => ({ ok: true, data: { code } }));
