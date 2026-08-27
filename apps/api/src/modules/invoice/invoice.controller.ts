@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
+import type { Response } from 'express';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
 import { RolesGuard } from '../../common/auth/roles.guard';
@@ -58,6 +59,11 @@ export class InvoiceController {
 export class PublicInvoiceController {
   constructor(private readonly invoices: InvoiceService) {}
   @Get('qr/:shortCode') qr(@Param('shortCode') shortCode: string) { return this.invoices.qr(shortCode); }
+  @Get('short/:shortCode/pdf') async pdfShort(@Param('shortCode') shortCode: string, @Res() response: Response) {
+    const file = await this.invoices.pdf(shortCode);
+    response.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="invoice-${shortCode}.pdf"`, 'Content-Length': file.length });
+    return response.end(file);
+  }
   @Get('short/:shortCode') getShort(@Param('shortCode') shortCode: string) { return this.invoices.getPublic(shortCode); }
   @Get(':token') get(@Param('token') token: string) { return this.invoices.getPublic(token); }
 }

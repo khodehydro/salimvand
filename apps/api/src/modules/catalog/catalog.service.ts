@@ -38,9 +38,9 @@ export class CatalogService {
     return { ok: true, data: product };
   }
 
-  private availability(items: Array<{ quantity: number }>, override: string | null) {
+  private availability(items: Array<{ quantity: number; minStock?: number | null }>, override: string | null) {
     if (override === 'coming_soon' || override === 'discontinued') return override;
-    if (items.some((item) => item.quantity > 0 && item.minStock !== null && item.quantity <= item.minStock)) return 'low_stock';
+    if (items.some((item) => item.quantity > 0 && item.minStock != null && item.quantity <= item.minStock)) return 'low_stock';
     return items.some((item) => item.quantity > 0) ? 'in_stock' : 'out_of_stock';
   }
 

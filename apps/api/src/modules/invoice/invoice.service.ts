@@ -4,7 +4,9 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
 import { writeAudit } from '../../common/audit/audit-log';
 import { calculateInvoiceTotals, InvoiceLineInput } from './invoice.rules';
-import QRCode from 'qrcode';
+import * as QRCode from 'qrcode';
+import PDFDocument = require('pdfkit');
+import { existsSync } from 'node:fs';
 import { createPublicShortCode, createPublicToken, hashPublicToken } from './public-token';
 
 type DraftLine = InvoiceLineInput & { inventoryItemId: string; productName: string };
@@ -76,10 +78,36 @@ export class InvoiceService {
   async qr(shortCode: string) {
     const invoice = await this.prisma.invoice.findFirst({ where: { publicShortCodeHash: hashPublicToken(shortCode) }, select: { publicTokenExpiresAt: true } });
     if (!invoice || (invoice.publicTokenExpiresAt && invoice.publicTokenExpiresAt.getTime() <= Date.now())) throw new NotFoundException('فاکتور پیدا نشد');
-    const siteUrl = (process.env.PUBLIC_SITE_URL ?? 'https://selimvand.ir').replace(/\\/$/, '');
+    const siteUrl = (process.env.PUBLIC_SITE_URL ?? 'https://selimvand.ir').replace(/\/$/, '');
     const url = `${siteUrl}/i/${encodeURIComponent(shortCode)}`;
     const dataUrl = await QRCode.toDataURL(url, { errorCorrectionLevel: 'M', width: 320, margin: 2 });
     return { ok: true, data: { url, dataUrl } };
+  }
+
+  async pdf(token: string): Promise<Buffer> {
+    const result = await this.getPublic(token);
+    const invoice = result.data;
+    const qr = await QRCode.toDataURL(`${(process.env.PUBLIC_SITE_URL ?? 'https://selimvand.ir').replace(/\/$/, '')}/i/${encodeURIComponent(token)}`, { errorCorrectionLevel: 'M', width: 240, margin: 1 });
+    const doc = new PDFDocument({ size: 'A4', margin: 42, info: { Title: `Invoice ${invoice.number}`, Author: 'Salimvand' } });
+    const chunks: Buffer[] = [];
+    const fontPath = process.env.PDF_FONT_PATH ?? '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf';
+    if (existsSync(fontPath)) doc.font(fontPath);
+    doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+    const finished = new Promise<Buffer>((resolve, reject) => { doc.on('end', () => resolve(Buffer.concat(chunks))); doc.on('error', reject); });
+    const text = (value: unknown) => String(value ?? '').replace(/[<>]/g, '');
+    doc.fillColor('#0d2b4b').fontSize(20).text('فاکتور فروشگاه سلیم وند', { align: 'right' });
+    doc.moveDown(.4).fillColor('#4a5f79').fontSize(10).text(`شماره: ${text(invoice.number)}    تاریخ: ${new Intl.DateTimeFormat('fa-IR').format(new Date(invoice.issuedAt))}`, { align: 'right' });
+    doc.moveDown(1).fillColor('#0b1c2f').fontSize(12).text(`مشتری: ${text(invoice.customerName ?? 'مشتری حضوری')}`, { align: 'right' });
+    if (invoice.customerMobile) doc.text(`شماره تماس: ${text(invoice.customerMobile)}`, { align: 'right' });
+    doc.moveDown(.8).fontSize(11).fillColor('#0d2b4b').text('اقلام فاکتور', { align: 'right' });
+    doc.moveDown(.3).fillColor('#0b1c2f').fontSize(9);
+    for (const [index, item] of invoice.items.entries()) doc.text(`${index + 1}. ${text(item.productName)} | برند: ${text(item.brand)} | تعداد: ${text(item.quantity)} | فی: ${text(item.unitPrice)} ریال | جمع: ${text(item.lineTotal)} ریال`, { align: 'right' });
+    doc.moveDown(1).fontSize(11).text(`جمع اقلام: ${text(invoice.subtotal)} ریال`, { align: 'right' }).text(`تخفیف: ${text(invoice.discount)} ریال`, { align: 'right' }).fontSize(14).fillColor('#0d2b4b').text(`مبلغ نهایی: ${text(invoice.total)} ریال`, { align: 'right' });
+    doc.moveDown(.5).fillColor('#0b1c2f').fontSize(11).text(`پرداخت‌شده: ${text(invoice.paidAmount)} ریال`, { align: 'right' }).text(`وضعیت: ${text(invoice.paymentStatus)}`, { align: 'right' });
+    doc.image(Buffer.from(qr.split(',')[1], 'base64'), 42, doc.page.height - 150, { fit: [105, 105] });
+    doc.fontSize(8).fillColor('#4a5f79').text('این فاکتور از طریق لینک امن و کوتاه قابل مشاهده است.', 165, doc.page.height - 105, { width: 380, align: 'right' });
+    doc.end();
+    return finished;
   }
 
   async customers(search?: string) {
