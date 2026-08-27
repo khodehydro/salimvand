@@ -26,7 +26,7 @@ export class CatalogAdminService {
     const code = await this.nextCode('product');
     const seo = buildProductSeo({ name, slug: this.optionalString(input.slug) ?? undefined });
     const createProduct = async (tx: Prisma.TransactionClient | typeof this.prisma) => {
-      const created = await tx.product.create({ data: { name, categoryId, code, ...seo, seoTitle: this.optionalString(input.seoTitle) ?? seo.seoTitle, seoDescription: this.optionalString(input.seoDescription) ?? seo.seoDescription, description: this.optionalString(input.description), partNumber: this.optionalString(input.partNumber) } });
+      const created = await tx.product.create({ data: { name, categoryId, code, ...seo, seoTitle: this.optionalString(input.seoTitle) ?? seo.seoTitle, seoDescription: this.optionalString(input.seoDescription) ?? seo.seoDescription, description: this.optionalString(input.description), partNumber: this.optionalString(input.partNumber), aparatVideoId: this.optionalString(input.aparatVideoId), status: input.status === 'hidden' ? 'hidden' : 'active', seoKeywords: this.stringArray(input.seoKeywords) ?? seo.seoKeywords } });
       if (userId && 'auditLog' in tx) await writeAudit(tx as Prisma.TransactionClient, { userId, ip, action: 'create', entityType: 'product', entityId: created.id, after: { name: created.name, code: created.code } });
       return created;
     };
@@ -37,7 +37,14 @@ export class CatalogAdminService {
   async update(id: string, input: Record<string, unknown>, userId?: string, ip?: string) {
     await this.ensureExists(id);
     const data: Record<string, unknown> = {};
-    for (const key of ['name', 'description', 'partNumber', 'categoryId', 'slug', 'seoTitle', 'seoDescription', 'seoKeywords']) if (input[key] !== undefined) data[key] = input[key];
+    for (const key of ['name', 'description', 'partNumber', 'categoryId', 'slug', 'seoTitle', 'seoDescription', 'aparatVideoId']) if (input[key] !== undefined) data[key] = input[key];
+    const keywords = this.stringArray(input.seoKeywords);
+    if (keywords) data.seoKeywords = keywords;
+    // status is an enum column: anything but the two known values must be rejected, not stored.
+    if (input.status !== undefined) {
+      if (input.status !== 'active' && input.status !== 'hidden') throw new BadRequestException('وضعیت محصول باید active یا hidden باشد');
+      data.status = input.status;
+    }
     if (typeof input.name === 'string' && input.name.trim()) {
       const seo = buildProductSeo({ name: input.name, slug: typeof input.slug === 'string' ? input.slug : undefined });
       for (const key of ['slug', 'seoTitle', 'seoDescription', 'seoKeywords']) if (data[key] === undefined) data[key] = seo[key as keyof typeof seo];
@@ -62,4 +69,10 @@ export class CatalogAdminService {
   private async nextCode(prefix: string) { const counter = await this.prisma.counter.upsert({ where: { key: prefix }, update: { lastValue: { increment: 1 } }, create: { key: prefix, lastValue: 1 } }); return `${prefix.toUpperCase()}-${String(counter.lastValue).padStart(5, '0')}`; }
   private stringValue(value: unknown) { return typeof value === 'string' ? value.trim() : ''; }
   private optionalString(value: unknown) { return typeof value === 'string' && value.trim() ? value.trim() : null; }
+
+  private stringArray(value: unknown) {
+    if (!Array.isArray(value)) return null;
+    const items = value.filter((entry): entry is string => typeof entry === 'string').map((entry) => entry.trim()).filter(Boolean);
+    return items.length ? items : null;
+  }
 }

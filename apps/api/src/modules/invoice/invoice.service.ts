@@ -133,7 +133,7 @@ export class InvoiceService {
   }
 
   async options() {
-    const items = await this.prisma.inventoryItem.findMany({ where: { isActive: true, product: { deletedAt: null, status: 'active' } }, orderBy: { product: { name: 'asc' } }, select: { id: true, barcode: true, quantity: true, salePrice: true, product: { select: { name: true, code: true } }, brand: { select: { name: true } }, location: true } });
+    const items = await this.prisma.inventoryItem.findMany({ where: { isActive: true, product: { deletedAt: null, status: 'active' } }, orderBy: { product: { name: 'asc' } }, select: { id: true, barcode: true, quantity: true, salePrice: true, product: { select: { name: true, code: true } }, brand: { select: { name: true } }, location: { select: { code: true, name: true } } } });
     return { ok: true, data: items };
   }
 

@@ -25,6 +25,18 @@ body,.admin,.admin input,.admin select,.admin button{font-family:Vazirmatn,Tahom
 .customer-payment{display:grid;gap:14px}.customer-payment input,.customer-payment select{border:1px solid var(--sv-border);background:var(--sv-surface-2);color:var(--sv-text);padding:11px;border-radius:8px;font:13px Vazirmatn}.customer-payment .button-primary{border:0;padding:11px;border-radius:8px;font:13px Vazirmatn;cursor:pointer}
 
 /* Invoice composer: searchable, multi-line sales workflow */
+.sheet-body{display:grid;gap:14px;padding:16px 0}
+.sheet-meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:0}
+.sheet-meta div{background:var(--sv-surface-2);border:1px solid var(--sv-border);border-radius:var(--sv-radius-button);padding:10px}
+.sheet-meta dt{color:var(--sv-text-2);font-size:11px;margin-bottom:4px}
+.sheet-meta dd{margin:0;font-size:13px;color:var(--sv-text)}
+.sheet-body label{display:grid;gap:6px;color:var(--sv-text-2);font-size:13px}
+.sheet-body input{border:1px solid var(--sv-border-2);border-radius:var(--sv-radius-button);padding:10px;font:13px Vazirmatn;color:var(--sv-text);background:var(--sv-surface-2)}
+.tabs{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--sv-border);padding-bottom:8px;margin:10px 0 16px}
+.tab{border:1px solid transparent;background:transparent;color:var(--sv-text-2);border-radius:999px;padding:8px 16px;font:13px Vazirmatn;cursor:pointer}
+.tab:hover{background:var(--sv-surface-2);color:var(--sv-text)}
+.tab.active{background:var(--sv-brand-900);color:var(--sv-on-navy);border-color:var(--sv-brand-900)}
+.aparat-frame{width:100%;aspect-ratio:16/9;border:1px solid var(--sv-border);border-radius:var(--sv-radius-card);background:var(--sv-surface-2);grid-column:1/-1}
 .invoice-product-picker{position:relative;display:grid;grid-template-columns:1fr 92px auto;gap:8px;margin:14px 0}
 .invoice-product-picker input,.invoice-line input,.payment-row input,.payment-row select,.form-grid input{border:1px solid var(--sv-border);background:var(--sv-surface-2);color:var(--sv-text);border-radius:8px;padding:10px;font:13px Vazirmatn;min-width:0}
 .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:12px 0}.form-grid>.invoice-product-picker{grid-column:1/-1;margin:0}

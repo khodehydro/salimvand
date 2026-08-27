@@ -4,7 +4,7 @@ import { discountedUnitPrice, invoiceTotals, isValidIranMobile, money, paymentTo
 import { api } from '../lib/api';
 
 type Invoice = { id: string; number: string; customerName?: string | null; total: string; paidAmount: string; paymentStatus: string; status: string; issuedAt: string; items: Array<{ productName: string; quantity: number }> };
-type StockOption = { id: string; barcode: string; quantity: number; salePrice: string; location?: string | null; product: { name: string; code: string }; brand: { name: string } };
+type StockOption = { id: string; barcode: string; quantity: number; salePrice: string; location?: { code: string; name: string } | null; product: { name: string; code: string }; brand: { name: string } };
 type CustomerOption = { id: string; name: string; mobile: string; debt?: string | number };
 type DraftLine = { item: StockOption; quantity: number; lineDiscount: number };
 type CreatedInvoice = { id: string; number: string; publicToken: string; publicShortCode: string; total: number; paid: number; qrDataUrl?: string };
@@ -178,7 +178,7 @@ export function InvoicesPage() {
           {search && !scanning && <div className="invoice-candidates">
             {candidates.length ? candidates.map((item) => <button type="button" key={item.id} onClick={() => addLine(item)}>
               <b>{item.product.name}</b>
-              <span>{item.brand.name} · <span dir="ltr">{item.product.code}</span> · بارکد <span dir="ltr">{item.barcode}</span> · قفسه {item.location ?? '—'}</span>
+              <span>{item.brand.name} · <span dir="ltr">{item.product.code}</span> · بارکد <span dir="ltr">{item.barcode}</span> · قفسه {item.location?.code ?? '—'}</span>
               <strong>{persianNumber(item.quantity)} عدد</strong>
             </button>) : <small>قلم موجودی پیدا نشد.</small>}
           </div>}
@@ -186,7 +186,7 @@ export function InvoicesPage() {
 
         <div className="invoice-lines">
           {lines.length ? lines.map((line) => <div className="invoice-line" key={line.item.id}>
-            <span><b>{line.item.product.name}</b><small>{line.item.brand.name} · {money(line.item.salePrice)} · قفسه {line.item.location ?? '—'}</small></span>
+            <span><b>{line.item.product.name}</b><small>{line.item.brand.name} · {money(line.item.salePrice)} · قفسه {line.item.location?.code ?? '—'}</small></span>
             <input aria-label={`تعداد ${line.item.product.name}`} type="number" min="1" max={line.item.quantity} value={line.quantity} onChange={(event) => setLines((current) => current.map((entry) => entry.item.id === line.item.id ? { ...entry, quantity: Math.min(line.item.quantity, Math.max(1, Number(event.target.value) || 1)) } : entry))} />
             <input aria-label={`تخفیف ${line.item.product.name}`} type="number" min="0" placeholder="تخفیف قلم" value={line.lineDiscount || ''} onChange={(event) => setLines((current) => current.map((entry) => entry.item.id === line.item.id ? { ...entry, lineDiscount: Math.max(0, Number(event.target.value) || 0) } : entry))} />
             <strong>{money(lineTotal(line))}</strong>
