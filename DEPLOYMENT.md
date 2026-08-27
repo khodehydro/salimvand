@@ -57,3 +57,13 @@ systemctl list-timers salimvand-backup.timer
 ```
 
 پیش از تحویل نهایی باید یک Restore Test روی دیتابیس جداگانه انجام شود؛ فایل Backup تولیدی نباید وارد Git شود.
+
+## بررسی صحت Backup
+
+هر Backup کنار فایل اصلی یک manifest شامل زمان تولید، وضعیت رمزنگاری و SHA-256 دارد. پیش از Restore، صحت فایل را بررسی کنید:
+
+```bash
+sudo /opt/salimvand/scripts/verify-backup.sh /var/backups/salimvand/postgres-YYYYMMDDTHHMMSSZ.sql.gz.gpg
+```
+
+اگر `BACKUP_ENCRYPTION_KEY` فعال باشد، manifest مربوط به فایل `.gpg` checksum همان فایل رمزنگاری‌شده را بررسی می‌کند؛ پس از verification، فایل را با کلید Production رمزگشایی و سپس Restore کنید. Backup معتبر به‌تنهایی جایگزین Restore Test نیست؛ ماهانه یک Restore روی دیتابیس جداگانه انجام شود.
