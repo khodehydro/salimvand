@@ -9,7 +9,10 @@
 .adjust-box select{border:1px solid var(--sv-border-2);border-radius:8px;padding:10px;font:inherit}
 .scan-box{align-items:flex-start}.scan-box h2{flex-basis:100%}.scan-box input{min-width:260px}.scanner{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.scanner #barcode-reader{width:260px}.scanner button{white-space:nowrap}.scan-result{background:var(--sv-ok-soft);color:var(--sv-ok);border-radius:8px;padding:8px;width:100%}
 .reference-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;margin-top:24px}.reference-card{background:var(--sv-surface);border:1px solid var(--sv-border);border-radius:14px;padding:22px;display:grid;gap:12px}.reference-card input,.reference-card select{border:1px solid var(--sv-border-2);border-radius:8px;padding:10px;font:inherit}.reference-card button{background:var(--sv-primary);color:var(--sv-on-brand);border:0;border-radius:8px;padding:10px;font:inherit;cursor:pointer}.reference-card li{color:var(--sv-text-2);padding:4px}.reference-card small{color:var(--sv-text-3)}@media(max-width:700px){.reference-grid{grid-template-columns:1fr}}
-.dashboard-cards{margin:24px 0}.dashboard-cards article strong{font-size:30px}.dashboard-cards .low-stock{color:var(--sv-danger)}
+.dashboard-cards{margin:24px 0;grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}
+.health-card{gap:10px}.health-row{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12px;color:var(--sv-text-2)}
+.health-row b{font-size:11px;padding:3px 8px}
+.debtors-table{margin:24px 0}.debtor-head{grid-template-columns:2fr 1.1fr .7fr 1.3fr 1.1fr}.dashboard-cards article strong{font-size:30px}.dashboard-cards .low-stock{color:var(--sv-danger)}
 
 .invoice-head,.invoice-row{grid-template-columns:1.2fr 1.5fr .7fr 1.5fr 1.2fr 1fr}.invoice-row{min-width:900px}
 body,.admin,.admin input,.admin select,.admin button{font-family:Vazirmatn,Tahoma,Arial,sans-serif}

@@ -42,7 +42,7 @@
 | ۵ ✅ | شِل پنل با توکن: سایدبار سرمه‌ای، شمارنده، FAB، نوار موبایل، پالت گروه‌بندی‌شده ۱..۵ | ۳ | حذف ۲۹۱ hex، هر دو پوسته |
 | ۶ ✅ | صفحهٔ «صدور فاکتور» کامل + مودال موفقیت + پیامک مجدد | ۲ | مهم‌ترین صفحهٔ پنل |
 | ۷ ✅ | محصول (۵ تب) + انبار (stockbar، شیت اصلاح، مسیر قفسه) | ۱ | مطابق نقشهٔ صفحه‌ها |
-| ۸ | داشبورد کامل + گزارش‌ها + تنظیمات + کارت سلامت یکپارچه‌سازی‌ها | ۳ و ۴ | KPI/دونات/تایم‌لاین/بدهکاران |
+| ۸ ✅ | داشبورد کامل + گزارش‌ها + تنظیمات + کارت سلامت یکپارچه‌سازی‌ها | ۳ و ۴ | KPI/دونات/تایم‌لاین/بدهکاران |
 | ۹ | API: مدل‌ها و اندپوینت‌های جاافتاده + تست | ۲ تا ۴ | `customer_vehicles`, `sms_logs`, `telegram_logs`, `backup_jobs`, `/audit-logs`, `/backups/*`, `/sms/logs`, `/users/:id/activity`, `resend-sms`, token toggle, `PUT /products/:id/compat`, `PATCH /inventory/items/:id`, `/customers/:id/vehicles`, CRUD مرجع‌ها |
 | ۱۰ | یکپارچه‌سازی‌ها (SMS/تلگرام/کانال/بکاپ درایو) + CI/CD و پذیرش نهایی | ۴ و ۵ | `.github/workflows/ci.yml` + `deploy.yml`، Playwright، `docs/acceptance-matrix.md` نهایی |
 
@@ -55,6 +55,8 @@
 - ~~`PATCH /invoices/:id/token`~~ — در قدم ۶ پیاده شد: `POST /invoices/:id/resend-sms` هم‌زمان لینک و توکن عمومی را می‌چرخاند (کد کوتاه فقط به‌صورت hash ذخیره می‌شود، پس بازیابی لینک قبلی ممکن نیست).
 - جاب سازش روزانهٔ موجودی (Reconciliation) طبق §۳.۴.
 - تصاویر محصول در `media.service` فقط در **یک اندازه** ذخیره می‌شوند؛ سند تحویل «WebP دو اندازه» می‌خواهد — باید در قدم ۹ به media service اضافه شود.
+- قالب پیامک در تنظیمات (`sms.templates`) ذخیره می‌شود اما `buildInvoiceMessage` در `notifications.service.ts` هنوز متن ثابت می‌سازد و متغیرهای `{customer_name}/{invoice_number}/{amount}/{link}` را جایگذاری نمی‌کند — در قدم ۱۰ وصل می‌شود.
+- یادآوری بدهی از داشبورد فعلاً از مسیر `POST /notifications/test` در صف قرار می‌گیرد؛ اندپوینت اختصاصی `/sms/logs` و قالب dedicated در قدم ۹/۱۰ اضافه می‌شود.
 - ~~صفحهٔ فاکتور عمومی: دکمهٔ «چاپ» دو بار رندر می‌شود و QR ندارد~~ — در قدم ۴ حل شد.
 - `packages/shared`: فرمت‌کنندهٔ تاریخ شمسی مشترک ندارد (سند §۲.۴).
 
@@ -79,7 +81,9 @@
 
 | ۷ | `feat(admin): five-tab product editor and stockbar-driven inventory sheet` | فرم ۵ تبی محصول (پایه و سئو / تصاویر / آپارات / سازگاری خودرو / اقلام برند با بارکد EAN-13 و قفسه) · API اکنون `aparatVideoId`, `status` و `seoKeywords` را می‌پذیرد و وضعیت نامعتبر را رد می‌کند (۲ تست جدید) · انبار با `StockBar` و شیت اصلاح از سمت inline-end با مسیر قفسه و آستانه · typecheck پنل پاک، `vite build` موفق |
 
-وضعیت تست‌ها پس از قدم ۷: `pnpm test` → ۴۰ فایل تست، ۱۵۸ تست موفق
-(shared ۵ · ui ۷ · api ۱۴۰ · admin ۶).
+| ۸ | `feat(admin): dashboard debtors, health card and report charts` | داشبورد: KPI چهارم (بدهی مشتریان)، کارت سلامت یکپارچه‌سازی‌ها با وضعیت صف، دونات ترکیب موجودی بر اساس برند، جدول بدهکاران با ارسال پیامک یادآوری · گزارش‌ها: نمودار ماهانهٔ شمسی و دونات سهم برندها از سود · تنظیمات: لینک کانال بله و قالب پیامک پرداخت با متغیرها · منطق تجمیع در `dashboard-metrics.ts` و `report-metrics.ts` با ۸ تست جدید |
+
+وضعیت تست‌ها پس از قدم ۸: `pnpm test` → ۴۲ فایل تست، ۱۶۶ تست موفق
+(shared ۵ · ui ۷ · api ۱۴۰ · admin ۱۴).
 `pnpm typecheck` برای `apps/api` همچنان فقط به دلیل تولیدنشدن Prisma Client در این sandbox شکست می‌خورد
 (اتصال TLS به `binaries.prisma.sh` بسته است)؛ typecheck بقیهٔ بسته‌ها پاک است.
