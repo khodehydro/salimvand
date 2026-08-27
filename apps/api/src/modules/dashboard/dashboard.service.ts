@@ -21,6 +21,16 @@ export class DashboardService {
     return { ok: true, data: [...days.values()].map((row) => ({ ...row, revenue: row.revenue.toString(), paid: row.paid.toString() })) };
   }
 
+  async inventoryTrend(from?: string, to?: string) {
+    const fromDate = from ? new Date(from) : undefined; const toDate = to ? new Date(to) : undefined;
+    if ((fromDate && Number.isNaN(fromDate.getTime())) || (toDate && Number.isNaN(toDate.getTime())) || (fromDate && toDate && fromDate > toDate)) throw new BadRequestException('بازهٔ تاریخ نمودار نامعتبر است');
+    if (toDate && /^\\d{4}-\\d{2}-\\d{2}$/.test(to ?? '')) toDate.setUTCHours(23, 59, 59, 999);
+    const rows = await this.prisma.inventoryTransaction.findMany({ where: { ...(fromDate || toDate ? { createdAt: { ...(fromDate ? { gte: fromDate } : {}), ...(toDate ? { lte: toDate } : {}) } } : {}) }, orderBy: { createdAt: 'asc' }, select: { createdAt: true, quantityChange: true, type: true } });
+    const days = new Map<string, { date: string; inbound: number; outbound: number; returns: number }>();
+    for (const row of rows) { const date = row.createdAt.toISOString().slice(0, 10); const day = days.get(date) ?? { date, inbound: 0, outbound: 0, returns: 0 }; if (row.type === 'return') day.returns += Math.abs(row.quantityChange); else if (row.quantityChange >= 0) day.inbound += row.quantityChange; else day.outbound += Math.abs(row.quantityChange); days.set(date, day); }
+    return { ok: true, data: [...days.values()] };
+  }
+
   async summary() {
     const [products, inventoryItems, lowStockItems, recentTransactions] = await Promise.all([
       this.prisma.product.count({ where: { deletedAt: null, status: 'active' } }),

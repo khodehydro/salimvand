@@ -16,4 +16,10 @@ describe('DashboardService', () => {
     prisma.invoice = { findMany: vi.fn().mockResolvedValue([{ issuedAt: new Date('2026-08-01T10:00:00Z'), total: 1000n, paidAmount: 400n }, { issuedAt: new Date('2026-08-01T15:00:00Z'), total: 500n, paidAmount: 500n }, { issuedAt: new Date('2026-08-02T10:00:00Z'), total: 200n, paidAmount: 0n }]) };
     await expect(service.salesTrend('2026-08-01', '2026-08-02')).resolves.toMatchObject({ ok: true, data: [{ date: '2026-08-01', revenue: '1500', paid: '900', invoiceCount: 2 }, { date: '2026-08-02', revenue: '200', paid: '0', invoiceCount: 1 }] });
   });
+
+  it('groups inventory movements by day and direction', async () => {
+    const { service, prisma } = makeService();
+    prisma.inventoryTransaction.findMany.mockResolvedValue([{ createdAt: new Date('2026-08-01T10:00:00Z'), quantityChange: 5, type: 'purchase' }, { createdAt: new Date('2026-08-01T11:00:00Z'), quantityChange: -2, type: 'sale' }, { createdAt: new Date('2026-08-01T12:00:00Z'), quantityChange: 1, type: 'return' }]);
+    await expect(service.inventoryTrend('2026-08-01', '2026-08-01')).resolves.toEqual({ ok: true, data: [{ date: '2026-08-01', inbound: 5, outbound: 2, returns: 1 }] });
+  });
 });
