@@ -24,7 +24,7 @@ pnpm prisma generate
 | `TELEGRAM_WEBHOOK_SECRET` | رمز مشترک webhook (خودتان تولید کنید) | `openssl rand -hex 24` |
 | `PUBLIC_SITE_URL` | دامنهٔ سایت عمومی برای لینک فاکتور | `https://selimvand.ir` |
 | `REDIS_URL` | صف BullMQ | `redis://127.0.0.1:6379` |
-| `ENABLE_QUEUE_WORKER` | worker باید روی یک فرایند فعال باشد | `true` |
+| ~~`ENABLE_QUEUE_WORKER`~~ | **در `.env` نگذارید** — واحد `salimvand-worker.service` خودش `Environment=ENABLE_QUEUE_WORKER=true` دارد و اگر در `.env` باشد API و Website هم worker اضافه راه می‌اندازند | — |
 
 فایل باید `chmod 600` و مالک آن کاربر سرویس باشد. بدون `SMS_PROVIDER`/`SMS_API_KEY`/`SMS_API_URL`
 هیچ پیامکی ارسال نمی‌شود و کارت سلامت در پنل «پیکربندی نشده» نشان می‌دهد (رفتار عمدی).
@@ -62,8 +62,15 @@ curl -s "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/getWebhookInfo"
 3. صدور یک فاکتور با موبایل مشتری → باید پیامک حاوی لینک `/i/<کد>` ارسال شود.
 4. خطاها در تب «صف و خطاها» با دکمهٔ «تلاش مجدد» قابل بازفرستادن هستند (۵ تلاش با backoff نمایی).
 
-## ۶) اگر worker اجرا نمی‌شود
+## ۶) اگر پیام‌ها در صف می‌مانند
 
-`ENABLE_QUEUE_WORKER=true` فقط روی یک فرایند؛ در غیر این صورت پیام‌ها در صف می‌مانند
-(در تب «صف و خطاها» شمارندهٔ `waiting` بالا می‌رود). بررسی اتصال:
-`redis-cli ping` باید `PONG` بدهد.
+worker به‌صورت واحد جداگانه اجرا می‌شود (`salimvand-worker.service` با `Environment=ENABLE_QUEUE_WORKER=true`)،
+پس این متغیر را در `.env` قرار ندهید. بررسی:
+
+```bash
+systemctl is-active salimvand-worker.service
+redis-cli ping            # باید PONG بدهد
+journalctl -u salimvand-worker.service -n 50 --no-pager
+```
+
+اگر شمارندهٔ `waiting` در تب «صف و خطاها» بالا می‌رود، worker یا Redis در دسترس نیست.
