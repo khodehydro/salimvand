@@ -72,7 +72,15 @@ export class InvoiceService {
   async getPublic(token: string) {
     const invoice = await this.prisma.invoice.findFirst({ where: { OR: [{ publicTokenHash: hashPublicToken(token) }, { publicShortCodeHash: hashPublicToken(token) }] }, select: { id: true, number: true, status: true, publicTokenExpiresAt: true, customerName: true, customerMobile: true, subtotal: true, discount: true, total: true, paymentStatus: true, paidAmount: true, paymentMethod: true, paidAt: true, issuedAt: true, voidedAt: true, items: { select: { productName: true, quantity: true, unitPrice: true, lineTotal: true, inventoryItem: { select: { brand: { select: { name: true } } } } } } } });
     if (!invoice || invoice.status === 'voided' || (invoice.publicTokenExpiresAt && invoice.publicTokenExpiresAt.getTime() <= Date.now())) throw new NotFoundException('فاکتور پیدا نشد');
-    const { id: _internalId, publicTokenExpiresAt: _expiresAt, ...publicInvoice } = invoice;
+    // Never spread internal identifiers into the public payload: strip the row id,
+    // the link expiry and every token hash explicitly (see public-contract.test.ts).
+    const {
+      id: _internalId,
+      publicTokenExpiresAt: _expiresAt,
+      publicTokenHash: _tokenHash,
+      publicShortCodeHash: _shortCodeHash,
+      ...publicInvoice
+    } = invoice as typeof invoice & { publicTokenHash?: string; publicShortCodeHash?: string };
     return { ok: true, data: { ...publicInvoice, items: invoice.items.map((item: { productName: string; quantity: number; unitPrice: bigint; lineTotal: bigint; inventoryItem: { brand: { name: string } } }) => ({ productName: item.productName, brand: item.inventoryItem.brand.name, quantity: item.quantity, unitPrice: item.unitPrice, lineTotal: item.lineTotal })) } };
   }
 

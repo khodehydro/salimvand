@@ -41,6 +41,9 @@ importers:
       recharts:
         specifier: ^3.10.1
         version: 3.10.1(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react-is@19.2.8)(react@18.3.1)(redux@5.0.1)
+      vazirmatn:
+        specifier: ^33.0.3
+        version: 33.0.3
       vite:
         specifier: ^6.2.2
         version: 6.4.3(@types/node@20.19.43)(tsx@4.23.12)
@@ -163,6 +166,9 @@ importers:
       react-dom:
         specifier: ^18.3.1
         version: 18.3.1(react@18.3.1)
+      vazirmatn:
+        specifier: ^33.0.3
+        version: 33.0.3
     devDependencies:
       '@types/node':
         specifier: ^20.17.30

@@ -17,6 +17,7 @@ import { UsersPage } from './pages/UsersPage';
 import { CustomersPage } from './pages/CustomersPage';
 import { SuppliersPage } from './pages/SuppliersPage';
 import { PurchasesPage } from './pages/PurchasesPage';
+import 'vazirmatn/Vazirmatn-font-face.css';
 import './styles.css';
 
 type Page = 'dashboard' | 'products' | 'inventory' | 'invoices' | 'media' | 'references' | 'reports' | 'settings' | 'users' | 'customers' | 'suppliers' | 'purchases';
