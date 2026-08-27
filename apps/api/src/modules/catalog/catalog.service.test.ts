@@ -33,6 +33,20 @@ describe('CatalogService', () => {
     const { service, prisma } = makeService(); prisma.product.findMany.mockResolvedValue([{ ...row, inventoryItems: [{ quantity: 0, brand: { name: 'اصلی' } }] }]); prisma.product.count.mockResolvedValue(1);
     const result = await service.listPublicProducts({}); expect(result.data[0].availability).toBe('out_of_stock');
   });
+  it('never serializes internal inventory fields in the public contract', async () => {
+    const { service, prisma } = makeService();
+    prisma.product.findMany.mockResolvedValue([{ ...row, inventoryItems: [{ quantity: 17, minStock: 4, brand: { name: 'اصلی' } }] }]); prisma.product.count.mockResolvedValue(1);
+    const result = await service.listPublicProducts({});
+    const serialized = JSON.stringify(result.data[0]);
+    expect(serialized).toContain('اصلی');
+    expect(serialized).toContain('in_stock');
+    expect(serialized).not.toContain('purchasePrice');
+    expect(serialized).not.toContain('salePrice');
+    expect(serialized).not.toContain('quantity');
+    expect(serialized).not.toContain('minStock');
+    expect(serialized).not.toContain('location');
+    expect(serialized).not.toContain('inventoryItemId');
+  });
   it('throws a not found error for an unknown slug', async () => {
     const { service, prisma } = makeService(); prisma.product.findMany.mockResolvedValue([]); prisma.product.count.mockResolvedValue(0);
     await expect(service.getPublicProduct('unknown')).rejects.toBeInstanceOf(NotFoundException);
