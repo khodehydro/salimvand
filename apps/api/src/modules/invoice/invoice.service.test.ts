@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { InvoiceService } from './invoice.service';
 import { matchesPublicToken } from './public-token';
 
@@ -14,4 +14,54 @@ describe('InvoiceService', () => {
     expect(result.data).not.toHaveProperty('id');
   });
   it('rejects malformed or unsafe invoice drafts', () => { const service = new InvoiceService({} as never); const line = { inventoryItemId: 'i1', productName: 'قطعه', quantity: 1, unitPrice: 100n }; expect(() => service.buildDraft('bad', [line])).toThrow(); expect(() => service.buildDraft('INV-0003', [])).toThrow(); expect(() => service.buildDraft('INV-0004', [line, line])).toThrow('قلم موجودی نمی‌تواند در چند ردیف تکرار شود'); });
+  it('atomically decrements every stock item before creating the invoice', async () => {
+    const invoiceCreate = vi.fn(async () => ({ id: 'invoice-1', number: 'INV-000001', items: [] }));
+    const decrements = vi.fn(async () => ({ count: 1 }));
+    const tx = {
+      counter: { upsert: vi.fn(async () => ({ lastValue: 1 })) },
+      inventoryItem: { updateMany: decrements, findUniqueOrThrow: vi.fn(async () => ({ quantity: 3 })) },
+      invoice: { create: invoiceCreate },
+      inventoryTransaction: { create: vi.fn(), updateMany: vi.fn() },
+    };
+    const prisma = {
+      inventoryItem: { findMany: vi.fn(async () => [
+        { id: 'item-1', product: { name: 'لنت' } },
+        { id: 'item-2', product: { name: 'فیلتر' } },
+      ]) },
+      $transaction: vi.fn(async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx)),
+    };
+    const result = await new InvoiceService(prisma as never).create({ items: [
+      { inventoryItemId: 'item-1', quantity: 2, unitPrice: 100n },
+      { inventoryItemId: 'item-2', quantity: 1, unitPrice: 200n },
+    ] }, 'user-1');
+    expect(result.data.number).toBe('INV-000001');
+    expect(decrements).toHaveBeenCalledTimes(2);
+    expect(decrements.mock.calls[0][0]).toMatchObject({ where: { id: 'item-1', quantity: { gte: 2 }, isActive: true } });
+    expect(decrements.mock.calls[1][0]).toMatchObject({ where: { id: 'item-2', quantity: { gte: 1 }, isActive: true } });
+    expect(invoiceCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not create an invoice when a later stock decrement fails', async () => {
+    const invoiceCreate = vi.fn();
+    let call = 0;
+    const tx = {
+      counter: { upsert: vi.fn(async () => ({ lastValue: 2 })) },
+      inventoryItem: { updateMany: vi.fn(async () => ({ count: ++call === 1 ? 1 : 0 })) },
+      invoice: { create: invoiceCreate },
+      inventoryTransaction: { create: vi.fn(), updateMany: vi.fn() },
+    };
+    const prisma = {
+      inventoryItem: { findMany: vi.fn(async () => [
+        { id: 'item-1', product: { name: 'لنت' } },
+        { id: 'item-2', product: { name: 'فیلتر' } },
+      ]) },
+      $transaction: vi.fn(async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx)),
+    };
+    await expect(new InvoiceService(prisma as never).create({ items: [
+      { inventoryItemId: 'item-1', quantity: 2, unitPrice: 100n },
+      { inventoryItemId: 'item-2', quantity: 1, unitPrice: 200n },
+    ] }, 'user-1')).rejects.toMatchObject({ response: { code: 'INSUFFICIENT_STOCK' } });
+    expect(invoiceCreate).not.toHaveBeenCalled();
+    expect(tx.inventoryItem.updateMany).toHaveBeenCalledTimes(2);
+  });
 });
