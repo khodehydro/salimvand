@@ -34,8 +34,10 @@ export class ReportsService {
     return { ok: true, data: { items, transactions } };
   }
 
-  async exportSales() {
-    const invoices = await this.prisma.invoice.findMany({ where: { status: 'issued' }, orderBy: { issuedAt: 'desc' }, select: { number: true, customerName: true, customerMobile: true, total: true, paidAmount: true, paymentStatus: true, issuedAt: true } });
+  async exportSales(from?: string, to?: string) {
+    const fromDate = parseReportDate(from, 'از'); const toDate = parseReportDate(to, 'تا', true);
+    if (fromDate && toDate && fromDate > toDate) throw new BadRequestException('بازهٔ تاریخ گزارش نامعتبر است');
+    const invoices = await this.prisma.invoice.findMany({ where: { status: 'issued', ...(fromDate || toDate ? { issuedAt: { ...(fromDate ? { gte: fromDate } : {}), ...(toDate ? { lte: toDate } : {}) } } : {}) },  orderBy: { issuedAt: 'desc' }, select: { number: true, customerName: true, customerMobile: true, total: true, paidAmount: true, paymentStatus: true, issuedAt: true } });
     const cell = (value: string | number | bigint | null) => { const text = String(value ?? ''); return /^[=+\-@]/.test(text) ? `'${text}` : `"${text.replaceAll('"', '""')}"`; };
     return ['شماره فاکتور,نام مشتری,موبایل,مبلغ,پرداخت‌شده,وضعیت,تاریخ', ...invoices.map((row) => [row.number, row.customerName, row.customerMobile, row.total, row.paidAmount, row.paymentStatus, row.issuedAt.toISOString()].map(cell).join(','))].join('\n');
   }
