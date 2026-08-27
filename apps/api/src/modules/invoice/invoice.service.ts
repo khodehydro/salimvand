@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException, Optional } from '@nestjs/common';
-import { NotificationsService, buildInvoiceMessage } from '../notifications/notifications.service';
+import { NotificationsService, buildInvoiceMessage, integrationConfigured } from '../notifications/notifications.service';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
 import { writeAudit } from '../../common/audit/audit-log';
@@ -65,7 +65,7 @@ export class InvoiceService {
       for (const line of lines) { const item = await tx.inventoryItem.findUniqueOrThrow({ where: { id: line.inventoryItemId }, select: { quantity: true } }); await tx.inventoryTransaction.updateMany({ where: { itemId: line.inventoryItemId, refId: created.id }, data: { quantityAfter: item.quantity } }); }
       return created;
     });
-    if (this.notifications && input.customerMobile) await this.notifications.enqueue({ type: 'invoice.issued', invoiceId: invoice.id, mobile: input.customerMobile, message: buildInvoiceMessage(invoice.number, publicShortCode.code, totals.total.toString()) });
+    if (this.notifications && (input.customerMobile || integrationConfigured('telegram') || integrationConfigured('bale'))) await this.notifications.enqueue({ type: 'invoice.issued', invoiceId: invoice.id, mobile: input.customerMobile, message: buildInvoiceMessage(invoice.number, publicShortCode.code, totals.total.toString()) });
     return { ok: true, data: { ...invoice, publicToken: publicToken.token, publicShortCode: publicShortCode.code } };
   }
 
