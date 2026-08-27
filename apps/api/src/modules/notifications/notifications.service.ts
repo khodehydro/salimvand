@@ -2,7 +2,7 @@ import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { Job, Queue, Worker } from 'bullmq';
 import IORedis from 'ioredis';
 
-export type NotificationJob = { type: 'invoice.issued' | 'invoice.paid' | 'low-stock'; invoiceId?: string; mobile?: string; message: string };
+export type NotificationJob = { type: 'invoice.issued' | 'invoice.paid' | 'low-stock'; invoiceId?: string; mobile?: string; message: string; testChannel?: Channel };
 type Channel = 'sms' | 'telegram' | 'bale';
 
 export function integrationConfigured(channel: Channel, env: NodeJS.ProcessEnv = process.env): boolean {
@@ -42,6 +42,12 @@ export class NotificationsService implements OnModuleDestroy {
     return this.queue.add(payload.type as NotificationName, payload, { attempts: 5, backoff: { type: 'exponential', delay: 1000 }, removeOnComplete: 100, removeOnFail: 500 });
   }
 
+  async enqueueTest(channel: Channel, message: string, mobile?: string) {
+    if (!integrationConfigured(channel)) throw new Error('این provider پیکربندی نشده است');
+    if (channel === 'sms' && !mobile) throw new Error('شماره موبایل برای تست SMS الزامی است');
+    return this.enqueue({ type: 'low-stock', testChannel: channel, mobile, message });
+  }
+
   async counts() { return this.queue.getJobCounts('waiting', 'active', 'completed', 'failed', 'delayed'); }
 
   async health() {
@@ -64,13 +70,13 @@ export class NotificationsService implements OnModuleDestroy {
   private async process(job: Job<NotificationJob>) {
     // Each adapter fails the job on provider errors so BullMQ can retry it.
     let delivered = false;
-    if (job.data.mobile && integrationConfigured('sms')) {
+    if (job.data.mobile && (!job.data.testChannel || job.data.testChannel === 'sms') && integrationConfigured('sms')) {
       const response = await fetch(process.env.SMS_API_URL!, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${process.env.SMS_API_KEY!}` }, body: JSON.stringify({ to: job.data.mobile, message: job.data.message, provider: process.env.SMS_PROVIDER }) });
       if (!response.ok) throw new Error(`SMS provider returned ${response.status}`);
       delivered = true;
     }
     for (const channel of ['telegram', 'bale'] as const) {
-      if (!integrationConfigured(channel)) continue;
+      if ((job.data.testChannel && job.data.testChannel !== channel) || !integrationConfigured(channel)) continue;
       const chatId = channel === 'telegram' ? process.env.TELEGRAM_CHAT_ID! : process.env.BALE_CHAT_ID!;
       const response = await fetch(integrationUrl(channel), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ chat_id: chatId, text: job.data.message, disable_web_page_preview: true }) });
       if (!response.ok) throw new Error(`${channel} provider returned ${response.status}`);
