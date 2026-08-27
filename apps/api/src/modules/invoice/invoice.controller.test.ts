@@ -14,6 +14,13 @@ describe('InvoiceController', () => {
     expect(pay).toHaveBeenCalledWith('invoice-1', '100', 'cash', 'user-1');
   });
 
+  it('routes the SMS resend with the caller identity and an optional corrected mobile', async () => {
+    const resendSms = vi.fn(async () => ({ ok: true, data: { publicShortCode: 'AbC2dEf3gH' } }));
+    const controller = new InvoiceController({ resendSms } as never);
+    await expect(controller.resendSms('invoice-1', { mobile: '09351112233' }, { user: { id: 'user-7' }, ip: '10.0.0.9' } as never)).resolves.toEqual({ ok: true, data: { publicShortCode: 'AbC2dEf3gH' } });
+    expect(resendSms).toHaveBeenCalledWith('invoice-1', 'user-7', '09351112233', '10.0.0.9');
+  });
+
   it('routes stock options, returns, and void operations', async () => {
     const options = vi.fn(async () => ({ ok: true, data: [] }));
     const returns = vi.fn(async () => ({ ok: true, data: { quantityAfter: 3 } }));

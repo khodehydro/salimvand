@@ -134,6 +134,17 @@ export function InvoicesPage() {
   };
   const payAmountValid = () => payments.some((row) => Number(row.amount) > 0);
 
+  // Resending rotates the short link, so the operator gets the new URL to hand over.
+  const resend = async (invoice: Invoice) => {
+    const mobile = window.prompt('شمارهٔ موبایل گیرنده (خالی = شمارهٔ ثبت‌شدهٔ فاکتور)') ?? '';
+    try {
+      const result = await api<{ data: { publicShortCode: string } }>(`/invoices/${invoice.id}/resend-sms`, { method: 'POST', body: JSON.stringify(mobile ? { mobile } : {}) });
+      const link = shortLink(result.data.publicShortCode);
+      setMessage(`پیامک فاکتور ${invoice.number} در صف ارسال قرار گرفت. لینک جدید: ${link}`);
+      void navigator.clipboard?.writeText(link);
+    } catch (error) { setMessage((error as Error).message); }
+  };
+
   return <section>
     <div className="page-title">
       <div><h1>فروش و فاکتورها</h1><p className="muted">صدور فاکتور چندقلمی با اسکنر، مصرف اتمیک موجودی و پرداخت چندروشه</p></div>
@@ -242,6 +253,8 @@ export function InvoicesPage() {
         <span className={invoice.paymentStatus === 'paid' ? 'status-chip' : 'low-stock'}>{labels[invoice.paymentStatus] ?? invoice.paymentStatus}<small> · {money(invoice.paidAmount)}</small></span>
         <span>{invoice.status === 'voided' ? labels.voided : <>
           <button className="row-action" onClick={() => { setPaying(invoice); setPayments([{ method: 'cash', amount: String(Math.max(0, Number(invoice.total) - Number(invoice.paidAmount))) }]); }}>پرداخت</button>
+          {' '}
+          <button className="row-action" onClick={() => void resend(invoice)}>پیامک مجدد</button>
           {' '}
           <button className="row-action" onClick={async () => {
             if (!window.confirm('فاکتور باطل شود؟')) return;

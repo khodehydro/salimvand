@@ -189,6 +189,28 @@ export class InvoiceService {
     });
   }
 
+  /**
+   * Re-sends the invoice link. The short code is stored as a hash only, so resending
+   * rotates the public link and its 30-day window instead of replaying the old one.
+   */
+  async resendSms(id: string, userId: string, mobileOverride?: string, ip?: string) {
+    const invoice = await this.prisma.invoice.findUnique({ where: { id }, select: { id: true, number: true, status: true, total: true, customerMobile: true } });
+    if (!invoice) throw new NotFoundException('فاکتور پیدا نشد');
+    if (invoice.status === 'voided') throw new BadRequestException('برای فاکتور باطل‌شده پیامک ارسال نمی‌شود');
+    const mobile = (mobileOverride?.trim() || invoice.customerMobile?.trim() || '');
+    if (!/^09\d{9}$/.test(mobile)) throw new BadRequestException('شماره موبایل معتبری برای ارسال پیامک ثبت نشده است');
+    if (!this.notifications) throw new BadRequestException('صف اعلان‌ها فعال نیست');
+    const shortCode = createPublicShortCode();
+    const token = createPublicToken();
+    const linkExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await tx.invoice.update({ where: { id }, data: { publicShortCodeHash: shortCode.hash, publicTokenHash: token.hash, publicTokenExpiresAt: linkExpiresAt, ...(mobile === invoice.customerMobile ? {} : { customerMobile: mobile }) } });
+      await writeAudit(tx, { userId, ip, action: 'update', entityType: 'invoice', entityId: id, before: { publicLink: 'rotated' }, after: { publicShortCode: shortCode.code, linkExpiresAt: linkExpiresAt.toISOString() } });
+    });
+    await this.notifications.enqueue({ type: 'invoice.issued', invoiceId: id, mobile, message: buildInvoiceMessage(invoice.number, shortCode.code, invoice.total.toString()) });
+    return { ok: true, data: { publicShortCode: shortCode.code, publicToken: token.token, linkExpiresAt, mobile, queued: true } };
+  }
+
   private async queryRaw<T>(client: { $queryRawUnsafe: unknown }, query: string, ...values: unknown[]): Promise<T[]> {
     const execute = client.$queryRawUnsafe as (...args: unknown[]) => Promise<T[]>;
     return execute(query, ...values);

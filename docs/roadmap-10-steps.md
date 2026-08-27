@@ -39,8 +39,8 @@
 | ۲ ✅ | سیستم طراحی کامل در `packages/ui` (توکن دوپوسته + اجزای پایه + فونت vazirmatn از npm) | ۰ | توکن‌ها، ThemeProvider، ۲۰+ کامپوننت، تست توکن/کامپوننت |
 | ۳ ✅ | سایت عمومی: توکن‌محوری + پوستهٔ تاریک + نقشه/بله/فوتر + تست contract «بدون قیمت» | ۱ | حذف hex خام، `data-theme`، بخش تماس کامل |
 | ۴ ✅ | صفحهٔ فاکتور عمومی: QR، متای کامل، جعبه‌های پرداخت، رفع باگ چاپ تکراری | ۲ | `/invoice/[token]` مطابق مرجع |
-| ۵ | شِل پنل با توکن: سایدبار سرمه‌ای، شمارنده، FAB، نوار موبایل، پالت گروه‌بندی‌شده ۱..۵ | ۳ | حذف ۲۹۱ hex، هر دو پوسته |
-| ۶ | صفحهٔ «صدور فاکتور» کامل + مودال موفقیت + پیامک مجدد | ۲ | مهم‌ترین صفحهٔ پنل |
+| ۵ ✅ | شِل پنل با توکن: سایدبار سرمه‌ای، شمارنده، FAB، نوار موبایل، پالت گروه‌بندی‌شده ۱..۵ | ۳ | حذف ۲۹۱ hex، هر دو پوسته |
+| ۶ ✅ | صفحهٔ «صدور فاکتور» کامل + مودال موفقیت + پیامک مجدد | ۲ | مهم‌ترین صفحهٔ پنل |
 | ۷ | محصول (۵ تب) + انبار (stockbar، شیت اصلاح، مسیر قفسه) | ۱ | مطابق نقشهٔ صفحه‌ها |
 | ۸ | داشبورد کامل + گزارش‌ها + تنظیمات + کارت سلامت یکپارچه‌سازی‌ها | ۳ و ۴ | KPI/دونات/تایم‌لاین/بدهکاران |
 | ۹ | API: مدل‌ها و اندپوینت‌های جاافتاده + تست | ۲ تا ۴ | `customer_vehicles`, `sms_logs`, `telegram_logs`, `backup_jobs`, `/audit-logs`, `/backups/*`, `/sms/logs`, `/users/:id/activity`, `resend-sms`, token toggle, `PUT /products/:id/compat`, `PATCH /inventory/items/:id`, `/customers/:id/vehicles`, CRUD مرجع‌ها |
@@ -52,8 +52,9 @@
   `/integrations/telegram/test`، `/webhooks/telegram/:secret`، `/users/:id/activity`،
   `/invoices/:id/resend-sms`، `PATCH /invoices/:id/token`، `PATCH /inventory/items/:id`،
   `PUT /products/:id/compat`، `/customers/:id/vehicles`، CRUD کامل `/categories`، `/brands`، `/vehicles/*`.
+- ~~`PATCH /invoices/:id/token`~~ — در قدم ۶ پیاده شد: `POST /invoices/:id/resend-sms` هم‌زمان لینک و توکن عمومی را می‌چرخاند (کد کوتاه فقط به‌صورت hash ذخیره می‌شود، پس بازیابی لینک قبلی ممکن نیست).
 - جاب سازش روزانهٔ موجودی (Reconciliation) طبق §۳.۴.
-- صفحهٔ فاکتور عمومی: دکمهٔ «چاپ» دو بار رندر می‌شود و QR/فروشنده/خودرو/اعتبار لینک ندارد.
+- ~~صفحهٔ فاکتور عمومی: دکمهٔ «چاپ» دو بار رندر می‌شود و QR ندارد~~ — در قدم ۴ حل شد.
 - `packages/shared`: فرمت‌کنندهٔ تاریخ شمسی مشترک ندارد (سند §۲.۴).
 
 ## قانون اجرا
@@ -72,7 +73,10 @@
 | ۲ | `feat(ui): build token-based design system with dual-theme components` | `pnpm --filter @salimvand/ui typecheck` پاک · ۷ تست جدید · `pnpm --filter @salimvand/admin build` موفق · گالری در `/#design-system` |
 | ۳ | `feat(website): token-only theming with data-theme switch and contact upgrades` | ۰ hex خارج از توکن‌ها در CSS سایت · ۴ تست contract جدید · باگ نشت `publicTokenHash` در سریالایزر فاکتور عمومی رفع شد · `next build` موفق (۷ صفحه) |
 | ۴ | `feat(website): rebuild public invoice document with QR, payments and shared component` | `next build` بدون warning · تست‌ها: shared ۵ + ui ۷ + api ۱۳۲ |
+| ۵ | `feat(admin): tokenize panel styles and upgrade the shell` | ۰ hex خارج از توکن در `apps/admin/src/styles.css` · حذف بلوک `.theme-dark` و لایهٔ `--a-*` ناقص · پالت گروه‌بندی‌شده + FAB موبایل + ToastStack · `vite build` موفق · typecheck پنل و `packages/ui` پاک |
+| ۶ | `feat(admin): complete the invoice issuing screen` | اسکنر بارکد (Enter و دوربین)، جست‌وجوی مشتری با بدهی، تخفیف قلمی، پرداخت چندروشه، مودال موفقیت با QR و ماندهٔ بدهی · منطق محاسباتی در `apps/admin/src/lib/invoice-math.ts` با ۶ تست جدید · `GET /invoices/options` اکنون `location` (مسیر قفسه) برمی‌گرداند · اندپوینت جدید `POST /invoices/:id/resend-sms` با چرخش لینک عمومی و ۶ تست جدید (api ۱۳۸ تست) |
 
-وضعیت تست‌ها پس از قدم ۴: `pnpm test` → ۳۹ فایل تست، ۱۴۴ تست موفق.
+وضعیت تست‌ها پس از قدم ۶: `pnpm test` → ۴۰ فایل تست، ۱۵۶ تست موفق
+(shared ۵ · ui ۷ · api ۱۳۸ · admin ۶).
 `pnpm typecheck` برای `apps/api` همچنان فقط به دلیل تولیدنشدن Prisma Client در این sandbox شکست می‌خورد
 (اتصال TLS به `binaries.prisma.sh` بسته است)؛ typecheck بقیهٔ بسته‌ها پاک است.

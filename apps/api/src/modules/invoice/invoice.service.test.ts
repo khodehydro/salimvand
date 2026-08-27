@@ -111,3 +111,51 @@ describe('InvoiceService', () => {
     expect(invoiceUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: 'voided' }) }));
   });
 });
+
+describe('InvoiceService.resendSms', () => {
+  const invoice = { id: 'inv-9', number: 'INV-000009', status: 'issued', total: 4_500_000n, customerMobile: '09123456789' };
+  const harness = (record = invoice) => {
+    const update = vi.fn(async () => record);
+    const enqueue = vi.fn(async () => ({ id: 'job-1' }));
+    const prisma = { invoice: { findUnique: async () => record, update }, $transaction: async (run: (tx: unknown) => Promise<unknown>) => run({ invoice: { update }, auditLog: { create: async () => undefined } }) };
+    const service = new InvoiceService(prisma as never, { enqueue } as never);
+    return { service, update, enqueue };
+  };
+
+  it('rotates the public link and queues the SMS with the new short code', async () => {
+    const { service, update, enqueue } = harness();
+    const result = await service.resendSms('inv-9', 'user-1');
+    const call = update.mock.calls[0][0] as { data: { publicShortCodeHash: string; publicTokenHash: string; publicTokenExpiresAt: Date } };
+    expect(matchesPublicToken(result.data.publicShortCode, call.data.publicShortCodeHash)).toBe(true);
+    expect(matchesPublicToken(result.data.publicToken, call.data.publicTokenHash)).toBe(true);
+    expect(call.data.publicTokenExpiresAt.getTime()).toBeGreaterThan(Date.now() + 29 * 24 * 60 * 60 * 1000);
+    expect(enqueue).toHaveBeenCalledTimes(1);
+    expect(enqueue.mock.calls[0][0]).toMatchObject({ type: 'invoice.issued', invoiceId: 'inv-9', mobile: '09123456789' });
+    expect(enqueue.mock.calls[0][0].message).toContain(`/i/${result.data.publicShortCode}`);
+  });
+
+  it('accepts a corrected mobile and stores it on the invoice', async () => {
+    const { service, update, enqueue } = harness();
+    await service.resendSms('inv-9', 'user-1', '09351112233');
+    const call = update.mock.calls[0][0] as { data: { customerMobile?: string } };
+    expect(call.data.customerMobile).toBe('09351112233');
+    expect(enqueue.mock.calls[0][0].mobile).toBe('09351112233');
+  });
+
+  it('refuses to send without a valid mobile number', async () => {
+    const { service, enqueue } = harness({ ...invoice, customerMobile: '123' });
+    await expect(service.resendSms('inv-9', 'user-1')).rejects.toThrow('شماره موبایل معتبری');
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+
+  it('refuses to resend a voided invoice', async () => {
+    const { service, enqueue } = harness({ ...invoice, status: 'voided' });
+    await expect(service.resendSms('inv-9', 'user-1')).rejects.toThrow('باطل‌شده');
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+
+  it('fails loudly when the notification queue is not wired', async () => {
+    const prisma = { invoice: { findUnique: async () => invoice, update: vi.fn() }, $transaction: vi.fn() };
+    await expect(new InvoiceService(prisma as never).resendSms('inv-9', 'user-1')).rejects.toThrow('صف اعلان‌ها');
+  });
+});
