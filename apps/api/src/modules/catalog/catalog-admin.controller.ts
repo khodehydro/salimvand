@@ -9,7 +9,7 @@ type AuthenticatedRequest = Request & { user?: { id: string } };
 
 @Controller('products')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('seller')
+@Roles('manager')
 export class CatalogAdminController {
   constructor(private readonly catalog: CatalogAdminService) {}
   @Get() list() { return this.catalog.list(); }

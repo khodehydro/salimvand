@@ -1,10 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
 import { CustomersController } from './customers.controller';
 import { CustomerPaymentMethod } from './customers.dto';
+import { ROLES_KEY } from '../../common/auth/roles.decorator';
 
 const request = { user: { id: 'user-1' }, ip: '127.0.0.1' } as never;
 
 describe('CustomersController', () => {
+  it('allows accountant reads and payments without customer or vehicle writes', () => {
+    expect(Reflect.getMetadata(ROLES_KEY, CustomersController)).toEqual(['seller', 'accountant']);
+    expect(Reflect.getMetadata(ROLES_KEY, CustomersController.prototype.payment)).toBeUndefined();
+    expect(Reflect.getMetadata(ROLES_KEY, CustomersController.prototype.create)).toEqual(['seller']);
+    expect(Reflect.getMetadata(ROLES_KEY, CustomersController.prototype.addVehicle)).toEqual(['seller']);
+  });
+
   it('routes list, detail, and debtors', async () => {
     const list = vi.fn(async (search?: string) => ({ ok: true, data: [{ search }] }));
     const get = vi.fn(async (id: string) => ({ ok: true, data: { id, debt: 500n } }));

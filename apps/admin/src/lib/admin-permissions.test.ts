@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canAccessPage, invoiceCapabilities } from './admin-permissions';
+import { canAccessPage, customerCapabilities, invoiceCapabilities } from './admin-permissions';
 
 describe('admin page permissions', () => {
   it('keeps sensitive system areas manager-only', () => {
@@ -14,9 +14,16 @@ describe('admin page permissions', () => {
   it('shows daily workspaces only to relevant roles', () => {
     expect(canAccessPage('warehouse', 'inventory')).toBe(true);
     expect(canAccessPage('warehouse', 'invoices')).toBe(false);
+    expect(canAccessPage('seller', 'products')).toBe(false);
+    expect(canAccessPage('manager', 'products')).toBe(true);
     expect(canAccessPage('accountant', 'purchases')).toBe(true);
     expect(canAccessPage('accountant', 'invoices')).toBe(true);
     expect(canAccessPage('', 'dashboard')).toBe(false);
+  });
+  it('keeps customer account management separate from accounting payments', () => {
+    expect(customerCapabilities('accountant')).toEqual({ canManage: false, canPay: true });
+    expect(customerCapabilities('seller')).toEqual({ canManage: true, canPay: true });
+    expect(customerCapabilities('warehouse')).toEqual({ canManage: false, canPay: false });
   });
   it('separates invoice read, issue, payment, and void capabilities', () => {
     expect(invoiceCapabilities('accountant')).toEqual({ canCreate: false, canPay: true, canResend: true, canVoid: false });
