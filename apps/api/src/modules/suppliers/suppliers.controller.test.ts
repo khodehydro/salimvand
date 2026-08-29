@@ -9,6 +9,13 @@ describe('SuppliersController', () => {
     expect(debtors).toHaveBeenCalledTimes(1);
   });
 
+  it('returns the connected supplier account profile', async () => {
+    const get = vi.fn(async (id: string) => ({ ok: true, data: { id, debt: 1200n, purchases: [] } }));
+    const controller = new SuppliersController({ get } as never);
+    await expect(controller.get('supplier-1')).resolves.toEqual({ ok: true, data: { id: 'supplier-1', debt: 1200n, purchases: [] } });
+    expect(get).toHaveBeenCalledWith('supplier-1');
+  });
+
   it('passes search to supplier listing', async () => {
     const list = vi.fn(async (search?: string) => ({ ok: true, data: [{ search }] }));
     const controller = new SuppliersController({ list } as never);

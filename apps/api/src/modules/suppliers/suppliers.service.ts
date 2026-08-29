@@ -23,6 +23,19 @@ export class SuppliersService {
     return { ok: true, data: suppliers.map((supplier) => ({ id: supplier.id, name: supplier.name, mobile: supplier.mobile, debt: calculateSupplierDebt(supplier.purchases), invoiceCount: supplier.purchases.length })).filter((supplier) => supplier.debt > 0n).sort((a, b) => (a.debt > b.debt ? -1 : 1)) };
   }
 
+  async get(id: string) {
+    const supplier = await this.prisma.supplier.findFirst({
+      where: { id, deletedAt: null },
+      include: {
+        purchases: { orderBy: { issuedAt: 'desc' }, include: { items: true, payments: { orderBy: { paidAt: 'desc' } } } },
+        supplierPayments: { orderBy: { paidAt: 'desc' }, take: 50 },
+      },
+    });
+    if (!supplier) throw new NotFoundException('تأمین‌کننده پیدا نشد');
+    const issued = supplier.purchases.filter((invoice) => invoice.status === 'issued');
+    return { ok: true, data: { ...supplier, debt: calculateSupplierDebt(issued), invoiceCount: issued.length } };
+  }
+
   async create(input: SupplierInput, actorId: string, ip?: string) {
     const name = input.name?.trim();
     if (!name) throw new BadRequestException('نام تأمین‌کننده الزامی است');

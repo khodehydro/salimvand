@@ -15,6 +15,7 @@ export class SuppliersController {
   constructor(private readonly suppliers: SuppliersService) {}
   @Get() list(@Query('search') search?: string) { return this.suppliers.list(search); }
   @Get('debtors') debtors() { return this.suppliers.debtors(); }
+  @Get(':id') get(@Param('id') id: string) { return this.suppliers.get(id); }
   @Post() create(@Body() body: SupplierDto, @Req() request: AuthRequest) { return this.suppliers.create(body, request.user?.id ?? '', request.ip); }
   @Patch(':id') update(@Param('id') id: string, @Body() body: UpdateSupplierDto, @Req() request: AuthRequest) { return this.suppliers.update(id, body, request.user?.id ?? '', request.ip); }
   @Delete(':id') remove(@Param('id') id: string, @Req() request: AuthRequest) { return this.suppliers.remove(id, request.user?.id ?? '', request.ip); }
