@@ -63,3 +63,12 @@ body,.admin,.admin input,.admin select,.admin button{font-family:Vazirmatn,Tahom
 
 .admin-fab{position:fixed;inset-block-end:74px;inset-inline-start:18px;z-index:40;display:none;align-items:center;gap:8px;border:0;border-radius:var(--sv-radius-pill);background:var(--sv-primary);color:var(--sv-primary-fg);padding:13px 20px;font:600 13px Vazirmatn,Tahoma,sans-serif;box-shadow:var(--sv-shadow-2);cursor:pointer}
 @media(max-width:700px){.admin-fab{display:inline-flex}.mobile-nav{padding-bottom:6px}}
+
+/* Connected media library */
+.media-form select{border:1px solid var(--sv-border-2);border-radius:9px;padding:11px;font:inherit;background:var(--sv-surface);color:var(--sv-text)}
+.media-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:24px;color:var(--sv-text-2);font-size:12px}
+.media-toolbar .search-field{width:min(100%,460px);display:flex;align-items:center;gap:8px;border:1px solid var(--sv-border);border-radius:10px;padding:0 12px;background:var(--sv-surface)}
+.media-toolbar input{width:100%;border:0;outline:0;padding:11px 0;background:transparent;color:var(--sv-text);font:inherit}
+.media-preview{position:relative}.media-primary{position:absolute;inset-block-start:8px;inset-inline-start:8px;padding:5px 9px;border-radius:99px;background:var(--sv-ok-soft);color:var(--sv-ok);font-size:10px;font-weight:700}
+.media-actions{display:flex;gap:7px;margin-top:auto}.media-actions button{flex:1;font-size:11px;padding:9px}.media-actions .danger{background:var(--sv-danger-soft);color:var(--sv-danger)}
+@media(max-width:700px){.media-toolbar{align-items:stretch;flex-direction:column}.media-toolbar .search-field{width:100%}.media-actions{flex-direction:column}}
