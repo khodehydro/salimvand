@@ -7,10 +7,54 @@ type Product = { slug: string; name: string; code: string; availability: string;
 type Filter = { id: string; name: string; slug?: string };
 type Vehicle = { id: string; name: string; models: Array<{ id: string; name: string; trims?: Array<{ id: string; name: string }> }> };
 const emptyFilters = { categories: [] as Filter[], brands: [] as Filter[], vehicles: [] as Vehicle[] };
-async function getProducts(query: string): Promise<{ items: Product[]; total: number; totalPages: number; page: number }> { try { const response = await fetch(`${apiUrl}/public/products${query ? `?${query}` : ''}`, { next: { revalidate: 300 } }); if (!response.ok) return { items: [], total: 0, totalPages: 0, page: 1 }; const body = await response.json() as { data: Product[]; meta?: { total?: number; totalPages?: number; page?: number } }; return { items: body.data, total: body.meta?.total ?? body.data.length, totalPages: body.meta?.totalPages ?? 1, page: body.meta?.page ?? 1 }; } catch { return { items: [], total: 0, totalPages: 0, page: 1 }; } }
-async function getFilters(): Promise<typeof emptyFilters> { try { const response = await fetch(`${apiUrl}/public/filters`, { next: { revalidate: 300 } }); if (!response.ok) return emptyFilters; return (await response.json() as { data: typeof emptyFilters }).data; } catch { return emptyFilters; } }
+
+// Defensive normalizers: the public API returns operator-controlled JSON from the
+// database, so its shape cannot be trusted. These guards keep the render from
+// throwing (which would surface as a 500 "Internal Server Error") when a field is
+// missing or comes back as the wrong type (e.g. phones stored as an array).
+function asArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? (value as T[]) : [];
+}
+function normalizePhones(value: unknown): string {
+  if (value == null) return '';
+  if (Array.isArray(value)) return value.map((item) => normalizePhones(item)).join('،');
+  return String(value);
+}
+
+async function getProducts(query: string): Promise<{ items: Product[]; total: number; totalPages: number; page: number }> {
+  try {
+    const response = await fetch(`${apiUrl}/public/products${query ? `?${query}` : ''}`, { next: { revalidate: 300 } });
+    if (!response.ok) return { items: [], total: 0, totalPages: 0, page: 1 };
+    const body = await response.json() as { data?: unknown; meta?: { total?: number; totalPages?: number; page?: number } };
+    const items = asArray<Product>(body.data);
+    const meta = body.meta ?? {};
+    return {
+      items,
+      total: Number(meta.total ?? items.length) || 0,
+      totalPages: Number(meta.totalPages ?? 1) || 1,
+      page: Number(meta.page ?? 1) || 1,
+    };
+  } catch {
+    return { items: [], total: 0, totalPages: 0, page: 1 };
+  }
+}
+async function getFilters(): Promise<typeof emptyFilters> {
+  try {
+    const response = await fetch(`${apiUrl}/public/filters`, { next: { revalidate: 300 } });
+    if (!response.ok) return emptyFilters;
+    const body = await response.json() as { data?: Partial<typeof emptyFilters> };
+    const data = body.data ?? {};
+    return {
+      categories: asArray(data.categories),
+      brands: asArray(data.brands),
+      vehicles: asArray(data.vehicles),
+    };
+  } catch {
+    return emptyFilters;
+  }
+}
 type StoreMeta = { profile?: { name?: string; phones?: string; address?: string; open?: string; close?: string; mapUrl?: string; instagram?: string }; trustVideo?: string | null; telegram?: { link?: string; username?: string }; bale?: { link?: string; username?: string } };
-async function getMeta(): Promise<StoreMeta> { try { const response = await fetch(`${apiUrl}/public/meta`, { next: { revalidate: 300 } }); if (!response.ok) return {}; return (await response.json() as { data: StoreMeta }).data; } catch { return {}; } }
+async function getMeta(): Promise<StoreMeta> { try { const response = await fetch(`${apiUrl}/public/meta`, { next: { revalidate: 300 } }); if (!response.ok) return {}; const body = await response.json() as { data?: StoreMeta }; const data = body.data ?? {}; const profile = data.profile ?? {}; return { ...data, profile: { ...profile, phones: normalizePhones(profile.phones) } }; } catch { return {}; } }
 
 export async function generateMetadata() { return { title: 'قطعات یدکی خودرو | فروشگاه سلیم وند', description: 'کاتالوگ قطعات یدکی خودرو با اعلام وضعیت موجودی و برندهای موجود در میاندوآب.' }; }
 

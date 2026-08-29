@@ -13,7 +13,10 @@ export default async function ShortInvoicePage({ params }: Props) {
   let invoice: PublicInvoice | null = null;
   try {
     const response = await fetch(`${api}/public/invoices/short/${encodeURIComponent(code)}`, { cache: 'no-store' });
-    if (response.ok) invoice = (await response.json() as { data: PublicInvoice }).data;
+    if (response.ok) {
+      const data = (await response.json() as { data?: PublicInvoice }).data;
+      if (data) invoice = { ...data, items: Array.isArray(data.items) ? data.items : [] };
+    }
   } catch {
     invoice = null;
   }
