@@ -139,9 +139,6 @@ export default async function HomePage({
   const telegram = info.telegram;
   const bale = info.bale;
   const instagram = info.instagram;
-  const address = info.address;
-  const workingHours = info.workingHours;
-  const mapEmbed = info.mapUrl;
   return (
     <main className="site-shell">
       <header className="site-header">
@@ -362,7 +359,7 @@ export default async function HomePage({
           </nav>
         )}
       </section>
-      <StoreContact info={info} />
+      <StoreContact info={info} variant="home" />
       <footer className="site-footer">
         <span>
           © {formatPersianNumber(new Date().getFullYear())} {STORE_BRAND}
@@ -371,13 +368,17 @@ export default async function HomePage({
           <a href="#catalog">کاتالوگ</a>
           <a href="#video">ویدئوی فروشگاه</a>
           <a href="#contact">تماس و آدرس</a>
-          <a href={telegram} rel="noreferrer">
-            تلگرام
-          </a>
-          <a href={bale} rel="noreferrer">
-            بله
-          </a>
-          {instagram && (
+          {/^https?:\/\/.+/.test(telegram) && (
+            <a href={telegram} rel="noreferrer">
+              تلگرام
+            </a>
+          )}
+          {/^https?:\/\/.+/.test(bale) && (
+            <a href={bale} rel="noreferrer">
+              بله
+            </a>
+          )}
+          {/^https?:\/\/.+/.test(instagram) && (
             <a href={instagram} rel="noreferrer">
               اینستاگرام
             </a>

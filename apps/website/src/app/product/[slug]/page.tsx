@@ -154,11 +154,10 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
               <span className="status-dot" />
               {isAvailable ? 'موجود در فروشگاه' : 'استعلام موجودی'}
             </div>
-            {compatibleModels.length === 0 && (
+            {compatibleModels.length > 0 && (
               <p className="compatibility">
                 مناسب{' '}
-                {compatibleModels.map((m) => `${m.model.make.name} ${m.model.name}`).join(' · ') ||
-                  'خودروهای داخلی'}
+                {compatibleModels.map((m) => `${m.model.make.name} ${m.model.name}`).join(' · ')}
               </p>
             )}
             <div className="brands-list">

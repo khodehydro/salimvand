@@ -27,7 +27,7 @@ export async function PublicSubHeader({ context }: { context: string }) {
         </nav>
       </header>
 
-      <StoreContact info={info} />
+      <StoreContact info={info} variant="sub" />
 
       <footer className="sub-footer">
         <span>
@@ -43,10 +43,28 @@ export async function PublicSubHeader({ context }: { context: string }) {
   );
 }
 
-export async function StoreContact({ info }: { info?: StoreInfo }) {
+/**
+ * Store contact + map block shared by the homepage (navy `contact-section`
+ * variant with the price-fluctuation note) and the landing pages (compact
+ * `sub-contact` variant). Every field comes from the admin settings through
+ * /public/meta, so the operator-controlled phones, social IDs, working hours
+ * and Google map embed code are applied on every page.
+ */
+export async function StoreContact({
+  info,
+  variant = 'sub',
+}: {
+  info?: StoreInfo;
+  variant?: 'home' | 'sub';
+}) {
   const resolved = info ?? (await getStoreInfo());
+  const hasTelegram = /^https?:\/\//i.test(resolved.telegram);
+  const hasBale = /^https?:\/\//i.test(resolved.bale);
   return (
-    <section className="sub-contact" id="contact">
+    <section
+      className={variant === 'home' ? 'contact-section' : 'sub-contact'}
+      id="contact"
+    >
       <div className="sub-contact-copy">
         <span className="eyebrow">آذین خودرو · میاندوآب</span>
         <h2>استعلام قیمت و موجودی</h2>
@@ -57,13 +75,23 @@ export async function StoreContact({ info }: { info?: StoreInfo }) {
           <a className="button button-light" href={telHref(resolved)}>
             تماس با فروشگاه
           </a>
-          <a className="button button-outline-light" href={resolved.telegram} rel="noreferrer">
-            تلگرام
-          </a>
-          <a className="button button-bale" href={resolved.bale} rel="noreferrer">
-            بله
-          </a>
+          {hasTelegram && (
+            <a className="button button-outline-light" href={resolved.telegram} rel="noreferrer">
+              تلگرام
+            </a>
+          )}
+          {hasBale && (
+            <a className="button button-bale" href={resolved.bale} rel="noreferrer">
+              بله
+            </a>
+          )}
         </div>
+        {variant === 'home' && (
+          <p className="contact-price-note">
+            قیمت‌ها به‌دلیل نوسان روزانهٔ بازار فقط تلفنی اعلام می‌شود؛ مبلغ نهایی هنگام صدور فاکتور
+            قطعی است.
+          </p>
+        )}
       </div>
       <div className="contact-details">
         <div className="contact-list">
