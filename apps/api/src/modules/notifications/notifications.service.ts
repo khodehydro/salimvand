@@ -77,6 +77,10 @@ export class NotificationsService implements OnModuleDestroy {
 
   constructor(@Optional() private readonly prisma?: PrismaService) {
     this.connection = new IORedis(process.env.REDIS_URL ?? 'redis://localhost:6379', { maxRetriesPerRequest: null, lazyConnect: true });
+    // An unreachable Redis must not take down the whole API via an unhandled
+    // 'error' event on the shared connection. Log it and keep serving; the
+    // queue simply stays degraded until Redis is available again.
+    this.connection.on('error', (err) => console.error('[notifications] redis connection error:', (err as Error)?.message ?? err));
     this.queue = new Queue<NotificationJob>(NOTIFICATION_QUEUE_NAME, { connection: this.connection });
     if (process.env.ENABLE_QUEUE_WORKER === 'true' && !process.env.VITEST && process.env.NODE_ENV !== 'test') {
       this.worker = new Worker<NotificationJob>('salimvand-notifications', async (job) => this.process(job), { connection: this.connection, concurrency: 4 });
