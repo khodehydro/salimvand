@@ -136,6 +136,23 @@ export default async function HomePage({
     getMeta(),
     getStoreInfo(),
   ]);
+  // vehicleMakeId only scopes the cascading vehicle dropdowns; the API filters
+  // by model/trim, so it is not part of the products query.
+  const makeId = params.vehicleMakeId ?? '';
+  const modelId = params.vehicleModelId ?? '';
+  const scopedMakes = makeId ? filters.vehicles.filter((make) => make.id === makeId) : filters.vehicles;
+  const scopedModels = scopedMakes.flatMap((make) => make.models);
+  const selectedModel = scopedModels.find((model) => model.id === modelId);
+  const scopedTrims: Array<{ id: string; label: string }> = selectedModel
+    ? (selectedModel.trims ?? []).map((trim) => ({ id: trim.id, label: trim.name }))
+    : scopedMakes.flatMap((make) =>
+        make.models.flatMap((model) =>
+          (model.trims ?? []).map((trim) => ({
+            id: trim.id,
+            label: `${make.name} · ${model.name} · ${trim.name}`,
+          })),
+        ),
+      );
   const phone = info.phones[0]?.replace(/[^0-9+]/g, '') ?? '';
   const telegram = info.telegram;
   const bale = info.bale;
@@ -225,16 +242,24 @@ export default async function HomePage({
             <input name="q" defaultValue={params.q} placeholder="نام قطعه یا شماره فنی..." />
           </label>
           <select name="brandId" defaultValue={params.brandId ?? ''}>
-            <option value="">برند خودرو / قطعه</option>
+            <option value="">برند قطعه</option>
             {filters.brands.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.name}
               </option>
             ))}
           </select>
-          <select name="vehicleModelId" defaultValue={params.vehicleModelId ?? ''}>
+          <select name="vehicleMakeId" defaultValue={makeId}>
+            <option value="">برند خودرو</option>
+            {filters.vehicles.map((make) => (
+              <option key={make.id} value={make.id}>
+                {make.name}
+              </option>
+            ))}
+          </select>
+          <select name="vehicleModelId" defaultValue={modelId}>
             <option value="">مدل خودرو</option>
-            {filters.vehicles.flatMap((make) =>
+            {scopedMakes.flatMap((make) =>
               make.models.map((model) => (
                 <option key={model.id} value={model.id}>
                   {make.name} · {model.name}
@@ -244,15 +269,11 @@ export default async function HomePage({
           </select>
           <select name="vehicleTrimId" defaultValue={params.vehicleTrimId ?? ''}>
             <option value="">تیپ / موتور</option>
-            {filters.vehicles.flatMap((make) =>
-              make.models.flatMap((model) =>
-                (model.trims ?? []).map((trim) => (
-                  <option key={trim.id} value={trim.id}>
-                    {make.name} · {model.name} · {trim.name}
-                  </option>
-                )),
-              ),
-            )}
+            {scopedTrims.map((trim) => (
+              <option key={trim.id} value={trim.id}>
+                {trim.label}
+              </option>
+            ))}
           </select>
           <select name="categoryId" defaultValue={params.categoryId ?? ''}>
             <option value="">دسته‌بندی</option>
