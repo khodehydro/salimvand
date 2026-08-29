@@ -24,6 +24,18 @@ export function canAccessPage(role: UserRole | '', page: AdminPage): boolean {
   return Boolean(role && pageRoles[page].includes(role));
 }
 
+export function dashboardCapabilities(role: UserRole | '') {
+  const isManager = role === 'manager' || role === 'super_admin';
+  return {
+    canViewSales: isManager || role === 'seller' || role === 'accountant',
+    canViewInventory: isManager || role === 'warehouse',
+    canViewProfit: isManager || role === 'accountant',
+    canViewDebtors: isManager || role === 'seller' || role === 'accountant',
+    canViewHealth: isManager,
+    canNotify: isManager,
+  };
+}
+
 export function customerCapabilities(role: UserRole | '') {
   return {
     canManage: role === 'seller' || role === 'manager' || role === 'super_admin',

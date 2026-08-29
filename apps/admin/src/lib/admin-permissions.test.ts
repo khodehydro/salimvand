@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canAccessPage, customerCapabilities, invoiceCapabilities } from './admin-permissions';
+import { canAccessPage, customerCapabilities, dashboardCapabilities, invoiceCapabilities } from './admin-permissions';
 
 describe('admin page permissions', () => {
   it('keeps sensitive system areas manager-only', () => {
@@ -19,6 +19,12 @@ describe('admin page permissions', () => {
     expect(canAccessPage('accountant', 'purchases')).toBe(true);
     expect(canAccessPage('accountant', 'invoices')).toBe(true);
     expect(canAccessPage('', 'dashboard')).toBe(false);
+  });
+  it('shows each role only its permitted dashboard datasets', () => {
+    expect(dashboardCapabilities('seller')).toMatchObject({ canViewSales: true, canViewInventory: false, canViewProfit: false, canViewDebtors: true, canViewHealth: false });
+    expect(dashboardCapabilities('warehouse')).toMatchObject({ canViewSales: false, canViewInventory: true, canViewProfit: false, canViewDebtors: false });
+    expect(dashboardCapabilities('accountant')).toMatchObject({ canViewSales: true, canViewInventory: false, canViewProfit: true, canViewDebtors: true });
+    expect(dashboardCapabilities('manager')).toMatchObject({ canViewSales: true, canViewInventory: true, canViewProfit: true, canViewHealth: true, canNotify: true });
   });
   it('keeps customer account management separate from accounting payments', () => {
     expect(customerCapabilities('accountant')).toEqual({ canManage: false, canPay: true });
