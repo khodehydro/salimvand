@@ -74,15 +74,30 @@ async function main() {
 
     const model = matchModel(name, makes);
     if (model) {
-      await prisma.productVehicleCompat.deleteMany({ where: { productId: product.id, modelId: model.id } });
-      await prisma.productVehicleCompat.create({ data: { productId: product.id, modelId: model.id } });
+      await prisma.productVehicleCompat.deleteMany({
+        where: { productId: product.id, modelId: model.id },
+      });
+      await prisma.productVehicleCompat.create({
+        data: { productId: product.id, modelId: model.id },
+      });
     }
   }
 
   await prisma.counter.upsert({
     where: { key: 'product' },
-    update: { lastValue: Math.max(1, perCategory.values().reduce((a, b) => a + b, 0)) },
-    create: { key: 'product', lastValue: Math.max(1, perCategory.values().reduce((a, b) => a + b, 0)) },
+    update: {
+      lastValue: Math.max(
+        1,
+        perCategory.values().reduce((a, b) => a + b, 0),
+      ),
+    },
+    create: {
+      key: 'product',
+      lastValue: Math.max(
+        1,
+        perCategory.values().reduce((a, b) => a + b, 0),
+      ),
+    },
   });
 
   const adminPassword = process.env.SEED_ADMIN_PASSWORD;
@@ -101,12 +116,20 @@ async function main() {
     });
     console.log('Seeded the initial admin user.');
   } else {
-    console.log('Seeded references and catalog data; SEED_ADMIN_PASSWORD was not set, so no admin was created.');
+    console.log(
+      'Seeded references and catalog data; SEED_ADMIN_PASSWORD was not set, so no admin was created.',
+    );
   }
 }
 
 function catPrefix(catKey: string): string {
-  const map: Record<string, string> = { brake: 'BRK', filter: 'FLT', belt: 'BLT', engine: 'ENG', light: 'LGT' };
+  const map: Record<string, string> = {
+    brake: 'BRK',
+    filter: 'FLT',
+    belt: 'BLT',
+    engine: 'ENG',
+    light: 'LGT',
+  };
   return map[catKey] ?? 'PRD';
 }
 
@@ -147,7 +170,11 @@ async function seedVehicles() {
   ];
   const out: Record<string, { model: string; id: string }[]> = {};
   for (const make of makes) {
-    const mk = await prisma.vehicleMake.upsert({ where: { name: make.name }, update: {}, create: { name: make.name } });
+    const mk = await prisma.vehicleMake.upsert({
+      where: { name: make.name },
+      update: {},
+      create: { name: make.name },
+    });
     for (const modelName of make.models) {
       const model = await prisma.vehicleModel.upsert({
         where: { makeId_name: { makeId: mk.id, name: modelName } },
@@ -168,7 +195,9 @@ async function seedLocations() {
   const out: Record<string, { id: string }> = {};
   for (const code of shelves) {
     const existing = await prisma.location.findFirst({ where: { code, parentId: null } });
-    const row = existing ?? (await prisma.location.create({ data: { code, name: `قفسه ${code}`, type: 'shelf' } }));
+    const row =
+      existing ??
+      (await prisma.location.create({ data: { code, name: `قفسه ${code}`, type: 'shelf' } }));
     out[code[0]] = row as unknown as { id: string };
   }
   return out;
@@ -186,7 +215,9 @@ function matchModel(productName: string, makes: Record<string, { model: string; 
 function createEan13(seed: string): string {
   const digits = seed.replace(/\D/g, '').padStart(9, '0').slice(-9);
   const base = `626${digits}`;
-  const sum = base.split('').reduce((total, digit, index) => total + Number(digit) * (index % 2 === 0 ? 1 : 3), 0);
+  const sum = base
+    .split('')
+    .reduce((total, digit, index) => total + Number(digit) * (index % 2 === 0 ? 1 : 3), 0);
   return `${base}${(10 - (sum % 10)) % 10}`;
 }
 
