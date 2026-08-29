@@ -44,6 +44,9 @@ fi
 if [[ "${RUN_TESTS:-0}" == "1" || "${SKIP_TESTS:-1}" == "0" ]]; then
   "${PNPM[@]}" test
 fi
+# The CMS and API are intentionally same-origin in production. Never allow a
+# local/development VITE_API_URL from .env to be embedded in the browser bundle.
+export VITE_API_URL=/api/v1
 "${PNPM[@]}" build
 
 # Next standalone is nested because this is a workspace monorepo. Copy runtime assets

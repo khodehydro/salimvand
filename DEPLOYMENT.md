@@ -94,7 +94,7 @@ export CONFIRM_RESTORE=RESTORE_TO_TARGET
 ./scripts/check-local.sh
 ```
 
-این فرمان PostgreSQL و Redis محلی Compose و هر دو endpoint سلامت و readiness API را بررسی می‌کند و به Production متصل نمی‌شود. مقادیر `VITE_API_URL` در `.env.example` نیز عمداً localhost هستند؛ قبل از Build Production باید با URL واقعی API جایگزین شوند.
+این فرمان PostgreSQL و Redis محلی Compose و هر دو endpoint سلامت و readiness API را بررسی می‌کند و به Production متصل نمی‌شود. مقدار `VITE_API_URL` در `.env.example` فقط برای توسعهٔ محلی است. Build پروداکشن همیشه از مسیر هم‌مبدأ `/api/v1` روی دامنهٔ CMS استفاده می‌کند و Nginx آن را به API داخلی Proxy می‌کند؛ بنابراین آدرس localhost وارد کد مرورگر نمی‌شود.
 
 ## کنترل کیفیت CI/CD
 
