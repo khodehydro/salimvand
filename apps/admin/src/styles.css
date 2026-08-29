@@ -2526,3 +2526,11 @@ body,
 .invoice-detail-items small {
   color: var(--text-3);
 }
+
+/* Dashboard section headers can carry a jump link. */
+.history h2 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}

@@ -74,14 +74,14 @@ function AdminPalette({
   onClose,
 }: {
   items: NavItem[];
-  onSelect: (page: Page) => void;
+  onSelect: (page: Page, params?: Record<string, string>) => void;
   onClose: () => void;
 }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<{
-    products: Array<{ name: string; code: string }>;
-    customers: Array<{ name: string; mobile: string }>;
-    invoices: Array<{ number: string; customerName: string | null }>;
+    products: Array<{ id: string; name: string; code: string }>;
+    customers: Array<{ id: string; name: string; mobile: string }>;
+    invoices: Array<{ id: string; number: string; customerName: string | null }>;
   }>({ products: [], customers: [], invoices: [] });
   useEffect(() => {
     if (query.trim().length < 2) {
@@ -91,9 +91,9 @@ function AdminPalette({
     const timer = window.setTimeout(() => {
       void api<{
         data: {
-          products: Array<{ name: string; code: string }>;
-          customers: Array<{ name: string; mobile: string }>;
-          invoices: Array<{ number: string; customerName: string | null }>;
+          products: Array<{ id: string; name: string; code: string }>;
+          customers: Array<{ id: string; name: string; mobile: string }>;
+          invoices: Array<{ id: string; number: string; customerName: string | null }>;
         };
       }>(`/search?q=${encodeURIComponent(query)}`)
         .then((response) => setResults(response.data))
@@ -118,7 +118,7 @@ function AdminPalette({
       items: results.products.map((item) => ({
         label: item.name,
         detail: item.code,
-        onSelect: () => onSelect('products'),
+        onSelect: () => onSelect('products', { edit: item.id }),
       })),
     },
     {
@@ -127,7 +127,7 @@ function AdminPalette({
       items: results.customers.map((item) => ({
         label: item.name,
         detail: item.mobile,
-        onSelect: () => onSelect('invoices'),
+        onSelect: () => onSelect('customers', { customer: item.id }),
       })),
     },
     {
@@ -136,7 +136,7 @@ function AdminPalette({
       items: results.invoices.map((item) => ({
         label: item.number,
         detail: item.customerName ?? 'فاکتور',
-        onSelect: () => onSelect('invoices'),
+        onSelect: () => onSelect('invoices', { invoice: item.id }),
       })),
     },
   ];
@@ -200,8 +200,8 @@ function App() {
   const dashboardAccess = dashboardCapabilities(role);
   const invoiceAccess = invoiceCapabilities(role);
   const customerAccess = customerCapabilities(role);
-  const navigate = (next: Page) => {
-    window.location.hash = hashForPage(next);
+  const navigate = (next: Page, params?: Record<string, string>) => {
+    window.location.hash = hashForPage(next, params);
     setPage(next);
     setMobileOpen(false);
     setPaletteOpen(false);

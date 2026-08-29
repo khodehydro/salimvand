@@ -317,7 +317,14 @@ export function DashboardPage({
       )}
       <div className="dashboard-columns">
         <div className="history">
-          <h2>هشدار کمبود موجودی</h2>
+          <h2>
+            هشدار کمبود موجودی
+            {canViewInventory && (
+              <a className="row-action" href="#/inventory">
+                رفتن به انبار ←
+              </a>
+            )}
+          </h2>
           {summary?.lowStockItems.length ? (
             summary.lowStockItems.map((row) => (
               <div key={row.id}>

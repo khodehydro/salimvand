@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import { paramsFromHash } from '../lib/admin-route';
 import { formatRial, formatPersianNumber } from '@salimvand/shared';
 
 type CustomerVehicle = {
@@ -82,6 +83,17 @@ export function CustomersPage({
       .then((result) => setRows(result.data))
       .catch((error: Error) => setMessage(error.message));
   useEffect(load, []);
+  // Deep link from the global palette (#/customers?customer=<id>) opens the profile.
+  useEffect(() => {
+    const openFromHash = () => {
+      const customerId = paramsFromHash(window.location.hash).customer;
+      if (customerId) void loadDetail(customerId);
+    };
+    openFromHash();
+    window.addEventListener('hashchange', openFromHash);
+    return () => window.removeEventListener('hashchange', openFromHash);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     const errors: { name?: string; mobile?: string } = {};

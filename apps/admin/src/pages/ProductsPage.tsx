@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { createEan13 } from '@salimvand/shared';
 import { api } from '../lib/api';
+import { paramsFromHash } from '../lib/admin-route';
 
 type ProductRow = {
   id: string;
@@ -69,6 +70,7 @@ const tabs = [
 type Tab = (typeof tabs)[number]['id'];
 
 const empty = { name: '', categoryId: '', description: '', partNumber: '', status: 'active' };
+const publicSiteUrl = import.meta.env.VITE_PUBLIC_SITE_URL ?? window.location.origin;
 const aparatEmbed = (videoId: string) =>
   `https://www.aparat.com/video/video/embed/videohash/${videoId}/vt/frame`;
 
@@ -95,6 +97,18 @@ export function ProductsPage() {
     await load();
     return fresh.data;
   };
+
+  // Deep link from the global palette (#/products?edit=<id>) opens the editor.
+  useEffect(() => {
+    const openFromHash = () => {
+      const editId = paramsFromHash(window.location.hash).edit;
+      if (editId) void refresh(editId).then(() => setTab('basic'));
+    };
+    openFromHash();
+    window.addEventListener('hashchange', openFromHash);
+    return () => window.removeEventListener('hashchange', openFromHash);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     void load();
@@ -233,6 +247,15 @@ export function ProductsPage() {
               >
                 ویرایش
               </button>{' '}
+              <a
+                className="row-action"
+                href={`${publicSiteUrl}/product/${encodeURIComponent(product.slug)}`}
+                target="_blank"
+                rel="noreferrer"
+                title="نمایش این محصول در سایت عمومی"
+              >
+                سایت
+              </a>{' '}
               <button
                 className="row-action"
                 onClick={async () => {

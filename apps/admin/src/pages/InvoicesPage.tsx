@@ -11,6 +11,7 @@ import {
   type PaymentRow,
 } from '../lib/invoice-math';
 import { api, downloadFile } from '../lib/api';
+import { paramsFromHash } from '../lib/admin-route';
 
 type Invoice = {
   id: string;
@@ -126,6 +127,28 @@ export function InvoicesPage({
     downloadFile(`/invoices/${invoice.id}/pdf`, `invoice-${invoice.number}.pdf`).catch(
       (error: Error) => setMessage(error.message),
     );
+  // Deep link from the global palette (#/invoices?invoice=<id>) opens the details.
+  useEffect(() => {
+    const openFromHash = () => {
+      const invoiceId = paramsFromHash(window.location.hash).invoice;
+      if (!invoiceId) return;
+      const match = rows.find((row) => row.id === invoiceId);
+      if (match) setViewing(match);
+      else
+        void api<{ data: Invoice[] }>('/invoices')
+          .then((result) => {
+            setRows(result.data);
+            const found = result.data.find((row) => row.id === invoiceId);
+            if (found) setViewing(found);
+          })
+          .catch(() => undefined);
+    };
+    openFromHash();
+    window.addEventListener('hashchange', openFromHash);
+    return () => window.removeEventListener('hashchange', openFromHash);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows]);
+
   useEffect(() => {
     void load();
     if (canCreate)
