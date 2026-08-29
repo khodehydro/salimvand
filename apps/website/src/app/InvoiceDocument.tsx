@@ -1,5 +1,6 @@
 import { formatPersianNumber, formatRial } from '@salimvand/shared';
 import QRCode from 'qrcode';
+import { InvoiceActions } from './InvoiceActions';
 
 export type PublicInvoice = {
   number: string;
@@ -48,19 +49,6 @@ const shamsi = (value: string) =>
     new Date(value),
   );
 
-function PrintButton() {
-  return (
-    <button
-      type="button"
-      onClick={() => {
-        if (typeof window !== 'undefined') window.print();
-      }}
-    >
-      چاپ
-    </button>
-  );
-}
-
 export function InvoiceUnavailable() {
   return (
     <main className="invoice-shell">
@@ -105,12 +93,7 @@ export async function InvoiceDocument({
             <small>آذین خودرو · میاندوآب</small>
           </span>
         </a>
-        <div className="invoice-actions">
-          <PrintButton />
-          <a href={pdfHref} target="_blank" rel="noreferrer">
-            دانلود PDF
-          </a>
-        </div>
+        <InvoiceActions pdfHref={pdfHref} />
       </header>
 
       <article className="invoice-card">
@@ -231,10 +214,7 @@ export async function InvoiceDocument({
         </p>
 
         <div className="invoice-actions invoice-actions-inline">
-          <PrintButton />
-          <a href={pdfHref} target="_blank" rel="noreferrer">
-            دانلود PDF
-          </a>
+          <InvoiceActions pdfHref={pdfHref} />
         </div>
       </article>
 
