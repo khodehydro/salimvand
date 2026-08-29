@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { CustomersService, calculateCustomerDebt } from './customers.service';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 
 describe('customer payment accounting', () => {
   it('calculates outstanding debt from issued invoice balances', () => {
@@ -40,6 +41,16 @@ describe('customer payment accounting', () => {
     await new CustomersService(prisma as never).payment('customer-1', { amount: 300, method: 'card', invoiceId: 'invoice-2' }, 'user-1');
     expect(invoiceUpdate).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'invoice-2' }, data: expect.objectContaining({ paidAmount: 300n }) }));
     expect(invoiceUpdate).not.toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'invoice-1' } }));
+  });
+
+  it('rejects incomplete and unknown customer vehicles before writing', async () => {
+    const create = vi.fn();
+    const prisma = { customer: { findUnique: vi.fn(async () => ({ id: 'customer-1' })) }, vehicleTrim: { findUnique: vi.fn(async () => null) }, customerVehicle: { create } };
+    const service = new CustomersService(prisma as never);
+    await expect(service.addVehicle('customer-1', {})).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.addVehicle('customer-1', { trimId: 'missing' })).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.addVehicle('customer-1', { plate: '12-الف-345', year: 1200 })).rejects.toBeInstanceOf(BadRequestException);
+    expect(create).not.toHaveBeenCalled();
   });
 
   it('rejects a customer payment above total outstanding debt', async () => {

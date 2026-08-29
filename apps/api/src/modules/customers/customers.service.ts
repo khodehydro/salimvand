@@ -61,6 +61,9 @@ export class CustomersService {
   async addVehicle(customerId: string, input: { trimId?: string; plate?: string; chassis?: string; year?: number; notes?: string }, actorId?: string) {
     const customer = await this.prisma.customer.findUnique({ where: { id: customerId } });
     if (!customer) throw new NotFoundException('مشتری پیدا نشد');
+    if (!input.trimId && !input.plate?.trim()) throw new BadRequestException('نوع خودرو یا پلاک الزامی است');
+    if (input.year !== undefined && (!Number.isInteger(Number(input.year)) || Number(input.year) < 1300 || Number(input.year) > 1500)) throw new BadRequestException('سال مدل خودرو معتبر نیست');
+    if (input.trimId && !await this.prisma.vehicleTrim.findUnique({ where: { id: input.trimId } })) throw new NotFoundException('تیپ خودرو پیدا نشد');
     const vehicle = await this.prisma.customerVehicle.create({
       data: {
         customerId,
