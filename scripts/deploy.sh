@@ -34,6 +34,9 @@ git fetch --prune origin "$BRANCH"
 git checkout --detach "origin/$BRANCH"
 # Build, Prisma CLI and seed use devDependencies; production mode must not omit them.
 "${PNPM[@]}" install --frozen-lockfile --prod=false
+# prisma:seed imports @salimvand/shared, whose entry point is dist/ — build it
+# before seeding so a fresh server never runs seed against a stale/missing dist.
+"${PNPM[@]}" --filter @salimvand/shared build
 "${PNPM[@]}" --filter @salimvand/api exec prisma generate
 "${PNPM[@]}" --filter @salimvand/api exec prisma migrate deploy
 "${PNPM[@]}" --filter @salimvand/api prisma:seed

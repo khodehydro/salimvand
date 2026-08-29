@@ -1,5 +1,6 @@
 import { PrismaClient, UserRole } from '@prisma/client';
 import argon2 from 'argon2';
+import { createEan13 } from '@salimvand/shared';
 
 const prisma = new PrismaClient();
 
@@ -89,14 +90,14 @@ async function main() {
     update: {
       lastValue: Math.max(
         1,
-        perCategory.values().reduce((a, b) => a + b, 0),
+        [...perCategory.values()].reduce((a, b) => a + b, 0),
       ),
     },
     create: {
       key: 'product',
       lastValue: Math.max(
         1,
-        perCategory.values().reduce((a, b) => a + b, 0),
+        [...perCategory.values()].reduce((a, b) => a + b, 0),
       ),
     },
   });
@@ -255,15 +256,6 @@ function matchModel(productName: string, makes: Record<string, { model: string; 
     if (productName.includes(keyword) || productName.includes(entry.model)) return entry;
   }
   return all[0];
-}
-
-function createEan13(seed: string): string {
-  const digits = seed.replace(/\D/g, '').padStart(9, '0').slice(-9);
-  const base = `626${digits}`;
-  const sum = base
-    .split('')
-    .reduce((total, digit, index) => total + Number(digit) * (index % 2 === 0 ? 1 : 3), 0);
-  return `${base}${(10 - (sum % 10)) % 10}`;
 }
 
 function createSlug(value: string): string {

@@ -22,6 +22,23 @@ describe('shared utilities', () => {
     expect(barcode).toHaveLength(13);
     expect(barcode.startsWith('626')).toBe(true);
   });
+  it('produces distinct barcodes for seeds that differ only by prefix', () => {
+    const codes = ['BRK-00001', 'FLT-00001', 'BLT-00001', 'ENG-00001', 'LGT-00001', 'BRK-00002'];
+    const barcodes = codes.map((code) => createEan13(code));
+    expect(new Set(barcodes).size).toBe(codes.length);
+    for (const code of codes) {
+      const barcode = createEan13(code);
+      expect(barcode).toHaveLength(13);
+      expect(barcode.startsWith('626')).toBe(true);
+    }
+  });
+  it('keeps 9-digit entropy for purely numeric seeds like timestamps', () => {
+    const first = createEan13('177000012345');
+    const second = createEan13('177000019999');
+    expect(first).not.toBe(second);
+    expect(first).toHaveLength(13);
+    expect(second).toHaveLength(13);
+  });
   it('generates product SEO defaults', () => {
     const seo = buildProductSeo({ name: 'قاب ستون', vehicleNames: ['پژو ۲۰۶'] });
     expect(seo.seoTitle).toContain('قاب ستون');

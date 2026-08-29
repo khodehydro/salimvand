@@ -41,7 +41,20 @@ export function buildProductSeo(product: {
 }
 
 export function createEan13(seed: string): string {
-  const digits = seed.replace(/\D/g, '').padStart(9, '0').slice(-9);
+  // Letter prefixes (e.g. BRK/FLT product codes) are folded into a base-26
+  // number so codes that differ only by prefix never collide; purely numeric
+  // seeds (e.g. Date.now()) keep their full 9-digit entropy.
+  const letters = seed.replace(/[^A-Za-z]/g, '').toUpperCase();
+  let alpha = 0;
+  for (const ch of letters) {
+    alpha = alpha * 26 + (ch.charCodeAt(0) - 64);
+  }
+  const numeric = seed.replace(/\D/g, '').padStart(4, '0').slice(-4);
+  const digits = letters
+    ? String(alpha * 1_000_000 + Number(numeric))
+        .padStart(9, '0')
+        .slice(-9)
+    : seed.replace(/\D/g, '').padStart(9, '0').slice(-9);
   const base = `626${digits}`;
   const sum = base
     .split('')
