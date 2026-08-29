@@ -53,7 +53,7 @@ const productRow = {
   status: 'active',
   availabilityOverride: null,
   category: { name: 'ترمز', slug: 'brake' },
-  images: [{ path: '/uploads/p1.webp', alt: null, isPrimary: true }],
+  images: [{ path: '/uploads/products/image-1/large.webp', alt: null, isPrimary: true }],
   // Prisma only selects public columns, but the serializer must stay safe even
   // if a future `select` widens: these fields must never reach the response.
   inventoryItems: [
@@ -84,7 +84,7 @@ describe('public API contract — no internal data', () => {
     const serialized = assertPublic(result.data);
 
     expect(serialized).toContain('لنت ترمز جلو پژو ۲۰۶');
-    expect(result.data[0]).toMatchObject({ availability: 'in_stock', brands: [{ name: 'ایساکو', inStock: true }, { name: 'مهر', inStock: false }] });
+    expect(result.data[0]).toMatchObject({ images: [{ path: '/uploads/products/image-1/large.webp', thumbnailPath: '/uploads/products/image-1/small.webp' }], availability: 'in_stock', brands: [{ name: 'ایساکو', inStock: true }, { name: 'مهر', inStock: false }] });
   });
 
   it('keeps the single-product route on the same public contract', async () => {

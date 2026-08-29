@@ -5,6 +5,7 @@ type PublicProduct = {
   slug: string;
   availabilityOverride: string | null;
   inventoryItems: Array<{ quantity: number; minStock: number | null; brand: { name: string } }>;
+  images: Array<{ path: string; alt: string | null; isPrimary: boolean }>;
   [key: string]: unknown;
 };
 
@@ -28,7 +29,7 @@ export class CatalogService {
       select: { id: true, code: true, slug: true, name: true, description: true, seoTitle: true, seoDescription: true, status: true, availabilityOverride: true, category: { select: { name: true, slug: true } }, images: { orderBy: { sort: 'asc' }, select: { path: true, alt: true, isPrimary: true } }, inventoryItems: { where: { isActive: true }, select: { quantity: true, minStock: true, brand: { select: { name: true } } } }, compatibilities: { select: { model: { select: { name: true, make: { select: { name: true } } }, }, trim: { select: { name: true } } } } },
     }), this.prisma.product.count({ where: where as never })]);
     const publicProducts = products as unknown as PublicProduct[];
-    return { ok: true, data: publicProducts.map((product) => ({ ...product, availability: this.availability(product.inventoryItems, product.availabilityOverride), brands: product.inventoryItems.map((item) => ({ name: item.brand.name, inStock: item.quantity > 0 })), inventoryItems: undefined })), meta: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) } };
+    return { ok: true, data: publicProducts.map((product) => ({ ...product, images: product.images.map((image) => ({ ...image, thumbnailPath: image.path.endsWith('/large.webp') ? image.path.replace(/\/large\.webp$/, '/small.webp') : image.path })), availability: this.availability(product.inventoryItems, product.availabilityOverride), brands: product.inventoryItems.map((item) => ({ name: item.brand.name, inStock: item.quantity > 0 })), inventoryItems: undefined })), meta: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) } };
   }
 
   async getPublicProduct(slug: string) {
