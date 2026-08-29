@@ -1,3 +1,4 @@
+import { ProductCard } from './ProductCard';
 import { ThemeToggle } from './ThemeToggle';
 import { APP_NAME, STORE_BRAND, formatPersianNumber } from '@salimvand/shared';
 import { TrustVideo } from './TrustVideo';
@@ -140,7 +141,9 @@ export default async function HomePage({
   // by model/trim, so it is not part of the products query.
   const makeId = params.vehicleMakeId ?? '';
   const modelId = params.vehicleModelId ?? '';
-  const scopedMakes = makeId ? filters.vehicles.filter((make) => make.id === makeId) : filters.vehicles;
+  const scopedMakes = makeId
+    ? filters.vehicles.filter((make) => make.id === makeId)
+    : filters.vehicles;
   const scopedModels = scopedMakes.flatMap((make) => make.models);
   const selectedModel = scopedModels.find((model) => model.id === modelId);
   const scopedTrims: Array<{ id: string; label: string }> = selectedModel
@@ -304,60 +307,7 @@ export default async function HomePage({
         {products.items.length ? (
           <div className="product-grid">
             {products.items.map((product) => (
-              <a className="product-card" href={`/product/${product.slug}`} key={product.slug}>
-                <div className="product-image">
-                  {product.images[0] ? (
-                    <img
-                      src={product.images[0].thumbnailPath ?? product.images[0].path}
-                      srcSet={
-                        product.images[0].thumbnailPath
-                          ? `${product.images[0].thumbnailPath} 400w, ${product.images[0].path} 900w`
-                          : undefined
-                      }
-                      sizes="(max-width: 620px) 50vw, (max-width: 900px) 33vw, 25vw"
-                      alt={product.images[0].alt ?? product.name}
-                      loading="lazy"
-                    />
-                  ) : (
-                    <span>قطعه خودرو</span>
-                  )}
-                  <span className={`status-badge ${product.availability}`}>
-                    {product.availability === 'in_stock'
-                      ? 'موجود'
-                      : product.availability === 'low_stock'
-                        ? 'موجود (کم)'
-                        : product.availability === 'coming_soon'
-                          ? 'به‌زودی'
-                          : 'ناموجود'}
-                  </span>
-                  {product.aparatVideoId && (
-                    <span className="video-badge" title="ویدئوی محصول">
-                      ▶ ویدئو
-                    </span>
-                  )}
-                </div>
-                <span className="category-label">{product.category.name}</span>
-                <h3>{product.name}</h3>
-                <p className="compatibility">
-                  {product.compatibilities
-                    ?.slice(0, 2)
-                    .map((item) => `${item.model.make.name} ${item.model.name}`)
-                    .join(' · ') || 'مناسب خودروهای داخلی'}
-                </p>
-                <div className="brand-list">
-                  {product.brands.slice(0, 4).map((brand) => (
-                    <span className={brand.inStock ? 'brand-in' : 'brand-out'} key={brand.name}>
-                      {brand.inStock ? '✓' : '×'} {brand.name}
-                    </span>
-                  ))}
-                </div>
-                <div className="card-footer">
-                  <code>{product.code}</code>
-                  <span>
-                    استعلام قیمت <b>←</b>
-                  </span>
-                </div>
-              </a>
+              <ProductCard key={product.slug} product={product} />
             ))}
           </div>
         ) : (

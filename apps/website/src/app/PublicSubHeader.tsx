@@ -61,10 +61,7 @@ export async function StoreContact({
   const hasTelegram = /^https?:\/\//i.test(resolved.telegram);
   const hasBale = /^https?:\/\//i.test(resolved.bale);
   return (
-    <section
-      className={variant === 'home' ? 'contact-section' : 'sub-contact'}
-      id="contact"
-    >
+    <section className={variant === 'home' ? 'contact-section' : 'sub-contact'} id="contact">
       <div className="sub-contact-copy">
         <span className="eyebrow">آذین خودرو · میاندوآب</span>
         <h2>استعلام قیمت و موجودی</h2>

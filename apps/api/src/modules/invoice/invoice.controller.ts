@@ -41,10 +41,7 @@ export class InvoiceController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('seller', 'accountant')
   @Post(':id/link')
-  link(
-    @Param('id') id: string,
-    @Req() request: AuthenticatedRequest,
-  ) {
+  link(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
     return this.invoices.rotateLink(id, request.user?.id ?? '', request.ip);
   }
 

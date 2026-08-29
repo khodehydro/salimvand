@@ -23,9 +23,7 @@ export function ProductGallery({
         key={current.path}
         src={current.path}
         srcSet={
-          current.thumbnailPath
-            ? `${current.thumbnailPath} 400w, ${current.path} 900w`
-            : undefined
+          current.thumbnailPath ? `${current.thumbnailPath} 400w, ${current.path} 900w` : undefined
         }
         sizes="(max-width: 700px) 100vw, 660px"
         alt={current.alt ?? productName}

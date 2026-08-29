@@ -206,9 +206,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
             )}
             {product.brands.length > 0 && (
               <div className="brands-block">
-                <small>
-                  برندهای این قطعه ({formatPersianNumber(product.brands.length)} برند)
-                </small>
+                <small>برندهای این قطعه ({formatPersianNumber(product.brands.length)} برند)</small>
                 <div className="brands-list">
                   {product.brands.map((brand) => (
                     <span key={brand.name} className={brand.inStock ? 'brand-in' : 'brand-out'}>

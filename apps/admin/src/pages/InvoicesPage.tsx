@@ -778,8 +778,7 @@ export function InvoicesPage({
               مشتری: <b>{viewing.customerName ?? 'مشتری حضوری'}</b>
             </span>
             <span>
-              تاریخ صدور:{' '}
-              <b>{new Date(viewing.issuedAt).toLocaleDateString('fa-IR')}</b>
+              تاریخ صدور: <b>{new Date(viewing.issuedAt).toLocaleDateString('fa-IR')}</b>
             </span>
             <span>
               جمع اقلام: <b>{money(viewing.subtotal)}</b>
@@ -827,86 +826,86 @@ export function InvoicesPage({
           .map((invoice) => {
             const debt = Math.max(0, Number(invoice.total) - Number(invoice.paidAmount));
             return (
-          <div className="table-row invoice-row" key={invoice.id}>
-            <code>{invoice.number}</code>
-            <span>{invoice.customerName ?? 'مشتری حضوری'}</span>
-            <span>{persianNumber(invoice.items.length)}</span>
-            <strong>{money(invoice.total)}</strong>
-            <span className={invoice.paymentStatus === 'paid' ? 'status-chip' : 'low-stock'}>
-              {labels[invoice.paymentStatus] ?? invoice.paymentStatus}
-              <small> · {money(invoice.paidAmount)}</small>
-            </span>
-            {invoice.status === 'voided' || debt === 0 ? (
-              <span className="muted">—</span>
-            ) : (
-              <span className="low-stock">{money(debt)}</span>
-            )}
-            <span>
-              {invoice.status === 'voided' ? (
-                labels.voided
-              ) : (
-                <span className="row-actions">
-                  <button className="row-action" onClick={() => setViewing(invoice)}>
-                    نمایش
-                  </button>
-                  <button
-                    className="row-action"
-                    onClick={() => void downloadInvoicePdf(invoice)}
-                    title="دانلود پی‌دی‌اف"
-                  >
-                    PDF
-                  </button>
-                  <button
-                    className="row-action"
-                    onClick={() => void openPublicInvoice(invoice)}
-                    title="صدور لینک عمومی جدید و نمایش فاکتور آنلاین"
-                  >
-                    لینک
-                  </button>
-                  {canPay && Number(invoice.total) > Number(invoice.paidAmount) && (
-                    <button
-                      className="row-action"
-                      onClick={() => {
-                        setPaying(invoice);
-                        setPayments([
-                          {
-                            method: 'cash',
-                            amount: String(
-                              Math.max(0, Number(invoice.total) - Number(invoice.paidAmount)),
-                            ),
-                          },
-                        ]);
-                      }}
-                    >
-                      پرداخت
-                    </button>
-                  )}
-                  {canResend && (
-                    <button className="row-action" onClick={() => void resend(invoice)}>
-                      پیامک مجدد
-                    </button>
-                  )}
-                  {canVoid && (
-                    <button
-                      className="row-action danger-text"
-                      onClick={async () => {
-                        if (!window.confirm('فاکتور باطل شود؟')) return;
-                        try {
-                          await api(`/invoices/${invoice.id}/void`, { method: 'POST' });
-                          setMessage('فاکتور باطل و موجودی برگشت داده شد.');
-                          await load();
-                        } catch (error) {
-                          setMessage((error as Error).message);
-                        }
-                      }}
-                    >
-                      ابطال
-                    </button>
+              <div className="table-row invoice-row" key={invoice.id}>
+                <code>{invoice.number}</code>
+                <span>{invoice.customerName ?? 'مشتری حضوری'}</span>
+                <span>{persianNumber(invoice.items.length)}</span>
+                <strong>{money(invoice.total)}</strong>
+                <span className={invoice.paymentStatus === 'paid' ? 'status-chip' : 'low-stock'}>
+                  {labels[invoice.paymentStatus] ?? invoice.paymentStatus}
+                  <small> · {money(invoice.paidAmount)}</small>
+                </span>
+                {invoice.status === 'voided' || debt === 0 ? (
+                  <span className="muted">—</span>
+                ) : (
+                  <span className="low-stock">{money(debt)}</span>
+                )}
+                <span>
+                  {invoice.status === 'voided' ? (
+                    labels.voided
+                  ) : (
+                    <span className="row-actions">
+                      <button className="row-action" onClick={() => setViewing(invoice)}>
+                        نمایش
+                      </button>
+                      <button
+                        className="row-action"
+                        onClick={() => void downloadInvoicePdf(invoice)}
+                        title="دانلود پی‌دی‌اف"
+                      >
+                        PDF
+                      </button>
+                      <button
+                        className="row-action"
+                        onClick={() => void openPublicInvoice(invoice)}
+                        title="صدور لینک عمومی جدید و نمایش فاکتور آنلاین"
+                      >
+                        لینک
+                      </button>
+                      {canPay && Number(invoice.total) > Number(invoice.paidAmount) && (
+                        <button
+                          className="row-action"
+                          onClick={() => {
+                            setPaying(invoice);
+                            setPayments([
+                              {
+                                method: 'cash',
+                                amount: String(
+                                  Math.max(0, Number(invoice.total) - Number(invoice.paidAmount)),
+                                ),
+                              },
+                            ]);
+                          }}
+                        >
+                          پرداخت
+                        </button>
+                      )}
+                      {canResend && (
+                        <button className="row-action" onClick={() => void resend(invoice)}>
+                          پیامک مجدد
+                        </button>
+                      )}
+                      {canVoid && (
+                        <button
+                          className="row-action danger-text"
+                          onClick={async () => {
+                            if (!window.confirm('فاکتور باطل شود؟')) return;
+                            try {
+                              await api(`/invoices/${invoice.id}/void`, { method: 'POST' });
+                              setMessage('فاکتور باطل و موجودی برگشت داده شد.');
+                              await load();
+                            } catch (error) {
+                              setMessage((error as Error).message);
+                            }
+                          }}
+                        >
+                          ابطال
+                        </button>
+                      )}
+                    </span>
                   )}
                 </span>
-              )}
-            </span>
-          </div>
+              </div>
             );
           })}
       </div>

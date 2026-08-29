@@ -1,3 +1,4 @@
+import { ProductCard } from '../../ProductCard';
 import { PublicSubHeader } from '../../PublicSubHeader';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
@@ -8,6 +9,12 @@ type Product = {
   name: string;
   code: string;
   availability: string;
+  aparatVideoId?: string | null;
+  brands?: Array<{ name: string; inStock: boolean }>;
+  compatibilities?: Array<{
+    model: { name: string; make: { name: string } };
+    trim?: { name: string } | null;
+  }>;
   images: Array<{ path: string; thumbnailPath?: string; alt?: string }>;
   category: { name: string };
 };
@@ -85,28 +92,7 @@ export default async function CategoryPage({ params }: { params: Promise<{ slug:
         {data.products.length ? (
           <div className="product-grid">
             {data.products.map((product) => (
-              <a className="product-card" href={`/product/${product.slug}`} key={product.slug}>
-                {product.images[0] ? (
-                  <img
-                    src={product.images[0].thumbnailPath ?? product.images[0].path}
-                    srcSet={
-                      product.images[0].thumbnailPath
-                        ? `${product.images[0].thumbnailPath} 400w, ${product.images[0].path} 900w`
-                        : undefined
-                    }
-                    sizes="(max-width: 620px) 50vw, (max-width: 900px) 33vw, 25vw"
-                    alt={product.images[0].alt ?? product.name}
-                    loading="lazy"
-                  />
-                ) : (
-                  <div className="image-placeholder">قطعه خودرو</div>
-                )}
-                <h2>{product.name}</h2>
-                <code>{product.code}</code>
-                <b className="available">
-                  {product.availability === 'in_stock' ? 'موجود' : 'استعلام موجودی'}
-                </b>
-              </a>
+              <ProductCard key={product.slug} product={product} heading="h2" />
             ))}
           </div>
         ) : (
