@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Install · Prisma · typecheck · test · build · format
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: parts_store
+          POSTGRES_PASSWORD: parts_store_dev
+          POSTGRES_DB: parts_store
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U parts_store"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://parts_store:parts_store_dev@localhost:5432/parts_store
+      REDIS_URL: redis://:redis_dev@localhost:6379
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: Enable pnpm
+        run: corepack enable && corepack prepare pnpm@9 --activate
+      - name: Install dependencies (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+      - name: Prisma generate
+        run: pnpm --filter @salimvand/api prisma:generate
+      - name: Prisma validate
+        run: pnpm --filter @salimvand/api prisma:validate
+      - name: Prisma migrate deploy
+        run: pnpm --filter @salimvand/api exec prisma migrate deploy
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Unit and API tests
+        run: pnpm test
+      - name: Production builds
+        run: pnpm build
+      - name: Prettier format check
+        run: pnpm format:check
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+      - name: E2E smoke tests (site + admin shells)
+        run: pnpm test:e2e
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          if-no-files-found: ignore
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output
+          path: |
+            apps/website/.next/standalone
+            apps/admin/dist
+            apps/api/dist
+          if-no-files-found: ignore

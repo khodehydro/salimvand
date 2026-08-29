@@ -1,0 +1,89 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Quality gate
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: parts_store
+          POSTGRES_PASSWORD: parts_store_dev
+          POSTGRES_DB: parts_store
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U parts_store"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://parts_store:parts_store_dev@localhost:5432/parts_store
+      REDIS_URL: redis://:redis_dev@localhost:6379
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: Enable pnpm
+        run: corepack enable && corepack prepare pnpm@9 --activate
+      - name: Install dependencies (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+      - name: Prisma generate and validate
+        run: |
+          pnpm --filter @salimvand/api prisma:generate
+          pnpm --filter @salimvand/api prisma:validate
+      - name: Prisma migrate deploy
+        run: pnpm --filter @salimvand/api exec prisma migrate deploy
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Unit and API tests
+        run: pnpm test
+      - name: Production builds
+        run: pnpm build
+
+  release:
+    name: Release on VPS
+    runs-on: ubuntu-24.04
+    needs: [verify]
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            set -e
+            sudo APP_DIR="${{ secrets.APP_DIR }}" DEPLOY_BRANCH=main bash "${{ secrets.APP_DIR }}/scripts/deploy.sh"
+      - name: Notify Telegram on failure
+        if: failure()
+        uses: appleboy/telegram-action@v0.1.1
+        with:
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          message: |
+            Deploy failed for ${{ github.repository }} @ ${{ github.ref }}
+            commit: ${{ github.sha }}

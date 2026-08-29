@@ -1,0 +1,22 @@
+[Unit]
+Description=Salim Vand notification worker
+After=network-online.target redis.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=salimvand
+Group=salimvand
+WorkingDirectory=/opt/salimvand
+EnvironmentFile=/opt/salimvand/.env
+Environment=ENABLE_QUEUE_WORKER=true
+ExecStart=/usr/bin/node /opt/salimvand/apps/api/dist/worker.js
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/opt/salimvand/uploads
+
+[Install]
+WantedBy=multi-user.target

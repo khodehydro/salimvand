@@ -1,1 +1,96 @@
-# salimvand
+# فروشگاه سلیم وند
+
+Monorepo سامانهٔ کاتالوگ قطعات خودرو و ERP فروشگاه آذین خودرو سلیم وند در میاندوآب.
+
+## وضعیت فعلی پروژه
+
+این مخزن در حال تکمیل نهایی است. زیرساخت Monorepo، API، مدل داده، احراز هویت، کاتالوگ اولیه، موجودی، فاکتور، رسانه، پنل پایه و Deploy عملیاتی وجود دارد؛ اما وجود کد یا Build موفق به‌تنهایی به معنی تکمیل محصول مطابق سند مرجع نیست.
+
+مواردی که هنوز باید در Audit و اجرای نهایی تأیید و تکمیل شوند: انطباق کامل UI با Design System و صفحات مرجع، گردش‌کارهای واقعی CMS، تست‌های E2E و Integration، پوشش کامل نقش‌ها و مجوزها، دادهٔ واقعی کاتالوگ، SEO همهٔ موجودیت‌های قابل ایندکس، و Acceptance Criteria تحویل.
+
+هر قابلیت در گزارش تحویل با یکی از وضعیت‌های «اسکلت کد»، «پیاده‌سازی کاربردی»، «آمادهٔ Production» یا «تکمیل مطابق سند» علامت‌گذاری می‌شود؛ ادعای تکمیل ۱۰۰٪ بدون اجرای این تطبیق پذیرفته نیست.
+
+## اجزای پروژه
+
+- `apps/api`: NestJS، Auth، Role Guard، Catalog، Inventory، Media، Dashboard و Health probes
+- `apps/website`: Next.js، سایت عمومی RTL، صفحات محصول، دسته‌بندی، خودرو، موقعیت محلی، Sitemap و مسیر خصوصی فاکتور
+- `apps/admin`: React + Vite، پنل مدیریت، ورود، نقش‌ها، محصولات، انبار، رسانه، داده‌های مرجع و داشبورد
+- `packages/shared`: ثابت‌ها و تایپ‌های مشترک
+- `packages/ui`: توکن‌ها و اجزای پایهٔ طراحی
+
+## قابلیت‌های فاز یک که پیاده‌سازی شده‌اند
+
+- Access/Refresh JWT و Refresh Cookie امن
+- Logout و `GET /auth/me`
+- Role Policy دقیق برای نقش‌های پنل
+- محدودیت تلاش Login
+- پاسخ استاندارد خطاهای API
+- کاتالوگ عمومی با جستجو، فیلتر، برند، خودرو و Pagination
+- صفحات SEOمحور محصول، دسته‌بندی، خودرو و میاندوآب
+- Sitemap و Robots
+- مدیریت محصول، برند، خودرو، تیپ، تصویر و Media Library
+- قوانین موجودی اتمی و Ledger
+- بارکد EAN-13 و اسکنر پنل
+- داشبورد خلاصهٔ محصولات و انبار
+- مدل‌های Refresh Token، Audit Log و Invoice در Prisma
+- Health و Readiness probe برای API و PostgreSQL
+- Docker Compose برای PostgreSQL و Redis
+
+## خروجی‌های تکمیل‌شدهٔ فاز یک
+
+- Migrationهای Prisma برای تمام مدل‌های فاز یک و Seed قابل تکرار برای کاربر مدیر و داده‌های مرجع.
+- Refresh Token با ذخیرهٔ hash در جدول `refresh_tokens`، Rotation اتمیک، انقضا، ابطال و Cookie امن.
+- CRUD مدیریتی محصول با اعتبارسنجی، SEO خودکار/قابل ویرایش، Soft Delete، Restore و Audit.
+- Ledger موجودی برای موجودی اولیه، خرید، اصلاح، انتقال و ثبت Audit در مسیر تراکنشی.
+- API عمومی امن و صفحات SEOمحور محصول، دسته‌بندی، خودرو و موقعیت محلی.
+- Media Library با محدودیت نوع/حجم، تبدیل WebP، انتخاب تصویر اصلی و حذف رسانه.
+- تست‌های خودکار API و پکیج مشترک، TypeScript strict و Build تولیدی هر سه اپ.
+
+## چک‌لیست محیط مقصد
+
+برای اجرای Migration/Seed و تست Integration در محیط مقصد، PostgreSQL و Redis باید در دسترس باشند؛ این مرحله در چک‌لیست Deploy جامع نهایی انجام می‌شود و در طول توسعه Deploy جداگانه‌ای لازم نیست.
+
+## اجرا
+
+پیش‌نیاز: Node.js 20 و pnpm 9.
+
+```bash
+pnpm install
+cp .env.example .env
+pnpm dev
+```
+
+آدرس‌ها:
+
+- سایت: http://localhost:3000
+- پنل: http://localhost:5173
+- API: http://localhost:4000/api/v1/health
+- Readiness: http://localhost:4000/api/v1/health/ready
+
+راه سادهٔ راه‌اندازی کامل محیط محلی:
+
+```bash
+./scripts/setup-local.sh
+```
+
+این اسکریپت به‌صورت خودکار وابستگی‌ها، PostgreSQL، Redis، Prisma، Migration و Seed را اجرا می‌کند. در محیط فعلی فقط کافی است Docker در دسترس باشد.
+
+برای اجرای دستی سرویس‌ها:
+
+```bash
+docker compose -f docker-compose.dev.yml up -d
+```
+
+## اعتبارسنجی
+
+```bash
+pnpm typecheck
+pnpm build
+pnpm test
+```
+
+تست‌های فعلی API روی Auth، Catalog، Dashboard، Inventory، Role Policy، Rate Limit، Exception Filter و Public Invoice Token متمرکز هستند.
+
+## محدودیت فعلی محیط
+
+اجرای Prisma Migration و تست Integration تا فراهم‌شدن PostgreSQL و دسترسی Prisma Engine انجام نمی‌شود. پس از اتصال سرور/دیتابیس، این مرحله باید در چک‌لیست Deploy جامع نهایی اجرا و تأیید شود.

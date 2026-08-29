@@ -1,0 +1,15 @@
+node_modules/
+.pnpm-store/
+.next/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+uploads/
+*.log
+.DS_Store
+
+*.tsbuildinfo
+
+# GitHub Actions are source-controlled; local action caches are ignored separately.

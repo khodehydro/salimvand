@@ -1,0 +1,17 @@
+# Generated and third-party assets.
+node_modules/
+.pnpm-store/
+.next/
+dist/
+coverage/
+uploads/
+*.log
+.DS_Store
+
+# The design reference is a self-contained, generated HTML mock-up. It is shipped
+# as a committed visual artifact, not as source, and Prettier's HTML parser does
+# not accept its hand-tuned markup; keep it out of formatting checks.
+docs/ui-reference.html
+
+# Lockfile and package metadata are generated / tool-managed.
+pnpm-lock.yaml

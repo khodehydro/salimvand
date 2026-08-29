@@ -1,0 +1,136 @@
+import { describe, expect, it } from 'vitest';
+import {
+  buildInvoiceMessage,
+  integrationConfigured,
+  integrationUrl,
+  maskNotificationMobile,
+  normalizeFailedLimit,
+  notificationChannels,
+  NOTIFICATION_QUEUE_NAME,
+  notificationJobOptions,
+  NotificationsService,
+} from './notifications.service';
+
+describe('notification messages', () => {
+  it('uses the short invoice URL and never the long token', () => {
+    process.env.PUBLIC_SITE_URL = 'https://selimvand.ir/';
+    const message = buildInvoiceMessage('INV-0001', 'Ab7kP2xQ9m', '1500000');
+    expect(message).toContain('https://selimvand.ir/i/Ab7kP2xQ9m');
+    expect(message).not.toContain('publicToken');
+    expect(message).not.toContain('undefined');
+  });
+  it('recognizes configured channels', () => {
+    const env = {
+      TELEGRAM_BOT_TOKEN: 'secret',
+      TELEGRAM_CHAT_ID: 'chat',
+      BALE_BOT_TOKEN: 'bale-secret',
+      BALE_CHAT_ID: 'bale-chat',
+    };
+    expect(integrationConfigured('telegram', env)).toBe(true);
+    expect(integrationConfigured('bale', env)).toBe(true);
+    expect(integrationUrl('telegram', env)).toContain('secret');
+    expect(integrationUrl('bale', env)).toContain('bale-secret');
+  });
+  it('builds a payment notification with the same short URL', () => {
+    const message = buildInvoiceMessage('INV-0002', 'Q9mAb7kP2x', '500000', true);
+    expect(message).toContain('پرداخت فاکتور INV-0002 ثبت شد');
+    expect(message).toContain('/i/Q9mAb7kP2x');
+  });
+  it('masks failed-job mobile numbers without exposing the full value', () => {
+    expect(maskNotificationMobile('09121234567')).toBe('091***67');
+    expect(maskNotificationMobile('1234')).toBe('1***');
+    expect(maskNotificationMobile(undefined)).toBeNull();
+  });
+  it('normalizes failed-job limits to a safe range', () => {
+    expect(normalizeFailedLimit(0)).toBe(1);
+    expect(normalizeFailedLimit(25.9)).toBe(25);
+    expect(normalizeFailedLimit(500)).toBe(100);
+    expect(normalizeFailedLimit(Number.NaN)).toBe(50);
+  });
+  it('keeps the queue retry contract explicit', () => {
+    expect(NOTIFICATION_QUEUE_NAME).toBe('salimvand-notifications');
+    expect(notificationJobOptions).toEqual({
+      attempts: 5,
+      backoff: { type: 'exponential', delay: 1000 },
+      removeOnComplete: 100,
+      removeOnFail: 500,
+    });
+  });
+  it('closes worker, queue, and Redis resources during shutdown', async () => {
+    const events: string[] = [];
+    const service = Object.create(NotificationsService.prototype) as NotificationsService;
+    Object.assign(service as unknown as Record<string, unknown>, {
+      worker: {
+        close: async () => {
+          events.push('worker');
+        },
+      },
+      queue: {
+        close: async () => {
+          events.push('queue');
+        },
+      },
+      connection: {
+        quit: async () => {
+          events.push('redis');
+        },
+      },
+    });
+    await service.onModuleDestroy();
+    expect(events).toEqual(['worker', 'queue', 'redis']);
+  });
+
+  it('closes queue and Redis when no worker is enabled', async () => {
+    const events: string[] = [];
+    const service = Object.create(NotificationsService.prototype) as NotificationsService;
+    Object.assign(service as unknown as Record<string, unknown>, {
+      queue: {
+        close: async () => {
+          events.push('queue');
+        },
+      },
+      connection: {
+        quit: async () => {
+          events.push('redis');
+        },
+      },
+    });
+    await service.onModuleDestroy();
+    expect(events).toEqual(['queue', 'redis']);
+  });
+
+  it('selects all configured channels for a normal invoice notification', () => {
+    const env = {
+      SMS_PROVIDER: 'generic',
+      SMS_API_URL: 'https://sms.test',
+      SMS_API_KEY: 'sms',
+      TELEGRAM_BOT_TOKEN: 'telegram',
+      TELEGRAM_CHAT_ID: 'chat',
+      BALE_BOT_TOKEN: 'bale',
+      BALE_CHAT_ID: 'bale-chat',
+    };
+    expect(
+      notificationChannels({ type: 'invoice.issued', mobile: '09120000000', message: 'test' }, env),
+    ).toEqual(['sms', 'telegram', 'bale']);
+  });
+  it('restricts test notifications to the requested provider', () => {
+    const env = {
+      SMS_PROVIDER: 'generic',
+      SMS_API_URL: 'https://sms.test',
+      SMS_API_KEY: 'sms',
+      TELEGRAM_BOT_TOKEN: 'telegram',
+      TELEGRAM_CHAT_ID: 'chat',
+      BALE_BOT_TOKEN: 'bale',
+      BALE_CHAT_ID: 'bale-chat',
+    };
+    expect(
+      notificationChannels(
+        { type: 'low-stock', testChannel: 'telegram', mobile: '09120000000', message: 'test' },
+        env,
+      ),
+    ).toEqual(['telegram']);
+    expect(
+      notificationChannels({ type: 'low-stock', testChannel: 'sms', message: 'test' }, env),
+    ).toEqual([]);
+  });
+});
