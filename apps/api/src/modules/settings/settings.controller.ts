@@ -14,5 +14,7 @@ export class SettingsController {
   constructor(private readonly settings: SettingsService) {}
   @Get() list() { return this.settings.list(); }
   @Get('backup/status') backupStatus() { return this.settings.backupStatus(); }
+  @Get('backup/jobs') backupJobs() { return this.settings.backupJobs(); }
+  @Put('backup/run') runBackup(@Req() request: AuthRequest) { return this.settings.runBackup(request.user?.id); }
   @Put() update(@Body() body: Record<string, unknown>, @Req() request: AuthRequest) { return this.settings.update(body, request.user?.id ?? '', request.ip); }
 }

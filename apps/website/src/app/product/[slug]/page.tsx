@@ -5,8 +5,23 @@ const apiUrl = process.env.API_URL ?? 'https://api.salimvand.ir/api/v1';
 const contactPhone = process.env.PUBLIC_CONTACT_PHONE ?? '';
 type Product = { name: string; slug: string; code: string; description?: string; seoTitle?: string; seoDescription?: string; availability: string; brands: Array<{ name: string; inStock: boolean }>; images?: Array<{ path: string; alt?: string }> };
 
+// The product payload comes from operator-controlled DB JSON, so its nested arrays
+// cannot be trusted. Normalize them so the render never throws a 500.
+function asArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? (value as T[]) : [];
+}
+
 async function getProduct(slug: string): Promise<Product | null> {
-  try { const response = await fetch(`${apiUrl}/public/products/${encodeURIComponent(slug)}`, { next: { revalidate: 300 } }); if (!response.ok) return null; const body = await response.json() as { data: Product }; return body.data; } catch { return null; }
+  try {
+    const response = await fetch(`${apiUrl}/public/products/${encodeURIComponent(slug)}`, { next: { revalidate: 300 } });
+    if (!response.ok) return null;
+    const body = await response.json() as { data?: Product | null };
+    const product = body.data;
+    if (!product) return null;
+    return { ...product, brands: asArray(product.brands), images: asArray(product.images) };
+  } catch {
+    return null;
+  }
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {

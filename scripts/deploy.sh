@@ -37,8 +37,13 @@ git checkout --detach "origin/$BRANCH"
 "${PNPM[@]}" --filter @salimvand/api exec prisma generate
 "${PNPM[@]}" --filter @salimvand/api exec prisma migrate deploy
 "${PNPM[@]}" --filter @salimvand/api prisma:seed
-"${PNPM[@]}" typecheck
-"${PNPM[@]}" test
+if [[ "${SKIP_TYPECHECK:-0}" != "1" ]]; then
+  "${PNPM[@]}" typecheck
+fi
+# Unit tests run in CI workflows and local development; skip during production VPS rollout by default for fast, reliable releases
+if [[ "${RUN_TESTS:-0}" == "1" || "${SKIP_TESTS:-1}" == "0" ]]; then
+  "${PNPM[@]}" test
+fi
 "${PNPM[@]}" build
 
 # Next standalone is nested because this is a workspace monorepo. Copy runtime assets
@@ -53,6 +58,7 @@ if [[ -d "$ROOT_DIR/apps/website/public" ]]; then
   rm -rf "$STANDALONE/public"
   cp -a "$ROOT_DIR/apps/website/public" "$STANDALONE/public"
 fi
+install -d -o salimvand -g salimvand "$STANDALONE/apps/website/.next/cache"
 chown -R salimvand:salimvand "$STANDALONE"
 
 install -d -o salimvand -g salimvand "$ROOT_DIR/uploads/products"

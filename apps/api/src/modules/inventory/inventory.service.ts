@@ -69,6 +69,72 @@ export class InventoryService {
     return { ok: true, data: rows };
   }
 
+  async updateItem(id: string, data: { minStock?: number; locationId?: string | null; salePrice?: number; purchasePrice?: number; isActive?: boolean; notes?: string }, userId?: string) {
+    const existing = await this.prisma.inventoryItem.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('قلم موجودی پیدا نشد');
+
+    const updated = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const item = await tx.inventoryItem.update({
+        where: { id },
+        data: {
+          minStock: data.minStock !== undefined ? data.minStock : undefined,
+          locationId: data.locationId !== undefined ? data.locationId : undefined,
+          salePrice: data.salePrice !== undefined ? BigInt(data.salePrice) : undefined,
+          purchasePrice: data.purchasePrice !== undefined ? BigInt(data.purchasePrice) : undefined,
+          isActive: data.isActive !== undefined ? data.isActive : undefined,
+          notes: data.notes !== undefined ? data.notes : undefined,
+        },
+        include: { product: true, brand: true, location: true },
+      });
+
+      if (userId) {
+        await writeAudit(tx, {
+          userId,
+          action: 'update',
+          entityType: 'inventory_item',
+          entityId: id,
+          before: { minStock: existing.minStock, locationId: existing.locationId, salePrice: String(existing.salePrice), purchasePrice: String(existing.purchasePrice) },
+          after: { minStock: item.minStock, locationId: item.locationId, salePrice: String(item.salePrice), purchasePrice: String(item.purchasePrice) },
+        });
+      }
+      return item;
+    });
+
+    return { ok: true, data: updated };
+  }
+
+  async reconciliation() {
+    const items = await this.prisma.inventoryItem.findMany({ select: { id: true, barcode: true, quantity: true } });
+    const anomalies: Array<{ itemId: string; barcode: string; recordedQuantity: number; ledgerQuantity: number; drift: number }> = [];
+
+    for (const item of items) {
+      const agg = await this.prisma.inventoryTransaction.aggregate({
+        where: { itemId: item.id },
+        _sum: { quantityChange: true },
+      });
+      const ledgerSum = agg._sum.quantityChange ?? 0;
+      if (ledgerSum !== item.quantity) {
+        anomalies.push({
+          itemId: item.id,
+          barcode: item.barcode,
+          recordedQuantity: item.quantity,
+          ledgerQuantity: ledgerSum,
+          drift: item.quantity - ledgerSum,
+        });
+      }
+    }
+
+    return {
+      ok: true,
+      data: {
+        checkedCount: items.length,
+        matchedCount: items.length - anomalies.length,
+        hasAnomalies: anomalies.length > 0,
+        anomalies,
+      },
+    };
+  }
+
   private async mutate(input: StockMutation, type: 'adjustment' | 'purchase') {
     return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const item = await tx.inventoryItem.findUnique({ where: { id: input.itemId } });

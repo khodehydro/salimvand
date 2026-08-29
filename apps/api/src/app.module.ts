@@ -14,12 +14,13 @@ import { SearchModule } from './modules/search/search.module';
 import { UsersModule } from './modules/users/users.module';
 import { CustomersModule } from './modules/customers/customers.module';
 import { SuppliersModule } from './modules/suppliers/suppliers.module';
+import { AuditModule } from './modules/audit/audit.module';
 import { SystemController } from './system.controller';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 
 @Module({
-  imports: [ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]), PrismaModule, CatalogModule, AuthModule, InventoryModule, MediaModule, DashboardModule, InvoiceModule, NotificationsModule, ReportsModule, SettingsModule, SearchModule, UsersModule, CustomersModule, SuppliersModule],
+  imports: [ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]), PrismaModule, CatalogModule, AuthModule, InventoryModule, MediaModule, DashboardModule, InvoiceModule, NotificationsModule, ReportsModule, SettingsModule, SearchModule, UsersModule, CustomersModule, SuppliersModule, AuditModule],
   controllers: [SystemController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

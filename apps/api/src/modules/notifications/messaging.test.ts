@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { NotificationsService, buildInvoiceMessage, parseTelegramCommand, renderSmsTemplate } from './notifications.service';
 
-function serviceWith(prisma: unknown) { return new NotificationsService(prisma as never); }
+function serviceWith(prisma: unknown) {
+  const service = Object.create(NotificationsService.prototype) as NotificationsService;
+  Object.assign(service as unknown as Record<string, unknown>, { prisma });
+  return service;
+}
 
 describe('SMS templates', () => {
   it('renders known placeholders and leaves unknown ones untouched', () => {
@@ -13,8 +17,9 @@ describe('SMS templates', () => {
   });
 
   it('uses the operator template when one is configured and falls back otherwise', () => {
+    const siteUrl = (process.env.PUBLIC_SITE_URL ?? 'https://selimvand.ir').replace(/\/$/, '');
     const withTemplate = buildInvoiceMessage('INV-0002', 'c0de', '5000', false, 'فاکتور {invoice_number}: {amount} ریال — {link}');
-    expect(withTemplate).toBe('فاکتور INV-0002: 5000 ریال — https://selimvand.ir/i/c0de');
+    expect(withTemplate).toBe(`فاکتور INV-0002: 5000 ریال — ${siteUrl}/i/c0de`);
     expect(buildInvoiceMessage('INV-0002', 'c0de', '5000', false)).toContain('مشاهده و دانلود');
     expect(buildInvoiceMessage('INV-0002', 'c0de', '5000', true)).toContain('پرداخت فاکتور');
   });

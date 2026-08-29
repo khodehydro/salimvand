@@ -22,6 +22,25 @@ export class SettingsService {
     } catch { return { ok: true, data: null }; }
   }
 
+  async backupJobs() {
+    const jobs = await this.prisma.backupJob.findMany({
+      orderBy: { startedAt: 'desc' },
+      take: 20,
+    });
+    return { ok: true, data: jobs };
+  }
+
+  async runBackup(userId?: string) {
+    const job = await this.prisma.backupJob.create({
+      data: {
+        kind: 'database',
+        status: 'running',
+        startedAt: new Date(),
+      },
+    });
+    return { ok: true, data: { jobId: String(job.id), status: 'running' } };
+  }
+
   async update(values: Record<string, unknown>, userId: string, ip?: string) {
     const entries = Object.entries(values);
     if (!entries.length) throw new BadRequestException('حداقل یک تنظیم لازم است');

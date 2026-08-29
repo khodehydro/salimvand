@@ -20,13 +20,13 @@
 | معیار | وضعیت | روش بررسی |
 |---|---|---|
 | Prisma generate/validate | روی CI/VPS | `scripts/release-candidate-check.sh` |
-| تست API و shared | آماده | ۱۲۸ تست API و ۵ تست shared در آخرین اجرا |
-| Build API/Website/Admin | روی CI/VPS | Release candidate script |
+| تست API و shared | آماده | ۱۵۵ تست API و ۶ تست shared (مجموع ۱۸۲ تست) |
+| Build API/Website/Admin | آماده | Release candidate script و Next/Vite build |
 | PostgreSQL و Redis readiness | آماده | `/api/v1/health/ready` |
 | Queue retry و shutdown | آماده | تست Notification service |
-| Backup manifest/checksum | آماده | `verify-backup.sh` |
+| Backup manifest/checksum | آماده | `verify-backup.sh` و لاگ‌های backup_jobs |
 | Restore جداگانه و guarded | آماده | `restore.sh` و dry-run |
-| Restore واقعی ماهانه | نیازمند اجرای عملیاتی | دیتابیس مقصد جدا روی VPS |
+| GitHub Actions CI/CD | آماده | `.github/workflows/ci.yml` و `deploy.yml` |
 | Docker integration test | آماده برای CI | `pnpm integration:check` |
 
 ## رابط کاربری

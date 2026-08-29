@@ -48,4 +48,43 @@ export class CustomersService {
   }
 
   async debtors() { const customers = await this.prisma.customer.findMany({ where: { isActive: true }, include: { invoices: { where: { status: 'issued', paymentStatus: { in: ['unpaid', 'partial'] } }, select: { total: true, paidAmount: true } } } }); return { ok: true, data: customers.map((customer) => ({ id: customer.id, name: customer.name, mobile: customer.mobile, debt: customer.invoices.reduce((sum, invoice) => sum + invoice.total - invoice.paidAmount, 0n), invoiceCount: customer.invoices.length })).filter((customer) => customer.debt > 0n).sort((a, b) => (a.debt > b.debt ? -1 : 1)) }; }
+
+  async vehicles(customerId: string) {
+    const rows = await this.prisma.customerVehicle.findMany({
+      where: { customerId },
+      include: { trim: { include: { model: { include: { make: true } } } } },
+      orderBy: { createdAt: 'desc' },
+    });
+    return { ok: true, data: rows };
+  }
+
+  async addVehicle(customerId: string, input: { trimId?: string; plate?: string; chassis?: string; year?: number; notes?: string }, actorId?: string) {
+    const customer = await this.prisma.customer.findUnique({ where: { id: customerId } });
+    if (!customer) throw new NotFoundException('مشتری پیدا نشد');
+    const vehicle = await this.prisma.customerVehicle.create({
+      data: {
+        customerId,
+        trimId: input.trimId || undefined,
+        plate: input.plate?.trim() || undefined,
+        chassis: input.chassis?.trim() || undefined,
+        year: input.year ? Number(input.year) : undefined,
+        notes: input.notes?.trim() || undefined,
+      },
+      include: { trim: { include: { model: { include: { make: true } } } } },
+    });
+    if (actorId) {
+      await writeAudit(this.prisma, { userId: actorId, action: 'create', entityType: 'customer_vehicle', entityId: vehicle.id, after: { plate: vehicle.plate, customerId } });
+    }
+    return { ok: true, data: vehicle };
+  }
+
+  async removeVehicle(customerId: string, vehicleId: string, actorId?: string) {
+    const vehicle = await this.prisma.customerVehicle.findFirst({ where: { id: vehicleId, customerId } });
+    if (!vehicle) throw new NotFoundException('خودرو پیدا نشد');
+    await this.prisma.customerVehicle.delete({ where: { id: vehicleId } });
+    if (actorId) {
+      await writeAudit(this.prisma, { userId: actorId, action: 'delete', entityType: 'customer_vehicle', entityId: vehicleId, before: { plate: vehicle.plate, customerId } });
+    }
+    return { ok: true, data: { id: vehicleId } };
+  }
 }
