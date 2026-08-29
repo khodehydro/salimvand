@@ -14,6 +14,6 @@ export class PurchaseController {
   constructor(private readonly purchases: PurchaseService) {}
   @Get() list(@Query('supplierId') supplierId?: string) { return this.purchases.list(supplierId); }
   @Get(':id') get(@Param('id') id: string) { return this.purchases.get(id); }
-  @Post() create(@Body() body: CreatePurchaseDto, @Req() request: AuthRequest) { return this.purchases.create(body.supplierId ?? '', body.lines ?? [], body.paidAmount, request.user?.id ?? '', request.ip); }
+  @Post() @Roles('manager') create(@Body() body: CreatePurchaseDto, @Req() request: AuthRequest) { return this.purchases.create(body.supplierId ?? '', body.lines ?? [], body.paidAmount, request.user?.id ?? '', request.ip); }
   @Post(':id/payments') pay(@Param('id') id: string, @Body() body: SupplierPaymentDto, @Req() request: AuthRequest) { return this.purchases.pay(id, body.amount ?? 0, body.method ?? 'transfer', body.notes, request.user?.id ?? '', request.ip); }
 }

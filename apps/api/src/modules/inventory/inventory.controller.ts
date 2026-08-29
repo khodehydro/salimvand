@@ -12,7 +12,7 @@ import { AdjustInventoryDto, CreateInventoryItemDto, ReceiveInventoryDto, Transf
 @Roles('warehouse')
 export class InventoryController {
   constructor(private readonly inventory: InventoryService) {}
-  @Get('items') list(@Query('q') q?: string, @Query('brandId') brandId?: string, @Query('locationId') locationId?: string, @Query('status') status?: 'low' | 'out') { return this.inventory.list({ q, brandId, locationId, status }); }
+  @Get('items') @Roles('warehouse', 'accountant') list(@Query('q') q?: string, @Query('brandId') brandId?: string, @Query('locationId') locationId?: string, @Query('status') status?: 'low' | 'out') { return this.inventory.list({ q, brandId, locationId, status }); }
   @Post('items') create(@Body() body: CreateInventoryItemDto, @Req() request: AuthenticatedRequest) { return this.inventory.create({ ...body, userId: request.user?.id }); }
   @Patch('items/:id') updateItem(@Param('id') id: string, @Body() body: UpdateInventoryItemDto, @Req() request: AuthenticatedRequest) { return this.inventory.updateItem(id, body, request.user?.id); }
   @Post('items/:id/adjust') adjust(@Param('id') itemId: string, @Body() body: AdjustInventoryDto, @Req() request: AuthenticatedRequest) { return this.inventory.adjust({ itemId, quantity: Number(body.quantity), userId: request.user?.id ?? '', reason: body.reason }); }

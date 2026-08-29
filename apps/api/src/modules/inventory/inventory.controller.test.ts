@@ -1,9 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 import { InventoryController } from './inventory.controller';
+import { ROLES_KEY } from '../../common/auth/roles.decorator';
 
 const request = { user: { id: 'user-1' } } as never;
 
 describe('InventoryController', () => {
+  it('allows accountants to read purchase inventory without granting write access', () => {
+    expect(Reflect.getMetadata(ROLES_KEY, InventoryController.prototype.list)).toEqual(['warehouse', 'accountant']);
+    expect(Reflect.getMetadata(ROLES_KEY, InventoryController.prototype.create)).toBeUndefined();
+  });
+
   it('passes inventory filters to the service', async () => {
     const list = vi.fn(async (filters: { q?: string; brandId?: string; locationId?: string; status?: 'low' | 'out' }) => ({ ok: true, data: [filters] }));
     const controller = new InventoryController({ list } as never);

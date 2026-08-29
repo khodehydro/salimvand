@@ -1,10 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
 import { PurchaseController } from './purchase.controller';
 import { SupplierPaymentMethod } from './purchase.dto';
+import { ROLES_KEY } from '../../common/auth/roles.decorator';
 
 const request = { user: { id: 'user-1' }, ip: '127.0.0.1' } as never;
 
 describe('PurchaseController', () => {
+  it('limits purchase creation to managers while keeping accounting actions available', () => {
+    expect(Reflect.getMetadata(ROLES_KEY, PurchaseController.prototype.create)).toEqual(['manager']);
+    expect(Reflect.getMetadata(ROLES_KEY, PurchaseController.prototype.pay)).toBeUndefined();
+  });
+
   it('routes purchase listing and detail', async () => {
     const list = vi.fn(async (supplierId?: string) => ({ ok: true, data: [{ supplierId }] }));
     const get = vi.fn(async (id: string) => ({ ok: true, data: { id, debt: 500n } }));

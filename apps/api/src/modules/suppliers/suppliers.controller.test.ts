@@ -1,7 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import { SuppliersController } from './suppliers.controller';
+import { ROLES_KEY } from '../../common/auth/roles.decorator';
 
 describe('SuppliersController', () => {
+  it('keeps supplier writes manager-only', () => {
+    expect(Reflect.getMetadata(ROLES_KEY, SuppliersController.prototype.create)).toEqual(['manager']);
+    expect(Reflect.getMetadata(ROLES_KEY, SuppliersController.prototype.update)).toEqual(['manager']);
+    expect(Reflect.getMetadata(ROLES_KEY, SuppliersController.prototype.remove)).toEqual(['manager']);
+  });
+
   it('returns supplier debtors', async () => {
     const debtors = vi.fn(async () => ({ ok: true, data: [{ id: 'supplier-1', name: 'تأمین‌کننده', debt: 4000n, invoiceCount: 2 }] }));
     const controller = new SuppliersController({ debtors } as never);
