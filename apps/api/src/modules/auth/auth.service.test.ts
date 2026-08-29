@@ -14,7 +14,11 @@ describe('AuthService', () => {
 
   it('issues and verifies access tokens', () => {
     const token = service.issueAccessToken(user);
-    expect(service.verifyAccessToken(token)).toMatchObject({ id: user.id, username: user.username, role: user.role });
+    expect(service.verifyAccessToken(token)).toMatchObject({
+      id: user.id,
+      username: user.username,
+      role: user.role,
+    });
   });
 
   it('rejects an access token as a refresh token', () => {

@@ -13,18 +13,18 @@ pnpm prisma generate
 
 ## ۲) متغیرهای Environment (`/var/www/parts-store/shared/.env`)
 
-| متغیر | کاربرد | نمونه |
-|---|---|---|
-| `SMS_PROVIDER` | نام provider (kavenegar / melipayamak / …) | `kavenegar` |
-| `SMS_API_KEY` | کلید API پیامک | `xxxx` |
-| `SMS_API_URL` | نشانی endpoint ارسال | `https://api.kavenegar.com/v1/.../send.json` |
-| `TELEGRAM_BOT_TOKEN` | توکن ربات تلگرام | `123456:ABC` |
-| `TELEGRAM_CHAT_ID` | chat/کانال مقصد اعلان‌ها | `-1001234567890` |
-| `BALE_BOT_TOKEN` / `BALE_CHAT_ID` | معادل بله | — |
-| `TELEGRAM_WEBHOOK_SECRET` | رمز مشترک webhook (خودتان تولید کنید) | `openssl rand -hex 24` |
-| `PUBLIC_SITE_URL` | دامنهٔ سایت عمومی برای لینک فاکتور | `https://selimvand.ir` |
-| `REDIS_URL` | صف BullMQ | `redis://127.0.0.1:6379` |
-| ~~`ENABLE_QUEUE_WORKER`~~ | **در `.env` نگذارید** — واحد `salimvand-worker.service` خودش `Environment=ENABLE_QUEUE_WORKER=true` دارد و اگر در `.env` باشد API و Website هم worker اضافه راه می‌اندازند | — |
+| متغیر                             | کاربرد                                                                                                                                                                     | نمونه                                        |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| `SMS_PROVIDER`                    | نام provider (kavenegar / melipayamak / …)                                                                                                                                 | `kavenegar`                                  |
+| `SMS_API_KEY`                     | کلید API پیامک                                                                                                                                                             | `xxxx`                                       |
+| `SMS_API_URL`                     | نشانی endpoint ارسال                                                                                                                                                       | `https://api.kavenegar.com/v1/.../send.json` |
+| `TELEGRAM_BOT_TOKEN`              | توکن ربات تلگرام                                                                                                                                                           | `123456:ABC`                                 |
+| `TELEGRAM_CHAT_ID`                | chat/کانال مقصد اعلان‌ها                                                                                                                                                   | `-1001234567890`                             |
+| `BALE_BOT_TOKEN` / `BALE_CHAT_ID` | معادل بله                                                                                                                                                                  | —                                            |
+| `TELEGRAM_WEBHOOK_SECRET`         | رمز مشترک webhook (خودتان تولید کنید)                                                                                                                                      | `openssl rand -hex 24`                       |
+| `PUBLIC_SITE_URL`                 | دامنهٔ سایت عمومی برای لینک فاکتور                                                                                                                                         | `https://selimvand.ir`                       |
+| `REDIS_URL`                       | صف BullMQ                                                                                                                                                                  | `redis://127.0.0.1:6379`                     |
+| ~~`ENABLE_QUEUE_WORKER`~~         | **در `.env` نگذارید** — واحد `salimvand-worker.service` خودش `Environment=ENABLE_QUEUE_WORKER=true` دارد و اگر در `.env` باشد API و Website هم worker اضافه راه می‌اندازند | —                                            |
 
 فایل باید `chmod 600` و مالک آن کاربر سرویس باشد. بدون `SMS_PROVIDER`/`SMS_API_KEY`/`SMS_API_URL`
 هیچ پیامکی ارسال نمی‌شود و کارت سلامت در پنل «پیکربندی نشده» نشان می‌دهد (رفتار عمدی).

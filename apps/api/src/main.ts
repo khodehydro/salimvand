@@ -10,14 +10,29 @@ import { corsOrigins, validateRuntimeConfig } from './common/config/runtime-conf
 async function bootstrap() {
   validateRuntimeConfig();
   const app = await NestFactory.create(AppModule);
-  app.getHttpAdapter().getInstance().set('json replacer', (_key: string, value: unknown) => typeof value === 'bigint' ? value.toString() : value);
+  app
+    .getHttpAdapter()
+    .getInstance()
+    .set('json replacer', (_key: string, value: unknown) =>
+      typeof value === 'bigint' ? value.toString() : value,
+    );
   app.setGlobalPrefix('api/v1');
   app.use(cookieParser());
   app.use(helmet());
   app.useGlobalFilters(new ApiExceptionFilter());
   app.enableCors({ origin: corsOrigins(process.env.CORS_ORIGINS), credentials: true });
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true, transformOptions: { enableImplicitConversion: true } }));
-  await app.listen(Number(process.env.API_PORT ?? 4000), process.env.API_HOST ?? (process.env.NODE_ENV === 'production' ? '127.0.0.1' : '0.0.0.0'));
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+      transformOptions: { enableImplicitConversion: true },
+    }),
+  );
+  await app.listen(
+    Number(process.env.API_PORT ?? 4000),
+    process.env.API_HOST ?? (process.env.NODE_ENV === 'production' ? '127.0.0.1' : '0.0.0.0'),
+  );
 }
 
 void bootstrap();

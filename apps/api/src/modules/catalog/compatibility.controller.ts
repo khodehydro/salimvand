@@ -9,5 +9,10 @@ import { CompatibilityService } from './compatibility.service';
 @Roles('manager')
 export class CompatibilityController {
   constructor(private readonly service: CompatibilityService) {}
-  @Put(':id/compat') replace(@Param('id') productId: string, @Body() body: { vehicles?: Array<{ modelId: string; trimId?: string | null }> }) { return this.service.replace(productId, body.vehicles ?? []); }
+  @Put(':id/compat') replace(
+    @Param('id') productId: string,
+    @Body() body: { vehicles?: Array<{ modelId: string; trimId?: string | null }> },
+  ) {
+    return this.service.replace(productId, body.vehicles ?? []);
+  }
 }

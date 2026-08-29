@@ -5,5 +5,9 @@ import { PurchaseController } from './purchase.controller';
 import { PurchaseService } from './purchase.service';
 import { SuppliersService } from './suppliers.service';
 
-@Module({ imports: [AuthModule], controllers: [SuppliersController, PurchaseController], providers: [SuppliersService, PurchaseService] })
+@Module({
+  imports: [AuthModule],
+  controllers: [SuppliersController, PurchaseController],
+  providers: [SuppliersService, PurchaseService],
+})
 export class SuppliersModule {}

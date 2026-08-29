@@ -8,4 +8,6 @@ export class SupplierDto {
   @IsOptional() @IsString() @MaxLength(30) taxId?: string;
   @IsOptional() @IsString() @MaxLength(1000) notes?: string;
 }
-export class UpdateSupplierDto extends SupplierDto { @IsOptional() @IsBoolean() isActive?: boolean; }
+export class UpdateSupplierDto extends SupplierDto {
+  @IsOptional() @IsBoolean() isActive?: boolean;
+}

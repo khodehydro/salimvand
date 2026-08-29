@@ -39,15 +39,18 @@ export function dashboardCapabilities(role: UserRole | '') {
 export function customerCapabilities(role: UserRole | '') {
   return {
     canManage: role === 'seller' || role === 'manager' || role === 'super_admin',
-    canPay: role === 'seller' || role === 'accountant' || role === 'manager' || role === 'super_admin',
+    canPay:
+      role === 'seller' || role === 'accountant' || role === 'manager' || role === 'super_admin',
   };
 }
 
 export function invoiceCapabilities(role: UserRole | '') {
   return {
     canCreate: role === 'seller' || role === 'manager' || role === 'super_admin',
-    canPay: role === 'seller' || role === 'accountant' || role === 'manager' || role === 'super_admin',
-    canResend: role === 'seller' || role === 'accountant' || role === 'manager' || role === 'super_admin',
+    canPay:
+      role === 'seller' || role === 'accountant' || role === 'manager' || role === 'super_admin',
+    canResend:
+      role === 'seller' || role === 'accountant' || role === 'manager' || role === 'super_admin',
     canVoid: role === 'manager' || role === 'super_admin',
   };
 }

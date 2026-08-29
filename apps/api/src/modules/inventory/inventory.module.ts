@@ -5,5 +5,10 @@ import { InventoryService } from './inventory.service';
 import { LocationController } from './location.controller';
 import { LocationService } from './location.service';
 
-@Module({ imports: [AuthModule], controllers: [InventoryController, LocationController], providers: [InventoryService, LocationService], exports: [InventoryService] })
+@Module({
+  imports: [AuthModule],
+  controllers: [InventoryController, LocationController],
+  providers: [InventoryService, LocationService],
+  exports: [InventoryService],
+})
 export class InventoryModule {}

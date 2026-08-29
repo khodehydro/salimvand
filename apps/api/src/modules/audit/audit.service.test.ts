@@ -8,7 +8,13 @@ describe('AuditService', () => {
       auditLog: {
         count: vi.fn(async () => 1),
         findMany: vi.fn(async () => [
-          { id: 1n, userId: 'user-1', action: 'create', entityType: 'customer', createdAt: new Date() },
+          {
+            id: 1n,
+            userId: 'user-1',
+            action: 'create',
+            entityType: 'customer',
+            createdAt: new Date(),
+          },
         ]),
       },
     };

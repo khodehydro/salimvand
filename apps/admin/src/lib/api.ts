@@ -8,7 +8,8 @@ export function resolveApiUrl(configuredUrl: string | undefined, production: boo
 }
 
 const API_URL = resolveApiUrl(import.meta.env.VITE_API_URL, import.meta.env.PROD);
-const CONNECTION_ERROR = 'ارتباط با سرور برقرار نشد. لطفاً اتصال شبکه را بررسی کنید و دوباره تلاش کنید.';
+const CONNECTION_ERROR =
+  'ارتباط با سرور برقرار نشد. لطفاً اتصال شبکه را بررسی کنید و دوباره تلاش کنید.';
 const INVALID_RESPONSE_ERROR = 'پاسخ نامعتبر از سرور دریافت شد. لطفاً دوباره تلاش کنید.';
 
 async function request(path: string, options: RequestInit): Promise<Response> {
@@ -23,7 +24,7 @@ async function request(path: string, options: RequestInit): Promise<Response> {
 
 async function responseBody<T>(response: Response): Promise<T & { error?: { message?: string } }> {
   try {
-    return await response.json() as T & { error?: { message?: string } };
+    return (await response.json()) as T & { error?: { message?: string } };
   } catch {
     throw new Error(response.status >= 500 ? CONNECTION_ERROR : INVALID_RESPONSE_ERROR);
   }
@@ -31,8 +32,12 @@ async function responseBody<T>(response: Response): Promise<T & { error?: { mess
 
 export async function downloadFile(path: string, filename: string): Promise<void> {
   const token = localStorage.getItem('salimvand.accessToken');
-  const response = await request(path, { headers: token ? { Authorization: `Bearer ${token}` } : undefined, credentials: 'include' });
-  if (!response.ok) throw new Error(response.status >= 500 ? CONNECTION_ERROR : 'دریافت فایل گزارش ناموفق بود');
+  const response = await request(path, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    credentials: 'include',
+  });
+  if (!response.ok)
+    throw new Error(response.status >= 500 ? CONNECTION_ERROR : 'دریافت فایل گزارش ناموفق بود');
   const blob = await response.blob();
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -54,7 +59,8 @@ async function refreshAccessToken(): Promise<string | null> {
 export async function api<T>(path: string, options: RequestInit = {}, retry = true): Promise<T> {
   const token = localStorage.getItem('salimvand.accessToken');
   const headers = new Headers(options.headers);
-  if (!headers.has('Content-Type') && options.body && !(options.body instanceof FormData)) headers.set('Content-Type', 'application/json');
+  if (!headers.has('Content-Type') && options.body && !(options.body instanceof FormData))
+    headers.set('Content-Type', 'application/json');
   if (token) headers.set('Authorization', `Bearer ${token}`);
   const response = await request(path, { ...options, headers, credentials: 'include' });
   if (response.status === 401 && retry && !path.startsWith('/auth/')) {
@@ -63,6 +69,9 @@ export async function api<T>(path: string, options: RequestInit = {}, retry = tr
     localStorage.removeItem('salimvand.accessToken');
   }
   const body = await responseBody<T>(response);
-  if (!response.ok) throw new Error(body.error?.message ?? (response.status >= 500 ? CONNECTION_ERROR : 'خطا در ارتباط با سرور'));
+  if (!response.ok)
+    throw new Error(
+      body.error?.message ?? (response.status >= 500 ? CONNECTION_ERROR : 'خطا در ارتباط با سرور'),
+    );
   return body;
 }

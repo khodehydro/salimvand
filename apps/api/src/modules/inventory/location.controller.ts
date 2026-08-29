@@ -9,6 +9,10 @@ import { LocationService } from './location.service';
 @Roles('manager')
 export class LocationController {
   constructor(private readonly locations: LocationService) {}
-  @Get() list() { return this.locations.list(); }
-  @Post() create(@Body() body: { name?: string; code?: string; type?: string; parentId?: string }) { return this.locations.create(body); }
+  @Get() list() {
+    return this.locations.list();
+  }
+  @Post() create(@Body() body: { name?: string; code?: string; type?: string; parentId?: string }) {
+    return this.locations.create(body);
+  }
 }

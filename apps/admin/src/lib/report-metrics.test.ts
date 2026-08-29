@@ -15,13 +15,25 @@ describe('report metrics', () => {
   });
 
   it('ignores rows without a parsable date and negative amounts', () => {
-    expect(monthlySales([ { issuedAt: 'not-a-date', total: '10' }, { issuedAt: '2026-03-21T10:00:00Z', total: -50 } ]))
-      .toEqual([ expect.objectContaining({ revenue: 0, invoiceCount: 1 }) ]);
+    expect(
+      monthlySales([
+        { issuedAt: 'not-a-date', total: '10' },
+        { issuedAt: '2026-03-21T10:00:00Z', total: -50 },
+      ]),
+    ).toEqual([expect.objectContaining({ revenue: 0, invoiceCount: 1 })]);
   });
 
   it('clamps negative margins and sorts brands by profit', () => {
-    expect(profitShare([ { brand: 'اصلی', profit: '-400' }, { brand: 'ایرانی', profit: '900' }, { brand: 'چینی', profit: '1500' } ]))
-      .toEqual([ { name: 'چینی', value: 1500 }, { name: 'ایرانی', value: 900 } ]);
+    expect(
+      profitShare([
+        { brand: 'اصلی', profit: '-400' },
+        { brand: 'ایرانی', profit: '900' },
+        { brand: 'چینی', profit: '1500' },
+      ]),
+    ).toEqual([
+      { name: 'چینی', value: 1500 },
+      { name: 'ایرانی', value: 900 },
+    ]);
     expect(profitShare([])).toEqual([]);
   });
 });

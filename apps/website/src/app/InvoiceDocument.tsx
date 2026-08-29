@@ -15,15 +15,38 @@ export type PublicInvoice = {
   paymentMethod?: string | null;
   issuedAt: string;
   linkExpiresAt?: string | null;
-  payments?: Array<{ amount: string | number; method: string; paidAt?: string | null; reference?: string | null }>;
-  items: Array<{ productName: string; brand?: string; quantity: number; discount?: string | number; unitPrice: string | number; lineTotal: string | number }>;
+  payments?: Array<{
+    amount: string | number;
+    method: string;
+    paidAt?: string | null;
+    reference?: string | null;
+  }>;
+  items: Array<{
+    productName: string;
+    brand?: string;
+    quantity: number;
+    discount?: string | number;
+    unitPrice: string | number;
+    lineTotal: string | number;
+  }>;
 };
 
-const statusLabels: Record<string, string> = { paid: 'تسویه شده', partial: 'پرداخت بخشی', unpaid: 'پرداخت نشده' };
-const methodLabels: Record<string, string> = { cash: 'نقدی', card: 'کارت‌خوان', transfer: 'واریز بانکی', credit: 'اعتباری' };
+const statusLabels: Record<string, string> = {
+  paid: 'تسویه شده',
+  partial: 'پرداخت بخشی',
+  unpaid: 'پرداخت نشده',
+};
+const methodLabels: Record<string, string> = {
+  cash: 'نقدی',
+  card: 'کارت‌خوان',
+  transfer: 'واریز بانکی',
+  credit: 'اعتباری',
+};
 const money = (value: string | number) => formatRial(Number(value));
 const shamsi = (value: string) =>
-  new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
+  new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short', timeStyle: 'short' }).format(
+    new Date(value),
+  );
 
 function PrintButton() {
   return (
@@ -108,9 +131,7 @@ export async function InvoiceDocument({
           {invoice.customerMobile && (
             <div>
               <small>شماره تماس</small>
-              <b dir="ltr">
-                {invoice.customerMobile}
-              </b>
+              <b dir="ltr">{invoice.customerMobile}</b>
             </div>
           )}
           {invoice.salesPerson && (
@@ -198,14 +219,15 @@ export async function InvoiceDocument({
 
         {remaining > 0 && (
           <p className="invoice-debt-note">
-            باقی‌ماندهٔ این فاکتور به‌عنوان بدهی در حساب شما ثبت شده و در فاکتور بعدی قابل تسویه است. برای پرداخت با فروشگاه
-            تماس بگیرید.
+            باقی‌ماندهٔ این فاکتور به‌عنوان بدهی در حساب شما ثبت شده و در فاکتور بعدی قابل تسویه
+            است. برای پرداخت با فروشگاه تماس بگیرید.
           </p>
         )}
 
         <p className="invoice-note">
-          شرایط: کالا تا ۴۸ ساعت با ارائهٔ این فاکتور قابل تعویض است (به‌جز قطعات برقی و مصرفی). این صفحه فقط اطلاعات عمومی
-          فاکتور را نشان می‌دهد و هیچ دادهٔ داخلی انبار، قیمت خرید یا قفسه در آن وجود ندارد.
+          شرایط: کالا تا ۴۸ ساعت با ارائهٔ این فاکتور قابل تعویض است (به‌جز قطعات برقی و مصرفی). این
+          صفحه فقط اطلاعات عمومی فاکتور را نشان می‌دهد و هیچ دادهٔ داخلی انبار، قیمت خرید یا قفسه در
+          آن وجود ندارد.
         </p>
 
         <div className="invoice-actions invoice-actions-inline">
@@ -217,7 +239,8 @@ export async function InvoiceDocument({
       </article>
 
       <footer className="invoice-footer">
-        برای پیگیری یا پرداخت با فروشگاه سلیم وند تماس بگیرید · قیمت نهایی هنگام صدور فاکتور قطعی است.
+        برای پیگیری یا پرداخت با فروشگاه سلیم وند تماس بگیرید · قیمت نهایی هنگام صدور فاکتور قطعی
+        است.
       </footer>
     </main>
   );

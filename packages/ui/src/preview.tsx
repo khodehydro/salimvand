@@ -26,7 +26,15 @@ import {
   Timeline,
   TrendBarChart,
 } from './components';
-import { brand, lightTokens, darkTokens, spacing, geometry, type SemanticTokens, type Theme } from './tokens';
+import {
+  brand,
+  lightTokens,
+  darkTokens,
+  spacing,
+  geometry,
+  type SemanticTokens,
+  type Theme,
+} from './tokens';
 
 /** Token sample required by the delivery spec phase 0 acceptance criteria. */
 export function TokenGallery() {
@@ -44,7 +52,9 @@ export function TokenGallery() {
           </span>
         ))}
         <span>
-          <Code value={`radius ${geometry.radiusButton}/${geometry.radiusCard}/${geometry.radiusPill}`} />
+          <Code
+            value={`radius ${geometry.radiusButton}/${geometry.radiusCard}/${geometry.radiusPill}`}
+          />
         </span>
         <span>
           <Code value={`spacing ${spacing.join('/')}`} />
@@ -54,9 +64,30 @@ export function TokenGallery() {
   );
 
   const rows = [
-    { name: 'لنت ترمز جلو پژو ۲۰۶', brand: 'ایساکو', quantity: 12, min: 5, status: 'in_stock', code: 'BRK-00452' },
-    { name: 'کمک فنر عقب پژو پارس', brand: 'مونرو', quantity: 2, min: 4, status: 'low_stock', code: 'SUS-00290' },
-    { name: 'رادیاتور آب پژو ۲۰۶', brand: 'کوشش', quantity: 0, min: 2, status: 'out_of_stock', code: 'CLG-00072' },
+    {
+      name: 'لنت ترمز جلو پژو ۲۰۶',
+      brand: 'ایساکو',
+      quantity: 12,
+      min: 5,
+      status: 'in_stock',
+      code: 'BRK-00452',
+    },
+    {
+      name: 'کمک فنر عقب پژو پارس',
+      brand: 'مونرو',
+      quantity: 2,
+      min: 4,
+      status: 'low_stock',
+      code: 'SUS-00290',
+    },
+    {
+      name: 'رادیاتور آب پژو ۲۰۶',
+      brand: 'کوشش',
+      quantity: 0,
+      min: 2,
+      status: 'out_of_stock',
+      code: 'CLG-00072',
+    },
   ];
 
   return (
@@ -84,9 +115,25 @@ export function TokenGallery() {
         <Num value={12480} />
         <Code value="9653514180" />
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 12 }}>
-        <KpiCard label="فروش امروز" value={<Num value={48620} />} delta="۱۸٪ نسبت به دیروز" tone="ok" />
-        <KpiCard label="هشدار کمبود" value={<Num value={7} />} hint="۲ قلم بیشتر از دیروز" tone="warn" />
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))',
+          gap: 12,
+        }}
+      >
+        <KpiCard
+          label="فروش امروز"
+          value={<Num value={48620} />}
+          delta="۱۸٪ نسبت به دیروز"
+          tone="ok"
+        />
+        <KpiCard
+          label="هشدار کمبود"
+          value={<Num value={7} />}
+          hint="۲ قلم بیشتر از دیروز"
+          tone="warn"
+        />
       </div>
       <Card title="جدول اقلام">
         <DataTable
@@ -95,8 +142,16 @@ export function TokenGallery() {
           columns={[
             { key: 'name', header: 'کالا' },
             { key: 'brand', header: 'برند' },
-            { key: 'quantity', header: 'موجودی', render: (row) => <StockBar value={row.quantity} min={row.min} /> },
-            { key: 'status', header: 'وضعیت', render: (row) => <AvailabilityBadge availability={row.status} /> },
+            {
+              key: 'quantity',
+              header: 'موجودی',
+              render: (row) => <StockBar value={row.quantity} min={row.min} />,
+            },
+            {
+              key: 'status',
+              header: 'وضعیت',
+              render: (row) => <AvailabilityBadge availability={row.status} />,
+            },
             { key: 'code', header: 'کد', render: (row) => <Code value={row.code} /> },
           ]}
         />
@@ -112,7 +167,12 @@ export function TokenGallery() {
               <option>فیلتراسیون</option>
             </Select>
           </Field>
-          <SearchInput value="" onValueChange={() => undefined} placeholder="جست‌وجوی قطعه یا بارکد" hotkey="Ctrl K" />
+          <SearchInput
+            value=""
+            onValueChange={() => undefined}
+            placeholder="جست‌وجوی قطعه یا بارکد"
+            hotkey="Ctrl K"
+          />
           <div style={{ display: 'flex', gap: 16 }}>
             <Checkbox label="فقط موجود" checked onChange={() => undefined} />
             <Switch label="اعلان تلگرام" checked onChange={() => undefined} />
@@ -145,13 +205,31 @@ export function TokenGallery() {
             { name: 'موتور و انتقال', value: 2260 },
           ]}
         />
-        <TrendBarChart data={[{ label: '۱', value: 12 }, { label: '۲', value: 18 }, { label: '۳', value: 9 }]} />
+        <TrendBarChart
+          data={[
+            { label: '۱', value: 12 },
+            { label: '۲', value: 18 },
+            { label: '۳', value: 9 },
+          ]}
+        />
       </Card>
       <Card title="تایم‌لاین دفتر تراکنش‌ها">
         <Timeline
           items={[
-            { id: '1', title: 'فروش ۲ عدد', subtitle: 'لنت ۲۰۶ · ایساکو', meta: '۱۴:۲۲', tone: 'danger' },
-            { id: '2', title: 'ورود کالا ۲۰ عدد', subtitle: 'فاکتور خرید ۱۴۰۵-۰۰۳۱', meta: '۱۱:۰۵', tone: 'ok' },
+            {
+              id: '1',
+              title: 'فروش ۲ عدد',
+              subtitle: 'لنت ۲۰۶ · ایساکو',
+              meta: '۱۴:۲۲',
+              tone: 'danger',
+            },
+            {
+              id: '2',
+              title: 'ورود کالا ۲۰ عدد',
+              subtitle: 'فاکتور خرید ۱۴۰۵-۰۰۳۱',
+              meta: '۱۱:۰۵',
+              tone: 'ok',
+            },
           ]}
         />
       </Card>

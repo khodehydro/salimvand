@@ -20,7 +20,24 @@ import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 
 @Module({
-  imports: [ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]), PrismaModule, CatalogModule, AuthModule, InventoryModule, MediaModule, DashboardModule, InvoiceModule, NotificationsModule, ReportsModule, SettingsModule, SearchModule, UsersModule, CustomersModule, SuppliersModule, AuditModule],
+  imports: [
+    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
+    PrismaModule,
+    CatalogModule,
+    AuthModule,
+    InventoryModule,
+    MediaModule,
+    DashboardModule,
+    InvoiceModule,
+    NotificationsModule,
+    ReportsModule,
+    SettingsModule,
+    SearchModule,
+    UsersModule,
+    CustomersModule,
+    SuppliersModule,
+    AuditModule,
+  ],
   controllers: [SystemController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

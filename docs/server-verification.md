@@ -44,13 +44,13 @@ pnpm build                              # api + website + admin
 
 انتظار واقعی از آخرین وضعیت شاخهٔ `arena/01a0438f-salimvand`:
 
-| فرمان | انتظار |
-|---|---|
-| `pnpm test` | `packages/shared` ۵ · `packages/ui` ۷ · `apps/api` ۱۳۲ تست موفق |
-| `pnpm --filter @salimvand/ui typecheck` | پاک |
-| `pnpm --filter @salimvand/admin typecheck` + `build` | پاک / `✓ built` |
-| `pnpm --filter @salimvand/website build` | `✓ Compiled successfully` + ۷ صفحهٔ استاتیک |
-| `pnpm --filter @salimvand/api typecheck` | **فقط** بعد از موفقیت `prisma:generate` پاک می‌شود |
+| فرمان                                                | انتظار                                                          |
+| ---------------------------------------------------- | --------------------------------------------------------------- |
+| `pnpm test`                                          | `packages/shared` ۵ · `packages/ui` ۷ · `apps/api` ۱۳۲ تست موفق |
+| `pnpm --filter @salimvand/ui typecheck`              | پاک                                                             |
+| `pnpm --filter @salimvand/admin typecheck` + `build` | پاک / `✓ built`                                                 |
+| `pnpm --filter @salimvand/website build`             | `✓ Compiled successfully` + ۷ صفحهٔ استاتیک                     |
+| `pnpm --filter @salimvand/api typecheck`             | **فقط** بعد از موفقیت `prisma:generate` پاک می‌شود              |
 
 ---
 

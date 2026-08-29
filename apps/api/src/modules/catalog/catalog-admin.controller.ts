@@ -12,14 +12,34 @@ type AuthenticatedRequest = Request & { user?: { id: string } };
 @Roles('manager', 'warehouse')
 export class CatalogAdminController {
   constructor(private readonly catalog: CatalogAdminService) {}
-  @Get() list() { return this.catalog.list(); }
-  @Get(':id') get(@Param('id') id: string) { return this.catalog.get(id); }
+  @Get() list() {
+    return this.catalog.list();
+  }
+  @Get(':id') get(@Param('id') id: string) {
+    return this.catalog.get(id);
+  }
   @Roles('manager')
-  @Post() create(@Body() body: Record<string, unknown>, @Req() request: AuthenticatedRequest) { return this.catalog.create(body, request.user?.id, request.ip); }
+  @Post()
+  create(@Body() body: Record<string, unknown>, @Req() request: AuthenticatedRequest) {
+    return this.catalog.create(body, request.user?.id, request.ip);
+  }
   @Roles('manager')
-  @Patch(':id') update(@Param('id') id: string, @Body() body: Record<string, unknown>, @Req() request: AuthenticatedRequest) { return this.catalog.update(id, body, request.user?.id, request.ip); }
+  @Patch(':id')
+  update(
+    @Param('id') id: string,
+    @Body() body: Record<string, unknown>,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.catalog.update(id, body, request.user?.id, request.ip);
+  }
   @Roles('manager')
-  @Delete(':id') remove(@Param('id') id: string, @Req() request: AuthenticatedRequest) { return this.catalog.softDelete(id, request.user?.id, request.ip); }
+  @Delete(':id')
+  remove(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
+    return this.catalog.softDelete(id, request.user?.id, request.ip);
+  }
   @Roles('manager')
-  @Post(':id/restore') restore(@Param('id') id: string, @Req() request: AuthenticatedRequest) { return this.catalog.restore(id, request.user?.id, request.ip); }
+  @Post(':id/restore')
+  restore(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
+    return this.catalog.restore(id, request.user?.id, request.ip);
+  }
 }

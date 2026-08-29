@@ -5,7 +5,17 @@ import { PrismaService } from '../../prisma.service';
 export class AuditService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(filters: { userId?: string; action?: string; entityType?: string; from?: string; to?: string; take?: number; skip?: number } = {}) {
+  async list(
+    filters: {
+      userId?: string;
+      action?: string;
+      entityType?: string;
+      from?: string;
+      to?: string;
+      take?: number;
+      skip?: number;
+    } = {},
+  ) {
     const where: Record<string, unknown> = {};
     if (filters.userId) where.userId = filters.userId;
     if (filters.action) where.action = filters.action;

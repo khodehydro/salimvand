@@ -9,7 +9,9 @@ import type { Theme } from '@salimvand/ui';
 function Gallery() {
   return (
     <div style={{ display: 'grid', gap: 16, padding: 24, maxWidth: 1100, margin: 'auto' }}>
-      <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+      <header
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}
+      >
         <div>
           <strong>سیستم طراحی سلیم‌وند</strong>
           <p style={{ margin: '4px 0 0', fontSize: 12 }}>توکن‌ها، اجزا و نمودارها — هر دو پوسته</p>

@@ -5,11 +5,17 @@ import { PrismaService } from './prisma.service';
 
 @Controller()
 export class SystemController {
-  constructor(private readonly prisma: PrismaService, private readonly notifications: NotificationsService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   @Get('health')
   health() {
-    return { ok: true, data: { service: 'api', name: APP_NAME, prefix: API_PREFIX, database: 'configured' } };
+    return {
+      ok: true,
+      data: { service: 'api', name: APP_NAME, prefix: API_PREFIX, database: 'configured' },
+    };
   }
 
   @Get('health/ready')

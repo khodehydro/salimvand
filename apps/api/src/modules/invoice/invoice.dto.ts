@@ -1,5 +1,17 @@
 import { Type } from 'class-transformer';
-import { IsBoolean, IsEnum, IsInt, IsMobilePhone, IsNumberString, IsOptional, IsString, Max, MaxLength, Min, ValidateNested } from 'class-validator';
+import {
+  IsBoolean,
+  IsEnum,
+  IsInt,
+  IsMobilePhone,
+  IsNumberString,
+  IsOptional,
+  IsString,
+  Max,
+  MaxLength,
+  Min,
+  ValidateNested,
+} from 'class-validator';
 
 export class InvoiceItemDto {
   @IsString() inventoryItemId!: string;
@@ -14,7 +26,12 @@ export class CreateInvoiceDto {
   @ValidateNested({ each: true }) @Type(() => InvoiceItemDto) items!: InvoiceItemDto[];
 }
 
-export enum InvoicePaymentMethod { cash = 'cash', card = 'card', transfer = 'transfer', credit = 'credit' }
+export enum InvoicePaymentMethod {
+  cash = 'cash',
+  card = 'card',
+  transfer = 'transfer',
+  credit = 'credit',
+}
 export class PayInvoiceDto {
   @IsNumberString() amount!: string;
   @IsEnum(InvoicePaymentMethod) method!: InvoicePaymentMethod;

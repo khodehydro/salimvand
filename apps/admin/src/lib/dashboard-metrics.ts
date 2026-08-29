@@ -1,8 +1,15 @@
 // Dashboard aggregates, kept pure so they can be unit tested without a DOM.
-export type StockItem = { quantity: number; minStock?: number | null; brand?: { name: string } | null };
+export type StockItem = {
+  quantity: number;
+  minStock?: number | null;
+  brand?: { name: string } | null;
+};
 
 /** Share of each brand in the total stock; the long tail is merged into «سایر». */
-export function brandComposition(items: StockItem[], top = 6): Array<{ name: string; value: number }> {
+export function brandComposition(
+  items: StockItem[],
+  top = 6,
+): Array<{ name: string; value: number }> {
   const totals = new Map<string, number>();
   for (const item of items) {
     const name = item.brand?.name?.trim() || 'بدون برند';
@@ -16,7 +23,9 @@ export function brandComposition(items: StockItem[], top = 6): Array<{ name: str
 
 /** Split of the shelf into out-of-stock, at/below threshold and healthy items. */
 export function stockHealth(items: StockItem[]) {
-  let out = 0; let low = 0; let healthy = 0;
+  let out = 0;
+  let low = 0;
+  let healthy = 0;
   for (const item of items) {
     const quantity = Math.max(0, item.quantity);
     if (quantity <= 0) out += 1;

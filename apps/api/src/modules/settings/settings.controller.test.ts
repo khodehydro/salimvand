@@ -11,7 +11,20 @@ describe('SettingsController', () => {
     const controller = new SettingsController({ list, backupStatus, update } as never);
     await expect(controller.list()).resolves.toEqual({ ok: true, data: {} });
     await expect(controller.backupStatus()).resolves.toEqual({ ok: true, data: null });
-    await expect(controller.update({ 'store.profile': { name: 'سلیم وند' } }, request)).resolves.toEqual({ ok: true, data: { body: { 'store.profile': { name: 'سلیم وند' } }, userId: 'manager-1', ip: '127.0.0.1' } });
-    expect(update).toHaveBeenCalledWith({ 'store.profile': { name: 'سلیم وند' } }, 'manager-1', '127.0.0.1');
+    await expect(
+      controller.update({ 'store.profile': { name: 'سلیم وند' } }, request),
+    ).resolves.toEqual({
+      ok: true,
+      data: {
+        body: { 'store.profile': { name: 'سلیم وند' } },
+        userId: 'manager-1',
+        ip: '127.0.0.1',
+      },
+    });
+    expect(update).toHaveBeenCalledWith(
+      { 'store.profile': { name: 'سلیم وند' } },
+      'manager-1',
+      '127.0.0.1',
+    );
   });
 });

@@ -5,5 +5,10 @@ import { TelegramWebhookController } from './telegram.controller';
 import { NotificationsService } from './notifications.service';
 
 @Global()
-@Module({ imports: [AuthModule], controllers: [NotificationsController, TelegramWebhookController], providers: [NotificationsService], exports: [NotificationsService] })
+@Module({
+  imports: [AuthModule],
+  controllers: [NotificationsController, TelegramWebhookController],
+  providers: [NotificationsService],
+  exports: [NotificationsService],
+})
 export class NotificationsModule {}

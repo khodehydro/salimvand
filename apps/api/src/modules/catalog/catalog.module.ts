@@ -9,5 +9,14 @@ import { ReferenceService } from './reference.service';
 import { CompatibilityController } from './compatibility.controller';
 import { CompatibilityService } from './compatibility.service';
 
-@Module({ imports: [AuthModule], controllers: [CatalogController, CatalogAdminController, ReferenceController, CompatibilityController], providers: [CatalogService, CatalogAdminService, ReferenceService, CompatibilityService] })
+@Module({
+  imports: [AuthModule],
+  controllers: [
+    CatalogController,
+    CatalogAdminController,
+    ReferenceController,
+    CompatibilityController,
+  ],
+  providers: [CatalogService, CatalogAdminService, ReferenceService, CompatibilityService],
+})
 export class CatalogModule {}

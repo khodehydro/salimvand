@@ -4,7 +4,10 @@ const SHORT_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23
 
 export function createPublicShortCode(length = 10): { code: string; hash: string } {
   const bytes = randomBytes(length);
-  const code = Array.from(bytes, (byte) => SHORT_CODE_ALPHABET[byte % SHORT_CODE_ALPHABET.length]).join('');
+  const code = Array.from(
+    bytes,
+    (byte) => SHORT_CODE_ALPHABET[byte % SHORT_CODE_ALPHABET.length],
+  ).join('');
   return { code, hash: hashPublicToken(code) };
 }
 

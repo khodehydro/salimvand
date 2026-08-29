@@ -8,7 +8,10 @@ import { hasRoleAccess } from './role-policy';
 export class RolesGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) {}
   canActivate(context: ExecutionContext): boolean {
-    const required = this.reflector.getAllAndOverride<UserRole[]>(ROLES_KEY, [context.getHandler(), context.getClass()]);
+    const required = this.reflector.getAllAndOverride<UserRole[]>(ROLES_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
     if (!required?.length) return true;
     const request = context.switchToHttp().getRequest<{ user?: { role?: UserRole } }>();
     const actual = request.user?.role;

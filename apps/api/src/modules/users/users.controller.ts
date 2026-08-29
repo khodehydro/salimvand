@@ -11,8 +11,25 @@ type AuthRequest = Request & { user?: { id: string } };
 @Roles('super_admin')
 export class UsersController {
   constructor(private readonly users: UsersService) {}
-  @Get() list() { return this.users.list(); }
-  @Get(':id/activity') activity(@Param('id') id: string) { return this.users.activity(id); }
-  @Post() create(@Body() body: { name?: string; username?: string; password?: string; role?: string; mobile?: string }, @Req() request: AuthRequest) { return this.users.create(body, request.user?.id ?? '', request.ip); }
-  @Patch(':id') update(@Param('id') id: string, @Body() body: { name?: string; role?: string; mobile?: string; password?: string; isActive?: boolean }, @Req() request: AuthRequest) { return this.users.update(id, body, request.user?.id ?? '', request.ip); }
+  @Get() list() {
+    return this.users.list();
+  }
+  @Get(':id/activity') activity(@Param('id') id: string) {
+    return this.users.activity(id);
+  }
+  @Post() create(
+    @Body()
+    body: { name?: string; username?: string; password?: string; role?: string; mobile?: string },
+    @Req() request: AuthRequest,
+  ) {
+    return this.users.create(body, request.user?.id ?? '', request.ip);
+  }
+  @Patch(':id') update(
+    @Param('id') id: string,
+    @Body()
+    body: { name?: string; role?: string; mobile?: string; password?: string; isActive?: boolean },
+    @Req() request: AuthRequest,
+  ) {
+    return this.users.update(id, body, request.user?.id ?? '', request.ip);
+  }
 }

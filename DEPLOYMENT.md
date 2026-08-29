@@ -106,6 +106,26 @@ pnpm ci:check
 
 `ci-check.sh` ابتدا Client و schema Prisma را با دیتابیس/نسخهٔ Prisma پروژه هماهنگ می‌کند، سپس به‌ترتیب typecheck، test، build و format را اجرا می‌کند. در صورت خطای network هنگام دانلود Prisma Engine، pipeline عمداً متوقف می‌شود و نباید Release ناقص ساخته شود.
 
+## GitHub Actions و Secrets
+
+دو workflow در `.github/workflows` تعریف شده‌اند:
+
+- **`ci.yml`** — روی هر PR و push به `main` اجرا می‌شود: install قفل‌شده، `prisma generate/validate`، migration، typecheck، تست‌ها، build هر سه اپ، `format:check` و تست‌های E2E با Playwright (پس از build سرویس‌های سایت و پنل بالا می‌آیند).
+- **`deploy.yml`** — پس از مرج به `main`، ابتدا همان Quality Gate را اجرا می‌کند و سپس با SSH به VPS متصل شده و `scripts/deploy.sh` را با Branch پین‌شده اجرا می‌کند؛ در صورت شکست به تلگرام مدیر خبر می‌دهد.
+
+برای کارکرد `deploy.yml`، در **Settings → Secrets and variables → Actions** این Secrets را اضافه کنید:
+
+| Secret               | توضیح                                                         |
+| -------------------- | ------------------------------------------------------------- |
+| `DEPLOY_HOST`        | IP یا دامنهٔ VPS                                              |
+| `DEPLOY_USER`        | کاربر SSH (می‌تواند `root` یا کاربر sudo)                     |
+| `DEPLOY_SSH_KEY`     | کلید خصوصی کاربر Deploy (هیچ‌وقت در ریپازیتوری ذخیره نمی‌شود) |
+| `APP_DIR`            | مسیر نصب، مثلاً `/opt/salimvand`                              |
+| `TELEGRAM_BOT_TOKEN` | (اختیاری) برای اطلاع‌رسانی شکست Deploy                        |
+| `TELEGRAM_CHAT_ID`   | (اختیاری) آیدی چت مدیر                                        |
+
+کلید خصوصی Deploy باید به‌صورت Secret و نه در فایل‌های ریپازیتوری نگهداری شود؛ ایجنت‌ها هرگز مستقیم روی سرور کار نمی‌کنند و تنها مسیر تغییر Production همین Pipeline است.
+
 ## تست Integration با PostgreSQL و Redis
 
 برای اجرای migration، seed و readiness واقعی API روی سرویس‌های محلی:

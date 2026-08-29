@@ -130,7 +130,14 @@ export const typography = {
 };
 
 /** Ordered brand ramp used by recharts (donut / bar) so charts stay on-palette. */
-export const chartColors = [brand[600], brand[400], brand[800], brand[300], brand[900], brand[200]] as const;
+export const chartColors = [
+  brand[600],
+  brand[400],
+  brand[800],
+  brand[300],
+  brand[900],
+  brand[200],
+] as const;
 
 export type Tone = 'neutral' | 'ok' | 'warn' | 'danger' | 'info';
 
@@ -168,17 +175,19 @@ const cssVarNames: Record<keyof SemanticTokens, string> = {
 export const tokenCssVarNames = cssVarNames;
 
 export function toCssVariables(tokens: SemanticTokens): Record<string, string> {
-  const brandVars = Object.entries(brand).reduce<Record<string, string>>((accumulator, [step, value]) => {
-    accumulator[`--sv-brand-${step}`] = value;
-    return accumulator;
-  }, {});
-  const semanticVars = (Object.keys(cssVarNames) as Array<keyof SemanticTokens>).reduce<Record<string, string>>(
-    (accumulator, key) => {
-      accumulator[cssVarNames[key]] = tokens[key];
+  const brandVars = Object.entries(brand).reduce<Record<string, string>>(
+    (accumulator, [step, value]) => {
+      accumulator[`--sv-brand-${step}`] = value;
       return accumulator;
     },
     {},
   );
+  const semanticVars = (Object.keys(cssVarNames) as Array<keyof SemanticTokens>).reduce<
+    Record<string, string>
+  >((accumulator, key) => {
+    accumulator[cssVarNames[key]] = tokens[key];
+    return accumulator;
+  }, {});
   return {
     ...brandVars,
     ...semanticVars,
@@ -236,4 +245,12 @@ export const availabilityLabels: Record<string, string> = {
 };
 
 /** Backwards-compatible alias kept for earlier imports of `designTokens`. */
-export const designTokens = { brand, light: lightTokens, dark: darkTokens, geometry, spacing, shadows, typography } as const;
+export const designTokens = {
+  brand,
+  light: lightTokens,
+  dark: darkTokens,
+  geometry,
+  spacing,
+  shadows,
+  typography,
+} as const;

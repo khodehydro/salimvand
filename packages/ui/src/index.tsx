@@ -12,7 +12,9 @@ const STYLE_ELEMENT_ID = 'salimvand-design-system';
  * Injects the design-system stylesheet once per document. Vite apps call this
  * from their entry file; Next.js apps get the same CSS through `ThemeProvider`.
  */
-export function installDesignSystemCss(doc: Document = typeof document === 'undefined' ? (undefined as never) : document) {
+export function installDesignSystemCss(
+  doc: Document = typeof document === 'undefined' ? (undefined as never) : document,
+) {
   if (!doc || typeof doc.getElementById !== 'function') return null;
   if (doc.getElementById(STYLE_ELEMENT_ID)) return doc.getElementById(STYLE_ELEMENT_ID);
   const element = doc.createElement('style');

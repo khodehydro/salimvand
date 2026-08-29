@@ -3,7 +3,9 @@ import { HttpException } from '@nestjs/common';
 import { LoginRateLimitGuard } from './login-rate-limit.guard';
 
 function context(ip = '192.0.2.1') {
-  return { switchToHttp: () => ({ getRequest: () => ({ ip, socket: { remoteAddress: ip } }) }) } as never;
+  return {
+    switchToHttp: () => ({ getRequest: () => ({ ip, socket: { remoteAddress: ip } }) }),
+  } as never;
 }
 
 describe('LoginRateLimitGuard', () => {
@@ -14,7 +16,13 @@ describe('LoginRateLimitGuard', () => {
   it('rejects the sixth attempt with status 429', () => {
     const guard = new LoginRateLimitGuard();
     for (let i = 0; i < 5; i += 1) guard.canActivate(context());
-    try { guard.canActivate(context()); expect.fail('expected rate limit'); } catch (error) { expect(error).toBeInstanceOf(HttpException); expect((error as HttpException).getStatus()).toBe(429); }
+    try {
+      guard.canActivate(context());
+      expect.fail('expected rate limit');
+    } catch (error) {
+      expect(error).toBeInstanceOf(HttpException);
+      expect((error as HttpException).getStatus()).toBe(429);
+    }
   });
   it('tracks different addresses independently', () => {
     const guard = new LoginRateLimitGuard();

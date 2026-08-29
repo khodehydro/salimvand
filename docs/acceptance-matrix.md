@@ -4,43 +4,43 @@
 
 ## وضعیت کد و داده
 
-| معیار | وضعیت | روش بررسی |
-|---|---|---|
-| TypeScript strict | آماده | `pnpm typecheck` |
-| پول به‌صورت Integer ریال | آماده | rules و DTOهای Invoice/Purchase/Payment |
-| زمان UTC | آماده | Prisma schema و runtime config |
-| فروش اتمیک و Ledger | آماده | تست InvoiceService و PostgreSQL integration |
-| پرداخت و مرجوعی | آماده | تست‌های Invoice و Customer |
-| Soft Delete | آماده | Customer/Supplier service |
-| Audit عملیات حساس | آماده | سرویس‌های فروش، خرید، تنظیمات و موجودی |
-| public serializer بدون قیمت و قفسه | آماده | تست public invoice و public catalog |
+| معیار                              | وضعیت | روش بررسی                                   |
+| ---------------------------------- | ----- | ------------------------------------------- |
+| TypeScript strict                  | آماده | `pnpm typecheck`                            |
+| پول به‌صورت Integer ریال           | آماده | rules و DTOهای Invoice/Purchase/Payment     |
+| زمان UTC                           | آماده | Prisma schema و runtime config              |
+| فروش اتمیک و Ledger                | آماده | تست InvoiceService و PostgreSQL integration |
+| پرداخت و مرجوعی                    | آماده | تست‌های Invoice و Customer                  |
+| Soft Delete                        | آماده | Customer/Supplier service                   |
+| Audit عملیات حساس                  | آماده | سرویس‌های فروش، خرید، تنظیمات و موجودی      |
+| public serializer بدون قیمت و قفسه | آماده | تست public invoice و public catalog         |
 
 ## عملیات و استقرار
 
-| معیار | وضعیت | روش بررسی |
-|---|---|---|
-| Prisma generate/validate | روی CI/VPS | `scripts/release-candidate-check.sh` |
-| تست API و shared | آماده | ۱۵۵ تست API و ۶ تست shared (مجموع ۱۸۲ تست) |
-| Build API/Website/Admin | آماده | Release candidate script و Next/Vite build |
-| PostgreSQL و Redis readiness | آماده | `/api/v1/health/ready` |
-| Queue retry و shutdown | آماده | تست Notification service |
-| Backup manifest/checksum | آماده | `verify-backup.sh` و لاگ‌های backup_jobs |
-| Restore جداگانه و guarded | آماده | `restore.sh` و dry-run |
-| GitHub Actions CI/CD | آماده | `.github/workflows/ci.yml` و `deploy.yml` |
-| Docker integration test | آماده برای CI | `pnpm integration:check` |
+| معیار                        | وضعیت         | روش بررسی                                                |
+| ---------------------------- | ------------- | -------------------------------------------------------- |
+| Prisma generate/validate     | روی CI/VPS    | `scripts/release-candidate-check.sh`                     |
+| تست API و shared             | آماده         | ۱۷۰ تست API + ۶ shared + ۷ ui + ۲۷ admin (مجموع ۲۱۰ تست) |
+| Build API/Website/Admin      | آماده         | Release candidate script و Next/Vite build               |
+| PostgreSQL و Redis readiness | آماده         | `/api/v1/health/ready`                                   |
+| Queue retry و shutdown       | آماده         | تست Notification service                                 |
+| Backup manifest/checksum     | آماده         | `verify-backup.sh` و لاگ‌های backup_jobs                 |
+| Restore جداگانه و guarded    | آماده         | `restore.sh` و dry-run                                   |
+| GitHub Actions CI/CD         | آماده         | `.github/workflows/ci.yml` و `deploy.yml`                |
+| Docker integration test      | آماده برای CI | `pnpm integration:check`                                 |
 
 ## رابط کاربری
 
-| معیار | وضعیت | توضیح |
-|---|---|---|
-| RTL و responsive shell | پیاده‌سازی شده | نیازمند بازبینی مرورگری نهایی |
-| Light/Dark | پیاده‌سازی شده | نیازمند بررسی همهٔ صفحات |
-| سایت کاتالوگی بدون قیمت عمومی | آماده | CTA استعلام و عدم وجود cart/payment |
-| صفحات SEO محصول/دسته/خودرو/موقعیت | آماده | metadata، canonical و JSON-LD |
-| CMS و command palette | پیاده‌سازی شده | نیازمند تست تعاملی مرورگر |
-| انبار، فروش، خرید و تنظیمات | پیاده‌سازی شده | نیازمند acceptance دستی در پنل |
-| تست UI/E2E واقعی | باقی‌مانده | اجرای Browser/Playwright در CI |
-| بازبینی رنگ‌های خام و Format کل repository | باقی‌مانده | cleanup جداگانه بدون تغییر منطق |
+| معیار                                      | وضعیت          | توضیح                                                                          |
+| ------------------------------------------ | -------------- | ------------------------------------------------------------------------------ |
+| RTL و responsive shell                     | پیاده‌سازی شده | نیازمند بازبینی مرورگری نهایی                                                  |
+| Light/Dark                                 | پیاده‌سازی شده | نیازمند بررسی همهٔ صفحات                                                       |
+| سایت کاتالوگی بدون قیمت عمومی              | آماده          | CTA استعلام و عدم وجود cart/payment                                            |
+| صفحات SEO محصول/دسته/خودرو/موقعیت          | آماده          | metadata، canonical و JSON-LD                                                  |
+| CMS و command palette                      | پیاده‌سازی شده | نیازمند تست تعاملی مرورگر                                                      |
+| انبار، فروش، خرید و تنظیمات                | پیاده‌سازی شده | نیازمند acceptance دستی در پنل                                                 |
+| تست UI/E2E واقعی                           | آماده در CI    | `pnpm test:e2e` با Playwright پس از build، چون سرویس‌های سایت/پنل بالا می‌آیند |
+| بازبینی رنگ‌های خام و Format کل repository | انجام شده      | `pnpm format:check` سبز + `.prettierignore` برای مرجع بصری و lockfile          |
 
 ## اجرای نهایی
 

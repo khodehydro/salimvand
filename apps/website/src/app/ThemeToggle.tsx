@@ -31,7 +31,12 @@ export function ThemeToggle() {
   };
 
   return (
-    <button type="button" className="theme-toggle" onClick={toggle} aria-label={theme === 'dark' ? 'پوستهٔ روشن' : 'پوستهٔ تاریک'}>
+    <button
+      type="button"
+      className="theme-toggle"
+      onClick={toggle}
+      aria-label={theme === 'dark' ? 'پوستهٔ روشن' : 'پوستهٔ تاریک'}
+    >
       {theme === 'dark' ? '☀' : '☾'}
     </button>
   );

@@ -9,5 +9,7 @@ import { SearchService } from './search.service';
 @Roles('seller')
 export class SearchController {
   constructor(private readonly search: SearchService) {}
-  @Get() all(@Query('q') query = '') { return this.search.all(query); }
+  @Get() all(@Query('q') query = '') {
+    return this.search.all(query);
+  }
 }

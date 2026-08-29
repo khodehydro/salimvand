@@ -36,7 +36,8 @@ import {
 } from './tokens';
 
 type ClassName = string | undefined;
-const cx = (...parts: Array<ClassName | false | null | undefined>) => parts.filter(Boolean).join(' ');
+const cx = (...parts: Array<ClassName | false | null | undefined>) =>
+  parts.filter(Boolean).join(' ');
 
 /* ------------------------------------------------------------------ theme */
 
@@ -96,13 +97,23 @@ export function Button({
   disabled,
   ...props
 }: PropsWithChildren<
-  ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant; size?: ButtonSize; loading?: boolean }
+  ButtonHTMLAttributes<HTMLButtonElement> & {
+    variant?: ButtonVariant;
+    size?: ButtonSize;
+    loading?: boolean;
+  }
 >) {
   return (
     <button
       {...props}
       disabled={disabled || loading}
-      className={cx('sv-btn', `sv-btn--${variant}`, `sv-btn--${size}`, loading && 'is-loading', className)}
+      className={cx(
+        'sv-btn',
+        `sv-btn--${variant}`,
+        `sv-btn--${size}`,
+        loading && 'is-loading',
+        className,
+      )}
     >
       {loading && <span className="sv-spinner" aria-hidden />}
       {children}
@@ -121,7 +132,13 @@ export function Badge({
   return <span className={cx('sv-badge', `sv-badge--${tone}`, className)}>{children}</span>;
 }
 
-export function AvailabilityBadge({ availability, className }: { availability: string; className?: string }) {
+export function AvailabilityBadge({
+  availability,
+  className,
+}: {
+  availability: string;
+  className?: string;
+}) {
   return (
     <Badge tone={availabilityTone(availability)} className={className}>
       {availabilityLabels[availability] ?? availability}
@@ -144,7 +161,12 @@ export function Card({
   actions,
   className,
   children,
-}: PropsWithChildren<{ title?: ReactNode; subtitle?: ReactNode; actions?: ReactNode; className?: string }>) {
+}: PropsWithChildren<{
+  title?: ReactNode;
+  subtitle?: ReactNode;
+  actions?: ReactNode;
+  className?: string;
+}>) {
   return (
     <section className={cx('sv-card', className)}>
       {(title || actions) && (
@@ -178,7 +200,11 @@ export function KpiCard({
 }) {
   const Wrapper = onClick ? 'button' : 'div';
   return (
-    <Wrapper type={onClick ? 'button' : undefined} onClick={onClick} className={cx('sv-kpi', `sv-kpi--${tone}`)}>
+    <Wrapper
+      type={onClick ? 'button' : undefined}
+      onClick={onClick}
+      className={cx('sv-kpi', `sv-kpi--${tone}`)}
+    >
       <small>{label}</small>
       <strong>{value}</strong>
       {delta && <em>{delta}</em>}
@@ -194,7 +220,13 @@ export function Field({
   required,
   className,
   children,
-}: PropsWithChildren<{ label: string; hint?: string; error?: string; required?: boolean; className?: string }>) {
+}: PropsWithChildren<{
+  label: string;
+  hint?: string;
+  error?: string;
+  required?: boolean;
+  className?: string;
+}>) {
   return (
     <label className={cx('sv-field', error && 'has-error', className)}>
       <span>
@@ -202,7 +234,11 @@ export function Field({
         {required && <b aria-hidden> *</b>}
       </span>
       {children}
-      {error ? <small className="sv-field__error">{error}</small> : hint ? <small>{hint}</small> : null}
+      {error ? (
+        <small className="sv-field__error">{error}</small>
+      ) : hint ? (
+        <small>{hint}</small>
+      ) : null}
     </label>
   );
 }
@@ -215,7 +251,11 @@ export function Textarea({ className, ...props }: TextareaHTMLAttributes<HTMLTex
   return <textarea {...props} className={cx('sv-textarea', className)} />;
 }
 
-export function Select({ className, children, ...props }: PropsWithChildren<SelectHTMLAttributes<HTMLSelectElement>>) {
+export function Select({
+  className,
+  children,
+  ...props
+}: PropsWithChildren<SelectHTMLAttributes<HTMLSelectElement>>) {
   return (
     <select {...props} className={cx('sv-select', className)}>
       {children}
@@ -267,7 +307,11 @@ export function Checkbox({
 }) {
   return (
     <label className={cx('sv-chk', className)}>
-      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+      />
       <span>{label}</span>
     </label>
   );
@@ -284,7 +328,11 @@ export function Switch({
 }) {
   return (
     <label className={cx('sv-sw', checked && 'is-on')}>
-      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+      />
       <i aria-hidden />
       <span>{label}</span>
     </label>
@@ -399,7 +447,10 @@ export function DataTable<Row>({
         <thead>
           <tr>
             {columns.map((column) => (
-              <th key={column.key} style={{ textAlign: column.align ?? 'start', width: column.width }}>
+              <th
+                key={column.key}
+                style={{ textAlign: column.align ?? 'start', width: column.width }}
+              >
                 {column.header}
               </th>
             ))}
@@ -414,19 +465,31 @@ export function DataTable<Row>({
             >
               {columns.map((column) => (
                 <td key={column.key} style={{ textAlign: column.align ?? 'start' }}>
-                  {column.render ? column.render(row, index) : String((row as Record<string, unknown>)[column.key] ?? '—')}
+                  {column.render
+                    ? column.render(row, index)
+                    : String((row as Record<string, unknown>)[column.key] ?? '—')}
                 </td>
               ))}
             </tr>
           ))}
         </tbody>
       </table>
-      {!rows.length && <div className="sv-table__empty">{empty ?? <EmptyState title="رکوردی وجود ندارد" />}</div>}
+      {!rows.length && (
+        <div className="sv-table__empty">{empty ?? <EmptyState title="رکوردی وجود ندارد" />}</div>
+      )}
     </div>
   );
 }
 
-export function StockBar({ value, min = 0, className }: { value: number; min?: number; className?: string }) {
+export function StockBar({
+  value,
+  min = 0,
+  className,
+}: {
+  value: number;
+  min?: number;
+  className?: string;
+}) {
   const ratio = min > 0 ? Math.min(1, value / (min * 3 || 1)) : value > 0 ? 1 : 0;
   const tone: Tone = value <= 0 ? 'danger' : min > 0 && value <= min ? 'warn' : 'ok';
   return (
@@ -440,7 +503,13 @@ export function StockBar({ value, min = 0, className }: { value: number; min?: n
 export function Timeline({
   items,
 }: {
-  items: Array<{ id: string; title: ReactNode; subtitle?: ReactNode; meta?: ReactNode; tone?: Tone }>;
+  items: Array<{
+    id: string;
+    title: ReactNode;
+    subtitle?: ReactNode;
+    meta?: ReactNode;
+    tone?: Tone;
+  }>;
 }) {
   return (
     <ol className="sv-tl">
@@ -498,7 +567,12 @@ export function Sheet({
   onClose,
   footer,
   children,
-}: PropsWithChildren<{ open: boolean; title: ReactNode; onClose: () => void; footer?: ReactNode }>) {
+}: PropsWithChildren<{
+  open: boolean;
+  title: ReactNode;
+  onClose: () => void;
+  footer?: ReactNode;
+}>) {
   useEffect(() => {
     if (!open) return;
     const handler = (event: KeyboardEvent) => {
@@ -509,11 +583,25 @@ export function Sheet({
   }, [open, onClose]);
   if (!open) return null;
   return (
-    <div className="sv-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <aside className="sv-sheet" role="dialog" aria-modal="true" aria-label={typeof title === 'string' ? title : 'پنل کناری'}>
+    <div
+      className="sv-backdrop"
+      role="presentation"
+      onMouseDown={(event) => event.target === event.currentTarget && onClose()}
+    >
+      <aside
+        className="sv-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-label={typeof title === 'string' ? title : 'پنل کناری'}
+      >
         <header>
           <h3>{title}</h3>
-          <button type="button" className="sv-btn sv-btn--ghost sv-btn--icon" onClick={onClose} aria-label="بستن">
+          <button
+            type="button"
+            className="sv-btn sv-btn--ghost sv-btn--icon"
+            onClick={onClose}
+            aria-label="بستن"
+          >
             ✕
           </button>
         </header>
@@ -531,7 +619,13 @@ export function Modal({
   footer,
   size = 'md',
   children,
-}: PropsWithChildren<{ open: boolean; title: ReactNode; onClose: () => void; footer?: ReactNode; size?: 'sm' | 'md' | 'lg' }>) {
+}: PropsWithChildren<{
+  open: boolean;
+  title: ReactNode;
+  onClose: () => void;
+  footer?: ReactNode;
+  size?: 'sm' | 'md' | 'lg';
+}>) {
   useEffect(() => {
     if (!open) return;
     const handler = (event: KeyboardEvent) => {
@@ -542,11 +636,20 @@ export function Modal({
   }, [open, onClose]);
   if (!open) return null;
   return (
-    <div className="sv-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+    <div
+      className="sv-backdrop"
+      role="presentation"
+      onMouseDown={(event) => event.target === event.currentTarget && onClose()}
+    >
       <div className={cx('sv-modal', `is-${size}`)} role="dialog" aria-modal="true">
         <header>
           <h3>{title}</h3>
-          <button type="button" className="sv-btn sv-btn--ghost sv-btn--icon" onClick={onClose} aria-label="بستن">
+          <button
+            type="button"
+            className="sv-btn sv-btn--ghost sv-btn--icon"
+            onClick={onClose}
+            aria-label="بستن"
+          >
             ✕
           </button>
         </header>
@@ -557,7 +660,11 @@ export function Modal({
   );
 }
 
-export type PaletteGroup = { id: string; label: string; items: Array<{ label: string; detail?: string; onSelect: () => void }> };
+export type PaletteGroup = {
+  id: string;
+  label: string;
+  items: Array<{ label: string; detail?: string; onSelect: () => void }>;
+};
 
 export function CommandPalette({
   open,
@@ -589,7 +696,10 @@ export function CommandPalette({
       .map((group) => ({
         ...group,
         items: group.items.filter(
-          (item) => !query.trim() || item.label.includes(query.trim()) || (item.detail ?? '').includes(query.trim()),
+          (item) =>
+            !query.trim() ||
+            item.label.includes(query.trim()) ||
+            (item.detail ?? '').includes(query.trim()),
         ),
       }))
       .filter((group) => group.items.length > 0);
@@ -603,7 +713,11 @@ export function CommandPalette({
   );
   if (!open) return null;
   return (
-    <div className="sv-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+    <div
+      className="sv-backdrop"
+      role="presentation"
+      onMouseDown={(event) => event.target === event.currentTarget && onClose()}
+    >
       <div className="sv-palette" role="dialog" aria-modal="true" aria-label="جست‌وجوی سراسری">
         <input
           autoFocus
@@ -634,7 +748,9 @@ export function CommandPalette({
               ))}
             </section>
           ))}
-          {!filtered.length && <EmptyState title="نتیجه‌ای پیدا نشد" description="عبارت دیگری را امتحان کنید." />}
+          {!filtered.length && (
+            <EmptyState title="نتیجه‌ای پیدا نشد" description="عبارت دیگری را امتحان کنید." />
+          )}
         </div>
         <footer>↑↓ جابه‌جایی · Enter انتخاب · ۱..۵ پرش به گروه · Esc بستن</footer>
       </div>
@@ -703,9 +819,20 @@ export function DonutChart({
     <div className="sv-donut">
       <ResponsiveContainer width="100%" height={height}>
         <PieChart>
-          <Pie data={data} dataKey="value" nameKey="name" innerRadius="58%" outerRadius="86%" paddingAngle={2}>
+          <Pie
+            data={data}
+            dataKey="value"
+            nameKey="name"
+            innerRadius="58%"
+            outerRadius="86%"
+            paddingAngle={2}
+          >
             {data.map((entry, index) => (
-              <Cell key={entry.name} fill={chartColors[index % chartColors.length]} stroke="transparent" />
+              <Cell
+                key={entry.name}
+                fill={chartColors[index % chartColors.length]}
+                stroke="transparent"
+              />
             ))}
           </Pie>
           <Tooltip />
@@ -717,7 +844,9 @@ export function DonutChart({
             <i style={{ background: chartColors[index % chartColors.length] }} />
             <span>{entry.name}</span>
             <b>{formatPersianNumber(entry.value)}</b>
-            {total > 0 && <small>{formatPersianNumber(Math.round((entry.value / total) * 100))}٪</small>}
+            {total > 0 && (
+              <small>{formatPersianNumber(Math.round((entry.value / total) * 100))}٪</small>
+            )}
           </li>
         ))}
       </ul>
