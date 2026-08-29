@@ -26,6 +26,29 @@ export class InvoiceController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('seller', 'accountant')
+  @Get(':id/pdf')
+  async pdf(@Param('id') id: string, @Res() response: Response) {
+    const file = await this.invoices.pdfById(id);
+    response.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="invoice-${id}.pdf"`,
+      'Content-Length': file.length,
+    });
+    return response.end(file);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('seller', 'accountant')
+  @Post(':id/link')
+  link(
+    @Param('id') id: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.invoices.rotateLink(id, request.user?.id ?? '', request.ip);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('seller')
   @Get('customers')
   customers(@Query('search') search?: string) {

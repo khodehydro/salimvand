@@ -454,3 +454,107 @@ describe('InvoiceService.getPublic document payload', () => {
     ).not.toContain('deadbeef');
   });
 });
+
+describe('InvoiceService.list and panel link/pdf actions', () => {
+  it('lists invoices without leaking token hashes', async () => {
+    const rows = [
+      {
+        id: 'inv-1',
+        number: 'INV-000001',
+        status: 'issued',
+        customerName: 'علی',
+        customerMobile: '09123456789',
+        subtotal: 100n,
+        discount: 0n,
+        total: 100n,
+        paidAmount: 50n,
+        paymentStatus: 'partial',
+        paymentMethod: null,
+        paidAt: null,
+        issuedAt: new Date(),
+        voidedAt: null,
+        publicTokenExpiresAt: null,
+        items: [
+          {
+            productName: 'لنت ترمز',
+            quantity: 1,
+            unitPrice: 100n,
+            lineTotal: 100n,
+            inventoryItem: { brand: { name: 'ایساکو' } },
+          },
+        ],
+      },
+    ];
+    const prisma = {
+      invoice: {
+        findMany: vi.fn(async () => rows),
+        findUnique: vi.fn(),
+      },
+    };
+    const result = await new InvoiceService(prisma as never).list();
+    const serialized = JSON.stringify(result, (_key, value) =>
+      typeof value === 'bigint' ? String(value) : value,
+    );
+    expect(serialized).not.toContain('publicTokenHash');
+    expect(serialized).not.toContain('publicShortCodeHash');
+    expect(result.data[0].items[0].inventoryItem.brand.name).toBe('ایساکو');
+  });
+
+  it('rotates the public link for panel viewing with an audit trail', async () => {
+    const update = vi.fn(async (_args?: unknown) => undefined);
+    const auditCreate = vi.fn(async (_args?: unknown) => undefined);
+    const prisma = {
+      invoice: {
+        findUnique: async () => ({ id: 'inv-2', status: 'issued' }),
+        update,
+      },
+      $transaction: async (run: (tx: unknown) => Promise<unknown>) =>
+        run({ invoice: { update }, auditLog: { create: auditCreate } }),
+    };
+    const result = await new InvoiceService(prisma as never).rotateLink('inv-2', 'user-1');
+    const call = update.mock.calls[0][0] as {
+      data: { publicTokenHash: string; publicShortCodeHash: string; publicTokenExpiresAt: Date };
+    };
+    expect(matchesPublicToken(result.data.publicToken, call.data.publicTokenHash)).toBe(true);
+    expect(matchesPublicToken(result.data.publicShortCode, call.data.publicShortCodeHash)).toBe(
+      true,
+    );
+    expect(auditCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses to issue a public link for a voided invoice', async () => {
+    const prisma = {
+      invoice: { findUnique: async () => ({ id: 'inv-3', status: 'voided' }) },
+    };
+    await expect(new InvoiceService(prisma as never).rotateLink('inv-3', 'user-1')).rejects.toThrow(
+      'باطل‌شده',
+    );
+  });
+
+  it('renders the panel PDF from the database row with brand names', async () => {
+    const invoice = {
+      number: 'INV-000012',
+      customerName: 'رضا',
+      customerMobile: '09121112233',
+      subtotal: 500_000n,
+      discount: 50_000n,
+      total: 450_000n,
+      paymentStatus: 'paid',
+      paidAmount: 450_000n,
+      issuedAt: new Date('2026-08-01T10:00:00Z'),
+      items: [
+        {
+          productName: 'فیلتر روغن',
+          quantity: 2,
+          unitPrice: 250_000n,
+          lineTotal: 500_000n,
+          inventoryItem: { brand: { name: 'سرام' } },
+        },
+      ],
+    };
+    const prisma = { invoice: { findUnique: async () => invoice } };
+    const file = await new InvoiceService(prisma as never).pdfById('inv-12');
+    expect(file.length).toBeGreaterThan(500);
+    expect(file.subarray(0, 5).toString()).toBe('%PDF-');
+  });
+});

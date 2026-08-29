@@ -312,6 +312,31 @@ export class InvoiceService {
       `${(process.env.PUBLIC_SITE_URL ?? 'https://selimvand.ir').replace(/\/$/, '')}/i/${encodeURIComponent(token)}`,
       { errorCorrectionLevel: 'M', width: 240, margin: 1 },
     );
+    return this.renderPdf(invoice, qr);
+  }
+
+  /** Shared PDF renderer: navy header, items with brand, totals and optional QR. */
+  private async renderPdf(
+    invoice: {
+      number: string;
+      customerName?: string | null;
+      customerMobile?: string | null;
+      subtotal: bigint | number;
+      discount: bigint | number;
+      total: bigint | number;
+      paymentStatus: string;
+      paidAmount: bigint | number;
+      issuedAt: string | Date;
+      items: Array<{
+        productName: string;
+        brand?: string | null;
+        quantity: number;
+        unitPrice: bigint | number;
+        lineTotal: bigint | number;
+      }>;
+    },
+    qrDataUrl?: string,
+  ): Promise<Buffer> {
     const doc = new PDFDocument({
       size: 'A4',
       margin: 42,
@@ -346,7 +371,7 @@ export class InvoiceService {
     doc.moveDown(0.3).fillColor('#0b1c2f').fontSize(9);
     for (const [index, item] of invoice.items.entries())
       doc.text(
-        `${index + 1}. ${text(item.productName)} | برند: ${text(item.brand)} | تعداد: ${text(item.quantity)} | فی: ${text(item.unitPrice)} ریال | جمع: ${text(item.lineTotal)} ریال`,
+        `${index + 1}. ${text(item.productName)}${item.brand ? ` | برند: ${text(item.brand)}` : ''} | تعداد: ${text(item.quantity)} | فی: ${text(item.unitPrice)} ریال | جمع: ${text(item.lineTotal)} ریال`,
         { align: 'right' },
       );
     doc
@@ -363,16 +388,18 @@ export class InvoiceService {
       .fontSize(11)
       .text(`پرداخت‌شده: ${text(invoice.paidAmount)} ریال`, { align: 'right' })
       .text(`وضعیت: ${text(invoice.paymentStatus)}`, { align: 'right' });
-    doc.image(Buffer.from(qr.split(',')[1], 'base64'), 42, doc.page.height - 150, {
-      fit: [105, 105],
-    });
-    doc
-      .fontSize(8)
-      .fillColor('#4a5f79')
-      .text('این فاکتور از طریق لینک امن و کوتاه قابل مشاهده است.', 165, doc.page.height - 105, {
-        width: 380,
-        align: 'right',
+    if (qrDataUrl) {
+      doc.image(Buffer.from(qrDataUrl.split(',')[1], 'base64'), 42, doc.page.height - 150, {
+        fit: [105, 105],
       });
+      doc
+        .fontSize(8)
+        .fillColor('#4a5f79')
+        .text('این فاکتور از طریق لینک امن و کوتاه قابل مشاهده است.', 165, doc.page.height - 105, {
+          width: 380,
+          align: 'right',
+        });
+    }
     doc.end();
     return finished;
   }
@@ -702,12 +729,124 @@ export class InvoiceService {
   }
 
   async list() {
+    const rows = await this.prisma.invoice.findMany({
+      orderBy: { issuedAt: 'desc' },
+      select: {
+        id: true,
+        number: true,
+        status: true,
+        customerName: true,
+        customerMobile: true,
+        subtotal: true,
+        discount: true,
+        total: true,
+        paidAmount: true,
+        paymentStatus: true,
+        paymentMethod: true,
+        paidAt: true,
+        issuedAt: true,
+        voidedAt: true,
+        publicTokenExpiresAt: true,
+        items: {
+          select: {
+            productName: true,
+            quantity: true,
+            unitPrice: true,
+            lineTotal: true,
+            inventoryItem: { select: { brand: { select: { name: true } } } },
+          },
+        },
+      },
+    });
+    // Never surface the token hashes — the raw public link is only ever handed
+    // out once at issue time or through the audited rotate endpoint.
+    return { ok: true, data: rows };
+  }
+
+  /** Issues a fresh public link for an invoice (the old link stops working). */
+  async rotateLink(id: string, userId: string, ip?: string) {
+    const invoice = await this.prisma.invoice.findUnique({
+      where: { id },
+      select: { id: true, status: true },
+    });
+    if (!invoice) throw new NotFoundException('فاکتور پیدا نشد');
+    if (invoice.status === 'voided')
+      throw new BadRequestException('لینک عمومی برای فاکتور باطل‌شده صادر نمی‌شود');
+    const token = createPublicToken();
+    const shortCode = createPublicShortCode();
+    const linkExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await tx.invoice.update({
+        where: { id },
+        data: {
+          publicTokenHash: token.hash,
+          publicShortCodeHash: shortCode.hash,
+          publicTokenExpiresAt: linkExpiresAt,
+        },
+      });
+      await writeAudit(tx, {
+        userId,
+        ip,
+        action: 'update',
+        entityType: 'invoice',
+        entityId: id,
+        before: { publicLink: 'rotated (panel view)' },
+        after: { linkExpiresAt: linkExpiresAt.toISOString() },
+      });
+    });
     return {
       ok: true,
-      data: await this.prisma.invoice.findMany({
-        orderBy: { issuedAt: 'desc' },
-        include: { items: true },
-      }),
+      data: {
+        publicToken: token.token,
+        publicShortCode: shortCode.code,
+        linkExpiresAt,
+      },
     };
+  }
+
+  /** Panel-side PDF: renders straight from the database row, no public link needed. */
+  async pdfById(id: string): Promise<Buffer> {
+    const invoice = await this.prisma.invoice.findUnique({
+      where: { id },
+      select: {
+        number: true,
+        customerName: true,
+        customerMobile: true,
+        subtotal: true,
+        discount: true,
+        total: true,
+        paymentStatus: true,
+        paidAmount: true,
+        issuedAt: true,
+        items: {
+          select: {
+            productName: true,
+            quantity: true,
+            unitPrice: true,
+            lineTotal: true,
+            inventoryItem: { select: { brand: { select: { name: true } } } },
+          },
+        },
+      },
+    });
+    if (!invoice) throw new NotFoundException('فاکتور پیدا نشد');
+    return this.renderPdf({
+      number: invoice.number,
+      customerName: invoice.customerName,
+      customerMobile: invoice.customerMobile,
+      subtotal: invoice.subtotal,
+      discount: invoice.discount,
+      total: invoice.total,
+      paymentStatus: invoice.paymentStatus,
+      paidAmount: invoice.paidAmount,
+      issuedAt: invoice.issuedAt,
+      items: invoice.items.map((item) => ({
+        productName: item.productName,
+        brand: item.inventoryItem.brand.name,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        lineTotal: item.lineTotal,
+      })),
+    });
   }
 }
