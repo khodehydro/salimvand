@@ -10,6 +10,7 @@ type Product = {
   name: string;
   code: string;
   availability: string;
+  aparatVideoId?: string | null;
   brands: Array<{ name: string; inStock: boolean }>;
   compatibilities?: Array<{
     model: { name: string; make: { name: string } };
@@ -308,6 +309,11 @@ export default async function HomePage({
                           ? 'به‌زودی'
                           : 'ناموجود'}
                   </span>
+                  {product.aparatVideoId && (
+                    <span className="video-badge" title="ویدئوی محصول">
+                      ▶ ویدئو
+                    </span>
+                  )}
                 </div>
                 <span className="category-label">{product.category.name}</span>
                 <h3>{product.name}</h3>

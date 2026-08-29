@@ -482,6 +482,21 @@ p {
   background: var(--warn-soft);
   color: var(--warn);
 }
+.status-badge.low_stock {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.video-badge {
+  position: absolute;
+  bottom: 9px;
+  left: 9px;
+  padding: 4px 9px;
+  border-radius: 99px;
+  font-size: 10px;
+  font-weight: 700;
+  background: color-mix(in srgb, var(--brand-900) 78%, transparent);
+  color: #fff;
+}
 .category-label {
   color: var(--brand-600);
   font-size: 11px;
@@ -1670,4 +1685,115 @@ p {
   .product-main h1 {
     font-size: 24px;
   }
+}
+
+/* ---- Product page completion: gallery, statuses, specs, video ---- */
+.product-main .status.low_stock {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.product-main .status.coming_soon {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.product-main .status.discontinued {
+  background: var(--surface-2);
+  color: var(--text-3);
+}
+.product-main .status small {
+  font-weight: 500;
+}
+.product-description {
+  color: var(--text-2);
+  line-height: 2;
+  margin: 0 0 6px;
+}
+.gallery-thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+.gallery-thumbs button {
+  width: 72px;
+  height: 72px;
+  padding: 0;
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface-2);
+  cursor: pointer;
+}
+.gallery-thumbs button.active {
+  border-color: var(--brand-500);
+}
+.gallery-thumbs img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.compat-block,
+.brands-block,
+.specs-block {
+  margin: 14px 0;
+}
+.compat-block > small,
+.brands-block > small,
+.specs-block > small {
+  display: block;
+  color: var(--text-3);
+  font-size: 11px;
+  margin-bottom: 8px;
+}
+.compat-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.compat-chips span {
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--border-2);
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 12px;
+}
+.specs-block dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 8px;
+}
+.specs-block dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 12px;
+}
+.specs-block dt {
+  color: var(--text-3);
+}
+.specs-block dd {
+  margin: 0;
+  color: var(--text);
+  font-weight: 600;
+}
+.product-video {
+  margin-top: 40px;
+  border-top: 1px solid var(--border);
+  padding-top: 30px;
+}
+.product-video-head h2 {
+  font-size: 22px;
+  margin: 0 0 4px;
+}
+.product-video-head p {
+  color: var(--text-3);
+  font-size: 13px;
+  margin: 0 0 16px;
 }
