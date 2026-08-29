@@ -20,6 +20,7 @@ type Settings = {
     open?: string;
     close?: string;
     mapUrl?: string;
+    mapCode?: string;
     instagram?: string;
   };
   'store.trust_video'?: string;
@@ -37,6 +38,7 @@ const initial: Settings = {
     open: '09:00',
     close: '20:00',
     mapUrl: '',
+    mapCode: '',
     instagram: '',
   },
   'store.trust_video': '',
@@ -224,12 +226,21 @@ export function SettingsPage() {
             />
           </label>
           <label>
-            لینک نقشه (Embed)
+            آدرس نقشه (Embed / Google Maps iframe src)
             <input
               dir="ltr"
               value={settings['store.profile']?.mapUrl ?? ''}
               onChange={(e) => updateProfile('mapUrl', e.target.value)}
-              placeholder="https://www.openstreetmap.org/export/embed.html?bbox=..."
+              placeholder="https://www.google.com/maps/embed?pb=... یا openstreetmap embed"
+            />
+          </label>
+          <label>
+            کد نقشه گوگل (اگر iframe src ندارید)
+            <input
+              dir="ltr"
+              value={settings['store.profile']?.mapCode ?? ''}
+              onChange={(e) => updateProfile('mapCode', e.target.value)}
+              placeholder="مثلاً: 0C4SxK7sFm2w8aBq1"
             />
           </label>
           <label>

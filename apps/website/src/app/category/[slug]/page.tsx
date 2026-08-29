@@ -15,9 +15,11 @@ async function getCategory(
   slug: string,
 ): Promise<{ category: Category; products: Product[] } | null> {
   try {
+    // Next may pass the param already percent-encoded for non-ASCII slugs.
+    const decodedSlug = decodeURIComponent(slug);
     const filters = await fetch(`${api}/public/filters`, { next: { revalidate: 300 } });
     const data = ((await filters.json()) as { data: { categories: Category[] } }).data;
-    const category = data.categories.find((item) => item.slug === slug);
+    const category = data.categories.find((item) => item.slug === decodedSlug);
     if (!category) return null;
     const products = await fetch(`${api}/public/products?categoryId=${category.id}`, {
       next: { revalidate: 300 },

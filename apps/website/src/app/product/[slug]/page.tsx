@@ -1,6 +1,7 @@
 import { PublicSubHeader } from '../../PublicSubHeader';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
+import { getStoreInfo, telHref } from '../../store-info';
 
 const apiUrl = process.env.API_URL ?? 'https://api.salimvand.ir/api/v1';
 const contactPhone = process.env.PUBLIC_CONTACT_PHONE ?? '';
@@ -14,6 +15,10 @@ type Product = {
   availability: string;
   brands: Array<{ name: string; inStock: boolean }>;
   images?: Array<{ path: string; thumbnailPath?: string; alt?: string }>;
+  compatibilities?: Array<{
+    model: { name: string; make: { name: string } };
+    trim?: { name: string } | null;
+  }>;
 };
 
 // The product payload comes from operator-controlled DB JSON, so its nested arrays
@@ -24,14 +29,21 @@ function asArray<T>(value: unknown): T[] {
 
 async function getProduct(slug: string): Promise<Product | null> {
   try {
-    const response = await fetch(`${apiUrl}/public/products/${encodeURIComponent(slug)}`, {
+    // Next may pass the param already percent-encoded for non-ASCII slugs.
+    const decodedSlug = decodeURIComponent(slug);
+    const response = await fetch(`${apiUrl}/public/products/${encodeURIComponent(decodedSlug)}`, {
       next: { revalidate: 300 },
     });
     if (!response.ok) return null;
     const body = (await response.json()) as { data?: Product | null };
     const product = body.data;
     if (!product) return null;
-    return { ...product, brands: asArray(product.brands), images: asArray(product.images) };
+    return {
+      ...product,
+      brands: asArray(product.brands),
+      images: asArray(product.images),
+      compatibilities: asArray(product.compatibilities),
+    };
   } catch {
     return null;
   }
@@ -59,7 +71,7 @@ export async function generateMetadata({
 }
 
 export default async function ProductPage({ params }: { params: Promise<{ slug: string }> }) {
-  const product = await getProduct((await params).slug);
+  const [product, info] = await Promise.all([getProduct((await params).slug), getStoreInfo()]);
   if (!product) notFound();
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -89,6 +101,8 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
       },
     ],
   };
+  const isAvailable = product.availability === 'in_stock';
+  const compatibleModels = product.compatibilities?.slice(0, 2) ?? [];
   return (
     <main className="shell">
       <script
@@ -108,47 +122,72 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
           <span>←</span>
           <span>{product.name}</span>
         </nav>
-        <div className="product-gallery">
-          {product.images?.length ? (
-            product.images.map((image) => (
-              <img
-                key={image.path}
-                src={image.path}
-                srcSet={
-                  image.thumbnailPath
-                    ? `${image.thumbnailPath} 400w, ${image.path} 900w`
-                    : undefined
-                }
-                sizes="(max-width: 700px) 100vw, 720px"
-                alt={image.alt ?? product.name}
-              />
-            ))
-          ) : (
-            <div className="image-placeholder">تصویر محصول</div>
-          )}
+        <div className="product-layout">
+          <div className="product-gallery">
+            {product.images?.length ? (
+              product.images.map((image) => (
+                <img
+                  key={image.path}
+                  src={image.path}
+                  srcSet={
+                    image.thumbnailPath
+                      ? `${image.thumbnailPath} 400w, ${image.path} 900w`
+                      : undefined
+                  }
+                  sizes="(max-width: 700px) 100vw, 720px"
+                  alt={image.alt ?? product.name}
+                />
+              ))
+            ) : (
+              <div className="image-placeholder">تصویر محصول</div>
+            )}
+          </div>
+          <div className="product-main">
+            <p className="eyebrow">کاتالوگ قطعات خودرو</p>
+            <h1>{product.name}</h1>
+            <p className="code">کد محصول: {product.code}</p>
+            <p>
+              {product.description ??
+                `برای استعلام ${product.name} با فروشگاه آذین خودرو سلیم وند تماس بگیرید.`}
+            </p>
+            <div className={`status ${isAvailable ? 'in_stock' : 'out_of_stock'}`}>
+              <span className="status-dot" />
+              {isAvailable ? 'موجود در فروشگاه' : 'استعلام موجودی'}
+            </div>
+            {compatibleModels.length === 0 && (
+              <p className="compatibility">
+                مناسب{' '}
+                {compatibleModels.map((m) => `${m.model.make.name} ${m.model.name}`).join(' · ') ||
+                  'خودروهای داخلی'}
+              </p>
+            )}
+            <div className="brands-list">
+              {product.brands.map((brand) => (
+                <span key={brand.name} className={brand.inStock ? 'brand-in' : 'brand-out'}>
+                  {brand.inStock ? '✓' : '×'} {brand.name}
+                </span>
+              ))}
+            </div>
+            <div className="product-cta">
+              <a className="button button-primary button-lg" href={telHref(info)}>
+                تماس برای استعلام قیمت
+              </a>
+              <a className="button button-outline" href={info.telegram} rel="noreferrer">
+                تلگرام
+              </a>
+              <a className="button button-bale" href={info.bale} rel="noreferrer">
+                بله
+              </a>
+            </div>
+            <p className="price-note-inline">
+              قیمت‌ها روزانه تغییر می‌کنند؛ مبلغ نهایی هنگام صدور فاکتور قطعی می‌شود.
+            </p>
+          </div>
         </div>
-        <p className="eyebrow">کاتالوگ قطعات خودرو</p>
-        <h1>{product.name}</h1>
-        <p className="code">کد محصول: {product.code}</p>
-        <p>
-          {product.description ??
-            `برای استعلام ${product.name} با فروشگاه آذین خودرو سلیم وند تماس بگیرید.`}
-        </p>
-        <div className="status">
-          وضعیت: {product.availability === 'in_stock' ? 'موجود' : 'استعلام موجودی'}
-        </div>
-        <h2>برندها</h2>
-        <ul>
-          {product.brands.map((brand) => (
-            <li key={brand.name}>
-              {brand.name} — {brand.inStock ? 'موجود' : 'ناموجود'}
-            </li>
-          ))}
-        </ul>
-        <a className="contact" href={contactPhone ? `tel:${contactPhone}` : '/#contact'}>
-          تماس برای استعلام قیمت
-        </a>
       </article>
+      <a className="mobile-contact-bar" href={telHref(info)}>
+        تماس سریع <span>برای استعلام قطعه</span> ←
+      </a>
     </main>
   );
 }

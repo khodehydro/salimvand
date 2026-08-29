@@ -31,7 +31,8 @@ async function getVehicle(
         slug: `${make.name}-${model.name}`.toLowerCase().replace(/\s+/g, '-'),
       })),
     );
-    const model = models.find((item) => item.slug === slug);
+    const decodedSlug = decodeURIComponent(slug);
+    const model = models.find((item) => item.slug === decodedSlug);
     if (!model) return null;
     const response = await fetch(`${api}/public/products?vehicleModelId=${model.id}`, {
       next: { revalidate: 300 },

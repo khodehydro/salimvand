@@ -1,6 +1,8 @@
 import { ThemeToggle } from './ThemeToggle';
 import { APP_NAME, STORE_BRAND, formatPersianNumber } from '@salimvand/shared';
 import { TrustVideo } from './TrustVideo';
+import { getStoreInfo, telHref, type StoreInfo } from './store-info';
+import { StoreContact } from './PublicSubHeader';
 
 const apiUrl = process.env.API_URL ?? 'https://api.salimvand.ir/api/v1';
 type Product = {
@@ -34,11 +36,6 @@ const emptyFilters = {
 // missing or comes back as the wrong type (e.g. phones stored as an array).
 function asArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : [];
-}
-function normalizePhones(value: unknown): string {
-  if (value == null) return '';
-  if (Array.isArray(value)) return value.map((item) => normalizePhones(item)).join('،');
-  return String(value);
 }
 
 async function getProducts(
@@ -94,18 +91,26 @@ type StoreMeta = {
   telegram?: { link?: string; username?: string };
   bale?: { link?: string; username?: string };
 };
-async function getMeta(): Promise<StoreMeta> {
-  try {
-    const response = await fetch(`${apiUrl}/public/meta`, { next: { revalidate: 300 } });
-    if (!response.ok) return {};
-    const body = (await response.json()) as { data?: StoreMeta };
-    const data = body.data ?? {};
-    const profile = data.profile ?? {};
-    return { ...data, profile: { ...profile, phones: normalizePhones(profile.phones) } };
-  } catch {
-    return {};
-  }
-}
+// Retained as a light wrapper on the shared server-side store info so the
+// homepage and every SEO landing page read the exact same operator-configured
+// contact/social/map data (phones, telegram, bale, instagram, map, hours).
+const getMeta = async (): Promise<StoreMeta> => {
+  const info = await getStoreInfo();
+  return {
+    profile: {
+      name: info.name,
+      phones: info.phones.join('، '),
+      address: info.address,
+      open: info.open,
+      close: info.close,
+      mapUrl: info.mapUrl,
+      instagram: info.instagram,
+    },
+    trustVideo: info.trustVideo,
+    telegram: { link: info.telegram },
+    bale: { link: info.bale },
+  } as StoreMeta;
+};
 
 export async function generateMetadata() {
   return {
@@ -124,24 +129,19 @@ export default async function HomePage({
   for (const key of ['q', 'categoryId', 'vehicleModelId', 'vehicleTrimId', 'brandId', 'page'])
     if (params[key]) query.set(key, params[key]!);
   if (params.inStock === 'true') query.set('inStock', 'true');
-  const [products, filters, meta] = await Promise.all([
+  const [products, filters, meta, info] = await Promise.all([
     getProducts(query.toString()),
     getFilters(),
     getMeta(),
+    getStoreInfo(),
   ]);
-  const phone = (meta.profile?.phones ?? '').split(/[،,]/)[0]?.replace(/[^0-9+]/g, '') ?? '';
-  const telegram = meta.telegram?.link ?? 'https://t.me/';
-  const bale = meta.bale?.link ?? 'https://ble.ir/';
-  const instagram = meta.profile?.instagram ?? '';
-  const address = meta.profile?.address ?? 'میاندوآب، آذربایجان غربی';
-  const workingHours =
-    meta.profile?.open && meta.profile?.close
-      ? `${meta.profile.open} تا ${meta.profile.close} · شنبه تا پنجشنبه`
-      : 'شنبه تا پنجشنبه · ۹ تا ۲۰';
-  const mapEmbed =
-    meta.profile?.mapUrl ??
-    process.env.MAP_EMBED_URL ??
-    'https://www.openstreetmap.org/export/embed.html?bbox=46.06%2C36.94%2C46.16%2C37.00&layer=mapnik&marker=36.9692%2C46.1027';
+  const phone = info.phones[0]?.replace(/[^0-9+]/g, '') ?? '';
+  const telegram = info.telegram;
+  const bale = info.bale;
+  const instagram = info.instagram;
+  const address = info.address;
+  const workingHours = info.workingHours;
+  const mapEmbed = info.mapUrl;
   return (
     <main className="site-shell">
       <header className="site-header">
@@ -159,10 +159,7 @@ export default async function HomePage({
         </nav>
         <div className="header-tools">
           <ThemeToggle />
-          <a
-            className="button button-primary header-cta"
-            href={phone ? `tel:${phone}` : '#contact'}
-          >
+          <a className="button button-primary header-cta" href={telHref(info)}>
             تماس سریع
           </a>
         </div>
@@ -182,7 +179,7 @@ export default async function HomePage({
             <a className="button button-light" href="#catalog">
               جست‌وجوی قطعه <span>←</span>
             </a>
-            <a className="button button-outline-light" href={phone ? `tel:${phone}` : '#contact'}>
+            <a className="button button-outline-light" href={telHref(info)}>
               تماس سریع
             </a>
           </div>
@@ -365,66 +362,7 @@ export default async function HomePage({
           </nav>
         )}
       </section>
-      <section className="contact-section" id="contact">
-        <div>
-          <span className="eyebrow">نیاز به راهنمایی داری؟</span>
-          <h2>
-            کد قطعه را بفرست،
-            <br />
-            <em>سریع جواب می‌دیم.</em>
-          </h2>
-          <p>موجودی و قیمت روز را از طریق تماس یا پیام‌رسان استعلام بگیرید.</p>
-          <div className="contact-actions">
-            <a className="button button-light" href={phone ? `tel:${phone}` : '#contact'}>
-              تماس با فروشگاه
-            </a>
-            <a className="button button-outline-light" href={telegram} rel="noreferrer">
-              تلگرام
-            </a>
-            <a className="button button-bale" href={bale} rel="noreferrer">
-              بله
-            </a>
-            {instagram && (
-              <a className="button button-outline-light" href={instagram} rel="noreferrer">
-                اینستاگرام
-              </a>
-            )}
-          </div>
-          <p className="price-note-inline">
-            قیمت‌ها روزانه تغییر می‌کنند؛ مبلغ نهایی هنگام صدور فاکتور قطعی می‌شود.
-          </p>
-        </div>
-        <div className="contact-details">
-          <div className="contact-list">
-            <div>
-              <small>آدرس فروشگاه</small>
-              <b>{address}</b>
-            </div>
-            <div>
-              <small>ساعات کاری</small>
-              <b>{workingHours}</b>
-            </div>
-            {phone && (
-              <div>
-                <small>تلفن تماس</small>
-                <b dir="ltr">{phone}</b>
-              </div>
-            )}
-            <div>
-              <small>ارسال شهرستان</small>
-              <b>باربری و پست پیشتاز</b>
-            </div>
-          </div>
-          <div className="map-embed">
-            <iframe
-              title="نقشهٔ موقعیت فروشگاه"
-              src={mapEmbed}
-              loading="lazy"
-              referrerPolicy="no-referrer-when-downgrade"
-            />
-          </div>
-        </div>
-      </section>
+      <StoreContact info={info} />
       <footer className="site-footer">
         <span>
           © {formatPersianNumber(new Date().getFullYear())} {STORE_BRAND}
@@ -447,7 +385,7 @@ export default async function HomePage({
         </nav>
         <span>قیمت‌ها روزانه تغییر می‌کنند · مبلغ نهایی هنگام صدور فاکتور قطعی است.</span>
       </footer>
-      <a className="mobile-contact-bar" href={phone ? `tel:${phone}` : '#contact'}>
+      <a className="mobile-contact-bar" href={telHref(info)}>
         تماس سریع <span>برای استعلام قطعه</span> ←
       </a>
     </main>

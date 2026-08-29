@@ -1460,3 +1460,202 @@ p {
     height: 66px;
   }
 }
+
+/* ---- Shared contact & footer for landing pages (PublicSubHeader) ---- */
+.sub-contact {
+  background: var(--brand-900);
+  color: var(--on-brand);
+  border-radius: 20px;
+  padding: 44px 46px;
+  margin: 44px 0;
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 34px;
+  align-items: center;
+}
+.sub-contact .eyebrow {
+  color: var(--brand-200);
+}
+.sub-contact h2 {
+  font-size: 26px;
+  margin: 8px 0 10px;
+  line-height: 1.5;
+}
+.sub-contact p {
+  color: var(--brand-200);
+  line-height: 2;
+  margin: 0;
+}
+.sub-contact .contact-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 22px;
+}
+.sub-contact .contact-details {
+  border-right: 1px solid color-mix(in srgb, var(--on-brand) 24%, transparent);
+  padding-right: 30px;
+  min-width: 0;
+}
+.sub-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  color: var(--text-3);
+  font-size: 11px;
+  padding: 14px 0 32px;
+  border-top: 1px solid var(--border);
+}
+.sub-footer nav {
+  display: flex;
+  gap: 14px;
+}
+.sub-footer a {
+  color: var(--text-3);
+  text-decoration: none;
+}
+.sub-footer a:hover {
+  color: var(--brand-600);
+}
+@media (max-width: 760px) {
+  .sub-contact {
+    grid-template-columns: 1fr;
+    padding: 30px 24px;
+    gap: 24px;
+  }
+  .sub-contact .contact-details {
+    border-right: 0;
+    border-top: 1px solid color-mix(in srgb, var(--on-brand) 24%, transparent);
+    padding-right: 0;
+    padding-top: 24px;
+  }
+}
+
+/* ---- Product detail page ---- */
+.product-layout {
+  display: grid;
+  grid-template-columns: 0.95fr 1.05fr;
+  gap: 34px;
+  align-items: start;
+}
+.product-gallery img {
+  width: 100%;
+  border-radius: 14px;
+  aspect-ratio: 1;
+  object-fit: cover;
+  background: var(--surface-2);
+}
+.image-placeholder {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: var(--surface-2);
+  color: var(--text-3);
+  border: 1px solid var(--border);
+}
+.product-main h1 {
+  font-size: 28px;
+  margin: 6px 0 4px;
+  line-height: 1.5;
+}
+.product-main .code {
+  color: var(--text-3);
+  font-size: 12px;
+  font-family: ui-monospace, Menlo, monospace;
+  direction: ltr;
+  display: inline-block;
+  margin: 4px 0 12px;
+}
+.product-main .status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 13px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  margin: 12px 0;
+}
+.product-main .status.in_stock {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+.product-main .status.out_of_stock {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.compatibility {
+  color: var(--text-2);
+  font-size: 12px;
+  margin: 4px 0;
+}
+.brands-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 18px;
+}
+.brands-list .brand-in,
+.brands-list .brand-out {
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+.brands-list .brand-in {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+.brands-list .brand-out {
+  background: var(--surface-2);
+  color: var(--text-3);
+}
+.product-cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.product-cta .button {
+  flex: 1 1 150px;
+}
+.button-lg {
+  padding: 14px 22px;
+  font-size: 15px;
+}
+.button-outline {
+  border: 1px solid var(--border-2);
+  color: var(--text);
+  background: var(--surface);
+}
+.button-outline:hover {
+  border-color: var(--brand-500);
+  color: var(--brand-600);
+}
+/* Bale (which sits on a light surface in the product CTA). */
+.button-bale {
+  background: color-mix(in srgb, var(--brand-600) 12%, var(--surface));
+  color: var(--brand-700);
+  border: 1px solid color-mix(in srgb, var(--brand-600) 24%, var(--border));
+}
+.button-bale:hover {
+  background: color-mix(in srgb, var(--brand-600) 18%, var(--surface));
+  border-color: var(--brand-500);
+}
+@media (max-width: 760px) {
+  .product-layout {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  .product-main h1 {
+    font-size: 24px;
+  }
+}
