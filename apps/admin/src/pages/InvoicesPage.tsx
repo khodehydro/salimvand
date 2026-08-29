@@ -14,7 +14,7 @@ const labels: Record<string, string> = { paid: 'پرداخت کامل', partial:
 const publicSiteUrl = import.meta.env.VITE_PUBLIC_SITE_URL ?? window.location.origin;
 const shortLink = (code: string) => `${publicSiteUrl}/i/${code}`;
 
-export function InvoicesPage() {
+export function InvoicesPage({ canCreate = true, canPay = true, canResend = true, canVoid = false }: { canCreate?: boolean; canPay?: boolean; canResend?: boolean; canVoid?: boolean }) {
   const [rows, setRows] = useState<Invoice[]>([]);
   const [options, setOptions] = useState<StockOption[]>([]);
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
@@ -35,18 +35,18 @@ export function InvoicesPage() {
   const load = () => api<{ data: Invoice[] }>('/invoices').then((result) => setRows(result.data)).catch((error: Error) => setMessage(error.message));
   useEffect(() => {
     void load();
-    void api<{ data: StockOption[] }>('/invoices/options').then((result) => setOptions(result.data)).catch((error: Error) => setMessage(error.message));
-  }, []);
+    if (canCreate) void api<{ data: StockOption[] }>('/invoices/options').then((result) => setOptions(result.data)).catch((error: Error) => setMessage(error.message));
+  }, [canCreate]);
 
   // Customer lookup is debounced: typing a mobile must not fire a request per key.
   useEffect(() => {
     const query = customerQuery.trim();
-    if (!query) { setCustomers([]); return; }
+    if (!canCreate || !query) { setCustomers([]); return; }
     const handle = window.setTimeout(() => {
       void api<{ data: CustomerOption[] }>(`/customers?search=${encodeURIComponent(query)}`).then((result) => setCustomers(result.data)).catch(() => setCustomers([]));
     }, 250);
     return () => window.clearTimeout(handle);
-  }, [customerQuery]);
+  }, [canCreate, customerQuery]);
 
   const candidates = useMemo(() => {
     const query = search.trim().toLocaleLowerCase();
@@ -161,13 +161,13 @@ export function InvoicesPage() {
         <input readOnly value={shortLink(created.publicShortCode)} onFocus={(event) => event.currentTarget.select()} />
         <div>
           <button onClick={() => void navigator.clipboard?.writeText(shortLink(created.publicShortCode))}>کپی لینک</button>
-          <a className="button-primary" target="_blank" rel="noreferrer" href={`/invoice/${created.publicToken}`}>مشاهده فاکتور</a>
+          <a className="button-primary" target="_blank" rel="noreferrer" href={`${publicSiteUrl}/invoice/${created.publicToken}`}>مشاهده فاکتور</a>
           <button className="outline" onClick={() => { setCreated(null); searchRef.current?.focus(); }}>فاکتور بعدی</button>
         </div>
       </div>
     </div>}
 
-    <div className="cards invoice-form">
+    {canCreate && <div className="cards invoice-form">
       <div>
         <h2>صدور فاکتور جدید</h2>
         <div className="invoice-product-picker">
@@ -228,7 +228,7 @@ export function InvoicesPage() {
         </div>
         <button disabled={!lines.length} onClick={() => void create()}>صدور فاکتور</button>
       </div>
-    </div>
+    </div>}
 
     {paying && <div className="notice">
       <strong>ثبت پرداخت {paying.number}</strong>
@@ -251,16 +251,14 @@ export function InvoicesPage() {
         <span>{persianNumber(invoice.items.length)}</span>
         <strong>{money(invoice.total)}</strong>
         <span className={invoice.paymentStatus === 'paid' ? 'status-chip' : 'low-stock'}>{labels[invoice.paymentStatus] ?? invoice.paymentStatus}<small> · {money(invoice.paidAmount)}</small></span>
-        <span>{invoice.status === 'voided' ? labels.voided : <>
-          <button className="row-action" onClick={() => { setPaying(invoice); setPayments([{ method: 'cash', amount: String(Math.max(0, Number(invoice.total) - Number(invoice.paidAmount))) }]); }}>پرداخت</button>
-          {' '}
-          <button className="row-action" onClick={() => void resend(invoice)}>پیامک مجدد</button>
-          {' '}
-          <button className="row-action" onClick={async () => {
+        <span>{invoice.status === 'voided' ? labels.voided : <span className="row-actions">
+          {canPay && Number(invoice.total) > Number(invoice.paidAmount) && <button className="row-action" onClick={() => { setPaying(invoice); setPayments([{ method: 'cash', amount: String(Math.max(0, Number(invoice.total) - Number(invoice.paidAmount))) }]); }}>پرداخت</button>}
+          {canResend && <button className="row-action" onClick={() => void resend(invoice)}>پیامک مجدد</button>}
+          {canVoid && <button className="row-action danger-text" onClick={async () => {
             if (!window.confirm('فاکتور باطل شود؟')) return;
             try { await api(`/invoices/${invoice.id}/void`, { method: 'POST' }); setMessage('فاکتور باطل و موجودی برگشت داده شد.'); await load(); } catch (error) { setMessage((error as Error).message); }
-          }}>ابطال</button>
-        </>}</span>
+          }}>ابطال</button>}
+        </span>}</span>
       </div>)}
     </div>
   </section>;

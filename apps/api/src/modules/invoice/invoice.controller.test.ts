@@ -1,10 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
 import { InvoiceController, PublicInvoiceController } from './invoice.controller';
 import { InvoicePaymentMethod } from './invoice.dto';
+import { ROLES_KEY } from '../../common/auth/roles.decorator';
 
 const request = { user: { id: 'user-1' } } as never;
 
 describe('InvoiceController', () => {
+  it('allows accounting reads and point-of-sale payments without granting invoice issuance', () => {
+    expect(Reflect.getMetadata(ROLES_KEY, InvoiceController.prototype.list)).toEqual(['seller', 'accountant']);
+    expect(Reflect.getMetadata(ROLES_KEY, InvoiceController.prototype.pay)).toEqual(['seller', 'accountant']);
+    expect(Reflect.getMetadata(ROLES_KEY, InvoiceController.prototype.create)).toEqual(['seller']);
+    expect(Reflect.getMetadata(ROLES_KEY, InvoiceController.prototype.void)).toEqual(['manager']);
+  });
+
   it('routes invoice creation and payment to the service', async () => {
     const create = vi.fn(async () => ({ ok: true, data: { number: 'INV-1' } }));
     const pay = vi.fn(async () => ({ ok: true, data: { paymentStatus: 'paid' } }));

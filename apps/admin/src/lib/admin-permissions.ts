@@ -6,7 +6,7 @@ const allRoles: UserRole[] = ['super_admin', 'manager', 'seller', 'warehouse', '
 export const pageRoles: Record<AdminPage, readonly UserRole[]> = {
   dashboard: allRoles,
   products: allRoles,
-  invoices: ['super_admin', 'manager', 'seller'],
+  invoices: ['super_admin', 'manager', 'seller', 'accountant'],
   customers: ['super_admin', 'manager', 'seller', 'accountant'],
   inventory: ['super_admin', 'manager', 'warehouse'],
   purchases: ['super_admin', 'manager', 'accountant'],
@@ -22,4 +22,13 @@ export const pageRoles: Record<AdminPage, readonly UserRole[]> = {
 
 export function canAccessPage(role: UserRole | '', page: AdminPage): boolean {
   return Boolean(role && pageRoles[page].includes(role));
+}
+
+export function invoiceCapabilities(role: UserRole | '') {
+  return {
+    canCreate: role === 'seller' || role === 'manager' || role === 'super_admin',
+    canPay: role === 'seller' || role === 'accountant' || role === 'manager' || role === 'super_admin',
+    canResend: role === 'seller' || role === 'accountant' || role === 'manager' || role === 'super_admin',
+    canVoid: role === 'manager' || role === 'super_admin',
+  };
 }

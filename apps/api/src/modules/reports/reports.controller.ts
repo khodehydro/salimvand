@@ -17,5 +17,5 @@ export class ReportsController {
   @Get('customers') customers() { return this.reports.customers(); }
   @Get('purchase-debts') purchaseDebts() { return this.reports.purchaseDebts(); }
   @Get('purchase-debts/export') async exportPurchaseDebts(@Res() response: Response) { const csv = await this.reports.exportPurchaseDebts(); response.setHeader('Content-Type', 'text/csv; charset=utf-8'); response.setHeader('Content-Disposition', 'attachment; filename="salimvand-supplier-debts.csv"'); return response.send(`\uFEFF${csv}`); }
-  @Get('sales/export') async exportSales(@Query('from') from: string | undefined, @Query('to') to: string | undefined, @Res() response: Response) { const csv = await this.reports.exportSales(from, to); response.setHeader('Content-Type', 'text/csv; charset=utf-8'); response.setHeader('Content-Disposition', 'attachment; filename="salimvand-sales.csv"'); return response.send(`\\uFEFF${csv}`); }
+  @Get('sales/export') async exportSales(@Query('from') from: string | undefined, @Query('to') to: string | undefined, @Res() response: Response) { const csv = await this.reports.exportSales(from, to); response.setHeader('Content-Type', 'text/csv; charset=utf-8'); response.setHeader('Content-Disposition', 'attachment; filename="salimvand-sales.csv"'); return response.send(`\uFEFF${csv}`); }
 }

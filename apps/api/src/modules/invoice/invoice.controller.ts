@@ -17,7 +17,7 @@ export class InvoiceController {
   @Get('public/:token') getPublic(@Param('token') token: string) { return this.invoices.getPublic(token); }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('seller')
+  @Roles('seller', 'accountant')
   @Get()
   list() { return this.invoices.list(); }
 
@@ -47,7 +47,7 @@ export class InvoiceController {
   resendSms(@Param('id') id: string, @Body() body: { mobile?: string }, @Req() request: AuthenticatedRequest) { return this.invoices.resendSms(id, request.user?.id ?? '', body?.mobile, request.ip); }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('accountant')
+  @Roles('seller', 'accountant')
   @Post(':id/pay')
   pay(@Param('id') id: string, @Body() body: PayInvoiceDto, @Req() request: AuthenticatedRequest) { return this.invoices.pay(id, body.amount ?? 0, body.method ?? 'cash', request.user?.id ?? ''); }
 
