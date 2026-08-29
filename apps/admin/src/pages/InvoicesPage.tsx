@@ -10,18 +10,27 @@ import {
   remainingDebt as debtLeft,
   type PaymentRow,
 } from '../lib/invoice-math';
-import { api } from '../lib/api';
+import { api, downloadFile } from '../lib/api';
 
 type Invoice = {
   id: string;
   number: string;
   customerName?: string | null;
+  customerMobile?: string | null;
+  subtotal: string;
+  discount: string;
   total: string;
   paidAmount: string;
   paymentStatus: string;
   status: string;
   issuedAt: string;
-  items: Array<{ productName: string; quantity: number }>;
+  items: Array<{
+    productName: string;
+    quantity: number;
+    unitPrice: string;
+    lineTotal: string;
+    inventoryItem?: { brand: { name: string } } | null;
+  }>;
 };
 type StockOption = {
   id: string;
@@ -83,6 +92,8 @@ export function InvoicesPage({
   const [discount, setDiscount] = useState('');
   const [payments, setPayments] = useState<PaymentRow[]>([{ method: 'cash', amount: '' }]);
   const [paying, setPaying] = useState<Invoice | null>(null);
+  const [viewing, setViewing] = useState<Invoice | null>(null);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'paid' | 'partial' | 'unpaid'>('all');
   const [created, setCreated] = useState<CreatedInvoice | null>(null);
   const [message, setMessage] = useState('');
   const [scanning, setScanning] = useState(false);
@@ -92,6 +103,29 @@ export function InvoicesPage({
     api<{ data: Invoice[] }>('/invoices')
       .then((result) => setRows(result.data))
       .catch((error: Error) => setMessage(error.message));
+
+  // The public link is stored hashed; "view" issues a fresh link (the previous
+  // one is invalidated) and opens the online invoice for the customer.
+  const openPublicInvoice = async (invoice: Invoice) => {
+    try {
+      const result = await api<{ data: { publicToken: string } }>(`/invoices/${invoice.id}/link`, {
+        method: 'POST',
+      });
+      window.open(
+        `${publicSiteUrl}/invoice/${result.data.publicToken}`,
+        '_blank',
+        'noopener,noreferrer',
+      );
+      setMessage(`لینک عمومی جدید برای ${invoice.number} صادر شد؛ لینک قبلی دیگر معتبر نیست.`);
+    } catch (error) {
+      setMessage((error as Error).message);
+    }
+  };
+
+  const downloadInvoicePdf = (invoice: Invoice) =>
+    downloadFile(`/invoices/${invoice.id}/pdf`, `invoice-${invoice.number}.pdf`).catch(
+      (error: Error) => setMessage(error.message),
+    );
   useEffect(() => {
     void load();
     if (canCreate)
@@ -685,6 +719,76 @@ export function InvoicesPage({
         </div>
       )}
 
+      <div className="list-toolbar">
+        <h2>فاکتورهای اخیر</h2>
+        <div className="pill-filters" role="tablist" aria-label="فیلتر وضعیت پرداخت">
+          {(
+            [
+              { id: 'all', label: 'همه' },
+              { id: 'unpaid', label: 'پرداخت‌نشده' },
+              { id: 'partial', label: 'پرداخت بخشی' },
+              { id: 'paid', label: 'تسویه‌شده' },
+            ] as const
+          ).map((entry) => (
+            <button
+              key={entry.id}
+              role="tab"
+              aria-selected={statusFilter === entry.id}
+              className={statusFilter === entry.id ? 'pill active' : 'pill'}
+              onClick={() => setStatusFilter(entry.id)}
+            >
+              {entry.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {viewing && (
+        <div className="notice invoice-detail">
+          <strong>
+            جزئیات فاکتور {viewing.number}
+            <button className="row-action" onClick={() => setViewing(null)}>
+              بستن ✕
+            </button>
+          </strong>
+          <div className="invoice-detail-grid">
+            <span>
+              مشتری: <b>{viewing.customerName ?? 'مشتری حضوری'}</b>
+            </span>
+            <span>
+              تاریخ صدور:{' '}
+              <b>{new Date(viewing.issuedAt).toLocaleDateString('fa-IR')}</b>
+            </span>
+            <span>
+              جمع اقلام: <b>{money(viewing.subtotal)}</b>
+            </span>
+            <span>
+              تخفیف: <b>{money(viewing.discount)}</b>
+            </span>
+            <span>
+              مبلغ نهایی: <b>{money(viewing.total)}</b>
+            </span>
+            <span>
+              پرداخت‌شده: <b>{money(viewing.paidAmount)}</b>
+            </span>
+          </div>
+          <div className="invoice-detail-items">
+            {viewing.items.map((item, index) => (
+              <div key={index}>
+                <span>
+                  {item.productName}
+                  {item.inventoryItem?.brand?.name ? (
+                    <small> · {item.inventoryItem.brand.name}</small>
+                  ) : null}
+                </span>
+                <span>
+                  {persianNumber(item.quantity)} × {money(item.unitPrice)} ={' '}
+                  <b>{money(item.lineTotal)}</b>
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="product-table">
         <div className="table-head invoice-head">
           <span>شماره</span>
@@ -692,9 +796,14 @@ export function InvoicesPage({
           <span>اقلام</span>
           <span>مبلغ</span>
           <span>پرداخت</span>
+          <span>بدهی</span>
           <span>عملیات</span>
         </div>
-        {rows.map((invoice) => (
+        {rows
+          .filter((invoice) => statusFilter === 'all' || invoice.paymentStatus === statusFilter)
+          .map((invoice) => {
+            const debt = Math.max(0, Number(invoice.total) - Number(invoice.paidAmount));
+            return (
           <div className="table-row invoice-row" key={invoice.id}>
             <code>{invoice.number}</code>
             <span>{invoice.customerName ?? 'مشتری حضوری'}</span>
@@ -704,11 +813,33 @@ export function InvoicesPage({
               {labels[invoice.paymentStatus] ?? invoice.paymentStatus}
               <small> · {money(invoice.paidAmount)}</small>
             </span>
+            {invoice.status === 'voided' || debt === 0 ? (
+              <span className="muted">—</span>
+            ) : (
+              <span className="low-stock">{money(debt)}</span>
+            )}
             <span>
               {invoice.status === 'voided' ? (
                 labels.voided
               ) : (
                 <span className="row-actions">
+                  <button className="row-action" onClick={() => setViewing(invoice)}>
+                    نمایش
+                  </button>
+                  <button
+                    className="row-action"
+                    onClick={() => void downloadInvoicePdf(invoice)}
+                    title="دانلود پی‌دی‌اف"
+                  >
+                    PDF
+                  </button>
+                  <button
+                    className="row-action"
+                    onClick={() => void openPublicInvoice(invoice)}
+                    title="صدور لینک عمومی جدید و نمایش فاکتور آنلاین"
+                  >
+                    لینک
+                  </button>
                   {canPay && Number(invoice.total) > Number(invoice.paidAmount) && (
                     <button
                       className="row-action"
@@ -753,7 +884,8 @@ export function InvoicesPage({
               )}
             </span>
           </div>
-        ))}
+            );
+          })}
       </div>
     </section>
   );

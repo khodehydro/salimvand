@@ -585,7 +585,7 @@ section {
 
 .invoice-head,
 .invoice-row {
-  grid-template-columns: 1.2fr 1.5fr 0.7fr 1.5fr 1.2fr 1fr;
+  grid-template-columns: 1.1fr 1.4fr 0.6fr 1.3fr 1.2fr 1fr 1.9fr;
 }
 .invoice-row {
   min-width: 900px;
@@ -2448,4 +2448,81 @@ body,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+
+/* ---- Invoice list: status pills, details drawer ---- */
+.list-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 18px 0 10px;
+}
+.list-toolbar h2 {
+  margin: 0;
+  font-size: 17px;
+}
+.pill-filters {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.pill {
+  border: 1px solid var(--border-2);
+  background: var(--surface);
+  color: var(--text-2);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.pill:hover {
+  border-color: var(--brand-500);
+  color: var(--brand-600);
+}
+.pill.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-fg);
+}
+.invoice-detail strong {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+.invoice-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 8px;
+  margin: 12px 0;
+  font-size: 12px;
+}
+.invoice-detail-grid span {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  color: var(--text-2);
+}
+.invoice-detail-grid b {
+  color: var(--text);
+}
+.invoice-detail-items {
+  display: grid;
+  gap: 6px;
+}
+.invoice-detail-items > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  border-bottom: 1px dashed var(--border);
+  padding-bottom: 6px;
+}
+.invoice-detail-items small {
+  color: var(--text-3);
 }
