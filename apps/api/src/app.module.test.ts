@@ -12,15 +12,15 @@ describe('SystemController readiness', () => {
     expect(queue).toHaveBeenCalledTimes(1);
   });
 
-  it('returns service unavailable when Redis is not ready', async () => {
+  it('reports a degraded queue without taking the API offline when Redis is not ready', async () => {
     const controller = new SystemController({ $queryRaw: vi.fn(async () => [{ ok: 1 }]) } as never, { checkQueueConnection: vi.fn(async () => { throw new Error('redis unavailable'); }) } as never);
-    await expect(controller.readiness()).rejects.toBeInstanceOf(ServiceUnavailableException);
+    await expect(controller.readiness()).resolves.toEqual({ ok: true, data: { service: 'api', database: 'ready', queue: 'degraded' } });
   });
 
   it('returns service unavailable when PostgreSQL is not ready', async () => {
     const queue = vi.fn(async () => true);
     const controller = new SystemController({ $queryRaw: vi.fn(async () => { throw new Error('database unavailable'); }) } as never, { checkQueueConnection: queue } as never);
     await expect(controller.readiness()).rejects.toBeInstanceOf(ServiceUnavailableException);
-    expect(queue).toHaveBeenCalledTimes(1);
+    expect(queue).not.toHaveBeenCalled();
   });
 });
