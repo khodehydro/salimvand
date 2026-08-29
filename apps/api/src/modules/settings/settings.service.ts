@@ -1,5 +1,7 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
-import { readFile } from 'node:fs/promises';
+import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
+import { spawn } from 'node:child_process';
+import { readFile, stat } from 'node:fs/promises';
+import { join } from 'node:path';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
 import { writeAudit } from '../../common/audit/audit-log';
@@ -31,14 +33,37 @@ export class SettingsService {
   }
 
   async runBackup(userId?: string) {
-    const job = await this.prisma.backupJob.create({
-      data: {
-        kind: 'database',
-        status: 'running',
-        startedAt: new Date(),
-      },
-    });
+    const staleBefore = new Date(Date.now() - 6 * 60 * 60 * 1000);
+    await this.prisma.backupJob.updateMany({ where: { status: 'running', startedAt: { lt: staleBefore } }, data: { status: 'failed', error: 'اجرای قبلی بدون نتیجه متوقف شد', finishedAt: new Date() } });
+    const running = await this.prisma.backupJob.findFirst({ where: { status: 'running' } });
+    if (running) throw new ConflictException('یک پشتیبان‌گیری در حال اجرا است');
+    const job = await this.prisma.backupJob.create({ data: { kind: 'database', status: 'running', startedAt: new Date() } });
+    if (userId) await this.prisma.auditLog.create({ data: { userId, action: 'create', entityType: 'backup_job', after: { jobId: String(job.id), status: 'running' } } });
+    void this.executeBackup(job.id).catch(() => undefined);
     return { ok: true, data: { jobId: String(job.id), status: 'running' } };
+  }
+
+  private async executeBackup(jobId: bigint) {
+    const script = process.env.BACKUP_SCRIPT ?? join(process.env.APP_DIR ?? process.cwd(), 'scripts', 'backup.sh');
+    let stderr = '';
+    try {
+      const exitCode = await new Promise<number>((resolve, reject) => {
+        const child = spawn(script, [], { cwd: process.env.APP_DIR ?? process.cwd(), env: process.env, stdio: ['ignore', 'ignore', 'pipe'] });
+        child.stderr?.on('data', (chunk: Buffer) => { stderr = `${stderr}${chunk.toString()}`.slice(-500); });
+        child.once('error', reject);
+        child.once('close', (code) => resolve(code ?? 1));
+      });
+      const statusResult = await this.backupStatus();
+      const backup = statusResult.data;
+      const succeeded = exitCode === 0 && backup?.status === 'success';
+      let sizeBytes = 0n;
+      if (succeeded && backup?.file) {
+        try { sizeBytes = BigInt((await stat(join(process.env.BACKUP_DIR ?? '/var/backups/salimvand', backup.file))).size); } catch { sizeBytes = 0n; }
+      }
+      await this.prisma.backupJob.update({ where: { id: jobId }, data: { status: succeeded ? 'success' : 'failed', file: backup?.file || null, encrypted: backup?.encrypted ?? true, sizeBytes, destination: 'local', error: succeeded ? null : (stderr.trim() || `فرآیند پشتیبان‌گیری با کد ${exitCode} متوقف شد`), finishedAt: new Date() } });
+    } catch (error) {
+      await this.prisma.backupJob.update({ where: { id: jobId }, data: { status: 'failed', error: error instanceof Error ? error.message.slice(0, 500) : 'اجرای پشتیبان‌گیری ناموفق بود', finishedAt: new Date() } });
+    }
   }
 
   async update(values: Record<string, unknown>, userId: string, ip?: string) {

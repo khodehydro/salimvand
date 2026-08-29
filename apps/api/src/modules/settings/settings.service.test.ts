@@ -17,6 +17,20 @@ describe('SettingsService', () => {
     expect(upsert).toHaveBeenCalledTimes(1);
   });
 
+  it('starts one real backup process record and rejects concurrent runs', async () => {
+    const findFirst = vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce({ id: 1n });
+    const create = vi.fn(async () => ({ id: 7n }));
+    const prisma = { backupJob: { findFirst, create, updateMany: vi.fn(async () => ({ count: 0 })) }, auditLog: { create: vi.fn(async () => ({})) } };
+    const service = new SettingsService(prisma as never);
+    const execute = vi.fn(async () => undefined);
+    (service as unknown as { executeBackup: typeof execute }).executeBackup = execute;
+
+    await expect(service.runBackup('manager-1')).resolves.toEqual({ ok: true, data: { jobId: '7', status: 'running' } });
+    expect(execute).toHaveBeenCalledWith(7n);
+    expect(prisma.auditLog.create).toHaveBeenCalled();
+    await expect(service.runBackup('manager-1')).rejects.toThrow('در حال اجرا');
+  });
+
   it('returns null backup status when the status file is absent', async () => {
     const previous = process.env.BACKUP_STATUS_FILE;
     process.env.BACKUP_STATUS_FILE = '/tmp/salimvand-status-file-that-does-not-exist.json';
