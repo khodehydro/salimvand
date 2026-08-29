@@ -180,6 +180,16 @@ export function SettingsPage() {
       setMessage((error as Error).message);
     }
   };
+  // Mirrors the website's fullMapUrl(): an explicit embed URL wins, otherwise a
+  // Google Maps code is expanded into an embed link.
+  const previewMapUrl = () => {
+    const mapUrl = (settings['store.profile']?.mapUrl ?? '').trim();
+    const mapCode = (settings['store.profile']?.mapCode ?? '').trim();
+    if (/^https?:\/\//i.test(mapUrl)) return mapUrl;
+    if (mapCode) return `https://www.google.com/maps/embed?pb=${encodeURIComponent(mapCode)}`;
+    return 'https://www.openstreetmap.org/export/embed.html?bbox=46.06%2C36.94%2C46.16%2C37.00&layer=mapnik&marker=36.9692%2C46.1027';
+  };
+
   if (loading)
     return (
       <section>
@@ -243,6 +253,20 @@ export function SettingsPage() {
               placeholder="مثلاً: 0C4SxK7sFm2w8aBq1"
             />
           </label>
+          <div className="map-preview">
+            <small>
+              پیش‌نمایش نقشهٔ سایت — پس از ذخیره، همین نقشه در بخش «تماس و آدرس» صفحهٔ اصلی و همهٔ
+              صفحات عمومی نمایش داده می‌شود.
+            </small>
+            <div className="map-preview-frame">
+              <iframe
+                title="پیش‌نمایش نقشه"
+                src={previewMapUrl()}
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+              />
+            </div>
+          </div>
           <label>
             اینستاگرام
             <input
@@ -269,6 +293,30 @@ export function SettingsPage() {
                 onChange={(e) => updateProfile('close', e.target.value)}
               />
             </label>
+          </div>
+          <div className="site-visibility">
+            <small>پس از ذخیره، این اطلاعات در سایت عمومی دیده می‌شود:</small>
+            <ul>
+              <li>
+                تلفن‌ها در دکمهٔ «تماس سریع» و بخش تماس:{' '}
+                <b dir="ltr">{settings['store.profile']?.phones || 'ثبت نشده'}</b>
+              </li>
+              <li>
+                آدرس و نقشه در بخش «تماس و آدرس» صفحهٔ اصلی و همهٔ صفحات محصول
+              </li>
+              <li>
+                ساعات کاری:{' '}
+                <b>
+                  {(settings['store.profile']?.open || '—')} تا{' '}
+                  {(settings['store.profile']?.close || '—')}
+                </b>
+              </li>
+              <li>
+                تلگرام و بله در دکمه‌های تماس و فوتر سایت — در صورت خالی بودن، دکمه‌ها پنهان
+                می‌شوند
+              </li>
+              <li>ویدئوی آپارات در بخش «فروشگاه ما را ببینید» صفحهٔ اصلی</li>
+            </ul>
           </div>
         </fieldset>
         <fieldset>

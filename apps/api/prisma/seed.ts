@@ -18,6 +18,7 @@ async function main() {
   const brands = await seedBrands();
   const makes = await seedVehicles();
   const locations = await seedLocations();
+  await seedSettings();
 
   // name | categoryKey | brand | qty | min | price(rial) | shelfPrefix
   const items: Array<[string, string, string, number, number, number, string]> = [
@@ -120,6 +121,50 @@ async function main() {
       'Seeded references and catalog data; SEED_ADMIN_PASSWORD was not set, so no admin was created.',
     );
   }
+}
+
+/**
+ * Default store settings so the admin panel starts with the same values the
+ * public site renders (phones, address, hours, map, social links, SMS
+ * templates). Existing values are never overwritten — operators own them.
+ */
+async function seedSettings() {
+  const defaults: Array<{ key: string; value: unknown }> = [
+    {
+      key: 'store.profile',
+      value: {
+        name: 'فروشگاه سلیم وند',
+        phones: '۰۴۱-۳۲۳۴۵۶۷۸, ۰۹۱۴۱۲۳۴۵۶۷',
+        address: 'میاندوآب، خیابان امام، بازار قطعات خودرو، پلاک ۱۲',
+        open: '09:00',
+        close: '20:00',
+        mapUrl: '',
+        mapCode: '',
+        instagram: '',
+      },
+    },
+    { key: 'store.trust_video', value: '' },
+    {
+      key: 'sms.templates',
+      value: {
+        invoice: '{customer_name} عزیز، فاکتور {invoice_number} شما صادر شد. مشاهده: {link}',
+        paid: 'پرداخت فاکتور {invoice_number} ثبت شد. مبلغ: {amount} ریال. سپاس از خرید شما.',
+        autoSend: true,
+      },
+    },
+    { key: 'integrations.telegram', value: { link: '' } },
+    { key: 'integrations.bale', value: { link: '' } },
+    { key: 'inventory.default_min_stock', value: 3 },
+    { key: 'backup.schedule', value: { enabled: true } },
+  ];
+  for (const entry of defaults) {
+    await prisma.setting.upsert({
+      where: { key: entry.key },
+      update: {},
+      create: { key: entry.key, value: entry.value as never },
+    });
+  }
+  console.log('Seeded default store settings (existing values kept).');
 }
 
 function catPrefix(catKey: string): string {
