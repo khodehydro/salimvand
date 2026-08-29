@@ -86,6 +86,14 @@ for attempt in $(seq 1 30); do
     systemctl is-active --quiet salimvand-website.service
     systemctl is-active --quiet salimvand-worker.service
     curl --fail --silent --show-error --max-time 10 http://127.0.0.1:3000/ >/dev/null
+    # Check the same CMS route used by browser login, not only the private API.
+    if [[ -n "${ADMIN_URL:-}" ]]; then
+      admin_health="$(curl --fail --silent --show-error --max-time 10 "${ADMIN_URL%/}/api/v1/health")"
+      grep -q '"service":"api"' <<<"$admin_health" || {
+        echo 'CMS /api reverse proxy is not returning the API health payload.' >&2
+        exit 1
+      }
+    fi
     if ss -ltnH 'sport = :4000' | grep -qvE '127\.0\.0\.1:4000|\[::1\]:4000'; then
       echo 'API is listening on a non-loopback address; refusing to mark release live.' >&2
       ss -ltnH 'sport = :4000' >&2 || true
