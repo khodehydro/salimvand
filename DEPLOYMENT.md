@@ -36,6 +36,8 @@ sudo APP_DIR=/opt/salimvand DEPLOY_BRANCH=main ./scripts/deploy.sh
 
 فرمان بالا به‌ترتیب Fetch، Checkout نسخهٔ Branch، Install قفل‌شده، Prisma Generate، Migration Deploy، Seed، Typecheck، Test، Build، فعال‌سازی Systemd، Restart و Health Check را انجام می‌دهد. در پایان علاوه بر API Readiness، فعال‌بودن API، Website و Worker و پاسخ‌گویی Website نیز بررسی می‌شود؛ همچنین Deploy اگر API روی آدرس عمومی Bind شده باشد، ناموفق اعلام می‌شود.
 
+در هر Deploy، اگر vhost پنل (`cms.`) هنوز location مسیر `/uploads/` را نداشته باشد، همین بلاک به‌صورت خودکار به همان server block اضافه و Nginx Reload می‌شود تا پیش‌نمایش تصاویر در کتابخانهٔ رسانه و تنظیمات پنل کار کند. فایل vhost هرگز بازنویسی کامل نمی‌شود تا تغییرات Certbot (بلوک‌های TLS) دست‌نخورده بمانند؛ برای نصب‌های تازه، `setup-server.sh` نسخهٔ کامل داخل `deploy/nginx/salimvand.conf` را می‌گذارد.
+
 ## Smoke Check پس از Deploy
 
 برای بررسی مستقل سلامت سرویس‌ها روی VPS:

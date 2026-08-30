@@ -32,6 +32,18 @@ if [[ -n "${ADMIN_URL:-}" ]]; then
   }
 fi
 
+# The media library and settings previews load /uploads same-origin from the
+# CMS. When that Nginx location is missing, the SPA fallback answers with the
+# index.html shell (HTTP 200 + <!doctype html>) and every image breaks.
+if [[ -n "${ADMIN_URL:-}" ]]; then
+  uploads_response="$(curl --silent --max-time 10 -w '\n%{http_code}' "${ADMIN_URL%/}/uploads/" || true)"
+  uploads_code="$(tail -n 1 <<<"$uploads_response")"
+  if [[ "$uploads_code" == "200" ]] && grep -qi '<!doctype html' <<<"$uploads_response"; then
+    echo 'CMS serves the SPA shell on /uploads/ — the Nginx uploads location is missing (rerun deploy).' >&2
+    exit 1
+  fi
+fi
+
 if ss -ltnH 'sport = :4000' | grep -qvE '127\.0\.0\.1:4000|\[::1\]:4000'; then
   echo 'API is exposed on a non-loopback address.' >&2
   exit 1

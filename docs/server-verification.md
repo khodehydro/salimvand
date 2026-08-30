@@ -76,6 +76,15 @@ curl -fsS http://127.0.0.1:4000/api/v1/health/ready
 `scripts/deploy.sh` با `set -Eeuo pipefail` اجرا می‌شود؛ اگر `prisma generate` یا بیلد شکست بخورد،
 دیپلوی متوقف می‌شود و نسخهٔ قبلی سر جای خود می‌ماند.
 
+دیپلوی در صورت نیاز location سرو `/uploads/` را به vhost پنل اضافه می‌کند (بدون بازنویسی کامل فایل،
+تا بلوک‌های TLS مربوط به Certbot دست نخورند). پس از دیپلوی، این را هم چک کنید:
+
+```bash
+# اگر ADMIN_URL ست شده باشد، check-production همین را خودکار بررسی می‌کند:
+sudo ADMIN_URL=https://cms.salimvand.ir APP_DIR=/opt/salimvand bash scripts/check-production.sh
+# خروجی مورد انتظار: Production checks passed.
+```
+
 ---
 
 ## ۵) اگر `prisma generate` به `binaries.prisma.sh` نرسید
