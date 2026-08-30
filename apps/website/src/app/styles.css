@@ -847,6 +847,25 @@ p {
     margin-right: auto;
     margin-left: 10px;
   }
+  /* Navigation pill stacked right above the quick-call bar. */
+  .mobile-nav-button {
+    display: block;
+    position: fixed;
+    z-index: 10;
+    bottom: 74px;
+    left: 12px;
+    right: 12px;
+    padding: 10px 16px;
+    border: 0;
+    border-radius: 12px;
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border-2);
+    box-shadow: var(--shadow-card);
+    font: 700 13px Vazirmatn;
+    cursor: pointer;
+    text-align: center;
+  }
 }
 .invoice-shell {
   max-width: 900px;
@@ -1862,4 +1881,110 @@ p {
   color: var(--text-3);
   font-size: 13px;
   margin: 0 0 16px;
+}
+
+/* Mobile navigation button (stacked with the quick-call bar). */
+.mobile-nav-button {
+  display: none;
+}
+.nav-chooser {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: end center;
+  background: rgba(4, 18, 31, 0.55);
+  backdrop-filter: blur(2px);
+  padding: 16px;
+}
+.nav-chooser-sheet {
+  display: grid;
+  gap: 10px;
+  width: min(420px, 100%);
+  padding: 18px;
+  border-radius: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-card);
+  text-align: center;
+}
+.nav-chooser-sheet b {
+  font-size: 15px;
+}
+.nav-chooser-sheet small {
+  color: var(--text-3);
+  font-size: 11px;
+}
+.nav-choice {
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 0;
+  color: #fff;
+  font: 700 14px Vazirmatn;
+  cursor: pointer;
+}
+.nav-choice.neshan {
+  background: var(--telegram);
+}
+.nav-choice.balad {
+  background: var(--bale);
+}
+.nav-choice-cancel {
+  padding: 10px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border-2);
+  background: transparent;
+  color: var(--text-2);
+  font: 600 13px Vazirmatn;
+  cursor: pointer;
+}
+
+/* Quick actions under catalog cards (call / Telegram / Bale). */
+.card-quick-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: -4px;
+}
+.card-quick-actions a {
+  flex: 1 1 0;
+  display: grid;
+  place-items: center;
+  padding: 8px 6px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  border: 1px solid transparent;
+  transition: 0.15s;
+}
+.quick-call {
+  background: var(--primary);
+  color: var(--primary-fg);
+}
+.quick-call:hover {
+  background: var(--primary-hover);
+}
+.quick-telegram {
+  background: var(--telegram);
+  color: #fff;
+}
+.quick-telegram:hover {
+  background: var(--telegram-hover);
+}
+.quick-bale {
+  background: var(--bale);
+  color: #fff;
+}
+.quick-bale:hover {
+  background: var(--bale-hover);
+}
+
+/* Product video now lives in the media column under the gallery. */
+.product-layout .product-video {
+  margin-top: 18px;
+  border-top: 0;
+  padding-top: 0;
+}
+.product-layout .product-video-head h2 {
+  font-size: 17px;
 }

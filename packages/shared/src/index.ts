@@ -54,6 +54,37 @@ export function extractAparatVideoId(input: string | null | undefined): string {
   return '';
 }
 
+/** Parse a coordinate typed by the operator; returns null when invalid.
+ * Accepts Persian/Arabic digits (operators use a Persian keyboard layout). */
+export function parseCoordinate(value: string | null | undefined): number | null {
+  const raw = normalizeDigits(String(value ?? '')).trim();
+  if (!raw) return null;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/** Neshan smart link: with an origin it opens a full drive route inside the
+ * Neshan app (or neshan.org on the web); without one it opens the store's
+ * location so routing starts from the visitor's current position. */
+export function neshanRouteUrl(
+  lat: number,
+  lng: number,
+  origin?: { lat: number; lng: number } | null,
+): string {
+  const destination = `${lat},${lng}`;
+  if (origin) {
+    return `https://nshn.ir/maps?origin=${origin.lat},${origin.lng}&destination=${destination}&type=drive`;
+  }
+  return `https://nshn.ir/?lat=${lat}&lng=${lng}`;
+}
+
+/** Standard Android geo: intent — opens a chooser listing every installed map
+ * app (Balad, Neshan, …); each app then routes from the current position. */
+export function geoIntentUrl(lat: number, lng: number, label?: string): string {
+  if (!label) return `geo:${lat},${lng}`;
+  return `geo:${lat},${lng}?q=${lat},${lng}(${encodeURIComponent(label)})`;
+}
+
 /** Convert Persian (۰-۹) and Arabic (٠-٩) digits to ASCII digits. Needed for
  * phone dial links: operators type numbers with a Persian keyboard layout. */
 export function normalizeDigits(value: string): string {

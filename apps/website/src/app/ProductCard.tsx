@@ -38,12 +38,23 @@ export function aparatWatchUrl(rawVideoId?: string | null): string {
   return videoId ? `https://www.aparat.com/v/${videoId}` : '';
 }
 
+/** Quick actions rendered under every catalog card: call / Telegram / Bale
+ * without opening the product page. Passed down by each page from the store
+ * settings so the numbers and links always match the panel. */
+export type CardContact = {
+  tel: string;
+  telegram?: string;
+  bale?: string;
+};
+
 export function ProductCard({
   product,
   heading = 'h3',
+  contact,
 }: {
   product: CardProduct;
   heading?: 'h2' | 'h3';
+  contact?: CardContact;
 }) {
   const image = product.images?.[0];
   const title: ReactNode = product.name;
@@ -107,6 +118,37 @@ export function ProductCard({
         >
           ▶
         </a>
+      )}
+      {contact && (contact.tel.startsWith('tel:') || contact.telegram || contact.bale) && (
+        <div className="card-quick-actions">
+          {contact.tel.startsWith('tel:') && (
+            <a className="quick-call" href={contact.tel} aria-label={`تماس برای ${product.name}`}>
+              ☎ تماس
+            </a>
+          )}
+          {/^https?:\/\/.+/.test(contact.telegram ?? '') && (
+            <a
+              className="quick-telegram"
+              href={contact.telegram}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={`تلگرام برای ${product.name}`}
+            >
+              تلگرام
+            </a>
+          )}
+          {/^https?:\/\/.+/.test(contact.bale ?? '') && (
+            <a
+              className="quick-bale"
+              href={contact.bale}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={`بله برای ${product.name}`}
+            >
+              بله
+            </a>
+          )}
+        </div>
       )}
     </div>
   );

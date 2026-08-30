@@ -3,6 +3,7 @@ import {
   extractMapEmbedUrl,
   formatPersianNumber,
   normalizeDigits,
+  parseCoordinate,
 } from '@salimvand/shared';
 
 /**
@@ -22,6 +23,12 @@ export type StoreInfo = {
   mapCode: string;
   logoUrl: string;
   faviconUrl: string;
+  /** Store coordinates for the mobile navigation button (Neshan / Balad). */
+  nav: {
+    lat: number | null;
+    lng: number | null;
+    app: 'neshan' | 'balad' | 'both';
+  };
   /** Operator-editable header texts (logo tagline, CTA label, nav labels). */
   header: {
     tagline: string;
@@ -53,6 +60,7 @@ export async function getStoreInfo(): Promise<StoreInfo> {
     mapCode: '',
     logoUrl: '',
     faviconUrl: '',
+    nav: { lat: null, lng: null, app: 'both' },
     shippingMethods: ['باربری و پست پیشتاز'],
     header: {
       tagline: 'قطعات یدکی خودرو',
@@ -117,6 +125,14 @@ export async function getStoreInfo(): Promise<StoreInfo> {
       mapCode,
       logoUrl: asString(profile.logoUrl ?? ''),
       faviconUrl: asString(profile.faviconUrl ?? ''),
+      nav: {
+        lat: parseCoordinate(asString(profile.navLat ?? '')),
+        lng: parseCoordinate(asString(profile.navLng ?? '')),
+        app:
+          asString(profile.navApp ?? '') === 'neshan' || asString(profile.navApp ?? '') === 'balad'
+            ? (asString(profile.navApp) as 'neshan' | 'balad')
+            : 'both',
+      },
       header: {
         tagline: headerText('tagline', fallback.header.tagline),
         cta: headerText('cta', fallback.header.cta),

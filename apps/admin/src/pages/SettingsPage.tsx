@@ -25,6 +25,9 @@ type Settings = {
     logoUrl?: string;
     faviconUrl?: string;
     shippingMethods?: string;
+    navLat?: string;
+    navLng?: string;
+    navApp?: string;
     instagram?: string;
     header?: {
       tagline?: string;
@@ -53,6 +56,9 @@ const initial: Settings = {
     logoUrl: '',
     faviconUrl: '',
     shippingMethods: '',
+    navLat: '',
+    navLng: '',
+    navApp: 'both',
     instagram: '',
     header: { tagline: '', cta: '', navCatalog: '', navVideo: '', navContact: '' },
   },
@@ -385,6 +391,45 @@ export function SettingsPage() {
               placeholder="باربری، پست پیشتاز، اتوبار"
             />
           </label>
+          <div className="header-texts">
+            <small>مسیریابی موبایل — دکمهٔ «مسیریابی» کنار دکمهٔ تماس سریع نسخهٔ موبایل سایت</small>
+            <div className="two-fields">
+              <label>
+                عرض جغرافیایی فروشگاه (Latitude)
+                <input
+                  dir="ltr"
+                  value={settings['store.profile']?.navLat ?? ''}
+                  onChange={(e) => updateProfile('navLat', e.target.value)}
+                  placeholder="36.9692"
+                />
+              </label>
+              <label>
+                طول جغرافیایی فروشگاه (Longitude)
+                <input
+                  dir="ltr"
+                  value={settings['store.profile']?.navLng ?? ''}
+                  onChange={(e) => updateProfile('navLng', e.target.value)}
+                  placeholder="46.1027"
+                />
+              </label>
+            </div>
+            <label>
+              برنامهٔ مسیریابی
+              <select
+                value={settings['store.profile']?.navApp ?? 'both'}
+                onChange={(e) => updateProfile('navApp', e.target.value)}
+              >
+                <option value="both">هر دو — بازدیدکننده انتخاب کند (نشان / بلد)</option>
+                <option value="neshan">فقط نشان</option>
+                <option value="balad">فقط بلد</option>
+              </select>
+            </label>
+            <small>
+              مختصات را از گوگل‌مپ کپی کنید: روی موقعیت فروشگاه راست‌کلیک → عدد اول Latitude و عدد
+              دوم Longitude است. سفر به‌صورت خودکار از موقعیت فعلی بازدیدکننده شروع می‌شود؛ اگر
+              مختصات خالی باشد دکمهٔ مسیریابی نمایش داده نمی‌شود.
+            </small>
+          </div>
           <label>
             اینستاگرام
             <input
@@ -473,6 +518,14 @@ export function SettingsPage() {
               <li>
                 روش‌های ارسال در بخش تماس:{' '}
                 <b>{settings['store.profile']?.shippingMethods || 'باربری و پست پیشتاز'}</b>
+              </li>
+              <li>
+                دکمهٔ مسیریابی موبایل:{' '}
+                <b>
+                  {settings['store.profile']?.navLat && settings['store.profile']?.navLng
+                    ? `فعال (${settings['store.profile'].navLat}، ${settings['store.profile'].navLng})`
+                    : 'غیرفعال — مختصات ثبت نشده'}
+                </b>
               </li>
               <li>
                 ساعات کاری:{' '}

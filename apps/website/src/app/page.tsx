@@ -1,6 +1,7 @@
 import { ProductCard } from './ProductCard';
 import { CatalogFilters } from './CatalogFilters';
 import { ThemeToggle } from './ThemeToggle';
+import { NavigationButton } from './NavigationButton';
 import { APP_NAME, STORE_BRAND, formatPersianNumber } from '@salimvand/shared';
 import { TrustVideo } from './TrustVideo';
 import { getStoreInfo, telHref, type StoreInfo } from './store-info';
@@ -230,7 +231,15 @@ export default async function HomePage({
         {products.items.length ? (
           <div className="product-grid">
             {products.items.map((product) => (
-              <ProductCard key={product.slug} product={product} />
+              <ProductCard
+                key={product.slug}
+                product={product}
+                contact={{
+                  tel: telHref(info),
+                  telegram: info.telegram,
+                  bale: info.bale,
+                }}
+              />
             ))}
           </div>
         ) : (
@@ -289,6 +298,12 @@ export default async function HomePage({
       <a className="mobile-contact-bar" href={telHref(info)}>
         تماس سریع <span>برای استعلام قطعه</span> ←
       </a>
+      <NavigationButton
+        lat={info.nav.lat}
+        lng={info.nav.lng}
+        app={info.nav.app}
+        storeName={info.name}
+      />
     </main>
   );
 }

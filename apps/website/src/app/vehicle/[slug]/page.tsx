@@ -1,4 +1,5 @@
 import { ProductCard } from '../../ProductCard';
+import { getStoreInfo, telHref } from '../../store-info';
 import { PublicSubHeader } from '../../PublicSubHeader';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
@@ -68,6 +69,7 @@ export async function generateMetadata({
 
 export default async function VehiclePage({ params }: { params: Promise<{ slug: string }> }) {
   const data = await getVehicle((await params).slug);
+  const info = await getStoreInfo();
   if (!data) notFound();
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -110,7 +112,12 @@ export default async function VehiclePage({ params }: { params: Promise<{ slug: 
         {data.products.length ? (
           <div className="product-grid">
             {data.products.map((product) => (
-              <ProductCard key={product.slug} product={product} heading="h2" />
+              <ProductCard
+                key={product.slug}
+                product={product}
+                heading="h2"
+                contact={{ tel: telHref(info), telegram: info.telegram, bale: info.bale }}
+              />
             ))}
           </div>
         ) : (

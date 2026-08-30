@@ -1,4 +1,5 @@
 import { AparatVideo } from '../../AparatVideo';
+import { NavigationButton } from '../../NavigationButton';
 import { ProductGallery } from '../../ProductGallery';
 import { PublicSubHeader } from '../../PublicSubHeader';
 import type { Metadata } from 'next';
@@ -176,6 +177,12 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
             ) : (
               <div className="image-placeholder">تصویر محصول</div>
             )}
+            {/* Design call: the product video lives in the media column,
+                right under the gallery — install/review footage beside the
+                product images, away from the purchase CTA flow. */}
+            {product.aparatVideoId && (
+              <AparatVideo videoId={product.aparatVideoId} title={`ویدئو: ${product.name}`} />
+            )}
           </div>
           <div className="product-main">
             <p className="eyebrow">{product.category?.name ?? 'کاتالوگ قطعات خودرو'}</p>
@@ -253,13 +260,16 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
             </p>
           </div>
         </div>
-        {product.aparatVideoId && (
-          <AparatVideo videoId={product.aparatVideoId} title={`ویدئو: ${product.name}`} />
-        )}
       </article>
       <a className="mobile-contact-bar" href={telHref(info)}>
         تماس سریع <span>برای استعلام قطعه</span> ←
       </a>
+      <NavigationButton
+        lat={info.nav.lat}
+        lng={info.nav.lng}
+        app={info.nav.app}
+        storeName={info.name}
+      />
     </main>
   );
 }

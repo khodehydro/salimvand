@@ -7,6 +7,9 @@ import {
   extractAparatVideoId,
   extractMapEmbedUrl,
   formatJalaliDate,
+  geoIntentUrl,
+  neshanRouteUrl,
+  parseCoordinate,
   formatPersianNumber,
   formatRial,
   normalizeDigits,
@@ -51,6 +54,20 @@ describe('shared utilities', () => {
     ).toBe('QwEr123');
     expect(extractAparatVideoId('')).toBe('');
     expect(extractAparatVideoId('نه-معتبر!')).toBe('');
+  });
+  it('builds navigation links for Neshan and the geo: chooser', () => {
+    expect(neshanRouteUrl(36.9692, 46.1027, { lat: 35.7, lng: 51.4 })).toBe(
+      'https://nshn.ir/maps?origin=35.7,51.4&destination=36.9692,46.1027&type=drive',
+    );
+    expect(neshanRouteUrl(36.9692, 46.1027)).toBe('https://nshn.ir/?lat=36.9692&lng=46.1027');
+    expect(geoIntentUrl(36.9692, 46.1027)).toBe('geo:36.9692,46.1027');
+    expect(geoIntentUrl(36.9692, 46.1027, 'فروشگاه سلیم وند')).toBe(
+      `geo:36.9692,46.1027?q=36.9692,46.1027(${encodeURIComponent('فروشگاه سلیم وند')})`,
+    );
+    expect(parseCoordinate('۳۶/۹۶۹۲'.replace('/', '.'))).toBe(36.9692);
+    expect(parseCoordinate('46.1027')).toBe(46.1027);
+    expect(parseCoordinate('')).toBeNull();
+    expect(parseCoordinate('abc')).toBeNull();
   });
   it('normalizes Persian and Arabic digits to ASCII', () => {
     expect(normalizeDigits('۰۹۱۲۳۴۵۶۷۸۹')).toBe('09123456789');
