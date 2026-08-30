@@ -164,7 +164,11 @@ export default async function HomePage({
     <main className="site-shell">
       <header className="site-header">
         <a className="brand-lockup" href="/">
-          <span className="brand-mark">س</span>
+          {info.logoUrl ? (
+            <img className="brand-logo" src={info.logoUrl} alt={info.name} />
+          ) : (
+            <span className="brand-mark">س</span>
+          )}
           <span>
             <strong>{APP_NAME}</strong>
             <small>قطعات یدکی خودرو</small>

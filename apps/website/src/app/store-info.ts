@@ -1,4 +1,4 @@
-import { PUBLIC_SITE_URL } from './config';
+import { extractMapEmbedUrl, normalizeDigits } from '@salimvand/shared';
 
 /**
  * Shared, server-side storefront meta. Every SEO/landing page reads the same
@@ -14,11 +14,17 @@ export type StoreInfo = {
   workingHours: string;
   mapUrl: string;
   mapCode: string;
+  logoUrl: string;
+  faviconUrl: string;
   telegram: string;
   bale: string;
   instagram: string;
   trustVideo: string | null;
 };
+
+/** Shown when the operator has not configured a map embed yet. */
+export const DEFAULT_MAP_EMBED_URL =
+  'https://www.openstreetmap.org/export/embed.html?bbox=46.06%2C36.94%2C46.16%2C37.00&layer=mapnik&marker=36.9692%2C46.1027';
 
 export async function getStoreInfo(): Promise<StoreInfo> {
   const apiUrl = process.env.API_URL ?? 'https://api.salimvand.ir/api/v1';
@@ -29,17 +35,17 @@ export async function getStoreInfo(): Promise<StoreInfo> {
     open: '09:00',
     close: '20:00',
     workingHours: 'شنبه تا پنجشنبه · ۹ تا ۲۰',
-    mapUrl:
-      process.env.MAP_EMBED_URL ??
-      'https://www.openstreetmap.org/export/embed.html?bbox=46.06%2C36.94%2C46.16%2C37.00&layer=mapnik&marker=36.9692%2C46.1027',
+    mapUrl: process.env.MAP_EMBED_URL ?? DEFAULT_MAP_EMBED_URL,
     mapCode: '',
+    logoUrl: '',
+    faviconUrl: '',
     telegram: 'https://t.me/',
     bale: 'https://ble.ir/',
     instagram: 'https://instagram.com/',
     trustVideo: null,
   };
   try {
-    const response = await fetch(`${apiUrl}/public/meta`, { next: { revalidate: 300 } });
+    const response = await fetch(`${apiUrl}/public/meta`, { next: { revalidate: 60 } });
     if (!response.ok) return fallback;
     const body = (await response.json()) as {
       data?: {
@@ -75,6 +81,8 @@ export async function getStoreInfo(): Promise<StoreInfo> {
       workingHours: open && close ? `${open} تا ${close} · شنبه تا پنجشنبه` : fallback.workingHours,
       mapUrl: resolvedMapUrl,
       mapCode,
+      logoUrl: asString(profile.logoUrl ?? ''),
+      faviconUrl: asString(profile.faviconUrl ?? ''),
       telegram: telegramLink || fallback.telegram,
       bale: baleLink || fallback.bale,
       instagram: instagram || fallback.instagram,
@@ -90,19 +98,17 @@ export function primaryPhone(info: StoreInfo): string {
 }
 
 export function telHref(info: StoreInfo): string {
-  const phone = primaryPhone(info).replace(/[^0-9+]/g, '');
+  // Operators type phone numbers with a Persian keyboard, so normalize the
+  // digits before building the dial link — otherwise every character would be
+  // stripped and the "quick call" buttons would go nowhere.
+  const phone = normalizeDigits(primaryPhone(info)).replace(/[^0-9+]/g, '');
   return phone ? `tel:${phone}` : '#contact';
 }
 
 export function fullMapUrl(mapUrl: string, mapCode?: string): string {
-  if (mapUrl && /^https?:\/\//i.test(mapUrl)) return mapUrl;
-  // A shortened Google Maps "code" (e.g. from the share iframe) is expanded
-  // into a full embed link so the admin can paste just the code.
-  if (mapCode?.trim()) {
-    const q = encodeURIComponent(mapCode.trim());
-    return `https://www.google.com/maps/embed?pb=${q}`;
-  }
-  return PUBLIC_SITE_URL + '/#contact';
+  // Accepts whatever the operator pasted (full iframe tag, embed URL or a
+  // bare pb code) and falls back to the default map when nothing embeds.
+  return extractMapEmbedUrl(mapUrl, mapCode) || DEFAULT_MAP_EMBED_URL;
 }
 
 function asString(value: unknown): string {

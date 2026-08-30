@@ -4,7 +4,7 @@ import { PublicSubHeader } from '../../PublicSubHeader';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { formatPersianNumber } from '@salimvand/shared';
-import { getStoreInfo, telHref } from '../../store-info';
+import { getStoreInfo, primaryPhone, telHref } from '../../store-info';
 
 const apiUrl = process.env.API_URL ?? 'https://api.salimvand.ir/api/v1';
 type Spec = { key?: string; label?: string; value?: string };
@@ -150,7 +150,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumb) }}
       />
-      <PublicSubHeader context="آذین خودرو · میاندوآب" />
+      <PublicSubHeader context="آذین خودرو · میاندوآب" showContact={false} />
       <article className="product-page">
         <nav className="breadcrumb" aria-label="مسیر صفحه">
           <a href="/">خانه</a>
@@ -229,20 +229,23 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
                 </dl>
               </div>
             )}
-            <div className="product-cta">
-              <a className="button button-primary button-lg" href={telHref(info)}>
-                تماس برای استعلام قیمت
+            <div className="product-contact">
+              <a className="product-phone" href={telHref(info)}>
+                <small>تماس برای استعلام قیمت</small>
+                <b dir="ltr">{primaryPhone(info) || 'شماره تماس ثبت نشده است'}</b>
               </a>
-              {/^https?:\/\/.+/.test(info.telegram) && (
-                <a className="button button-outline" href={info.telegram} rel="noreferrer">
-                  تلگرام
-                </a>
-              )}
-              {/^https?:\/\/.+/.test(info.bale) && (
-                <a className="button button-bale" href={info.bale} rel="noreferrer">
-                  بله
-                </a>
-              )}
+              <div className="product-messengers">
+                {/^https?:\/\/.+/.test(info.telegram) && (
+                  <a className="button button-telegram" href={info.telegram} rel="noreferrer">
+                    تلگرام
+                  </a>
+                )}
+                {/^https?:\/\/.+/.test(info.bale) && (
+                  <a className="button button-bale" href={info.bale} rel="noreferrer">
+                    بله
+                  </a>
+                )}
+              </div>
             </div>
             <p className="price-note-inline">
               قیمت‌ها روزانه تغییر می‌کنند؛ مبلغ نهایی هنگام صدور فاکتور قطعی می‌شود.

@@ -7,14 +7,27 @@ import { getStoreInfo, telHref, fullMapUrl, type StoreInfo } from './store-info'
  * (product, category, vehicle, location). It reads the same store meta as the
  * homepage, so the phone numbers, social IDs and map set in the admin panel
  * are applied consistently across the whole storefront.
+ *
+ * `showContact={false}` renders only the slim header — used on the product
+ * page, where the big contact/footer block must not sit above the product.
  */
-export async function PublicSubHeader({ context }: { context: string }) {
+export async function PublicSubHeader({
+  context,
+  showContact = true,
+}: {
+  context: string;
+  showContact?: boolean;
+}) {
   const info = await getStoreInfo();
   return (
     <>
       <header className="sub-header">
         <a className="brand-lockup" href="/">
-          <span className="brand-mark">س</span>
+          {info.logoUrl ? (
+            <img className="brand-logo" src={info.logoUrl} alt={info.name} />
+          ) : (
+            <span className="brand-mark">س</span>
+          )}
           <span>
             <strong>{APP_NAME}</strong>
             <small>{context}</small>
@@ -27,18 +40,22 @@ export async function PublicSubHeader({ context }: { context: string }) {
         </nav>
       </header>
 
-      <StoreContact info={info} variant="sub" />
+      {showContact && (
+        <>
+          <StoreContact info={info} variant="sub" />
 
-      <footer className="sub-footer">
-        <span>
-          © {formatPersianNumber(new Date().getFullYear())} {STORE_BRAND}
-        </span>
-        <nav aria-label="پیوندهای تکراری">
-          <a href="/#catalog">کاتالوگ</a>
-          <a href="/#video">ویدئوی فروشگاه</a>
-          <a href="/#contact">تماس و آدرس</a>
-        </nav>
-      </footer>
+          <footer className="sub-footer">
+            <span>
+              © {formatPersianNumber(new Date().getFullYear())} {STORE_BRAND}
+            </span>
+            <nav aria-label="پیوندهای تکراری">
+              <a href="/#catalog">کاتالوگ</a>
+              <a href="/#video">ویدئوی فروشگاه</a>
+              <a href="/#contact">تماس و آدرس</a>
+            </nav>
+          </footer>
+        </>
+      )}
     </>
   );
 }
@@ -73,7 +90,7 @@ export async function StoreContact({
             تماس با فروشگاه
           </a>
           {hasTelegram && (
-            <a className="button button-outline-light" href={resolved.telegram} rel="noreferrer">
+            <a className="button button-telegram" href={resolved.telegram} rel="noreferrer">
               تلگرام
             </a>
           )}

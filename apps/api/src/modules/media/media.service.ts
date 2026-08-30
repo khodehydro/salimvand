@@ -1,15 +1,26 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import sharp = require('sharp');
 import { PrismaService } from '../../prisma.service';
 import { Prisma } from '@prisma/client';
 
+/** Allowed image types for the site logo / favicon (SVG is rejected on
+ * purpose: served same-origin from /uploads it would allow script injection). */
+const SITE_ASSET_MIME: Record<string, string> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/webp': 'webp',
+  'image/x-icon': 'ico',
+  'image/vnd.microsoft.icon': 'ico',
+};
+
 @Injectable()
 export class MediaService {
   private readonly uploadRoot =
     process.env.UPLOAD_DIR ?? join(process.cwd(), 'uploads', 'products');
+
   constructor(private readonly prisma: PrismaService) {}
 
   async list() {
@@ -18,6 +29,31 @@ export class MediaService {
       include: { product: { select: { id: true, name: true, slug: true } } },
     });
     return { ok: true, data: images };
+  }
+
+  /** Store logo / favicon uploads under uploads/site and return the public
+   * path the operator saves into store.profile (logoUrl / faviconUrl). */
+  async uploadSiteAsset(
+    kind: string,
+    file: { buffer: Buffer; mimetype: string; originalname: string },
+  ) {
+    if (kind !== 'logo' && kind !== 'favicon')
+      throw new BadRequestException('نوع تصویر نامعتبر است (logo یا favicon)');
+    if (!file?.buffer?.length) throw new BadRequestException('فایل تصویر معتبر نیست');
+    const extension = SITE_ASSET_MIME[file.mimetype];
+    if (!extension)
+      throw new BadRequestException('فرمت مجاز: PNG، JPG، WebP یا ICO (حجم حداکثر ۱ مگابایت)');
+    if (file.buffer.length > 1024 * 1024)
+      throw new BadRequestException('حجم فایل نباید بیشتر از ۱ مگابایت باشد');
+    // nginx caps the CMS proxy body at ~1MB; stay safely below it.
+    if (file.buffer.length > 900 * 1024)
+      throw new BadRequestException('حجم فایل باید کمتر از ۹۰۰ کیلوبایت باشد');
+    const dir = join(this.uploadRoot, '..', 'site');
+    await mkdir(dir, { recursive: true });
+    // A fresh filename per upload acts as a cache-buster for browsers and CDN.
+    const name = `${kind}-${randomUUID().slice(0, 8)}.${extension}`;
+    await writeFile(join(dir, name), file.buffer);
+    return { ok: true, data: { kind, path: `/uploads/site/${name}` } };
   }
 
   async upload(

@@ -4,9 +4,11 @@ import {
   buildProductSeo,
   createEan13,
   createSlug,
+  extractMapEmbedUrl,
   formatJalaliDate,
   formatPersianNumber,
   formatRial,
+  normalizeDigits,
 } from './index';
 
 describe('shared utilities', () => {
@@ -38,6 +40,25 @@ describe('shared utilities', () => {
     expect(first).not.toBe(second);
     expect(first).toHaveLength(13);
     expect(second).toHaveLength(13);
+  });
+  it('normalizes Persian and Arabic digits to ASCII', () => {
+    expect(normalizeDigits('۰۹۱۲۳۴۵۶۷۸۹')).toBe('09123456789');
+    expect(normalizeDigits('٠١٢٣')).toBe('0123');
+    expect(normalizeDigits('+98 441 ۰۹۱۲')).toBe('+98 441 0912');
+  });
+  it('extracts embeddable map URLs from any paste format', () => {
+    const embed = 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d4080.abc';
+    expect(extractMapEmbedUrl(embed)).toBe(embed);
+    expect(extractMapEmbedUrl(`<iframe src="${embed}" width="600"></iframe>`)).toBe(embed);
+    expect(extractMapEmbedUrl('!1m18!1m12!1m3!1d4080.xyz')).toBe(
+      'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d4080.xyz',
+    );
+    const osm = 'https://www.openstreetmap.org/export/embed.html?bbox=46.06%2C36.94';
+    expect(extractMapEmbedUrl(osm)).toBe(osm);
+    // Google share links cannot be framed — they must be rejected.
+    expect(extractMapEmbedUrl('https://maps.app.goo.gl/AbCdEf?g_st=ic')).toBe('');
+    expect(extractMapEmbedUrl('https://www.google.com/maps/place/Miandoab')).toBe('');
+    expect(extractMapEmbedUrl('')).toBe('');
   });
   it('generates product SEO defaults', () => {
     const seo = buildProductSeo({ name: 'قاب ستون', vehicleNames: ['پژو ۲۰۶'] });

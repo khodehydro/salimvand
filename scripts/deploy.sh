@@ -68,6 +68,7 @@ install -d -o salimvand -g salimvand "$STANDALONE/apps/website/.next/cache"
 chown -R salimvand:salimvand "$STANDALONE"
 
 install -d -o salimvand -g salimvand "$ROOT_DIR/uploads/products"
+install -d -o salimvand -g salimvand "$ROOT_DIR/uploads/site"
 install -m 0644 deploy/systemd/salimvand-api.service /etc/systemd/system/salimvand-api.service
 install -m 0644 deploy/systemd/salimvand-website.service /etc/systemd/system/salimvand-website.service
 install -m 0644 deploy/systemd/salimvand-worker.service /etc/systemd/system/salimvand-worker.service

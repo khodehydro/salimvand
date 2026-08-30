@@ -40,6 +40,50 @@ export function buildProductSeo(product: {
   };
 }
 
+/** Convert Persian (۰-۹) and Arabic (٠-٩) digits to ASCII digits. Needed for
+ * phone dial links: operators type numbers with a Persian keyboard layout. */
+export function normalizeDigits(value: string): string {
+  return value
+    .replace(/[\u06f0-\u06f9]/g, (digit) => String(digit.charCodeAt(0) - 0x06f0))
+    .replace(/[\u0660-\u0669]/g, (digit) => String(digit.charCodeAt(0) - 0x0660));
+}
+
+/** Extract a working iframe embed URL from whatever the operator pasted into
+ * the settings: a full `<iframe src="...">` tag from Google Maps "Embed a
+ * map", a bare embed URL, or a bare `pb=` code. Google Maps share links
+ * (maps.app.goo.gl / /maps/place/…) refuse framing, so they are rejected and
+ * the caller falls back to a default map instead of a blank frame. */
+export function extractMapEmbedUrl(...inputs: Array<string | null | undefined>): string {
+  for (const input of inputs) {
+    const raw = String(input ?? '').trim();
+    if (!raw) continue;
+    // A pasted iframe/embed tag: take its src attribute and recurse.
+    const srcMatch = raw.match(/src\s*=\s*["']([^"']+)["']/i);
+    if (srcMatch) {
+      const fromSrc = extractMapEmbedUrl(srcMatch[1]);
+      if (fromSrc) return fromSrc;
+      continue;
+    }
+    if (/^https?:\/\/\S+$/i.test(raw)) {
+      try {
+        const url = new URL(raw);
+        const isGoogleMaps =
+          /(^|\.)google\.[a-z.]+$/i.test(url.hostname) && url.pathname.startsWith('/maps');
+        const isShortLink = /^maps\.app\.goo\.gl$/i.test(url.hostname);
+        if (isShortLink || (isGoogleMaps && !/^\/maps\/embed/.test(url.pathname))) continue;
+      } catch {
+        continue;
+      }
+      return raw;
+    }
+    // Bare Google Maps embed payload (e.g. "!1m18!1m12!1m3!1d…").
+    if (raw.startsWith('!')) {
+      return `https://www.google.com/maps/embed?pb=${encodeURIComponent(raw)}`;
+    }
+  }
+  return '';
+}
+
 export function createEan13(seed: string): string {
   // Letter prefixes (e.g. BRK/FLT product codes) are folded into a base-26
   // number so codes that differ only by prefix never collide; purely numeric

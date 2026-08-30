@@ -36,6 +36,10 @@
   --navy: #071c30;
   --navy-2: #0d2b4b;
   --overlay-brand: rgba(255, 255, 255, 0.17);
+  --telegram: #0088cc;
+  --telegram-hover: #0077b3;
+  --bale: #0a7d4e;
+  --bale-hover: #096a42;
 }
 * {
   box-sizing: border-box;
@@ -87,6 +91,15 @@ body {
   color: var(--on-brand);
   font-weight: 700;
   font-size: 21px;
+}
+.brand-logo {
+  display: block;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  object-fit: contain;
+  background: var(--surface);
+  border: 1px solid var(--border);
 }
 .desktop-nav {
   display: flex;
@@ -1127,9 +1140,13 @@ p {
   font-size: 14px;
 }
 .contact-actions .button-bale {
-  background: color-mix(in srgb, var(--on-brand) 14%, transparent);
-  color: var(--on-brand);
-  border: 1px solid var(--overlay-brand);
+  background: var(--bale);
+  color: #fff;
+  border: 1px solid var(--bale);
+}
+.contact-actions .button-bale:hover {
+  background: var(--bale-hover);
+  border-color: var(--bale-hover);
 }
 .site-footer {
   flex-wrap: wrap;
@@ -1646,13 +1663,48 @@ p {
   background: var(--surface-2);
   color: var(--text-3);
 }
-.product-cta {
+.product-contact {
+  display: grid;
+  gap: 10px;
+  margin-block: 4px;
+}
+/* The product page shows the phone number alone — one tap dials the store. */
+.product-phone {
+  display: grid;
+  gap: 4px;
+  padding: 14px 18px;
+  border-radius: 14px;
+  border: 1px solid var(--border-2);
+  background: var(--surface-2);
+  text-decoration: none;
+  text-align: center;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+.product-phone small {
+  color: var(--text-3);
+  font-size: 12px;
+}
+.product-phone b {
+  font-size: 22px;
+  letter-spacing: 0.5px;
+  color: var(--text);
+  direction: ltr;
+}
+.product-phone:hover {
+  border-color: var(--brand-400);
+  background: var(--brand-50);
+}
+:root[data-theme='dark'] .product-phone:hover {
+  background: var(--surface-3);
+}
+.product-messengers {
   display: flex;
-  flex-wrap: wrap;
   gap: 10px;
 }
-.product-cta .button {
-  flex: 1 1 150px;
+.product-messengers .button {
+  flex: 1 1 0;
 }
 .button-lg {
   padding: 14px 22px;
@@ -1667,15 +1719,25 @@ p {
   border-color: var(--brand-500);
   color: var(--brand-600);
 }
-/* Bale (which sits on a light surface in the product CTA). */
+/* Telegram (dark blue) and Bale (dark green) sit side by side on the product
+ * page and inside the navy contact section. */
+.button-telegram {
+  background: var(--telegram);
+  color: #fff;
+  border: 1px solid var(--telegram);
+}
+.button-telegram:hover {
+  background: var(--telegram-hover);
+  border-color: var(--telegram-hover);
+}
 .button-bale {
-  background: color-mix(in srgb, var(--brand-600) 12%, var(--surface));
-  color: var(--brand-700);
-  border: 1px solid color-mix(in srgb, var(--brand-600) 24%, var(--border));
+  background: var(--bale);
+  color: #fff;
+  border: 1px solid var(--bale);
 }
 .button-bale:hover {
-  background: color-mix(in srgb, var(--brand-600) 18%, var(--surface));
-  border-color: var(--brand-500);
+  background: var(--bale-hover);
+  border-color: var(--bale-hover);
 }
 @media (max-width: 760px) {
   .product-layout {

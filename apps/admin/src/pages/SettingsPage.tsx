@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
+import { extractMapEmbedUrl } from '@salimvand/shared';
 import { api } from '../lib/api';
 import { isValidIranMobile } from '../lib/invoice-math';
 
@@ -21,6 +22,8 @@ type Settings = {
     close?: string;
     mapUrl?: string;
     mapCode?: string;
+    logoUrl?: string;
+    faviconUrl?: string;
     instagram?: string;
   };
   'store.trust_video'?: string;
@@ -39,6 +42,8 @@ const initial: Settings = {
     close: '20:00',
     mapUrl: '',
     mapCode: '',
+    logoUrl: '',
+    faviconUrl: '',
     instagram: '',
   },
   'store.trust_video': '',
@@ -180,14 +185,41 @@ export function SettingsPage() {
       setMessage((error as Error).message);
     }
   };
-  // Mirrors the website's fullMapUrl(): an explicit embed URL wins, otherwise a
-  // Google Maps code is expanded into an embed link.
-  const previewMapUrl = () => {
-    const mapUrl = (settings['store.profile']?.mapUrl ?? '').trim();
-    const mapCode = (settings['store.profile']?.mapCode ?? '').trim();
-    if (/^https?:\/\//i.test(mapUrl)) return mapUrl;
-    if (mapCode) return `https://www.google.com/maps/embed?pb=${encodeURIComponent(mapCode)}`;
-    return 'https://www.openstreetmap.org/export/embed.html?bbox=46.06%2C36.94%2C46.16%2C37.00&layer=mapnik&marker=36.9692%2C46.1027';
+  // Mirrors the website's fullMapUrl(): accepts the full iframe code, a bare
+  // embed URL or a bare Google Maps pb code, exactly like the storefront.
+  const mapInput = () =>
+    (settings['store.profile']?.mapUrl ?? '').trim() ||
+    (settings['store.profile']?.mapCode ?? '').trim();
+  const mapResolvedUrl = () =>
+    extractMapEmbedUrl(
+      settings['store.profile']?.mapUrl ?? '',
+      settings['store.profile']?.mapCode ?? '',
+    ) ||
+    'https://www.openstreetmap.org/export/embed.html?bbox=46.06%2C36.94%2C46.16%2C37.00&layer=mapnik&marker=36.9692%2C46.1027';
+  const mapIsEmbeddable = () => !mapInput() || Boolean(mapResolvedUrl().match(/^https?:\/\//));
+
+  const [assetBusy, setAssetBusy] = useState<'logo' | 'favicon' | null>(null);
+  const uploadSiteAsset = async (kind: 'logo' | 'favicon', file: File | null) => {
+    if (!file) return setMessage('ابتدا یک فایل تصویر انتخاب کنید.');
+    setAssetBusy(kind);
+    try {
+      const data = new FormData();
+      data.append('file', file);
+      const result = await api<{ data: { path: string } }>(`/media/settings/${kind}/upload`, {
+        method: 'POST',
+        body: data,
+      });
+      updateProfile(kind === 'logo' ? 'logoUrl' : 'faviconUrl', result.data.path);
+      setMessage('فایل آپلود شد — برای اعمال روی سایت، تنظیمات را ذخیره کنید.');
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setAssetBusy(null);
+    }
+  };
+  const clearSiteAsset = (kind: 'logo' | 'favicon') => {
+    updateProfile(kind === 'logo' ? 'logoUrl' : 'faviconUrl', '');
+    setMessage('برای حذف کامل، تنظیمات را ذخیره کنید.');
   };
 
   if (loading)
@@ -236,37 +268,94 @@ export function SettingsPage() {
             />
           </label>
           <label>
-            آدرس نقشه (Embed / Google Maps iframe src)
-            <input
+            کد یا لینک iframe نقشه (گوگل‌مپ یا هر سرویس دیگر)
+            <textarea
               dir="ltr"
+              rows={2}
               value={settings['store.profile']?.mapUrl ?? ''}
               onChange={(e) => updateProfile('mapUrl', e.target.value)}
-              placeholder="https://www.google.com/maps/embed?pb=... یا openstreetmap embed"
+              placeholder={`<iframe src="https://www.google.com/maps/embed?pb=..." ...></iframe>`}
             />
           </label>
-          <label>
-            کد نقشه گوگل (اگر iframe src ندارید)
-            <input
-              dir="ltr"
-              value={settings['store.profile']?.mapCode ?? ''}
-              onChange={(e) => updateProfile('mapCode', e.target.value)}
-              placeholder="مثلاً: 0C4SxK7sFm2w8aBq1"
-            />
-          </label>
+          {!mapIsEmbeddable() && (
+            <p className="settings-help map-warn">
+              این لینک برای جاسازی مناسب نیست — لینک‌های اشتراکی گوگل‌مپ (maps.app.goo.gl یا
+              /maps/place) داخل سایت باز نمی‌شوند. در گوگل‌مپ روی «اشتراک‌گذاری ← Embed a map» کلیک
+              کنید و کل کد iframe را همین‌جا بچسبانید.
+            </p>
+          )}
           <div className="map-preview">
             <small>
-              پیش‌نمایش نقشهٔ سایت — پس از ذخیره، همین نقشه در بخش «تماس و آدرس» صفحهٔ اصلی و همهٔ
-              صفحات عمومی نمایش داده می‌شود.
+              پیش‌نمایش نقشهٔ سایت — پس از ذخیره، همین نقشه در بخش «تماس و آدرس» صفحهٔ اصلی و صفحات
+              عمومی نمایش داده می‌شود.
             </small>
             <div className="map-preview-frame">
               <iframe
                 title="پیش‌نمایش نقشه"
-                src={previewMapUrl()}
+                src={mapResolvedUrl()}
                 loading="lazy"
                 referrerPolicy="no-referrer-when-downgrade"
               />
             </div>
           </div>
+          <div className="site-assets">
+            <div className="asset-field">
+              <small>لوگوی سایت (هدر صفحهٔ اصلی و صفحات محصول)</small>
+              <div className="asset-preview">
+                {settings['store.profile']?.logoUrl ? (
+                  <img src={settings['store.profile'].logoUrl} alt="لوگوی سایت" />
+                ) : (
+                  <span>س</span>
+                )}
+              </div>
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                onChange={(e) => void uploadSiteAsset('logo', e.target.files?.[0] ?? null)}
+                disabled={assetBusy === 'logo'}
+              />
+              {settings['store.profile']?.logoUrl && (
+                <button
+                  type="button"
+                  className="asset-clear"
+                  onClick={() => clearSiteAsset('logo')}
+                >
+                  حذف لوگو
+                </button>
+              )}
+              {assetBusy === 'logo' && <small>در حال آپلود…</small>}
+            </div>
+            <div className="asset-field">
+              <small>آیکون تب مرورگر (Favicon)</small>
+              <div className="asset-preview asset-preview-sq">
+                {settings['store.profile']?.faviconUrl ? (
+                  <img src={settings['store.profile'].faviconUrl} alt="فاوآیکون" />
+                ) : (
+                  <span>🔒</span>
+                )}
+              </div>
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/x-icon"
+                onChange={(e) => void uploadSiteAsset('favicon', e.target.files?.[0] ?? null)}
+                disabled={assetBusy === 'favicon'}
+              />
+              {settings['store.profile']?.faviconUrl && (
+                <button
+                  type="button"
+                  className="asset-clear"
+                  onClick={() => clearSiteAsset('favicon')}
+                >
+                  حذف آیکون
+                </button>
+              )}
+              {assetBusy === 'favicon' && <small>در حال آپلود…</small>}
+            </div>
+          </div>
+          <p className="settings-help">
+            فرمت‌های مجاز: PNG، JPG، WebP و ICO — حداکثر ۹۰۰ کیلوبایت. لوگو به‌صورت مربعی (۳۸×۳۸) در
+            هدر نمایش داده می‌شود؛ آیکون مربعی ۶۴×۶۴ یا فایل ico بهترین نتیجه را می‌دهد.
+          </p>
           <label>
             اینستاگرام
             <input
@@ -298,10 +387,11 @@ export function SettingsPage() {
             <small>پس از ذخیره، این اطلاعات در سایت عمومی دیده می‌شود:</small>
             <ul>
               <li>
-                تلفن‌ها در دکمهٔ «تماس سریع» و بخش تماس:{' '}
+                تلفن‌ها در دکمهٔ «تماس سریع»، بخش تماس و صفحهٔ هر محصول:{' '}
                 <b dir="ltr">{settings['store.profile']?.phones || 'ثبت نشده'}</b>
               </li>
-              <li>آدرس و نقشه در بخش «تماس و آدرس» صفحهٔ اصلی و همهٔ صفحات محصول</li>
+              <li>آدرس و نقشه در بخش «تماس و آدرس» صفحهٔ اصلی و صفحات دسته‌بندی و خودرو</li>
+              <li>لوگو در هدر سایت و آیکون در تب مرورگر (پس از آپلود و ذخیره)</li>
               <li>
                 ساعات کاری:{' '}
                 <b>
