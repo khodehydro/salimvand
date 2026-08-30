@@ -99,14 +99,21 @@ export async function getStoreInfo(): Promise<StoreInfo> {
     const instagram = asString(profile.instagram ?? '');
     const mapUrl = asString(profile.mapUrl ?? '');
     const mapCode = asString(profile.mapCode ?? '');
+    // Coordinates are parsed first: when the operator picks the automatic
+    // map (or pastes nothing embeddable) the site still shows a real map
+    // centered on the store instead of the hardcoded default.
+    const navLat = parseCoordinate(asString(profile.navLat ?? ''));
+    const navLng = parseCoordinate(asString(profile.navLng ?? ''));
+    const coordMapUrl = osmEmbedUrl(navLat, navLng);
+    const pastedMapUrl = extractMapEmbedUrl(mapUrl, mapCode);
+    const mapMode = asString(profile.mapSource ?? '') === 'coords' ? 'coords' : 'embed';
+    const resolvedMapUrl =
+      (mapMode === 'coords' && coordMapUrl) || pastedMapUrl || coordMapUrl || fallback.mapUrl;
     const rawShipping = asString(profile.shippingMethods ?? '');
     const shippingMethods = rawShipping
       .split(/[،,;\n]/)
       .map((item) => item.trim())
       .filter(Boolean);
-    // When only a Google Maps code is provided, keep mapUrl empty so the
-    // renderer expands the code into a full embed link (see fullMapUrl).
-    const resolvedMapUrl = mapUrl || (mapCode ? '' : fallback.mapUrl);
     const rawHeader = (profile.header ?? {}) as Record<string, unknown>;
     const headerText = (key: keyof StoreInfo['header'], fallbackValue: string) =>
       asString(rawHeader[key] ?? '').trim() || fallbackValue;
@@ -122,12 +129,12 @@ export async function getStoreInfo(): Promise<StoreInfo> {
           : fallback.workingHours,
       shippingMethods: shippingMethods.length ? shippingMethods : fallback.shippingMethods,
       mapUrl: resolvedMapUrl,
-      mapCode,
+      mapCode: mapCode && !pastedMapUrl ? mapCode : '',
       logoUrl: asString(profile.logoUrl ?? ''),
       faviconUrl: asString(profile.faviconUrl ?? ''),
       nav: {
-        lat: parseCoordinate(asString(profile.navLat ?? '')),
-        lng: parseCoordinate(asString(profile.navLng ?? '')),
+        lat: navLat,
+        lng: navLng,
         app:
           asString(profile.navApp ?? '') === 'neshan' || asString(profile.navApp ?? '') === 'balad'
             ? (asString(profile.navApp) as 'neshan' | 'balad')
@@ -161,6 +168,13 @@ export function telHref(info: StoreInfo): string {
   // stripped and the "quick call" buttons would go nowhere.
   const phone = normalizeDigits(primaryPhone(info)).replace(/[^0-9+]/g, '');
   return phone ? `tel:${phone}` : '#contact';
+}
+
+/** OpenStreetMap embed centered on the store coordinates. Unlike Google
+ * embeds it renders for every visitor, so it backs the automatic map mode. */
+function osmEmbedUrl(lat: number | null, lng: number | null): string {
+  if (lat == null || lng == null) return '';
+  return `https://www.openstreetmap.org/export/embed.html?bbox=${lng - 0.012}%2C${lat - 0.008}%2C${lng + 0.012}%2C${lat + 0.008}&layer=mapnik&marker=${lat}%2C${lng}`;
 }
 
 export function fullMapUrl(mapUrl: string, mapCode?: string): string {

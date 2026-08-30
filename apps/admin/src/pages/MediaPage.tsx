@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { formatPersianNumber } from '@salimvand/shared';
 import { api } from '../lib/api';
+import { MediaPicker, type PickerItem } from '../components/MediaPicker';
 
 type Product = { id: string; name: string; code: string };
 type Media = {
@@ -23,6 +24,7 @@ export function MediaPage() {
   const [query, setQuery] = useState('');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const load = async () => {
     try {
@@ -81,6 +83,27 @@ export function MediaPage() {
       });
       setMessage('تصویر به محصول متصل شد.');
       setUrl('');
+      setAlt('');
+      await load();
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Attach an already-uploaded image to the selected product straight from
+  // the media library — no re-upload needed.
+  const attachExisting = async (item: PickerItem) => {
+    if (!productId) return setMessage('ابتدا محصول را انتخاب کنید.');
+    if (item.kind === 'site') return setMessage('رسانه‌های سایت به محصول متصل نمی‌شوند.');
+    setLoading(true);
+    try {
+      await api(`/media/products/${productId}/select`, {
+        method: 'POST',
+        body: JSON.stringify({ imageId: item.id, alt: alt.trim() || item.alt || undefined }),
+      });
+      setMessage('تصویر به محصول متصل شد.');
       setAlt('');
       await load();
     } catch (error) {
@@ -199,6 +222,15 @@ export function MediaPage() {
         >
           اتصال تصویر از نشانی
         </button>
+        <button
+          type="button"
+          className="outline"
+          onClick={() =>
+            productId ? setPickerOpen(true) : setMessage('ابتدا محصول را انتخاب کنید.')
+          }
+        >
+          انتخاب از رسانه‌های موجود
+        </button>
       </div>
       <div className="media-toolbar">
         <label className="search-field">
@@ -250,6 +282,12 @@ export function MediaPage() {
           <span>یک تصویر بارگذاری کنید یا عبارت جست‌وجو را تغییر دهید.</span>
         </div>
       )}
+      <MediaPicker
+        open={pickerOpen}
+        title={`انتخاب تصویر برای ${products.find((product) => product.id === productId)?.name ?? 'محصول'}`}
+        onClose={() => setPickerOpen(false)}
+        onSelect={(item) => void attachExisting(item)}
+      />
     </section>
   );
 }

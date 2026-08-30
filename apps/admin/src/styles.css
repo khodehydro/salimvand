@@ -95,6 +95,72 @@ section {
 .muted {
   color: var(--sv-text-2);
 }
+/* Shared action buttons. Pages used to ship unstyled <button class="..."> in
+ * some spots (e.g. the settings save button); these make every primary,
+ * outline and danger action look consistent panel-wide. */
+.button-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--sv-primary);
+  color: var(--sv-primary-fg);
+  border: 0;
+  border-radius: 10px;
+  padding: 12px 22px;
+  font: 700 14px Vazirmatn;
+  cursor: pointer;
+  box-shadow: var(--sv-shadow-1);
+  transition:
+    background 0.15s ease,
+    transform 0.1s ease;
+  white-space: nowrap;
+}
+.button-primary:hover {
+  background: var(--sv-primary-hover);
+}
+.button-primary:active {
+  transform: translateY(1px);
+}
+.button-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.outline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: var(--sv-surface-3);
+  color: var(--sv-primary);
+  border: 1px solid var(--sv-border-2);
+  border-radius: 10px;
+  padding: 10px 16px;
+  font: 600 13px Vazirmatn;
+  cursor: pointer;
+  transition: 0.15s;
+}
+.outline:hover {
+  border-color: var(--sv-primary);
+}
+.danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: var(--sv-danger-soft);
+  color: var(--sv-danger);
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 10px 16px;
+  font: 600 13px Vazirmatn;
+  cursor: pointer;
+  transition: 0.15s;
+}
+.danger:hover {
+  background: var(--sv-danger);
+  color: var(--sv-primary-fg);
+}
 .media-page {
   padding: 32px;
 }
@@ -852,35 +918,112 @@ body,
   padding: 0 8px;
   font-weight: 700;
 }
+/* Tabs replaced the old two-column mixed grid: one focused section at a
+ * time, with paired fields handled by .two-fields inside each fieldset. */
 .settings-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
-  margin-top: 22px;
+  margin-top: 18px;
 }
-.settings-grid fieldset:last-child {
-  grid-column: 1/-1;
+.settings-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 20px;
 }
-/* The store-profile fieldset is the biggest one: let it use the full row and
- * flow its fields through two inner columns so the page stays compact. */
-.settings-grid fieldset.wide {
-  grid-column: 1/-1;
+.settings-tabs button {
+  display: grid;
+  gap: 3px;
+  text-align: start;
+  padding: 12px 14px;
+  border: 1px solid var(--sv-border);
+  border-radius: 12px;
+  background: var(--sv-surface);
+  color: var(--sv-text-2);
+  font: inherit;
+  cursor: pointer;
+  transition: 0.15s;
+}
+.settings-tabs button small {
+  font-size: 10px;
+  color: var(--sv-text-3);
+}
+.settings-tabs button:hover {
+  border-color: var(--sv-primary);
+}
+.settings-tabs button.active {
+  border-color: var(--sv-primary);
+  background: var(--sv-surface-2);
+  box-shadow: inset 0 -2px 0 var(--sv-primary);
+}
+.settings-tabs button.active b {
+  color: var(--sv-primary);
+}
+.settings-tabs button b {
+  font-size: 13px;
+  color: var(--sv-text);
+}
+/* Save bar pinned to the bottom of the settings form — the same action is
+ * also in the page header, so it is reachable from both ends of a long form. */
+.settings-save-bar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--sv-border);
+  border-radius: 12px;
+  background: var(--sv-surface);
+  box-shadow: 0 -6px 18px #04121f14;
+  z-index: 4;
+}
+.settings-save-bar span {
+  font-size: 12px;
+  color: var(--sv-text-2);
+}
+/* Radio cards choosing the storefront map source. */
+.map-source-row {
+  display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-items: start;
-  column-gap: 22px;
+  gap: 10px;
 }
-.settings-grid fieldset.wide > .wide-row,
-.settings-grid fieldset.wide > .map-preview,
-.settings-grid fieldset.wide > .site-assets,
-.settings-grid fieldset.wide > .settings-help,
-.settings-grid fieldset.wide > .site-visibility {
-  grid-column: 1/-1;
+.map-source-row label {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px;
+  border: 1px solid var(--sv-border);
+  border-radius: 12px;
+  background: var(--sv-surface-2);
+  cursor: pointer;
 }
-.settings-grid fieldset.wide > .header-texts {
-  border: 1px dashed var(--sv-border);
-  border-radius: 10px;
-  padding: 10px 12px;
-  margin: 0;
+.map-source-row label.active {
+  border-color: var(--sv-primary);
+  box-shadow: 0 0 0 1px var(--sv-primary);
+}
+.map-source-row label input {
+  margin-top: 3px;
+}
+.map-source-row label b {
+  display: block;
+  font-size: 13px;
+}
+.map-source-row label small {
+  color: var(--sv-text-3);
+  font-size: 11px;
+}
+/* Logo / favicon cards: preview + upload + pick-from-library + remove. */
+.asset-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.asset-actions input[type='file'] {
+  font-size: 11px;
+  color: var(--sv-text-2);
 }
 .settings-grid label {
   display: grid;
@@ -978,11 +1121,16 @@ body,
   .settings-grid {
     grid-template-columns: 1fr;
   }
-  .settings-grid fieldset:last-child {
-    grid-column: auto;
+  .settings-tabs {
+    grid-template-columns: 1fr 1fr;
   }
-  .settings-grid fieldset.wide {
+  .map-source-row {
     grid-template-columns: 1fr;
+  }
+  .settings-save-bar {
+    flex-direction: column-reverse;
+    align-items: stretch;
+    text-align: center;
   }
 }
 .palette-detail {
@@ -2667,6 +2815,152 @@ body,
 .header-texts > small {
   color: var(--sv-text-3, var(--text-3));
   font-size: 11px;
+}
+
+/* Media picker modal — choose an existing uploaded file instead of
+ * uploading a new one (logo / favicon / product image). */
+.picker-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: var(--sv-scrim);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+.picker-modal {
+  width: min(860px, 100%);
+  max-height: min(82vh, 720px);
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  gap: 12px;
+  background: var(--sv-surface);
+  border: 1px solid var(--sv-border);
+  border-radius: 16px;
+  padding: 18px;
+  box-shadow: var(--sv-shadow-modal);
+  overflow: hidden;
+}
+.picker-modal header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: transparent;
+  border-bottom: 0;
+  padding: 0;
+}
+.picker-modal header b {
+  font-size: 15px;
+}
+.picker-close {
+  background: var(--sv-surface-3);
+  color: var(--sv-text-2);
+  border: 0;
+  border-radius: 8px;
+  width: 34px;
+  height: 34px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.picker-close:hover {
+  color: var(--sv-danger);
+}
+.picker-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--sv-surface-2);
+  border: 1px solid var(--sv-border);
+  border-radius: 10px;
+  padding: 0 12px;
+}
+.picker-search span {
+  color: var(--sv-text-3);
+}
+.picker-search input {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: var(--sv-text);
+  padding: 11px 0;
+  font: inherit;
+  outline: none;
+}
+.picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+  overflow-y: auto;
+  padding: 2px;
+}
+.picker-item {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--sv-border);
+  border-radius: 12px;
+  background: var(--sv-surface-2);
+  cursor: pointer;
+  text-align: start;
+  font: inherit;
+  transition: 0.15s;
+}
+.picker-item:hover {
+  border-color: var(--sv-primary);
+  transform: translateY(-2px);
+}
+.picker-item img {
+  width: 100%;
+  height: 96px;
+  object-fit: cover;
+  border-radius: 8px;
+  background: var(--sv-surface-3);
+}
+.picker-item span {
+  font-size: 12px;
+  color: var(--sv-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.picker-item small {
+  position: absolute;
+  top: 12px;
+  inset-inline-end: 12px;
+  background: #1f6fbe;
+  color: #fff;
+  border-radius: 99px;
+  padding: 3px 8px;
+  font-size: 10px;
+}
+.picker-empty {
+  display: grid;
+  place-items: center;
+  color: var(--sv-text-2);
+  font-size: 13px;
+  padding: 40px 12px;
+  margin: 0;
+}
+.picker-modal footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--sv-border);
+}
+.picker-modal footer span {
+  font-size: 12px;
+  color: var(--sv-text-3);
+}
+@media (max-width: 700px) {
+  .picker-overlay {
+    padding: 10px;
+  }
+  .picker-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 /* Site-asset badge sits on the opposite corner of the primary badge. */

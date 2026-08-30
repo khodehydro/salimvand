@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { createEan13 } from '@salimvand/shared';
 import { api } from '../lib/api';
+import { MediaPicker, type PickerItem } from '../components/MediaPicker';
 import { paramsFromHash } from '../lib/admin-route';
 
 type ProductRow = {
@@ -50,7 +51,6 @@ type ProductDetail = {
     location?: { code: string; name: string } | null;
   }>;
 };
-type Media = { id: string; path: string; alt?: string; product?: { name: string } };
 type Category = { id: string; name: string };
 type Brand = { id: string; name: string };
 type Location = { id: string; code: string; name: string; type: string };
@@ -76,7 +76,6 @@ const aparatEmbed = (videoId: string) =>
 
 export function ProductsPage() {
   const [products, setProducts] = useState<ProductRow[]>([]);
-  const [media, setMedia] = useState<Media[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
@@ -112,9 +111,6 @@ export function ProductsPage() {
 
   useEffect(() => {
     void load();
-    void api<{ data: Media[] }>('/media')
-      .then((result) => setMedia(result.data))
-      .catch(() => undefined);
     void api<{ data: Category[] }>('/categories')
       .then((result) => setCategories(result.data))
       .catch(() => undefined);
@@ -285,7 +281,6 @@ export function ProductsPage() {
           onClose={() => setDraft(null)}
           onMessage={setMessage}
           onRefresh={() => void refresh(draft.id)}
-          media={media}
           categories={categories}
           brands={brands}
           locations={locations}
@@ -303,7 +298,6 @@ type EditorProps = {
   onClose: () => void;
   onMessage: (text: string) => void;
   onRefresh: () => void;
-  media: Media[];
   categories: Category[];
   brands: Brand[];
   locations: Location[];
@@ -317,7 +311,6 @@ function ProductEditor({
   onClose,
   onMessage,
   onRefresh,
-  media,
   categories,
   brands,
   locations,
@@ -336,6 +329,7 @@ function ProductEditor({
   const [aparatId, setAparatId] = useState(product.aparatVideoId ?? '');
   const [mediaUrl, setMediaUrl] = useState('');
   const [mediaFile, setMediaFile] = useState<File | null>(null);
+  const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
   const [compat, setCompat] = useState<Array<{ modelId: string; trimId: string }>>(
     (product.compatibilities ?? []).map((entry) => ({
       modelId: entry.model.id,
@@ -644,36 +638,37 @@ function ProductEditor({
             >
               افزودن از نشانی
             </button>
-            <select
-              defaultValue=""
-              onChange={async (event) => {
-                if (!event.target.value) return;
-                try {
-                  await api(`/media/products/${product.id}/select`, {
-                    method: 'POST',
-                    body: JSON.stringify({ imageId: event.target.value, alt: product.name }),
-                  });
-                  onMessage('تصویر از کتابخانه افزوده شد');
-                  onRefresh();
-                } catch (error) {
-                  onMessage((error as Error).message);
-                }
-              }}
+            <button
+              type="button"
+              className="outline"
+              disabled={busy}
+              onClick={() => setMediaPickerOpen(true)}
             >
-              <option value="">انتخاب از کتابخانهٔ رسانه</option>
-              {media
-                .filter((entry) => entry.product?.name !== product.name)
-                .map((entry) => (
-                  <option key={entry.id} value={entry.id}>
-                    {entry.product?.name ?? entry.path}
-                  </option>
-                ))}
-            </select>
+              انتخاب از رسانه‌های موجود
+            </button>
           </div>
           <p className="muted">
             تصاویر با همان نشانی در سایت و فاکتور استفاده می‌شوند؛ Alt خالی برای دسترسی‌پذیری و سئو
             توصیه نمی‌شود.
           </p>
+          <MediaPicker
+            open={mediaPickerOpen}
+            title={`انتخاب تصویر برای ${product.name}`}
+            onClose={() => setMediaPickerOpen(false)}
+            onSelect={async (item: PickerItem) => {
+              if (item.kind === 'site') return onMessage('رسانه‌های سایت به محصول متصل نمی‌شوند.');
+              try {
+                await api(`/media/products/${product.id}/select`, {
+                  method: 'POST',
+                  body: JSON.stringify({ imageId: item.id, alt: item.alt ?? product.name }),
+                });
+                onMessage('تصویر از کتابخانه افزوده شد');
+                onRefresh();
+              } catch (error) {
+                onMessage((error as Error).message);
+              }
+            }}
+          />
         </div>
       )}
 

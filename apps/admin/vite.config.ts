@@ -13,6 +13,12 @@ export default defineConfig({
         target: process.env.VITE_API_PROXY_TARGET ?? 'http://127.0.0.1:4000',
         changeOrigin: true,
       },
+      // Uploaded media previews: the API exposes the uploads root under
+      // /uploads, so the dev panel resolves the same paths as production.
+      '/uploads': {
+        target: process.env.VITE_API_PROXY_TARGET ?? 'http://127.0.0.1:4000',
+        changeOrigin: true,
+      },
     },
   },
   preview: { host: '0.0.0.0', port: 5173, allowedHosts: true },

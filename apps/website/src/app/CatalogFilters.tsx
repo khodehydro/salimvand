@@ -144,7 +144,7 @@ export function CatalogFilters({
             className="clear-filter"
             onClick={() => router.push('/', { scroll: false })}
           >
-            پاک کردن فیلترها
+            <span aria-hidden="true">✕</span> پاک کردن فیلترها
           </button>
         );
       })()}

@@ -1,14 +1,14 @@
 'use client';
 
-import { useState } from 'react';
 import { extractAparatVideoId } from '@salimvand/shared';
 
 /**
- * The store's trust video. `variant="hero"` renders the compact player card
- * that sits inside the homepage hero (where the old info cards used to be);
- * `variant="section"` renders the previous full-width band. The iframe only
- * loads after the visitor clicks play, and the operator may paste a bare
- * Aparat hash or a full link.
+ * The store's trust video, embedded with the official Aparat iframe. The
+ * player loads with the page (the operator wants the video ready before the
+ * click) while playback stays in the visitor's hands — Aparat's own player
+ * shows the poster and play button. `variant="hero"` renders the compact
+ * card that sits inside the homepage hero; `variant="section"` renders the
+ * full-width band. The operator may paste a bare Aparat hash or a full link.
  */
 export function TrustVideo({
   videoId,
@@ -17,28 +17,15 @@ export function TrustVideo({
   videoId?: string;
   variant?: 'hero' | 'section';
 }) {
-  const [started, setStarted] = useState(false);
   const resolvedVideoId = extractAparatVideoId(videoId ?? '');
   const player = (
     <div className="video-frame">
       {resolvedVideoId ? (
-        started ? (
-          <iframe
-            title="ویدئوی معرفی فروشگاه سلیم وند"
-            src={`https://www.aparat.com/video/video/embed/videohash/${encodeURIComponent(resolvedVideoId)}/vt/frame`}
-            allowFullScreen
-          />
-        ) : (
-          <button
-            className="video-placeholder"
-            onClick={() => setStarted(true)}
-            aria-label="پخش ویدئوی معرفی فروشگاه"
-          >
-            <span className="play-icon">▶</span>
-            <span>پخش ویدئوی معرفی</span>
-            <small>فقط پس از کلیک بارگذاری می‌شود</small>
-          </button>
-        )
+        <iframe
+          title="ویدئوی معرفی فروشگاه سلیم وند"
+          src={`https://www.aparat.com/video/video/embed/videohash/${encodeURIComponent(resolvedVideoId)}/vt/frame`}
+          allowFullScreen
+        />
       ) : (
         <div className="video-placeholder video-empty" aria-label="ویدئوی فروشگاه">
           <span className="play-icon">▶</span>

@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react';
-import { extractAparatVideoId } from '@salimvand/shared';
 
 /**
  * The single catalog card used by the homepage grid and every SEO landing
@@ -33,11 +32,6 @@ const availabilityLabels: Record<string, string> = {
   discontinued: 'ناموجود',
 };
 
-export function aparatWatchUrl(rawVideoId?: string | null): string {
-  const videoId = extractAparatVideoId(rawVideoId ?? '');
-  return videoId ? `https://www.aparat.com/v/${videoId}` : '';
-}
-
 /** Quick actions rendered under every catalog card: call / Telegram / Bale
  * without opening the product page. Passed down by each page from the store
  * settings so the numbers and links always match the panel. */
@@ -61,7 +55,11 @@ export function ProductCard({
   // low_stock shares the in_stock look so the badge reads simply «موجود».
   const displayAvailability =
     product.availability === 'low_stock' ? 'in_stock' : product.availability;
-  const videoUrl = aparatWatchUrl(product.aparatVideoId);
+  // The badge no longer opens aparat.com in a new tab: it jumps to the
+  // embedded player on the product page itself.
+  const videoUrl = product.aparatVideoId
+    ? `/product/${encodeURIComponent(product.slug)}#video`
+    : '';
   return (
     <div className="product-card">
       <a className="card-link" href={`/product/${encodeURIComponent(product.slug)}`}>
@@ -111,10 +109,8 @@ export function ProductCard({
         <a
           className="video-play"
           href={videoUrl}
-          target="_blank"
-          rel="noreferrer"
           aria-label={`پخش ویدئوی ${product.name}`}
-          title="پخش ویدئوی آپارات"
+          title="پخش ویدئوی این محصول"
         >
           ▶
         </a>

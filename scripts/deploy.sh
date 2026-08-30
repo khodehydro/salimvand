@@ -69,6 +69,59 @@ chown -R salimvand:salimvand "$STANDALONE"
 
 install -d -o salimvand -g salimvand "$ROOT_DIR/uploads/products"
 install -d -o salimvand -g salimvand "$ROOT_DIR/uploads/site"
+# The CMS must serve uploaded media (/uploads) same-origin for the media
+# library and settings previews. Never overwrite the live vhost — certbot
+# edits it in place for TLS — only insert the location if it is missing.
+NGINX_CONF=""
+if [[ -f /etc/nginx/sites-available/salimvand.conf ]]; then
+  NGINX_CONF=/etc/nginx/sites-available/salimvand.conf
+elif [[ -f /etc/nginx/conf.d/salimvand.conf ]]; then
+  NGINX_CONF=/etc/nginx/conf.d/salimvand.conf
+fi
+if [[ -n "$NGINX_CONF" ]] && grep -q 'server_name cms' "$NGINX_CONF" \
+   && ! grep -q 'location \^~ /uploads/' "$NGINX_CONF"; then
+  python3 - "$NGINX_CONF" <<'NGINXPY'
+import sys
+
+path = sys.argv[1]
+newline = chr(10)
+lines = open(path).read().split(newline)
+block = [
+    '    # Uploaded media (product images, logo, favicon) served to the CMS.',
+    '    location ^~ /uploads/ {',
+    '        alias /opt/salimvand/uploads/;',
+    '        expires 30d;',
+    '        add_header Cache-Control "public, immutable";',
+    '        try_files $uri =404;',
+    '    }',
+]
+out = []
+in_cms = False
+has_api = False
+inserted = False
+for line in lines:
+    if 'server_name cms' in line:
+        in_cms = True
+    if 'location /api/' in line:
+        has_api = True
+    if in_cms and line == '}':
+        # Insert into the cms server block that actually proxies the API
+        # (certbot may add a separate HTTP->HTTPS redirect block first).
+        if has_api and not inserted:
+            out.extend(block)
+            inserted = True
+        in_cms = False
+        has_api = False
+    out.append(line)
+if inserted:
+    open(path, 'w').write(chr(10).join(out))
+    print('Added /uploads location to the CMS vhost.')
+NGINXPY
+fi
+if [[ -n "$NGINX_CONF" ]] && command -v nginx >/dev/null 2>&1; then
+  nginx -t
+  systemctl reload nginx
+fi
 install -m 0644 deploy/systemd/salimvand-api.service /etc/systemd/system/salimvand-api.service
 install -m 0644 deploy/systemd/salimvand-website.service /etc/systemd/system/salimvand-website.service
 install -m 0644 deploy/systemd/salimvand-worker.service /etc/systemd/system/salimvand-worker.service

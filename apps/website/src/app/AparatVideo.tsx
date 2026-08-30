@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
 import { extractAparatVideoId } from '@salimvand/shared';
 
 /**
- * Lazy Aparat embed: the iframe (and its third-party scripts) only load after
- * the visitor clicks play — exactly like the homepage trust video. Accepts a
- * bare hash or a full Aparat link.
+ * Product video embedded with the official Aparat iframe. The player loads
+ * with the page and playback is left to the visitor (Aparat's poster + play
+ * button) — no external aparat.com link, no click-to-reveal gate. The
+ * section carries id="video" so catalog card badges can link straight to it.
  */
 export function AparatVideo({
   videoId,
@@ -15,29 +15,20 @@ export function AparatVideo({
   videoId: string;
   title?: string;
 }) {
-  const [started, setStarted] = useState(false);
   const resolvedVideoId = extractAparatVideoId(videoId);
   if (!resolvedVideoId) return null;
   return (
-    <section className="product-video">
+    <section className="product-video" id="video">
       <div className="product-video-head">
         <h2>{title}</h2>
         <p>نصب و بررسی این قطعه روی آپارات منتشر شده است.</p>
       </div>
       <div className="video-frame">
-        {started ? (
-          <iframe
-            title={title}
-            src={`https://www.aparat.com/video/video/embed/videohash/${encodeURIComponent(resolvedVideoId)}/vt/frame`}
-            allowFullScreen
-          />
-        ) : (
-          <button className="video-placeholder" onClick={() => setStarted(true)}>
-            <span className="play-icon">▶</span>
-            <span>پخش ویدئو</span>
-            <small>فقط پس از کلیک بارگذاری می‌شود</small>
-          </button>
-        )}
+        <iframe
+          title={title}
+          src={`https://www.aparat.com/video/video/embed/videohash/${encodeURIComponent(resolvedVideoId)}/vt/frame`}
+          allowFullScreen
+        />
       </div>
     </section>
   );
