@@ -1,4 +1,5 @@
 import { ProductCard } from './ProductCard';
+import { CatalogFilters } from './CatalogFilters';
 import { ThemeToggle } from './ThemeToggle';
 import { APP_NAME, STORE_BRAND, formatPersianNumber } from '@salimvand/shared';
 import { TrustVideo } from './TrustVideo';
@@ -139,24 +140,6 @@ export default async function HomePage({
   ]);
   // vehicleMakeId only scopes the cascading vehicle dropdowns; the API filters
   // by model/trim, so it is not part of the products query.
-  const makeId = params.vehicleMakeId ?? '';
-  const modelId = params.vehicleModelId ?? '';
-  const scopedMakes = makeId
-    ? filters.vehicles.filter((make) => make.id === makeId)
-    : filters.vehicles;
-  const scopedModels = scopedMakes.flatMap((make) => make.models);
-  const selectedModel = scopedModels.find((model) => model.id === modelId);
-  const scopedTrims: Array<{ id: string; label: string }> = selectedModel
-    ? (selectedModel.trims ?? []).map((trim) => ({ id: trim.id, label: trim.name }))
-    : scopedMakes.flatMap((make) =>
-        make.models.flatMap((model) =>
-          (model.trims ?? []).map((trim) => ({
-            id: trim.id,
-            label: `${make.name} · ${model.name} · ${trim.name}`,
-          })),
-        ),
-      );
-  const phone = info.phones[0]?.replace(/[^0-9+]/g, '') ?? '';
   const telegram = info.telegram;
   const bale = info.bale;
   const instagram = info.instagram;
@@ -171,18 +154,18 @@ export default async function HomePage({
           )}
           <span>
             <strong>{APP_NAME}</strong>
-            <small>قطعات یدکی خودرو</small>
+            <small>{info.header.tagline}</small>
           </span>
         </a>
         <nav className="desktop-nav">
-          <a href="#catalog">کاتالوگ</a>
-          <a href="#video">ویدئوی فروشگاه</a>
-          <a href="#contact">تماس</a>
+          <a href="#catalog">{info.header.navCatalog}</a>
+          <a href="#video">{info.header.navVideo}</a>
+          <a href="#contact">{info.header.navContact}</a>
         </nav>
         <div className="header-tools">
           <ThemeToggle />
           <a className="button button-primary header-cta" href={telHref(info)}>
-            تماس سریع
+            {info.header.cta}
           </a>
         </div>
       </header>
@@ -243,71 +226,7 @@ export default async function HomePage({
           </div>
           <span className="price-note">قیمت فقط با استعلام</span>
         </div>
-        <form className="catalog-filters" method="get">
-          <label className="search-field">
-            <span>⌕</span>
-            <input name="q" defaultValue={params.q} placeholder="نام قطعه یا شماره فنی..." />
-          </label>
-          <select name="brandId" defaultValue={params.brandId ?? ''}>
-            <option value="">برند قطعه</option>
-            {filters.brands.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-          <select name="vehicleMakeId" defaultValue={makeId}>
-            <option value="">برند خودرو</option>
-            {filters.vehicles.map((make) => (
-              <option key={make.id} value={make.id}>
-                {make.name}
-              </option>
-            ))}
-          </select>
-          <select name="vehicleModelId" defaultValue={modelId}>
-            <option value="">مدل خودرو</option>
-            {scopedMakes.flatMap((make) =>
-              make.models.map((model) => (
-                <option key={model.id} value={model.id}>
-                  {make.name} · {model.name}
-                </option>
-              )),
-            )}
-          </select>
-          <select name="vehicleTrimId" defaultValue={params.vehicleTrimId ?? ''}>
-            <option value="">تیپ / موتور</option>
-            {scopedTrims.map((trim) => (
-              <option key={trim.id} value={trim.id}>
-                {trim.label}
-              </option>
-            ))}
-          </select>
-          <select name="categoryId" defaultValue={params.categoryId ?? ''}>
-            <option value="">دسته‌بندی</option>
-            {filters.categories.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-          <label className="check-field">
-            <input
-              type="checkbox"
-              name="inStock"
-              value="true"
-              defaultChecked={params.inStock === 'true'}
-            />{' '}
-            فقط موجود
-          </label>
-          <button className="button button-primary" type="submit">
-            اعمال فیلتر
-          </button>
-          {query.toString() && (
-            <a className="clear-filter" href="#catalog">
-              پاک کردن
-            </a>
-          )}
-        </form>
+        <CatalogFilters filters={filters} params={params} />
         {products.items.length ? (
           <div className="product-grid">
             {products.items.map((product) => (

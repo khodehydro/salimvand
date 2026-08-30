@@ -54,11 +54,13 @@ function normalizeSpecs(specs: unknown): Array<{ label: string; value: string }>
   return [];
 }
 
+// The public product page shows only two states — «موجود» / «ناموجود» —
+// low stock renders as plain «موجود».
 const availabilityLabels: Record<string, string> = {
   in_stock: 'موجود در انبار',
-  low_stock: 'موجود (کم)',
-  coming_soon: 'به‌زودی تأمین می‌شود',
-  discontinued: 'توقف تولید',
+  low_stock: 'موجود در انبار',
+  coming_soon: 'ناموجود',
+  discontinued: 'ناموجود',
   out_of_stock: 'ناموجود',
 };
 
@@ -110,7 +112,6 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   if (!product) notFound();
   const specs = normalizeSpecs(product.specs);
   const compatibilities = product.compatibilities ?? [];
-  const inStockBrands = product.brands.filter((brand) => brand.inStock);
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'Product',
@@ -140,6 +141,9 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
     ],
   };
   const statusLabel = availabilityLabels[product.availability] ?? 'استعلام موجودی';
+  // low_stock shares the in_stock styling so the page shows a clean binary state.
+  const displayAvailability =
+    product.availability === 'low_stock' ? 'in_stock' : product.availability;
   return (
     <main className="shell">
       <script
@@ -184,12 +188,9 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
               {product.description ??
                 `برای استعلام ${product.name} با فروشگاه آذین خودرو سلیم وند تماس بگیرید.`}
             </p>
-            <div className={`status ${product.availability}`}>
+            <div className={`status ${displayAvailability}`}>
               <span className="status-dot" />
               {statusLabel}
-              {product.availability === 'low_stock' && inStockBrands.length > 0 && (
-                <small> · {formatPersianNumber(inStockBrands.length)} برند محدود</small>
-              )}
             </div>
             {compatibilities.length > 0 && (
               <div className="compat-block">

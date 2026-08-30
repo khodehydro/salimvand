@@ -34,8 +34,8 @@ export async function PublicSubHeader({
           </span>
         </a>
         <nav>
-          <a href="/#catalog">کاتالوگ</a>
-          <a href="/#contact">تماس</a>
+          <a href="/#catalog">{info.header.navCatalog}</a>
+          <a href="/#contact">{info.header.navContact}</a>
           <ThemeToggle />
         </nav>
       </header>
@@ -127,7 +127,7 @@ export async function StoreContact({
           )}
           <div>
             <small>ارسال شهرستان</small>
-            <b>باربری و پست پیشتاز</b>
+            <b>{resolved.shippingMethods.join('، ')}</b>
           </div>
         </div>
         <div className="map-embed">

@@ -1,4 +1,9 @@
-import { extractMapEmbedUrl, normalizeDigits } from '@salimvand/shared';
+import {
+  extractAparatVideoId,
+  extractMapEmbedUrl,
+  formatPersianNumber,
+  normalizeDigits,
+} from '@salimvand/shared';
 
 /**
  * Shared, server-side storefront meta. Every SEO/landing page reads the same
@@ -12,10 +17,19 @@ export type StoreInfo = {
   open: string;
   close: string;
   workingHours: string;
+  shippingMethods: string[];
   mapUrl: string;
   mapCode: string;
   logoUrl: string;
   faviconUrl: string;
+  /** Operator-editable header texts (logo tagline, CTA label, nav labels). */
+  header: {
+    tagline: string;
+    cta: string;
+    navCatalog: string;
+    navVideo: string;
+    navContact: string;
+  };
   telegram: string;
   bale: string;
   instagram: string;
@@ -39,6 +53,14 @@ export async function getStoreInfo(): Promise<StoreInfo> {
     mapCode: '',
     logoUrl: '',
     faviconUrl: '',
+    shippingMethods: ['باربری و پست پیشتاز'],
+    header: {
+      tagline: 'قطعات یدکی خودرو',
+      cta: 'تماس سریع',
+      navCatalog: 'کاتالوگ',
+      navVideo: 'ویدئوی فروشگاه',
+      navContact: 'تماس',
+    },
     telegram: 'https://t.me/',
     bale: 'https://ble.ir/',
     instagram: 'https://instagram.com/',
@@ -69,24 +91,44 @@ export async function getStoreInfo(): Promise<StoreInfo> {
     const instagram = asString(profile.instagram ?? '');
     const mapUrl = asString(profile.mapUrl ?? '');
     const mapCode = asString(profile.mapCode ?? '');
+    const rawShipping = asString(profile.shippingMethods ?? '');
+    const shippingMethods = rawShipping
+      .split(/[،,;\n]/)
+      .map((item) => item.trim())
+      .filter(Boolean);
     // When only a Google Maps code is provided, keep mapUrl empty so the
     // renderer expands the code into a full embed link (see fullMapUrl).
     const resolvedMapUrl = mapUrl || (mapCode ? '' : fallback.mapUrl);
+    const rawHeader = (profile.header ?? {}) as Record<string, unknown>;
+    const headerText = (key: keyof StoreInfo['header'], fallbackValue: string) =>
+      asString(rawHeader[key] ?? '').trim() || fallbackValue;
     return {
       name: asString(profile.name ?? '') || fallback.name,
       phones,
       address: asString(profile.address ?? '') || fallback.address,
       open,
       close,
-      workingHours: open && close ? `${open} تا ${close} · شنبه تا پنجشنبه` : fallback.workingHours,
+      workingHours:
+        open && close
+          ? `${formatPersianNumber(open)} تا ${formatPersianNumber(close)} · شنبه تا پنجشنبه`
+          : fallback.workingHours,
+      shippingMethods: shippingMethods.length ? shippingMethods : fallback.shippingMethods,
       mapUrl: resolvedMapUrl,
       mapCode,
       logoUrl: asString(profile.logoUrl ?? ''),
       faviconUrl: asString(profile.faviconUrl ?? ''),
+      header: {
+        tagline: headerText('tagline', fallback.header.tagline),
+        cta: headerText('cta', fallback.header.cta),
+        navCatalog: headerText('navCatalog', fallback.header.navCatalog),
+        navVideo: headerText('navVideo', fallback.header.navVideo),
+        navContact: headerText('navContact', fallback.header.navContact),
+      },
       telegram: telegramLink || fallback.telegram,
       bale: baleLink || fallback.bale,
       instagram: instagram || fallback.instagram,
-      trustVideo: data.trustVideo ?? null,
+      // Operators paste either the bare hash or a full Aparat link — accept both.
+      trustVideo: extractAparatVideoId(asString(data.trustVideo ?? '')) || null,
     };
   } catch {
     return fallback;

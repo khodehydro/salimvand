@@ -24,7 +24,15 @@ type Settings = {
     mapCode?: string;
     logoUrl?: string;
     faviconUrl?: string;
+    shippingMethods?: string;
     instagram?: string;
+    header?: {
+      tagline?: string;
+      cta?: string;
+      navCatalog?: string;
+      navVideo?: string;
+      navContact?: string;
+    };
   };
   'store.trust_video'?: string;
   'sms.templates'?: { invoice?: string; paid?: string; autoSend?: boolean };
@@ -44,7 +52,9 @@ const initial: Settings = {
     mapCode: '',
     logoUrl: '',
     faviconUrl: '',
+    shippingMethods: '',
     instagram: '',
+    header: { tagline: '', cta: '', navCatalog: '', navVideo: '', navContact: '' },
   },
   'store.trust_video': '',
   'sms.templates': { invoice: '', paid: '', autoSend: true },
@@ -132,6 +142,17 @@ export function SettingsPage() {
     setSettings((current) => ({
       ...current,
       'store.profile': { ...current['store.profile'], [key]: value },
+    }));
+  const updateHeaderText = (
+    key: keyof NonNullable<NonNullable<Settings['store.profile']>['header']>,
+    value: string,
+  ) =>
+    setSettings((current) => ({
+      ...current,
+      'store.profile': {
+        ...current['store.profile'],
+        header: { ...(current['store.profile']?.header ?? {}), [key]: value },
+      },
     }));
   const sendTest = async () => {
     if (!testMessage.trim() || (testChannel === 'sms' && !isValidIranMobile(testMobile)))
@@ -357,6 +378,14 @@ export function SettingsPage() {
             هدر نمایش داده می‌شود؛ آیکون مربعی ۶۴×۶۴ یا فایل ico بهترین نتیجه را می‌دهد.
           </p>
           <label>
+            روش‌های ارسال شهرستان (با «،» جدا کنید)
+            <input
+              value={settings['store.profile']?.shippingMethods ?? ''}
+              onChange={(e) => updateProfile('shippingMethods', e.target.value)}
+              placeholder="باربری، پست پیشتاز، اتوبار"
+            />
+          </label>
+          <label>
             اینستاگرام
             <input
               dir="ltr"
@@ -365,6 +394,55 @@ export function SettingsPage() {
               placeholder="https://instagram.com/..."
             />
           </label>
+          <div className="header-texts">
+            <small>متن‌های هدر سایت — خالی بماند، پیش‌فرض استفاده می‌شود</small>
+            <div className="two-fields">
+              <label>
+                زیرنویس لوگو
+                <input
+                  value={settings['store.profile']?.header?.tagline ?? ''}
+                  onChange={(e) => updateHeaderText('tagline', e.target.value)}
+                  placeholder="قطعات یدکی خودرو"
+                />
+              </label>
+              <label>
+                متن دکمهٔ هدر
+                <input
+                  value={settings['store.profile']?.header?.cta ?? ''}
+                  onChange={(e) => updateHeaderText('cta', e.target.value)}
+                  placeholder="تماس سریع"
+                />
+              </label>
+            </div>
+            <div className="two-fields">
+              <label>
+                منو: کاتالوگ
+                <input
+                  value={settings['store.profile']?.header?.navCatalog ?? ''}
+                  onChange={(e) => updateHeaderText('navCatalog', e.target.value)}
+                  placeholder="کاتالوگ"
+                />
+              </label>
+              <label>
+                منو: ویدئو
+                <input
+                  value={settings['store.profile']?.header?.navVideo ?? ''}
+                  onChange={(e) => updateHeaderText('navVideo', e.target.value)}
+                  placeholder="ویدئوی فروشگاه"
+                />
+              </label>
+            </div>
+            <div className="two-fields">
+              <label>
+                منو: تماس
+                <input
+                  value={settings['store.profile']?.header?.navContact ?? ''}
+                  onChange={(e) => updateHeaderText('navContact', e.target.value)}
+                  placeholder="تماس"
+                />
+              </label>
+            </div>
+          </div>
           <div className="two-fields">
             <label>
               شروع کار
@@ -392,6 +470,10 @@ export function SettingsPage() {
               </li>
               <li>آدرس و نقشه در بخش «تماس و آدرس» صفحهٔ اصلی و صفحات دسته‌بندی و خودرو</li>
               <li>لوگو در هدر سایت و آیکون در تب مرورگر (پس از آپلود و ذخیره)</li>
+              <li>
+                روش‌های ارسال در بخش تماس:{' '}
+                <b>{settings['store.profile']?.shippingMethods || 'باربری و پست پیشتاز'}</b>
+              </li>
               <li>
                 ساعات کاری:{' '}
                 <b>
@@ -455,12 +537,14 @@ export function SettingsPage() {
             ارسال خودکار لینک فاکتور
           </label>
           <label>
-            شناسه ویدئوی آپارات
+            ویدئوی معرفی فروشگاه (شناسه یا لینک آپارات)
             <input
+              dir="ltr"
               value={settings['store.trust_video'] ?? ''}
               onChange={(e) =>
                 setSettings((current) => ({ ...current, 'store.trust_video': e.target.value }))
               }
+              placeholder="https://www.aparat.com/v/AbCdEf123 یا فقط AbCdEf123"
             />
           </label>
           <label>

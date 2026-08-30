@@ -1,11 +1,12 @@
 import type { ReactNode } from 'react';
+import { extractAparatVideoId } from '@salimvand/shared';
 
 /**
  * The single catalog card used by the homepage grid and every SEO landing
  * page (category, vehicle, location) so the storefront stays visually
  * consistent: image, category badge, availability state, brand chips with
- * per-brand stock, Latin product code and a video badge when an Aparat
- * video exists. No price, ever.
+ * per-brand stock, Latin product code and a play button that opens the
+ * product's Aparat video. No price, ever.
  */
 export type CardProduct = {
   slug: string;
@@ -22,12 +23,20 @@ export type CardProduct = {
   category?: { name: string };
 };
 
+// The public site only ever shows two states — «موجود» / «ناموجود». Low stock
+// deliberately renders as plain «موجود»; scarcity stays an internal signal.
 const availabilityLabels: Record<string, string> = {
   in_stock: 'موجود',
-  low_stock: 'موجود (کم)',
-  coming_soon: 'به‌زودی',
+  low_stock: 'موجود',
+  coming_soon: 'ناموجود',
   out_of_stock: 'ناموجود',
+  discontinued: 'ناموجود',
 };
+
+export function aparatWatchUrl(rawVideoId?: string | null): string {
+  const videoId = extractAparatVideoId(rawVideoId ?? '');
+  return videoId ? `https://www.aparat.com/v/${videoId}` : '';
+}
 
 export function ProductCard({
   product,
@@ -38,54 +47,67 @@ export function ProductCard({
 }) {
   const image = product.images?.[0];
   const title: ReactNode = product.name;
+  // low_stock shares the in_stock look so the badge reads simply «موجود».
+  const displayAvailability =
+    product.availability === 'low_stock' ? 'in_stock' : product.availability;
+  const videoUrl = aparatWatchUrl(product.aparatVideoId);
   return (
-    <a className="product-card" href={`/product/${encodeURIComponent(product.slug)}`}>
-      <div className="product-image">
-        {image ? (
-          <img
-            src={image.thumbnailPath ?? image.path}
-            srcSet={
-              image.thumbnailPath ? `${image.thumbnailPath} 400w, ${image.path} 900w` : undefined
-            }
-            sizes="(max-width: 620px) 50vw, (max-width: 900px) 33vw, 25vw"
-            alt={image.alt ?? product.name}
-            loading="lazy"
-          />
-        ) : (
-          <span>قطعه خودرو</span>
-        )}
-        <span className={`status-badge ${product.availability}`}>
-          {availabilityLabels[product.availability] ?? 'استعلام'}
-        </span>
-        {product.aparatVideoId && (
-          <span className="video-badge" title="ویدئوی محصول">
-            ▶ ویدئو
+    <div className="product-card-wrap">
+      <a className="product-card" href={`/product/${encodeURIComponent(product.slug)}`}>
+        <div className="product-image">
+          {image ? (
+            <img
+              src={image.thumbnailPath ?? image.path}
+              srcSet={
+                image.thumbnailPath ? `${image.thumbnailPath} 400w, ${image.path} 900w` : undefined
+              }
+              sizes="(max-width: 620px) 50vw, (max-width: 900px) 33vw, 25vw"
+              alt={image.alt ?? product.name}
+              loading="lazy"
+            />
+          ) : (
+            <span>قطعه خودرو</span>
+          )}
+          <span className={`status-badge ${displayAvailability}`}>
+            {availabilityLabels[product.availability] ?? 'استعلام'}
           </span>
-        )}
-      </div>
-      {product.category?.name && <span className="category-label">{product.category.name}</span>}
-      {heading === 'h2' ? <h2>{title}</h2> : <h3>{title}</h3>}
-      <p className="compatibility">
-        {product.compatibilities
-          ?.slice(0, 2)
-          .map((item) => `${item.model.make.name} ${item.model.name}`)
-          .join(' · ') || 'مناسب خودروهای داخلی'}
-      </p>
-      {product.brands && product.brands.length > 0 && (
-        <div className="brand-list">
-          {product.brands.slice(0, 4).map((brand) => (
-            <span className={brand.inStock ? 'brand-in' : 'brand-out'} key={brand.name}>
-              {brand.inStock ? '✓' : '×'} {brand.name}
-            </span>
-          ))}
         </div>
+        {product.category?.name && <span className="category-label">{product.category.name}</span>}
+        {heading === 'h2' ? <h2>{title}</h2> : <h3>{title}</h3>}
+        <p className="compatibility">
+          {product.compatibilities
+            ?.slice(0, 2)
+            .map((item) => `${item.model.make.name} ${item.model.name}`)
+            .join(' · ') || 'مناسب خودروهای داخلی'}
+        </p>
+        {product.brands && product.brands.length > 0 && (
+          <div className="brand-list">
+            {product.brands.slice(0, 4).map((brand) => (
+              <span className={brand.inStock ? 'brand-in' : 'brand-out'} key={brand.name}>
+                {brand.inStock ? '✓' : '×'} {brand.name}
+              </span>
+            ))}
+          </div>
+        )}
+        <div className="card-footer">
+          <code>{product.code}</code>
+          <span>
+            استعلام قیمت <b>←</b>
+          </span>
+        </div>
+      </a>
+      {videoUrl && (
+        <a
+          className="video-play"
+          href={videoUrl}
+          target="_blank"
+          rel="noreferrer"
+          aria-label={`پخش ویدئوی ${product.name}`}
+          title="پخش ویدئوی آپارات"
+        >
+          ▶
+        </a>
       )}
-      <div className="card-footer">
-        <code>{product.code}</code>
-        <span>
-          استعلام قیمت <b>←</b>
-        </span>
-      </div>
-    </a>
+    </div>
   );
 }

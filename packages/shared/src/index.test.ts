@@ -4,6 +4,7 @@ import {
   buildProductSeo,
   createEan13,
   createSlug,
+  extractAparatVideoId,
   extractMapEmbedUrl,
   formatJalaliDate,
   formatPersianNumber,
@@ -40,6 +41,16 @@ describe('shared utilities', () => {
     expect(first).not.toBe(second);
     expect(first).toHaveLength(13);
     expect(second).toHaveLength(13);
+  });
+  it('extracts Aparat video hashes from every paste format', () => {
+    expect(extractAparatVideoId('AbCdEf123')).toBe('AbCdEf123');
+    expect(extractAparatVideoId('https://www.aparat.com/v/AbCdEf123')).toBe('AbCdEf123');
+    expect(extractAparatVideoId('https://www.aparat.com/v/XyZ9?playlist=1')).toBe('XyZ9');
+    expect(
+      extractAparatVideoId('https://www.aparat.com/video/video/embed/videohash/QwEr123/vt/frame'),
+    ).toBe('QwEr123');
+    expect(extractAparatVideoId('')).toBe('');
+    expect(extractAparatVideoId('نه-معتبر!')).toBe('');
   });
   it('normalizes Persian and Arabic digits to ASCII', () => {
     expect(normalizeDigits('۰۹۱۲۳۴۵۶۷۸۹')).toBe('09123456789');

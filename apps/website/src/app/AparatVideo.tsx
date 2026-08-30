@@ -1,10 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import { extractAparatVideoId } from '@salimvand/shared';
 
 /**
  * Lazy Aparat embed: the iframe (and its third-party scripts) only load after
- * the visitor clicks play — exactly like the homepage trust video.
+ * the visitor clicks play — exactly like the homepage trust video. Accepts a
+ * bare hash or a full Aparat link.
  */
 export function AparatVideo({
   videoId,
@@ -14,6 +16,8 @@ export function AparatVideo({
   title?: string;
 }) {
   const [started, setStarted] = useState(false);
+  const resolvedVideoId = extractAparatVideoId(videoId);
+  if (!resolvedVideoId) return null;
   return (
     <section className="product-video">
       <div className="product-video-head">
@@ -24,7 +28,7 @@ export function AparatVideo({
         {started ? (
           <iframe
             title={title}
-            src={`https://www.aparat.com/video/video/embed/videohash/${encodeURIComponent(videoId)}/vt/frame`}
+            src={`https://www.aparat.com/video/video/embed/videohash/${encodeURIComponent(resolvedVideoId)}/vt/frame`}
             allowFullScreen
           />
         ) : (

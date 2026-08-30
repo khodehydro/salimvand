@@ -40,6 +40,20 @@ export function buildProductSeo(product: {
   };
 }
 
+/** Extract an Aparat video hash from whatever the operator pasted: a bare
+ * hash, a share link (aparat.com/v/HASH) or an embed URL
+ * (aparat.com/video/video/embed/videohash/HASH/vt/frame). */
+export function extractAparatVideoId(input: string | null | undefined): string {
+  const raw = String(input ?? '').trim();
+  if (!raw) return '';
+  const embed = raw.match(/videohash\/([A-Za-z0-9_-]+)/i);
+  if (embed) return embed[1];
+  const share = raw.match(/aparat\.com\/(?:v|w)\/([A-Za-z0-9_-]+)/i);
+  if (share) return share[1];
+  if (/^[A-Za-z0-9_-]{4,}$/.test(raw)) return raw;
+  return '';
+}
+
 /** Convert Persian (۰-۹) and Arabic (٠-٩) digits to ASCII digits. Needed for
  * phone dial links: operators type numbers with a Persian keyboard layout. */
 export function normalizeDigits(value: string): string {

@@ -348,6 +348,10 @@ p {
   font-size: 11px;
   color: var(--brand-200);
 }
+/* «Video coming soon» state when no Aparat id is configured yet. */
+.video-placeholder.video-empty {
+  cursor: default;
+}
 .catalog-section {
   scroll-margin-top: 20px;
 }
@@ -499,16 +503,39 @@ p {
   background: var(--warn-soft);
   color: var(--warn);
 }
-.video-badge {
+/* Play button that opens the product's Aparat video in a new tab; sits as a
+ * sibling of the card link (no nested interactive elements). */
+.product-card-wrap {
+  position: relative;
+  display: flex;
+}
+.product-card-wrap .product-card {
+  flex: 1 1 auto;
+}
+.video-play {
   position: absolute;
-  bottom: 9px;
-  left: 9px;
-  padding: 4px 9px;
-  border-radius: 99px;
-  font-size: 10px;
-  font-weight: 700;
-  background: color-mix(in srgb, var(--brand-900) 78%, transparent);
+  top: 18px;
+  left: 18px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 0;
+  background: color-mix(in srgb, var(--brand-900) 82%, transparent);
   color: #fff;
+  font-size: 15px;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    background 0.15s ease;
+  backdrop-filter: blur(3px);
+}
+.video-play:hover {
+  transform: scale(1.1);
+  background: var(--brand-600);
 }
 .category-label {
   color: var(--brand-600);
@@ -666,31 +693,8 @@ p {
 .mobile-contact-bar {
   display: none;
 }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
-    --bg: #050b14;
-    --surface: #0d1826;
-    --surface-2: #111f31;
-    --surface-3: #16283c;
-    --border: #1d3049;
-    --border-2: #294061;
-    --text: #eaf1f9;
-    --text-2: #9db1c8;
-    --text-3: #6c8299;
-    --primary: #2f7fce;
-    --primary-hover: #4d99e0;
-    --primary-fg: #04101c;
-    --ok: #3ecf8e;
-    --ok-soft: #0d2f24;
-    --warn: #f0b454;
-    --warn-soft: #332509;
-    --danger: #ff7a7f;
-    --danger-soft: #3a1618;
-    --on-navy: #eaf1f9;
-    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 25px rgba(0, 0, 0, 0.45);
-    --shadow-hero: 0 22px 55px rgba(0, 0, 0, 0.55);
-  }
-}
+/* Light is the default skin — dark only applies when the visitor picks it
+ * (data-theme="dark"). No prefers-color-scheme auto-dark. */
 :root[data-theme='dark'] {
   --bg: #050b14;
   --surface: #0d1826;
