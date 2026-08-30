@@ -844,9 +844,9 @@ body,
   border: 1px solid var(--sv-border);
   border-radius: 12px;
   background: var(--sv-surface);
-  padding: 22px;
+  padding: 18px;
   display: grid;
-  gap: 15px;
+  gap: 12px;
 }
 .settings-page legend {
   padding: 0 8px;
@@ -855,11 +855,32 @@ body,
 .settings-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
-  margin-top: 25px;
+  gap: 14px;
+  margin-top: 22px;
 }
 .settings-grid fieldset:last-child {
   grid-column: 1/-1;
+}
+/* The store-profile fieldset is the biggest one: let it use the full row and
+ * flow its fields through two inner columns so the page stays compact. */
+.settings-grid fieldset.wide {
+  grid-column: 1/-1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  column-gap: 22px;
+}
+.settings-grid fieldset.wide > .wide-row,
+.settings-grid fieldset.wide > .map-preview,
+.settings-grid fieldset.wide > .site-assets,
+.settings-grid fieldset.wide > .settings-help,
+.settings-grid fieldset.wide > .site-visibility {
+  grid-column: 1/-1;
+}
+.settings-grid fieldset.wide > .header-texts {
+  border: 1px dashed var(--sv-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 0;
 }
 .settings-grid label {
   display: grid;
@@ -959,6 +980,9 @@ body,
   }
   .settings-grid fieldset:last-child {
     grid-column: auto;
+  }
+  .settings-grid fieldset.wide {
+    grid-template-columns: 1fr;
   }
 }
 .palette-detail {
@@ -2553,7 +2577,7 @@ body,
 .map-preview-frame iframe {
   display: block;
   width: 100%;
-  height: 220px;
+  height: 170px;
   border: 0;
 }
 .site-visibility {
@@ -2587,7 +2611,7 @@ body,
 .asset-field {
   display: grid;
   gap: 8px;
-  padding: 12px;
+  padding: 10px;
   border: 1px solid var(--sv-border, var(--border));
   border-radius: 12px;
   background: var(--sv-surface-2, var(--surface-2));
@@ -2599,7 +2623,7 @@ body,
 .asset-preview {
   display: grid;
   place-items: center;
-  height: 72px;
+  height: 62px;
   border-radius: 10px;
   background: var(--sv-surface, #fff);
   border: 1px dashed var(--sv-border, var(--border));
@@ -2615,8 +2639,8 @@ body,
   color: var(--sv-text-3, var(--text-3));
 }
 .asset-preview-sq {
-  height: 56px;
-  width: 56px;
+  height: 48px;
+  width: 48px;
   justify-self: start;
 }
 .asset-clear {
@@ -2643,4 +2667,12 @@ body,
 .header-texts > small {
   color: var(--sv-text-3, var(--text-3));
   font-size: 11px;
+}
+
+/* Site-asset badge sits on the opposite corner of the primary badge. */
+.media-primary.media-site {
+  background: #1f6fbe;
+  color: #fff;
+  inset-inline-start: auto;
+  inset-inline-end: 8px;
 }

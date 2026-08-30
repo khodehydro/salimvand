@@ -195,19 +195,9 @@ export default async function HomePage({
           </div>
         </div>
         <div className="hero-visual">
-          <div className="hero-card">
-            <span className="hero-card-icon">✓</span>
-            <b>موجودی واقعی انبار</b>
-            <small>برند و وضعیت هر قطعه را ببینید</small>
-            <div className="mini-status">
-              <i /> به‌روزرسانی لحظه‌ای
-            </div>
-          </div>
-          <div className="hero-float">
-            بدون قیمت در سایت
-            <br />
-            <small>استعلام روزانه تلفنی</small>
-          </div>
+          {/* The store video lives right in the hero — the old info cards
+              (real stock / brands / no prices) were merged into it. */}
+          <TrustVideo videoId={meta.trustVideo ?? process.env.APARAT_VIDEO_ID} variant="hero" />
         </div>
       </section>
       <section className="trust-strip">
@@ -217,8 +207,8 @@ export default async function HomePage({
         <b>ایران‌خودرو</b>
         <b>و سایر برندها</b>
       </section>
-      <TrustVideo videoId={meta.trustVideo ?? process.env.APARAT_VIDEO_ID} />
       <section className="catalog-section" id="catalog">
+        {' '}
         <div className="section-heading">
           <div>
             <span className="eyebrow">کاتالوگ قطعات</span>

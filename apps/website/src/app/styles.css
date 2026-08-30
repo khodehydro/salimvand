@@ -227,58 +227,47 @@ p {
   place-items: center;
   z-index: 1;
 }
-.hero-card {
-  width: 235px;
+/* The store video card merged into the hero (replaces the old info cards). */
+.hero-video-card {
+  width: min(430px, 100%);
   background: var(--surface);
   color: var(--text);
+  border: 1px solid var(--border);
   border-radius: 16px;
-  padding: 22px;
+  padding: 14px;
   display: grid;
-  gap: 8px;
+  gap: 10px;
   box-shadow: var(--shadow-hero);
-  transform: rotate(-4deg);
+  scroll-margin-top: 20px;
 }
-.hero-card-icon {
-  background: var(--ok-soft);
-  color: var(--ok);
-  width: 35px;
-  height: 35px;
-  border-radius: 10px;
+.hero-video-head {
   display: grid;
-  place-items: center;
-  font-size: 20px;
-  font-weight: 700;
+  gap: 2px;
 }
-.hero-card small {
-  color: var(--text-2);
+.hero-video-head b {
+  font-size: 14px;
 }
-.mini-status {
-  margin-top: 15px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
+.hero-video-head small {
+  color: var(--text-3);
   font-size: 11px;
-  color: var(--text-2);
 }
-.mini-status i {
-  display: inline-block;
-  width: 7px;
-  height: 7px;
-  background: var(--ok);
-  border-radius: 50%;
-  margin-left: 6px;
-}
-.hero-float {
-  position: absolute;
-  bottom: 20px;
-  left: 8%;
-  background: var(--brand-700);
-  padding: 13px 18px;
+.hero-video-card .video-frame {
+  aspect-ratio: 16 / 9;
   border-radius: 10px;
-  font-size: 13px;
-  transform: rotate(4deg);
+  overflow: hidden;
+  background: var(--navy);
 }
-.hero-float small {
-  color: var(--brand-200);
+.hero-video-card .video-placeholder {
+  gap: 5px;
+  font-size: 12px;
+}
+.hero-video-card .play-icon {
+  width: 34px;
+  height: 34px;
+  font-size: 14px;
+}
+.hero-video-card .video-placeholder small {
+  font-size: 10px;
 }
 .trust-strip {
   display: flex;
@@ -447,6 +436,7 @@ p {
   gap: 14px;
 }
 .product-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -455,7 +445,6 @@ p {
   border-radius: 14px;
   padding: 10px;
   color: var(--text);
-  text-decoration: none;
   transition: 0.2s;
 }
 .product-card:hover {
@@ -503,14 +492,16 @@ p {
   background: var(--warn-soft);
   color: var(--warn);
 }
-/* Play button that opens the product's Aparat video in a new tab; sits as a
- * sibling of the card link (no nested interactive elements). */
-.product-card-wrap {
-  position: relative;
-  display: flex;
-}
-.product-card-wrap .product-card {
+/* Everything that links to the product page sits inside one anchor; the
+ * quick actions and video badge are siblings (no nested interactive
+ * elements). */
+.card-link {
   flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-decoration: none;
+  color: inherit;
 }
 .video-play {
   position: absolute;
@@ -726,8 +717,9 @@ p {
     grid-template-columns: 1fr;
     padding: 45px 35px;
   }
+  /* The store video card stays visible under the hero text on tablets. */
   .hero-visual {
-    display: none;
+    min-height: 0;
   }
   .product-grid {
     grid-template-columns: repeat(3, 1fr);
@@ -1412,11 +1404,9 @@ p {
 }
 .product-gallery {
   display: grid;
-  grid-template-columns: 2fr 1fr;
   gap: 10px;
   margin-bottom: 30px;
 }
-.product-gallery img,
 .product-gallery .image-placeholder {
   width: 100%;
   height: 180px;
@@ -1427,9 +1417,72 @@ p {
   place-items: center;
   color: var(--text-3);
 }
-.product-gallery img:first-child {
-  grid-row: span 2;
-  height: 370px;
+/* Slideshow stage: swipe/drag + arrows + dots. */
+.gallery-stage {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--surface-3);
+  touch-action: pan-y;
+  user-select: none;
+}
+.gallery-stage > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.gallery-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--brand-900) 78%, transparent);
+  color: #fff;
+  font-size: 22px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  z-index: 2;
+  backdrop-filter: blur(3px);
+}
+.gallery-nav:hover {
+  background: var(--brand-600);
+}
+.gallery-prev {
+  right: 10px;
+}
+.gallery-next {
+  left: 10px;
+}
+.gallery-dots {
+  position: absolute;
+  bottom: 10px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  z-index: 2;
+}
+.gallery-dots button {
+  width: 9px;
+  height: 9px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, #fff 45%, transparent);
+  cursor: pointer;
+}
+.gallery-dots button.active {
+  background: #fff;
+  width: 22px;
+  border-radius: 99px;
 }
 .product-page .status {
   display: inline-flex;
@@ -1486,18 +1539,9 @@ p {
     padding: 20px 16px;
     border-radius: 14px;
   }
-  .product-gallery {
-    grid-template-columns: 1fr 1fr;
-  }
-  .product-gallery img,
-  .product-gallery .image-placeholder,
-  .product-gallery img:first-child {
-    height: 180px;
-    grid-row: auto;
-  }
-  .product-gallery img:first-child {
-    grid-column: 1/-1;
-    height: 260px;
+  .gallery-thumbs button {
+    width: 60px;
+    height: 60px;
   }
   .product-page ul {
     grid-template-columns: 1fr;
@@ -1606,13 +1650,6 @@ p {
   grid-template-columns: 0.95fr 1.05fr;
   gap: 34px;
   align-items: start;
-}
-.product-gallery img {
-  width: 100%;
-  border-radius: 14px;
-  aspect-ratio: 1;
-  object-fit: cover;
-  background: var(--surface-2);
 }
 .image-placeholder {
   width: 100%;
@@ -1941,9 +1978,15 @@ p {
 
 /* Quick actions under catalog cards (call / Telegram / Bale). */
 .card-quick-actions {
+  display: grid;
+  gap: 6px;
+}
+.quick-row {
   display: flex;
   gap: 6px;
-  margin-top: -4px;
+}
+.quick-row a {
+  flex: 1 1 0;
 }
 .card-quick-actions a {
   flex: 1 1 0;

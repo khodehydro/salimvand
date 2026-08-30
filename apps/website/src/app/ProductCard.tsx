@@ -63,8 +63,8 @@ export function ProductCard({
     product.availability === 'low_stock' ? 'in_stock' : product.availability;
   const videoUrl = aparatWatchUrl(product.aparatVideoId);
   return (
-    <div className="product-card-wrap">
-      <a className="product-card" href={`/product/${encodeURIComponent(product.slug)}`}>
+    <div className="product-card">
+      <a className="card-link" href={`/product/${encodeURIComponent(product.slug)}`}>
         <div className="product-image">
           {image ? (
             <img
@@ -126,28 +126,30 @@ export function ProductCard({
               ☎ تماس
             </a>
           )}
-          {/^https?:\/\/.+/.test(contact.telegram ?? '') && (
-            <a
-              className="quick-telegram"
-              href={contact.telegram}
-              target="_blank"
-              rel="noreferrer"
-              aria-label={`تلگرام برای ${product.name}`}
-            >
-              تلگرام
-            </a>
-          )}
-          {/^https?:\/\/.+/.test(contact.bale ?? '') && (
-            <a
-              className="quick-bale"
-              href={contact.bale}
-              target="_blank"
-              rel="noreferrer"
-              aria-label={`بله برای ${product.name}`}
-            >
-              بله
-            </a>
-          )}
+          <div className="quick-row">
+            {/^https?:\/\/.+/.test(contact.telegram ?? '') && (
+              <a
+                className="quick-telegram"
+                href={contact.telegram}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={`تلگرام برای ${product.name}`}
+              >
+                تلگرام
+              </a>
+            )}
+            {/^https?:\/\/.+/.test(contact.bale ?? '') && (
+              <a
+                className="quick-bale"
+                href={contact.bale}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={`بله برای ${product.name}`}
+              >
+                بله
+              </a>
+            )}
+          </div>
         </div>
       )}
     </div>

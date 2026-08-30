@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { mkdir, readdir, rm, writeFile } from 'node:fs/promises';
+import { basename, join } from 'node:path';
 import sharp = require('sharp');
 import { PrismaService } from '../../prisma.service';
 import { Prisma } from '@prisma/client';
@@ -24,11 +24,70 @@ export class MediaService {
   constructor(private readonly prisma: PrismaService) {}
 
   async list() {
-    const images = await this.prisma.productImage.findMany({
-      orderBy: { sort: 'asc' },
-      include: { product: { select: { id: true, name: true, slug: true } } },
-    });
-    return { ok: true, data: images };
+    const [images, siteAssets] = await Promise.all([
+      this.prisma.productImage.findMany({
+        orderBy: { sort: 'asc' },
+        include: { product: { select: { id: true, name: true, slug: true } } },
+      }),
+      this.listSiteAssets(),
+    ]);
+    return { ok: true, data: [...images, ...siteAssets] };
+  }
+
+  /** Everything uploaded on the server must be visible in the media library:
+   * site assets (logo / favicon stored under uploads/site) are listed next to
+   * the product images so the operator can copy their link or remove them. */
+  private async listSiteAssets() {
+    const dir = this.siteAssetDir();
+    let files: string[];
+    try {
+      files = await readdir(dir);
+    } catch {
+      return [];
+    }
+    return files
+      .filter((name) => /\.(png|jpe?g|webp|ico)$/i.test(name))
+      .map((name) => ({
+        id: `site:${name}`,
+        path: `/uploads/site/${name}`,
+        kind: 'site' as const,
+        label: name.startsWith('logo')
+          ? 'لوگوی سایت'
+          : name.startsWith('favicon')
+            ? 'آیکون سایت'
+            : 'رسانهٔ سایت',
+        alt: null,
+        isPrimary: false,
+        product: null,
+      }));
+  }
+
+  /** Delete a site asset file (uploads/site/<name>). Only plain file names
+   * are accepted — no traversal, no subdirectories. If the store profile
+   * still references the file (logoUrl / faviconUrl), the reference is
+   * cleared too so the site never renders a broken image. */
+  async removeSiteAsset(name: string) {
+    const safe = name ?? '';
+    if (!safe || safe.includes('/') || safe.includes('\\') || safe !== basename(safe))
+      throw new BadRequestException('نام فایل نامعتبر است');
+    if (!/^[A-Za-z0-9._-]+$/.test(safe)) throw new BadRequestException('نام فایل نامعتبر است');
+    await rm(join(this.siteAssetDir(), safe), { force: true });
+    const path = `/uploads/site/${safe}`;
+    const row = await this.prisma.setting.findUnique({ where: { key: 'store.profile' } });
+    const profile = (row?.value ?? {}) as Record<string, unknown>;
+    const fields = ['logoUrl', 'faviconUrl'];
+    if (fields.some((field) => profile[field] === path)) {
+      for (const field of fields) if (profile[field] === path) profile[field] = '';
+      await this.prisma.setting.update({
+        where: { key: 'store.profile' },
+        data: { value: profile as Prisma.InputJsonValue },
+      });
+    }
+    return { ok: true, data: { id: `site:${safe}` } };
+  }
+
+  private siteAssetDir() {
+    return join(this.uploadRoot, '..', 'site');
   }
 
   /** Store logo / favicon uploads under uploads/site and return the public
@@ -48,7 +107,7 @@ export class MediaService {
     // nginx caps the CMS proxy body at ~1MB; stay safely below it.
     if (file.buffer.length > 900 * 1024)
       throw new BadRequestException('حجم فایل باید کمتر از ۹۰۰ کیلوبایت باشد');
-    const dir = join(this.uploadRoot, '..', 'site');
+    const dir = this.siteAssetDir();
     await mkdir(dir, { recursive: true });
     // A fresh filename per upload acts as a cache-buster for browsers and CDN.
     const name = `${kind}-${randomUUID().slice(0, 8)}.${extension}`;

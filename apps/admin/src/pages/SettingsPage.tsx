@@ -270,7 +270,7 @@ export function SettingsPage() {
       </div>
       {message && <div className="notice">{message}</div>}
       <form id="settings-form" className="settings-grid" onSubmit={submit}>
-        <fieldset>
+        <fieldset className="wide">
           <legend>اطلاعات فروشگاه</legend>
           <label>
             نام فروشگاه
@@ -294,7 +294,7 @@ export function SettingsPage() {
               onChange={(e) => updateProfile('address', e.target.value)}
             />
           </label>
-          <label>
+          <label className="wide-row">
             کد یا لینک iframe نقشه (گوگل‌مپ یا هر سرویس دیگر)
             <textarea
               dir="ltr"

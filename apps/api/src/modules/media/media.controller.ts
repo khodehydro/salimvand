@@ -33,6 +33,11 @@ export class MediaController {
   ) {
     return this.media.uploadSiteAsset(kind, file);
   }
+  /** Remove a site asset file (logo / favicon) from uploads/site. */
+  @Delete('site/:name')
+  removeSiteAsset(@Param('name') name: string) {
+    return this.media.removeSiteAsset(name);
+  }
   @Post('products/:productId/upload') @UseInterceptors(FileInterceptor('file')) upload(
     @Param('productId') productId: string,
     @UploadedFile() file: { buffer: Buffer; mimetype: string; originalname: string },

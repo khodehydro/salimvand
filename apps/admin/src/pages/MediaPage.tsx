@@ -8,7 +8,9 @@ type Media = {
   path: string;
   alt?: string | null;
   isPrimary: boolean;
-  product: { id: string; name: string; slug?: string };
+  product: { id: string; name: string; slug?: string } | null;
+  kind?: 'product' | 'site';
+  label?: string;
 };
 
 export function MediaPage() {
@@ -43,7 +45,9 @@ export function MediaPage() {
     const value = query.trim().toLocaleLowerCase('fa');
     return value
       ? items.filter((item) =>
-          `${item.product.name} ${item.alt ?? ''}`.toLocaleLowerCase('fa').includes(value),
+          `${item.product?.name ?? ''} ${item.label ?? ''} ${item.alt ?? ''}`
+            .toLocaleLowerCase('fa')
+            .includes(value),
         )
       : items;
   }, [items, query]);
@@ -87,6 +91,7 @@ export function MediaPage() {
   };
 
   const makePrimary = async (item: Media) => {
+    if (!item.product) return;
     try {
       await api(`/media/products/${item.product.id}/${item.id}/primary`, { method: 'PATCH' });
       setMessage('تصویر اصلی محصول تغییر کرد.');
@@ -97,13 +102,30 @@ export function MediaPage() {
   };
 
   const remove = async (item: Media) => {
-    if (!window.confirm(`تصویر «${item.product.name}» حذف شود؟`)) return;
+    const title = item.product
+      ? `تصویر «${item.product.name}»`
+      : `«${item.label ?? 'رسانهٔ سایت'}»`;
+    if (!window.confirm(`${title} حذف شود؟`)) return;
     try {
-      await api(`/media/products/${item.product.id}/${item.id}`, { method: 'DELETE' });
-      setMessage('تصویر حذف شد.');
+      if (item.kind === 'site' || !item.product) {
+        await api(`/media/site/${item.id.replace(/^site:/, '')}`, { method: 'DELETE' });
+      } else {
+        await api(`/media/products/${item.product.id}/${item.id}`, { method: 'DELETE' });
+      }
+      setMessage('رسانه حذف شد.');
       await load();
     } catch (error) {
       setMessage((error as Error).message);
+    }
+  };
+
+  const copyLink = async (item: Media) => {
+    const absolute = new URL(item.path, window.location.origin).href;
+    try {
+      await navigator.clipboard.writeText(absolute);
+      setMessage(`لینک کپی شد: ${absolute}`);
+    } catch {
+      setMessage(absolute);
     }
   };
 
@@ -113,7 +135,9 @@ export function MediaPage() {
         <div>
           <span className="eyebrow">کاتالوگ</span>
           <h1>کتابخانهٔ رسانه</h1>
-          <p className="muted">تصاویر محصول را بدون واردکردن شناسه‌های فنی مدیریت کنید.</p>
+          <p className="muted">
+            همهٔ رسانه‌های سرور — تصاویر محصولات و فایل‌های سایت (لوگو، آیکون) — با کپی لینک و حذف.
+          </p>
         </div>
         <span className="count">{formatPersianNumber(items.length)} تصویر</span>
       </div>
@@ -192,13 +216,23 @@ export function MediaPage() {
           {filtered.map((item) => (
             <article className="media-card" key={item.id}>
               <div className="media-preview">
-                <img src={item.path} alt={item.alt ?? item.product.name} loading="lazy" />
+                <img
+                  src={item.path}
+                  alt={item.alt ?? item.product?.name ?? item.label ?? 'رسانه'}
+                  loading="lazy"
+                />
                 {item.isPrimary && <span className="media-primary">تصویر اصلی</span>}
+                {item.kind === 'site' && (
+                  <span className="media-primary media-site">رسانهٔ سایت</span>
+                )}
               </div>
-              <strong>{item.product.name}</strong>
-              <small>{item.alt || 'متن جایگزین ثبت نشده'}</small>
+              <strong>{item.product ? item.product.name : (item.label ?? 'رسانهٔ سایت')}</strong>
+              <small>{item.alt || item.path}</small>
               <div className="media-actions">
-                {!item.isPrimary && (
+                <button type="button" className="outline" onClick={() => void copyLink(item)}>
+                  کپی لینک
+                </button>
+                {item.product && !item.isPrimary && (
                   <button type="button" className="outline" onClick={() => void makePrimary(item)}>
                     انتخاب به‌عنوان اصلی
                   </button>
