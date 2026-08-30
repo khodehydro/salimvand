@@ -15,14 +15,42 @@ cd "$ROOT_DIR"
 set -a
 . "$ROOT_DIR/.env"
 set +a
+# Minimal-PATH invocations (`sudo bash -c`, cron, plain ssh) must still find
+# Node and pnpm: scan the usual install locations (nvm homes, distro and
+# NodeSource prefixes, pnpm's own directory) before deciding they are missing.
+if ! command -v node >/dev/null 2>&1 \
+  || { ! command -v pnpm >/dev/null 2>&1 && ! command -v corepack >/dev/null 2>&1; }; then
+  for _candidate in \
+    "$HOME"/.nvm/versions/node/*/bin \
+    /home/*/.nvm/versions/node/*/bin \
+    /usr/local/bin \
+    /usr/bin \
+    /opt/node/bin \
+    "$HOME"/.local/share/pnpm; do
+    [[ -d "$_candidate" ]] && PATH="$_candidate:$PATH"
+  done
+  export PATH
+fi
+# nvm keeps corepack beside node; activate its shims so plain `pnpm` resolves.
+if ! command -v pnpm >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then
+  _node_dir="$(dirname "$(command -v node)")"
+  [[ -x "$_node_dir/corepack" ]] && "$_node_dir/corepack" enable >/dev/null 2>&1 || true
+fi
 if command -v corepack >/dev/null 2>&1; then
   PNPM=(corepack pnpm)
 elif command -v pnpm >/dev/null 2>&1; then
   PNPM=(pnpm)
+elif command -v npm >/dev/null 2>&1; then
+  # Node exists without corepack: install the pinned pnpm globally once.
+  echo 'pnpm not found — installing pnpm@9.15.0 with npm...'
+  npm install -g pnpm@9.15.0
+  PNPM=(pnpm)
 else
-  echo 'pnpm or corepack is required.' >&2
+  echo 'Node.js 20+ (with npm, corepack or pnpm) is required on this server.' >&2
+  echo 'See docs/server-verification.md for the approved install steps.' >&2
   exit 1
 fi
+command -v node >/dev/null 2>&1 || { echo 'Node.js 20+ is required (node not found in PATH).' >&2; exit 1; }
 command -v pg_isready >/dev/null || { echo 'PostgreSQL client is required.' >&2; exit 1; }
 
 export NODE_ENV=production
