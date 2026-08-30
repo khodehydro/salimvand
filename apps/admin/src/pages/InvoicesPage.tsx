@@ -680,7 +680,11 @@ export function InvoicesPage({
                 <span className="low-stock">بدهی مشتری: {money(remainingDebt)}</span>
               )}
             </div>
-            <button disabled={!lines.length} onClick={() => void create()}>
+            <button
+              className="button-primary"
+              disabled={!lines.length}
+              onClick={() => void create()}
+            >
               صدور فاکتور
             </button>
           </div>

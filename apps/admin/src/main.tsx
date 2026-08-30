@@ -161,6 +161,15 @@ function App() {
   const [page, setPage] = useState<Page>(() => pageFromHash(window.location.hash));
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  // Running release, exposed by the API on /health — shown in the sidebar so
+  // anyone can verify the last deploy actually landed (source of many
+  // "I fixed it but the panel looks the same" reports).
+  const [release, setRelease] = useState('');
+  useEffect(() => {
+    api<{ data?: { release?: string } }>('/health')
+      .then((result) => setRelease(result.data?.release ?? ''))
+      .catch(() => undefined);
+  }, []);
   useEffect(() => {
     document.documentElement.dataset.theme = dark ? 'dark' : 'light';
     localStorage.setItem('salimvand.theme', dark ? 'dark' : 'light');
@@ -231,6 +240,7 @@ function App() {
         </nav>
         <div className="aside-footer">
           <span className="online-dot" /> سیستم آنلاین
+          {release && <small className="release-tag">نسخهٔ {release}</small>}
         </div>
       </aside>
       <main>

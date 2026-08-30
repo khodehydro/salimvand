@@ -3,6 +3,7 @@ import { extractMapEmbedUrl } from '@salimvand/shared';
 import { api } from '../lib/api';
 import { isValidIranMobile } from '../lib/invoice-math';
 import { MediaPicker, type PickerItem } from '../components/MediaPicker';
+import { MediaImage } from '../components/MediaImage';
 
 type BackupJob = {
   id: string;
@@ -467,7 +468,7 @@ export function SettingsPage() {
                   <small>لوگوی سایت (هدر صفحهٔ اصلی و صفحات محصول)</small>
                   <div className="asset-preview">
                     {settings['store.profile']?.logoUrl ? (
-                      <img src={settings['store.profile'].logoUrl} alt="لوگوی سایت" />
+                      <MediaImage src={settings['store.profile'].logoUrl} alt="لوگوی سایت" />
                     ) : (
                       <span>س</span>
                     )}
@@ -501,7 +502,7 @@ export function SettingsPage() {
                   <small>آیکون سایت (نشانک تب مرورگر)</small>
                   <div className="asset-preview asset-preview-sq">
                     {settings['store.profile']?.faviconUrl ? (
-                      <img src={settings['store.profile'].faviconUrl} alt="آیکون سایت" />
+                      <MediaImage src={settings['store.profile'].faviconUrl} alt="آیکون سایت" />
                     ) : (
                       <span>س</span>
                     )}

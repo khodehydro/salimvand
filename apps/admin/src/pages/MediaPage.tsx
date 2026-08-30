@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { formatPersianNumber } from '@salimvand/shared';
 import { api } from '../lib/api';
 import { MediaPicker, type PickerItem } from '../components/MediaPicker';
+import { MediaImage } from '../components/MediaImage';
 
 type Product = { id: string; name: string; code: string };
 type Media = {
@@ -199,6 +200,7 @@ export function MediaPage() {
         </label>
         <button
           type="button"
+          className="button-primary"
           onClick={() => void upload()}
           disabled={loading || !productId || !file}
         >
@@ -248,10 +250,9 @@ export function MediaPage() {
           {filtered.map((item) => (
             <article className="media-card" key={item.id}>
               <div className="media-preview">
-                <img
+                <MediaImage
                   src={item.path}
                   alt={item.alt ?? item.product?.name ?? item.label ?? 'رسانه'}
-                  loading="lazy"
                 />
                 {item.isPrimary && <span className="media-primary">تصویر اصلی</span>}
                 {item.kind === 'site' && (
@@ -280,6 +281,13 @@ export function MediaPage() {
         <div className="empty-state">
           <b>تصویری پیدا نشد</b>
           <span>یک تصویر بارگذاری کنید یا عبارت جست‌وجو را تغییر دهید.</span>
+          {items.length === 0 && (
+            <small>
+              اگر لوگو یا تصاویری بارگذاری کرده‌اید و اینجا خالی است، یعنی پنل هنوز روی آخرین نسخهٔ
+              منتشرشده نیست — دستور Deploy را روی سرور اجرا کنید (نسخهٔ فعال در پایین منوی کنار
+              نمایش داده می‌شود).
+            </small>
+          )}
         </div>
       )}
       <MediaPicker

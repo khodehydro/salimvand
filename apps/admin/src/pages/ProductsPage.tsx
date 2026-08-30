@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { createEan13 } from '@salimvand/shared';
 import { api } from '../lib/api';
 import { MediaPicker, type PickerItem } from '../components/MediaPicker';
+import { MediaImage } from '../components/MediaImage';
 import { paramsFromHash } from '../lib/admin-route';
 
 type ProductRow = {
@@ -562,7 +563,9 @@ function ProductEditor({
               placeholder="لنت، ترمز، پژو ۲۰۶"
             />
           </label>
-          <button disabled={busy}>{busy ? 'در حال ذخیره…' : 'ذخیرهٔ پایه و سئو'}</button>
+          <button className="button-primary" disabled={busy}>
+            {busy ? 'در حال ذخیره…' : 'ذخیرهٔ پایه و سئو'}
+          </button>
         </form>
       )}
 
@@ -571,7 +574,7 @@ function ProductEditor({
           <div className="image-grid">
             {(product.images ?? []).map((image) => (
               <div className="image-item" key={image.id}>
-                <img src={image.path} alt={image.alt ?? product.name} />
+                <MediaImage src={image.path} alt={image.alt ?? product.name} />
                 <small>{image.isPrimary ? 'تصویر اصلی' : (image.alt ?? 'بدون Alt')}</small>
                 <button
                   onClick={() =>

@@ -95,70 +95,88 @@ section {
 .muted {
   color: var(--sv-text-2);
 }
+/* ---- Global button system ----------------------------------------------
+ * Every plain <button> in the panel gets this base look (secondary action);
+ * intent variants are .button-primary / .outline / .danger. Special buttons
+ * (sidebar nav, palette rows, tabs) override these with their own rules. */
+button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--sv-border-2);
+  border-radius: var(--sv-radius-button, 10px);
+  background: var(--sv-surface-3);
+  color: var(--sv-text);
+  padding: 10px 16px;
+  font:
+    600 13px Vazirmatn,
+    Tahoma;
+  line-height: 1.6;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.1s ease;
+}
+button:hover:not(:disabled) {
+  border-color: var(--sv-primary);
+  color: var(--sv-primary);
+  background: var(--sv-surface-2);
+}
+button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+button:focus-visible {
+  outline: 2px solid var(--sv-primary);
+  outline-offset: 2px;
+}
 /* Shared action buttons. Pages used to ship unstyled <button class="..."> in
  * some spots (e.g. the settings save button); these make every primary,
  * outline and danger action look consistent panel-wide. */
-.button-primary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
+/* Intent variants — prefixed with `button.` so they reliably beat the base
+ * element rules (including the base :hover state). */
+button.button-primary {
   background: var(--sv-primary);
   color: var(--sv-primary-fg);
-  border: 0;
-  border-radius: 10px;
+  border-color: var(--sv-primary);
   padding: 12px 22px;
-  font: 700 14px Vazirmatn;
-  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
   box-shadow: var(--sv-shadow-1);
-  transition:
-    background 0.15s ease,
-    transform 0.1s ease;
   white-space: nowrap;
 }
-.button-primary:hover {
+button.button-primary:hover:not(:disabled) {
   background: var(--sv-primary-hover);
+  border-color: var(--sv-primary-hover);
+  color: var(--sv-primary-fg);
 }
-.button-primary:active {
+button.button-primary:active:not(:disabled) {
   transform: translateY(1px);
 }
-.button-primary:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-.outline {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  background: var(--sv-surface-3);
+button.outline {
+  background: transparent;
   color: var(--sv-primary);
-  border: 1px solid var(--sv-border-2);
-  border-radius: 10px;
-  padding: 10px 16px;
-  font: 600 13px Vazirmatn;
-  cursor: pointer;
-  transition: 0.15s;
 }
-.outline:hover {
+button.outline:hover:not(:disabled) {
+  background: var(--sv-surface-3);
   border-color: var(--sv-primary);
+  color: var(--sv-primary);
 }
-.danger {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
+button.danger {
   background: var(--sv-danger-soft);
   color: var(--sv-danger);
-  border: 1px solid transparent;
-  border-radius: 10px;
-  padding: 10px 16px;
-  font: 600 13px Vazirmatn;
-  cursor: pointer;
-  transition: 0.15s;
+  border-color: color-mix(in srgb, var(--sv-danger) 35%, transparent);
 }
-.danger:hover {
+button.danger:hover:not(:disabled) {
   background: var(--sv-danger);
+  border-color: var(--sv-danger);
   color: var(--sv-primary-fg);
 }
 .media-page {
@@ -185,21 +203,6 @@ section {
   border-radius: 9px;
   padding: 11px;
   font: inherit;
-}
-.media-form button,
-.media-card button {
-  background: var(--sv-primary);
-  color: var(--sv-on-brand);
-  border: 0;
-  border-radius: 9px;
-  padding: 11px 16px;
-  font: inherit;
-  cursor: pointer;
-}
-.media-form .outline,
-.media-card .outline {
-  background: var(--sv-surface-3);
-  color: var(--sv-primary);
 }
 .notice {
   margin: 16px 0;
@@ -283,13 +286,6 @@ section {
 }
 .product-form button {
   grid-column: 1/-1;
-  background: var(--sv-primary);
-  color: var(--sv-on-brand);
-  border: 0;
-  border-radius: 9px;
-  padding: 12px;
-  font: inherit;
-  cursor: pointer;
 }
 .product-table {
   background: var(--sv-surface);
@@ -390,13 +386,8 @@ section {
 }
 .image-item button,
 .editor-actions button {
-  border: 0;
-  background: var(--sv-primary);
-  color: var(--sv-on-brand);
-  border-radius: 7px;
-  padding: 8px;
-  cursor: pointer;
-  font: inherit;
+  padding: 8px 12px;
+  font-size: 12px;
 }
 .image-item .danger {
   background: var(--sv-danger-soft);
@@ -462,13 +453,8 @@ section {
   font: inherit;
 }
 .login-card button {
-  background: var(--sv-primary);
-  color: var(--sv-on-brand);
-  border: 0;
-  border-radius: 9px;
+  width: 100%;
   padding: 13px;
-  font: inherit;
-  cursor: pointer;
 }
 .login-error {
   background: var(--sv-danger-soft);
@@ -509,15 +495,7 @@ section {
   flex: 1;
   min-width: 180px;
 }
-.adjust-box button {
-  background: var(--sv-primary);
-  color: var(--sv-on-brand);
-  border: 0;
-  border-radius: 8px;
-  padding: 10px 14px;
-  font: inherit;
-  cursor: pointer;
-}
+
 .adjust-box .outline {
   background: var(--sv-surface-3);
   color: var(--sv-primary);
@@ -596,15 +574,7 @@ section {
   padding: 10px;
   font: inherit;
 }
-.reference-card button {
-  background: var(--sv-primary);
-  color: var(--sv-on-brand);
-  border: 0;
-  border-radius: 8px;
-  padding: 10px;
-  font: inherit;
-  cursor: pointer;
-}
+
 .reference-card li {
   color: var(--sv-text-2);
   padding: 4px;
@@ -740,6 +710,16 @@ body,
   height: 18px;
   text-align: center;
   padding-top: 2px;
+}
+.aside-footer {
+  display: grid;
+  gap: 4px;
+}
+.release-tag {
+  color: var(--sv-brand-300);
+  font-size: 10px;
+  direction: ltr;
+  text-align: right;
 }
 .aside-footer {
   margin-top: auto;
@@ -1860,10 +1840,6 @@ body,
   font-size: 11px;
   padding: 9px;
 }
-.media-actions .danger {
-  background: var(--sv-danger-soft);
-  color: var(--sv-danger);
-}
 @media (max-width: 700px) {
   .media-toolbar {
     align-items: stretch;
@@ -2817,6 +2793,34 @@ body,
   font-size: 11px;
 }
 
+/* Visible failure state for media thumbnails (see MediaImage). */
+.media-img-failed {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 4px;
+  width: 100%;
+  height: 150px;
+  border: 1px dashed var(--sv-danger);
+  border-radius: 9px;
+  background: var(--sv-danger-soft);
+  color: var(--sv-danger);
+  overflow: hidden;
+  padding: 6px;
+}
+.media-img-failed b {
+  font-size: 12px;
+}
+.media-img-failed small {
+  direction: ltr;
+  font-size: 10px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.85;
+}
+
 /* Media picker modal — choose an existing uploaded file instead of
  * uploading a new one (logo / favicon / product image). */
 .picker-overlay {
@@ -2910,12 +2914,16 @@ body,
   border-color: var(--sv-primary);
   transform: translateY(-2px);
 }
-.picker-item img {
+.picker-item img,
+.picker-item .media-img-failed {
   width: 100%;
   height: 96px;
   object-fit: cover;
   border-radius: 8px;
   background: var(--sv-surface-3);
+}
+.picker-item .media-img-failed {
+  height: 96px;
 }
 .picker-item span {
   font-size: 12px;

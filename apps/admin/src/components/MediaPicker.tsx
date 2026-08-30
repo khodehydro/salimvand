@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { formatPersianNumber } from '@salimvand/shared';
 import { api } from '../lib/api';
+import { MediaImage } from './MediaImage';
 
 export type PickerItem = {
   id: string;
@@ -102,7 +103,7 @@ export function MediaPicker({
                 }}
                 title={item.alt ?? item.product?.name ?? item.label ?? item.path}
               >
-                <img src={item.path} alt={item.alt ?? item.label ?? 'رسانه'} loading="lazy" />
+                <MediaImage src={item.path} alt={item.alt ?? item.label ?? 'رسانه'} />
                 <span>{item.product?.name ?? item.label ?? 'رسانهٔ سایت'}</span>
                 {item.kind === 'site' && <small>رسانهٔ سایت</small>}
               </button>

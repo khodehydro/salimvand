@@ -32,6 +32,11 @@ bash "$ROOT_DIR/scripts/verify-production-config.sh"
 echo "Fetching $BRANCH..."
 git fetch --prune origin "$BRANCH"
 git checkout --detach "origin/$BRANCH"
+# Record the live release: the API exposes it on /health and the panel shows
+# it in the sidebar so anyone can confirm the deploy actually landed.
+printf '{"commit":"%s","branch":"%s","builtAt":"%s"}\n' \
+  "$(git rev-parse HEAD)" "$BRANCH" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$ROOT_DIR/version.json"
+chown salimvand:salimvand "$ROOT_DIR/version.json" 2>/dev/null || true
 # Build, Prisma CLI and seed use devDependencies; production mode must not omit them.
 "${PNPM[@]}" install --frozen-lockfile --prod=false
 # prisma:seed imports @salimvand/shared, whose entry point is dist/ — build it
@@ -69,6 +74,11 @@ chown -R salimvand:salimvand "$STANDALONE"
 
 install -d -o salimvand -g salimvand "$ROOT_DIR/uploads/products"
 install -d -o salimvand -g salimvand "$ROOT_DIR/uploads/site"
+# Panel-triggered backups run as the salimvand service user (the API spawns
+# scripts/backup.sh), so both the archive dir and the status dir must be
+# writable by it — otherwise every run dies with "Permission denied".
+install -d -o salimvand -g salimvand -m 0700 /var/backups/salimvand
+install -d -o salimvand -g salimvand -m 0700 /var/lib/salimvand
 # The CMS must serve uploaded media (/uploads) same-origin for the media
 # library and settings previews. Never overwrite the live vhost — certbot
 # edits it in place for TLS — only insert the location if it is missing.
@@ -79,22 +89,33 @@ elif [[ -f /etc/nginx/conf.d/salimvand.conf ]]; then
   NGINX_CONF=/etc/nginx/conf.d/salimvand.conf
 fi
 if [[ -n "$NGINX_CONF" ]] && grep -q 'server_name cms' "$NGINX_CONF" \
-   && ! grep -q 'location \^~ /uploads/' "$NGINX_CONF"; then
+   && { ! grep -q 'location \^~ /uploads/' "$NGINX_CONF" \
+       || ! grep -q 'location = /index.html' "$NGINX_CONF"; }; then
   python3 - "$NGINX_CONF" <<'NGINXPY'
 import sys
 
 path = sys.argv[1]
 newline = chr(10)
-lines = open(path).read().split(newline)
-block = [
-    '    # Uploaded media (product images, logo, favicon) served to the CMS.',
-    '    location ^~ /uploads/ {',
-    '        alias /opt/salimvand/uploads/;',
-    '        expires 30d;',
-    '        add_header Cache-Control "public, immutable";',
-    '        try_files $uri =404;',
-    '    }',
-]
+raw = open(path).read()
+lines = raw.split(newline)
+block = []
+if 'location ^~ /uploads/' not in raw:
+    block += [
+        '    # Uploaded media (product images, logo, favicon) served to the CMS.',
+        '    location ^~ /uploads/ {',
+        '        alias /opt/salimvand/uploads/;',
+        '        expires 30d;',
+        '        add_header Cache-Control "public, immutable";',
+        '        try_files $uri =404;',
+        '    }',
+    ]
+if 'location = /index.html' not in raw:
+    block += [
+        '    # Always revalidate the SPA shell so a new release is picked up.',
+        '    location = /index.html {',
+        '        add_header Cache-Control "no-cache";',
+        '    }',
+    ]
 out = []
 in_cms = False
 has_api = False
@@ -115,7 +136,7 @@ for line in lines:
     out.append(line)
 if inserted:
     open(path, 'w').write(chr(10).join(out))
-    print('Added /uploads location to the CMS vhost.')
+    print('Patched the CMS vhost: /uploads serving and/or index.html no-cache.')
 NGINXPY
 fi
 if [[ -n "$NGINX_CONF" ]] && command -v nginx >/dev/null 2>&1; then
