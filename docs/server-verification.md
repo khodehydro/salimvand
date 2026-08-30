@@ -63,6 +63,17 @@ pnpm --filter @salimvand/api exec prisma migrate deploy
 pnpm --filter @salimvand/api prisma:seed
 ```
 
+### راستی‌آزمایی آفلاین مایگریشن‌ها (پیش از دیپلوی)
+
+اسکریپت `scripts/verify-migrations.js` تمام فایل‌های مایگریشن را مثل `prisma migrate deploy` روی یک Postgres موقت (embedded) اجرا و نتیجه را ستون‌به‌ستون با `schema.prisma` مقایسه می‌کند؛ نام ستون یا nullable بودنِ ناهماهنگ را قبل از رسیدن به سرور پیدا می‌کند (تست‌های واحد Prisma را mock می‌کنند و این کلاس خطا را نمی‌بینند).
+
+```bash
+mkdir /tmp/pgval && cd /tmp/pgval && npm init -y >/dev/null && npm i embedded-postgres pg
+node "$APP_DIR/scripts/verify-migrations.js"   # یا مسیر ریپو
+```
+
+خروجی سالم: «schema matches migrations for every model». وابستگی‌ها عمداً در lockfile نیامده‌اند تا نصب سرور سبز بماند.
+
 ---
 
 ## ۴) دیپلوی
