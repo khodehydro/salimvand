@@ -178,8 +178,9 @@ export default async function HomePage({
             بقیه‌اش با ماست.
           </h1>
           <p>
-            کاتالوگ زندهٔ قطعات یدکی خودرو با اعلام وضعیت موجودی و برندهای موجود در انبار. قیمت‌ها
-            به‌دلیل نوسان بازار فقط با استعلام اعلام می‌شوند.
+            {info.pricing.showPrices
+              ? 'کاتالوگ زندهٔ قطعات یدکی خودرو با قیمت روز، وضعیت موجودی و برندهای موجود در انبار.'
+              : 'کاتالوگ زندهٔ قطعات یدکی خودرو با اعلام وضعیت موجودی و برندهای موجود در انبار. قیمت‌ها به‌دلیل نوسان بازار فقط با استعلام اعلام می‌شوند.'}
           </p>
           <div className="hero-actions">
             <a className="button button-light" href="#catalog">
@@ -215,7 +216,9 @@ export default async function HomePage({
             <h2>قطعهٔ موردنظرت را پیدا کن</h2>
             <p>{formatPersianNumber(products.total)} نتیجه · فیلترها در آدرس صفحه ذخیره می‌شوند</p>
           </div>
-          <span className="price-note">قیمت فقط با استعلام</span>
+          <span className="price-note">
+            {info.pricing.showPrices ? 'قیمت‌های روز انبار' : 'قیمت فقط با استعلام'}
+          </span>
         </div>
         <CatalogFilters filters={filters} params={params} />
         {products.items.length ? (

@@ -1028,10 +1028,58 @@ body,
 .switch-row {
   display: flex !important;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  cursor: pointer;
 }
-.switch-row input {
-  width: auto;
+/* Real toggle switch (used for the price-display master switch and SMS
+ * auto-send): a pill track with a sliding thumb; RTL-aware via logical
+ * properties so it also looks right in LTR contexts. */
+.switch-row input[type='checkbox'] {
+  appearance: none;
+  flex: none;
+  width: 42px;
+  height: 24px;
+  margin: 0;
+  border-radius: var(--sv-radius-pill, 999px);
+  border: 2px solid var(--sv-border);
+  background: var(--sv-surface-3);
+  position: relative;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+.switch-row input[type='checkbox']::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  inset-inline-start: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--sv-text-3);
+  transition:
+    inset-inline-start 0.15s ease,
+    background 0.15s ease;
+}
+.switch-row input[type='checkbox']:hover:not(:disabled) {
+  border-color: var(--sv-primary);
+}
+.switch-row input[type='checkbox']:checked {
+  border-color: var(--sv-primary);
+  background: color-mix(in srgb, var(--sv-primary) 24%, var(--sv-surface-3));
+}
+.switch-row input[type='checkbox']:checked::after {
+  inset-inline-start: 21px;
+  background: var(--sv-primary);
+}
+.switch-row input[type='checkbox']:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.switch-row input[type='checkbox']:focus-visible {
+  outline: 2px solid var(--sv-primary);
+  outline-offset: 2px;
 }
 .settings-help {
   color: var(--sv-text-2);

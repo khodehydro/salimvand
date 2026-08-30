@@ -97,3 +97,41 @@ describe('CatalogAdminService', () => {
     });
   });
 });
+describe('storefront price visibility per product', () => {
+  it('accepts show/hide overrides on create and defaults to inherit', async () => {
+    const { service, prisma } = makeService();
+    prisma.product.create.mockResolvedValue({ id: 'p1' });
+    await service.create({ name: 'لنت', categoryId: 'c1', priceDisplay: 'show' });
+    expect(prisma.product.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ priceDisplay: 'show' }),
+    });
+
+    await service.create({ name: 'دیفرانسیل', categoryId: 'c1' });
+    expect(prisma.product.create).toHaveBeenLastCalledWith({
+      data: expect.objectContaining({ priceDisplay: 'inherit' }),
+    });
+  });
+
+  it('rejects unknown price display values', async () => {
+    const { service } = makeService();
+    await expect(
+      service.create({ name: 'لنت', categoryId: 'c1', priceDisplay: 'always' }),
+    ).rejects.toThrow('نمایش قیمت باید inherit، show یا hide باشد');
+  });
+
+  it('persists the per-product override on update and leaves it untouched when absent', async () => {
+    const { service, prisma } = makeService();
+    prisma.product.findFirst.mockResolvedValue({ id: 'p1' });
+    prisma.product.update.mockResolvedValue({ id: 'p1' });
+
+    await service.update('p1', { priceDisplay: 'hide' });
+    expect(prisma.product.update).toHaveBeenLastCalledWith({
+      where: { id: 'p1' },
+      data: expect.objectContaining({ priceDisplay: 'hide' }),
+    });
+
+    await service.update('p1', { name: 'نام جدید' });
+    const call = prisma.product.update.mock.calls.at(-1)?.[0] as { data: Record<string, unknown> };
+    expect(call.data).not.toHaveProperty('priceDisplay');
+  });
+});

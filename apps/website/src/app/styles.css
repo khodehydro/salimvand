@@ -595,6 +595,12 @@ p {
     monospace;
   direction: ltr;
 }
+/* Visible price (panel switch on): shown instead of the inquiry CTA. */
+.card-price {
+  color: var(--ok);
+  font-size: 13px;
+  font-weight: 700;
+}
 .card-footer b {
   font-size: 15px;
 }
@@ -1741,6 +1747,28 @@ p {
   display: grid;
   gap: 10px;
   margin-block: 4px;
+}
+/* Visible price block on the product page (panel switch on). */
+.product-price {
+  display: grid;
+  gap: 2px;
+  padding: 12px 18px;
+  border-radius: 14px;
+  border: 1px solid var(--ok-soft);
+  background: var(--ok-soft);
+  text-align: center;
+}
+.product-price small {
+  color: var(--ok);
+  font-size: 12px;
+}
+.product-price b {
+  font-size: 21px;
+  color: var(--ok);
+}
+.product-price span {
+  color: var(--text-3);
+  font-size: 11px;
 }
 /* The product page shows the phone number alone — one tap dials the store. */
 .product-phone {

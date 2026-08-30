@@ -109,6 +109,9 @@ model Product {
   aparatVideoId         String?                @db.VarChar(30)
   status                ProductStatus          @default(active)
   availabilityOverride  AvailabilityOverride?
+  /// Storefront price visibility: 'inherit' follows the site-wide pricing
+  /// setting (store.pricing.showPrices); 'show'/'hide' override it per product.
+  priceDisplay          String                 @default("inherit") @db.VarChar(10)
   seoTitle              String?                @db.VarChar(255)
   seoDescription        String?                @db.VarChar(320)
   seoKeywords           String[]               @default([])

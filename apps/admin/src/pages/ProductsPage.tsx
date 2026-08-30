@@ -21,6 +21,8 @@ type ProductDetail = {
   code: string;
   slug: string;
   status: string;
+  /** Storefront price visibility: 'inherit' follows the site-wide switch. */
+  priceDisplay?: string;
   description?: string | null;
   partNumber?: string | null;
   aparatVideoId?: string | null;
@@ -323,6 +325,7 @@ function ProductEditor({
     description: product.description ?? '',
     partNumber: product.partNumber ?? '',
     status: product.status,
+    priceDisplay: product.priceDisplay ?? 'inherit',
     seoTitle: product.seoTitle ?? '',
     seoDescription: product.seoDescription ?? '',
     seoKeywords: (product.seoKeywords ?? []).join('، '),
@@ -382,6 +385,7 @@ function ProductEditor({
         description: basic.description || null,
         partNumber: basic.partNumber || null,
         status: basic.status,
+        priceDisplay: basic.priceDisplay,
         seoTitle: basic.seoTitle || null,
         seoDescription: basic.seoDescription || null,
         seoKeywords: basic.seoKeywords
@@ -530,6 +534,17 @@ function ProductEditor({
             >
               <option value="active">فعال</option>
               <option value="hidden">مخفی</option>
+            </select>
+          </label>
+          <label>
+            نمایش قیمت در سایت
+            <select
+              value={basic.priceDisplay}
+              onChange={(event) => setBasic({ ...basic, priceDisplay: event.target.value })}
+            >
+              <option value="inherit">مطابق تنظیم سایت</option>
+              <option value="show">همیشه نمایش بده</option>
+              <option value="hide">همیشه پنهان (استعلام)</option>
             </select>
           </label>
           <label>

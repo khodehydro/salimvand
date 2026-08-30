@@ -41,6 +41,9 @@ export type StoreInfo = {
   bale: string;
   instagram: string;
   trustVideo: string | null;
+  /** Site-wide price display switch from the panel: when true, product prices
+   * render on the storefront; when false (default) prices stay inquiry-only. */
+  pricing: { showPrices: boolean };
 };
 
 /** Shown when the operator has not configured a map embed yet. */
@@ -73,6 +76,7 @@ export async function getStoreInfo(): Promise<StoreInfo> {
     bale: 'https://ble.ir/',
     instagram: 'https://instagram.com/',
     trustVideo: null,
+    pricing: { showPrices: false },
   };
   try {
     const response = await fetch(`${apiUrl}/public/meta`, { next: { revalidate: 60 } });
@@ -81,6 +85,7 @@ export async function getStoreInfo(): Promise<StoreInfo> {
       data?: {
         profile?: Record<string, unknown>;
         trustVideo?: string | null;
+        pricing?: { showPrices?: boolean };
         telegram?: Record<string, unknown>;
         bale?: Record<string, unknown>;
       };
@@ -152,6 +157,9 @@ export async function getStoreInfo(): Promise<StoreInfo> {
       instagram: instagram || fallback.instagram,
       // Operators paste either the bare hash or a full Aparat link — accept both.
       trustVideo: extractAparatVideoId(asString(data.trustVideo ?? '')) || null,
+      pricing: {
+        showPrices: ((data.pricing ?? {}) as { showPrices?: unknown }).showPrices === true,
+      },
     };
   } catch {
     return fallback;

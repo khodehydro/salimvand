@@ -43,6 +43,9 @@ type Settings = {
     };
   };
   'store.trust_video'?: string;
+  /** Site-wide storefront price switch: off = inquiry-only (the default),
+   * on = product prices render on the public site. */
+  'store.pricing'?: { showPrices?: boolean };
   'sms.templates'?: { invoice?: string; paid?: string; autoSend?: boolean };
   'integrations.telegram'?: { link?: string };
   'integrations.bale'?: { link?: string };
@@ -69,6 +72,7 @@ const initial: Settings = {
     header: { tagline: '', cta: '', navCatalog: '', navVideo: '', navContact: '' },
   },
   'store.trust_video': '',
+  'store.pricing': { showPrices: false },
   'sms.templates': { invoice: '', paid: '', autoSend: true },
   'integrations.telegram': { link: '' },
   'integrations.bale': { link: '' },
@@ -460,6 +464,30 @@ export function SettingsPage() {
                   </label>
                 </div>
               </div>
+            </fieldset>
+            <fieldset>
+              <legend>قیمت‌ها در سایت</legend>
+              <label className="switch-row">
+                <input
+                  type="checkbox"
+                  checked={settings['store.pricing']?.showPrices ?? false}
+                  onChange={(e) =>
+                    setSettings((current) => ({
+                      ...current,
+                      'store.pricing': {
+                        ...(current['store.pricing'] ?? {}),
+                        showPrices: e.target.checked,
+                      },
+                    }))
+                  }
+                />
+                نمایش قیمت محصولات در سایت
+              </label>
+              <p className="settings-help">
+                خاموش: قیمت‌ها فقط با استعلام اعلام می‌شوند (حالت پیش‌فرض). روشن: ارزان‌ترین قیمت
+                اقلام فعال هر محصول روی سایت نمایش داده می‌شود. هر محصول می‌تواند در تب «پایه و سئو»
+                این حالت را برای خودش بازنویسی کند (مطابق سایت / همیشه نمایش / همیشه پنهان).
+              </p>
             </fieldset>
             <fieldset>
               <legend>لوگو و آیکون سایت</legend>

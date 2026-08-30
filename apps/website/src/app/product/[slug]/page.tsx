@@ -4,7 +4,7 @@ import { ProductGallery } from '../../ProductGallery';
 import { PublicSubHeader } from '../../PublicSubHeader';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { formatPersianNumber } from '@salimvand/shared';
+import { formatPersianNumber, formatRial } from '@salimvand/shared';
 import { getStoreInfo, primaryPhone, telHref } from '../../store-info';
 
 const apiUrl = process.env.API_URL ?? 'https://api.salimvand.ir/api/v1';
@@ -20,6 +20,8 @@ type Product = {
   seoTitle?: string;
   seoDescription?: string;
   availability: string;
+  /** Cheapest active brand price (rial, as a string) or null while hidden. */
+  price?: string | null;
   brands: Array<{ name: string; inStock: boolean }>;
   images?: Array<{ path: string; thumbnailPath?: string; alt?: string }>;
   compatibilities?: Array<{
@@ -237,9 +239,18 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
                 </dl>
               </div>
             )}
+            {product.price != null && (
+              <div className="product-price">
+                <small>قیمت</small>
+                <b>{formatRial(Number(product.price))}</b>
+                {(product.brands?.length ?? 0) > 1 && <span>ارزان‌ترین برند موجود</span>}
+              </div>
+            )}
             <div className="product-contact">
               <a className="product-phone" href={telHref(info)}>
-                <small>تماس برای استعلام قیمت</small>
+                <small>
+                  {product.price != null ? 'تماس و ثبت سفارش' : 'تماس برای استعلام قیمت'}
+                </small>
                 <b dir="ltr">{primaryPhone(info) || 'شماره تماس ثبت نشده است'}</b>
               </a>
               <div className="product-messengers">
@@ -256,7 +267,9 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
               </div>
             </div>
             <p className="price-note-inline">
-              قیمت‌ها روزانه تغییر می‌کنند؛ مبلغ نهایی هنگام صدور فاکتور قطعی می‌شود.
+              {product.price != null
+                ? 'قیمت روز انبار است؛ مبلغ نهایی هنگام صدور فاکتور قطعی می‌شود.'
+                : 'قیمت‌ها روزانه تغییر می‌کنند؛ مبلغ نهایی هنگام صدور فاکتور قطعی می‌شود.'}
             </p>
           </div>
         </div>

@@ -4,7 +4,13 @@ import { PrismaService } from '../../prisma.service';
 type PublicProduct = {
   slug: string;
   availabilityOverride: string | null;
-  inventoryItems: Array<{ quantity: number; minStock: number | null; brand: { name: string } }>;
+  priceDisplay: string;
+  inventoryItems: Array<{
+    quantity: number;
+    minStock: number | null;
+    salePrice: bigint;
+    brand: { name: string };
+  }>;
   images: Array<{ path: string; alt: string | null; isPrimary: boolean }>;
   [key: string]: unknown;
 };
@@ -61,6 +67,9 @@ export class CatalogService {
     };
     const page = Math.max(1, query.page ?? 1);
     const pageSize = Math.min(50, Math.max(1, query.pageSize ?? 24));
+    // Site-wide master switch (settings › نمایش قیمت در سایت): when off, prices
+    // stay internal unless a single product opts in with priceDisplay='show'.
+    const showPrices = await this.showPrices();
     const [products, total] = await Promise.all([
       this.prisma.product.findMany({
         where: where as never,
@@ -80,11 +89,17 @@ export class CatalogService {
           seoDescription: true,
           status: true,
           availabilityOverride: true,
+          priceDisplay: true,
           category: { select: { name: true, slug: true } },
           images: { orderBy: { sort: 'asc' }, select: { path: true, alt: true, isPrimary: true } },
           inventoryItems: {
             where: { isActive: true },
-            select: { quantity: true, minStock: true, brand: { select: { name: true } } },
+            select: {
+              quantity: true,
+              minStock: true,
+              salePrice: true,
+              brand: { select: { name: true } },
+            },
           },
           compatibilities: {
             select: {
@@ -108,6 +123,7 @@ export class CatalogService {
             : image.path,
         })),
         availability: this.availability(product.inventoryItems, product.availabilityOverride),
+        price: this.publicPrice(product, showPrices),
         brands: product.inventoryItems.map((item) => ({
           name: item.brand.name,
           inStock: item.quantity > 0,
@@ -123,6 +139,29 @@ export class CatalogService {
     const product = result.data[0];
     if (!product) throw new NotFoundException('محصول پیدا نشد');
     return { ok: true, data: product };
+  }
+
+  /** Cheapest active brand price, exposed only when this product's price is
+   * visible under the current site-wide setting. `null` keeps the storefront
+   * on its «استعلام قیمت» default. */
+  private publicPrice(product: PublicProduct, showPrices: boolean): string | null {
+    const visible = showPrices ? product.priceDisplay !== 'hide' : product.priceDisplay === 'show';
+    if (!visible || product.inventoryItems.length === 0) return null;
+    const min = product.inventoryItems.reduce(
+      (lowest, item) => (item.salePrice < lowest ? item.salePrice : lowest),
+      product.inventoryItems[0].salePrice,
+    );
+    return min.toString();
+  }
+
+  /** Reads the site-wide price display switch (store.pricing.showPrices). */
+  private async showPrices(): Promise<boolean> {
+    const rows = await this.prisma.setting.findMany({
+      where: { key: { in: ['store.pricing'] } },
+      select: { value: true },
+    });
+    const value = rows[0]?.value as { showPrices?: unknown } | undefined;
+    return value?.showPrices === true;
   }
 
   private availability(
@@ -172,7 +211,13 @@ export class CatalogService {
     const rows = await this.prisma.setting.findMany({
       where: {
         key: {
-          in: ['store.profile', 'store.trust_video', 'integrations.telegram', 'integrations.bale'],
+          in: [
+            'store.profile',
+            'store.trust_video',
+            'store.pricing',
+            'integrations.telegram',
+            'integrations.bale',
+          ],
         },
       },
       select: { key: true, value: true },
@@ -182,6 +227,10 @@ export class CatalogService {
       ok: true,
       data: {
         profile: values['store.profile'] ?? {},
+        pricing: {
+          showPrices:
+            (values['store.pricing'] as { showPrices?: boolean } | undefined)?.showPrices === true,
+        },
         trustVideo: values['store.trust_video'] ?? null,
         telegram: values['integrations.telegram'] ?? {},
         bale: values['integrations.bale'] ?? {},

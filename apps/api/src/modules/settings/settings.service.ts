@@ -8,6 +8,7 @@ import { writeAudit } from '../../common/audit/audit-log';
 
 const allowedKeys = new Set([
   'store.profile',
+  'store.pricing',
   'store.trust_video',
   'sms.templates',
   'integrations.telegram',

@@ -1,17 +1,22 @@
 import type { ReactNode } from 'react';
+import { formatRial } from '@salimvand/shared';
 
 /**
  * The single catalog card used by the homepage grid and every SEO landing
  * page (category, vehicle, location) so the storefront stays visually
  * consistent: image, category badge, availability state, brand chips with
  * per-brand stock, Latin product code and a play button that opens the
- * product's Aparat video. No price, ever.
+ * product's Aparat video. Prices appear only when the panel's price switch
+ * (site-wide or per-product) lets them through — otherwise the card keeps
+ * its inquiry-only footer.
  */
 export type CardProduct = {
   slug: string;
   name: string;
   code: string;
   availability: string;
+  /** Cheapest active brand price (rial, as a string) or null while hidden. */
+  price?: string | null;
   aparatVideoId?: string | null;
   brands?: Array<{ name: string; inStock: boolean }>;
   compatibilities?: Array<{
@@ -100,9 +105,16 @@ export function ProductCard({
         )}
         <div className="card-footer">
           <code>{product.code}</code>
-          <span>
-            استعلام قیمت <b>←</b>
-          </span>
+          {product.price ? (
+            <span className="card-price">
+              {(product.brands?.length ?? 0) > 1 ? 'از ' : ''}
+              {formatRial(Number(product.price))}
+            </span>
+          ) : (
+            <span>
+              استعلام قیمت <b>←</b>
+            </span>
+          )}
         </div>
       </a>
       {videoUrl && (

@@ -50,6 +50,7 @@ export class CatalogAdminService {
           partNumber: this.optionalString(input.partNumber),
           aparatVideoId: this.optionalString(input.aparatVideoId),
           status: input.status === 'hidden' ? 'hidden' : 'active',
+          priceDisplay: this.priceDisplayValue(input.priceDisplay) ?? 'inherit',
           seoKeywords: this.stringArray(input.seoKeywords) ?? seo.seoKeywords,
         },
       });
@@ -86,6 +87,10 @@ export class CatalogAdminService {
       if (input[key] !== undefined) data[key] = input[key];
     const keywords = this.stringArray(input.seoKeywords);
     if (keywords) data.seoKeywords = keywords;
+    // Storefront price visibility: 'inherit' follows the site-wide switch,
+    // 'show'/'hide' override it for this one product.
+    if (input.priceDisplay !== undefined)
+      data.priceDisplay = this.priceDisplayValue(input.priceDisplay) ?? 'inherit';
     // status is an enum column: anything but the two known values must be rejected, not stored.
     if (input.status !== undefined) {
       if (input.status !== 'active' && input.status !== 'hidden')
@@ -176,6 +181,12 @@ export class CatalogAdminService {
     });
     return `${prefix.toUpperCase()}-${String(counter.lastValue).padStart(5, '0')}`;
   }
+  private priceDisplayValue(value: unknown): 'inherit' | 'show' | 'hide' | null {
+    if (value === undefined || value === null || value === '') return null;
+    if (value === 'inherit' || value === 'show' || value === 'hide') return value;
+    throw new BadRequestException('نمایش قیمت باید inherit، show یا hide باشد');
+  }
+
   private stringValue(value: unknown) {
     return typeof value === 'string' ? value.trim() : '';
   }
