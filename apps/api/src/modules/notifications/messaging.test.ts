@@ -27,7 +27,7 @@ describe('SMS templates', () => {
   });
 
   it('uses the operator template when one is configured and falls back otherwise', () => {
-    const siteUrl = (process.env.PUBLIC_SITE_URL ?? 'https://selimvand.ir').replace(/\/$/, '');
+    const siteUrl = (process.env.PUBLIC_SITE_URL ?? 'https://salimvand.ir').replace(/\/$/, '');
     const withTemplate = buildInvoiceMessage(
       'INV-0002',
       'c0de',

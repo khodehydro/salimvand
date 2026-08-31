@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { createEan13 } from '@salimvand/shared';
 import { api } from '../lib/api';
+import { publicSiteUrl } from '../lib/public-site';
 import { MediaPicker, type PickerItem } from '../components/MediaPicker';
 import { MediaImage } from '../components/MediaImage';
 import { StockStepper } from '../components/StockStepper';
@@ -81,7 +82,6 @@ const tabs = [
 ] as const;
 type Tab = (typeof tabs)[number]['id'];
 
-const publicSiteUrl = import.meta.env.VITE_PUBLIC_SITE_URL ?? window.location.origin;
 const aparatEmbed = (videoId: string) =>
   `https://www.aparat.com/video/video/embed/videohash/${videoId}/vt/frame`;
 

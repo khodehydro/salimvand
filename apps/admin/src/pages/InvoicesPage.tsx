@@ -11,6 +11,7 @@ import {
   type PaymentRow,
 } from '../lib/invoice-math';
 import { api, downloadFile } from '../lib/api';
+import { publicSiteUrl } from '../lib/public-site';
 import { paramsFromHash } from '../lib/admin-route';
 
 type Invoice = {
@@ -67,7 +68,6 @@ const labels: Record<string, string> = {
   issued: 'صادرشده',
   voided: 'باطل‌شده',
 };
-const publicSiteUrl = import.meta.env.VITE_PUBLIC_SITE_URL ?? window.location.origin;
 const shortLink = (code: string) => `${publicSiteUrl}/i/${code}`;
 
 export function InvoicesPage({

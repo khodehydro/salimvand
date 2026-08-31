@@ -295,7 +295,7 @@ export class InvoiceService {
       (invoice.publicTokenExpiresAt && invoice.publicTokenExpiresAt.getTime() <= Date.now())
     )
       throw new NotFoundException('فاکتور پیدا نشد');
-    const siteUrl = (process.env.PUBLIC_SITE_URL ?? 'https://selimvand.ir').replace(/\/$/, '');
+    const siteUrl = (process.env.PUBLIC_SITE_URL ?? 'https://salimvand.ir').replace(/\/$/, '');
     const url = `${siteUrl}/i/${encodeURIComponent(shortCode)}`;
     const dataUrl = await QRCode.toDataURL(url, {
       errorCorrectionLevel: 'M',
@@ -309,7 +309,7 @@ export class InvoiceService {
     const result = await this.getPublic(token);
     const invoice = result.data;
     const qr = await QRCode.toDataURL(
-      `${(process.env.PUBLIC_SITE_URL ?? 'https://selimvand.ir').replace(/\/$/, '')}/i/${encodeURIComponent(token)}`,
+      `${(process.env.PUBLIC_SITE_URL ?? 'https://salimvand.ir').replace(/\/$/, '')}/i/${encodeURIComponent(token)}`,
       { errorCorrectionLevel: 'M', width: 240, margin: 1 },
     );
     return this.renderPdf(invoice, qr);

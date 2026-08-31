@@ -13,9 +13,9 @@ import {
 
 describe('notification messages', () => {
   it('uses the short invoice URL and never the long token', () => {
-    process.env.PUBLIC_SITE_URL = 'https://selimvand.ir/';
+    process.env.PUBLIC_SITE_URL = 'https://salimvand.ir/';
     const message = buildInvoiceMessage('INV-0001', 'Ab7kP2xQ9m', '1500000');
-    expect(message).toContain('https://selimvand.ir/i/Ab7kP2xQ9m');
+    expect(message).toContain('https://salimvand.ir/i/Ab7kP2xQ9m');
     expect(message).not.toContain('publicToken');
     expect(message).not.toContain('undefined');
   });

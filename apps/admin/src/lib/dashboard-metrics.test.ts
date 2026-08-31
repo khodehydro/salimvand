@@ -48,7 +48,7 @@ describe('dashboard metrics', () => {
   });
 
   it('writes a Persian debt reminder with the formatted amount', () => {
-    expect(debtReminderMessage('علی', 2_500_000, 'https://selimvand.ir/i/abc')).toContain(
+    expect(debtReminderMessage('علی', 2_500_000, 'https://salimvand.ir/i/abc')).toContain(
       '۲٬۵۰۰٬۰۰۰ ریال',
     );
     expect(debtReminderMessage('علی', 100)).toContain('هماهنگ');

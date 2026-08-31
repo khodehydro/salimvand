@@ -86,7 +86,7 @@ export function buildInvoiceMessage(
   paid = false,
   template?: string | null,
 ): string {
-  const siteUrl = (process.env.PUBLIC_SITE_URL ?? 'https://selimvand.ir').replace(/\/$/, '');
+  const siteUrl = (process.env.PUBLIC_SITE_URL ?? 'https://salimvand.ir').replace(/\/$/, '');
   const link = `${siteUrl}/i/${shortCode}`;
   const rendered = renderSmsTemplate(template, {
     invoice_number: number,
@@ -333,7 +333,7 @@ export class NotificationsService implements OnModuleDestroy {
       return `فروش امروز: ${count} فاکتور به مبلغ ${result._sum.total ?? 0} ریال`;
     }
     if (command === 'invoice') {
-      const siteUrl = (process.env.PUBLIC_SITE_URL ?? 'https://selimvand.ir').replace(/\/$/, '');
+      const siteUrl = (process.env.PUBLIC_SITE_URL ?? 'https://salimvand.ir').replace(/\/$/, '');
       return argument
         ? `لینک فاکتور: ${siteUrl}/i/${argument}`
         : 'کد کوتاه فاکتور را بعد از /invoice بنویسید.';

@@ -83,6 +83,11 @@ fi
 # The CMS and API are intentionally same-origin in production. Never allow a
 # local/development VITE_API_URL from .env to be embedded in the browser bundle.
 export VITE_API_URL=/api/v1
+# Customer-facing links (invoice short links, QR codes) are built in the
+# panel bundle and must point at the public storefront — never at the cms.*
+# host the panel itself is served from. PUBLIC_SITE_URL comes from .env
+# (verify-production-config.sh already requires it).
+export VITE_PUBLIC_SITE_URL="${PUBLIC_SITE_URL:-https://salimvand.ir}"
 "${PNPM[@]}" build
 
 # Next standalone is nested because this is a workspace monorepo. Copy runtime assets
