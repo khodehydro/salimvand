@@ -3,7 +3,7 @@ import { createEan13 } from '@salimvand/shared';
 import { api } from '../lib/api';
 import { MediaPicker, type PickerItem } from '../components/MediaPicker';
 import { MediaImage } from '../components/MediaImage';
-import { paramsFromHash } from '../lib/admin-route';
+import { StockStepper } from '../components/StockStepper';
 
 type ProductRow = {
   id: string;
@@ -12,8 +12,17 @@ type ProductRow = {
   slug: string;
   status: string;
   deletedAt?: string | null;
+  partNumber?: string | null;
   category?: { name: string };
-  inventoryItems?: Array<{ quantity: number; brand: { name: string } }>;
+  images?: Array<{ path: string; alt?: string | null; isPrimary: boolean }>;
+  inventoryItems?: Array<{
+    id: string;
+    quantity: number;
+    minStock?: number | null;
+    salePrice: string;
+    brand: { name: string };
+    location?: { code: string; name: string } | null;
+  }>;
 };
 type ProductDetail = {
   id: string;
@@ -51,7 +60,7 @@ type ProductDetail = {
     minStock?: number | null;
     isActive: boolean;
     brand: { id: string; name: string };
-    location?: { code: string; name: string } | null;
+    location?: { id: string; code: string; name: string } | null;
   }>;
 };
 type Category = { id: string; name: string };
@@ -68,14 +77,20 @@ const tabs = [
   { id: 'images', label: 'تصاویر' },
   { id: 'aparat', label: 'ویدیوی آپارات' },
   { id: 'vehicles', label: 'سازگاری خودرو' },
-  { id: 'items', label: 'اقلام برند و بارکد' },
+  { id: 'items', label: 'قلم‌ها، قیمت و موجودی' },
 ] as const;
 type Tab = (typeof tabs)[number]['id'];
 
-const empty = { name: '', categoryId: '', description: '', partNumber: '', status: 'active' };
 const publicSiteUrl = import.meta.env.VITE_PUBLIC_SITE_URL ?? window.location.origin;
 const aparatEmbed = (videoId: string) =>
   `https://www.aparat.com/video/video/embed/videohash/${videoId}/vt/frame`;
+
+const totalStock = (product: ProductRow) =>
+  product.inventoryItems?.reduce((sum, item) => sum + item.quantity, 0) ?? 0;
+const cheapestSalePrice = (product: ProductRow) => {
+  const prices = (product.inventoryItems ?? []).map((item) => Number(item.salePrice));
+  return prices.length ? Math.min(...prices) : null;
+};
 
 export function ProductsPage() {
   const [products, setProducts] = useState<ProductRow[]>([]);
@@ -83,9 +98,8 @@ export function ProductsPage() {
   const [brands, setBrands] = useState<Brand[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [vehicles, setVehicles] = useState<VehicleMake[]>([]);
-  const [form, setForm] = useState(empty);
+  const [filter, setFilter] = useState('');
   const [message, setMessage] = useState('');
-  const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState<ProductDetail | null>(null);
   const [tab, setTab] = useState<Tab>('basic');
 
@@ -128,151 +142,129 @@ export function ProductsPage() {
       .catch(() => undefined);
   }, []);
 
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    setSaving(true);
-    try {
-      const created = await api<{ data: ProductDetail }>('/products', {
-        method: 'POST',
-        body: JSON.stringify(form),
-      });
-      setMessage(`محصول ${created.data.name} ثبت شد؛ تب‌های بعدی را کامل کنید.`);
-      setForm(empty);
-      setDraft(created.data);
-      setTab('images');
-      await load();
-    } catch (error) {
-      setMessage((error as Error).message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const stock = (product: ProductRow) =>
-    product.inventoryItems?.reduce((sum, item) => sum + item.quantity, 0) ?? 0;
+  const visible = products.filter((product) =>
+    `${product.name} ${product.code} ${product.partNumber ?? ''}`.includes(filter.trim()),
+  );
 
   return (
     <section className="products-page">
       <div className="page-title">
         <div>
           <h1>محصولات</h1>
-          <p className="muted">کاتالوگ، سئو خودکار، سازگاری خودرو و اقلام برند با بارکد EAN-13</p>
+          <p className="muted">
+            کاتالوگ کامل با موجودی زندهٔ هر برند — ثبت محصول جدید از بخش «انبار و موجودی» انجام
+            می‌شود.
+          </p>
         </div>
         <span className="count">{products.length} محصول</span>
       </div>
 
-      <form className="product-form" onSubmit={submit}>
-        <h2>افزودن محصول</h2>
-        <label>
-          نام محصول
-          <input
-            required
-            value={form.name}
-            onChange={(event) => setForm({ ...form, name: event.target.value })}
-            placeholder="مثلاً قاب ستون بالای پژو ۲۰۶"
-          />
-        </label>
-        <label>
-          دسته‌بندی
-          <select
-            required
-            value={form.categoryId}
-            onChange={(event) => setForm({ ...form, categoryId: event.target.value })}
-          >
-            <option value="">انتخاب دسته‌بندی</option>
-            {categories.map((category) => (
-              <option value={category.id} key={category.id}>
-                {category.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          شماره فنی
-          <input
-            value={form.partNumber}
-            onChange={(event) => setForm({ ...form, partNumber: event.target.value })}
-            placeholder="Part Number"
-            dir="ltr"
-          />
-        </label>
-        <label>
-          وضعیت
-          <select
-            value={form.status}
-            onChange={(event) => setForm({ ...form, status: event.target.value })}
-          >
-            <option value="active">فعال</option>
-            <option value="hidden">مخفی</option>
-          </select>
-        </label>
-        <label>
-          توضیحات
-          <input
-            value={form.description}
-            onChange={(event) => setForm({ ...form, description: event.target.value })}
-            placeholder="توضیح واقعی و کاربردی قطعه"
-          />
-        </label>
-        <button disabled={saving}>{saving ? 'در حال ثبت…' : 'ثبت و ادامه در تب‌ها'}</button>
-      </form>
+      <div className="list-toolbar">
+        <input
+          className="table-filter"
+          placeholder="جست‌وجوی نام، کد یا شماره فنی…"
+          value={filter}
+          onChange={(event) => setFilter(event.target.value)}
+        />
+      </div>
 
       {message && <div className="notice">{message}</div>}
 
-      <div className="product-table">
-        <div className="table-head">
-          <span>نام محصول</span>
-          <span>کد</span>
-          <span>دسته</span>
-          <span>موجودی</span>
-          <span>وضعیت</span>
-          <span>عملیات</span>
-        </div>
-        {products.map((product) => (
-          <div className="table-row" key={product.id}>
-            <strong>{product.name}</strong>
-            <code dir="ltr">{product.code}</code>
-            <span>{product.category?.name ?? '—'}</span>
-            <span>{stock(product)}</span>
-            <span className={product.status === 'active' ? 'status-chip' : 'low-stock'}>
-              {product.status === 'active' ? 'فعال' : 'مخفی'}
-            </span>
-            <span>
-              <button
-                className="row-action"
-                onClick={() => {
-                  void refresh(product.id).then(() => setTab('basic'));
-                }}
-              >
-                ویرایش
-              </button>{' '}
-              <a
-                className="row-action"
-                href={`${publicSiteUrl}/product/${encodeURIComponent(product.slug)}`}
-                target="_blank"
-                rel="noreferrer"
-                title="نمایش این محصول در سایت عمومی"
-              >
-                سایت
-              </a>{' '}
-              <button
-                className="row-action"
-                onClick={async () => {
-                  if (!window.confirm('محصول حذف نرم شود؟ از سایت پنهان می‌شود.')) return;
-                  try {
-                    await api(`/products/${product.id}`, { method: 'DELETE' });
-                    setMessage('محصول حذف نرم شد.');
-                    await load();
-                  } catch (error) {
-                    setMessage((error as Error).message);
-                  }
-                }}
-              >
-                حذف
-              </button>
-            </span>
-          </div>
+      <div className="product-list">
+        {visible.map((product) => (
+          <article className="product-list-card" key={product.id}>
+            <div className="plc-main">
+              <span className="product-thumb">
+                {product.images?.[0] ? (
+                  <MediaImage
+                    src={product.images[0].path}
+                    alt={product.images[0].alt ?? product.name}
+                  />
+                ) : (
+                  <span>قطعه</span>
+                )}
+              </span>
+              <div className="plc-info">
+                <b>{product.name}</b>
+                <small dir="ltr">
+                  {product.code}
+                  {product.partNumber ? ` · ${product.partNumber}` : ''}
+                </small>
+                <div className="plc-chips">
+                  {product.category?.name && <span className="chip">{product.category.name}</span>}
+                  <span className={product.status === 'active' ? 'chip ok' : 'chip warn'}>
+                    {product.status === 'active' ? 'فعال' : 'مخفی'}
+                  </span>
+                  {cheapestSalePrice(product) != null && (
+                    <span className="chip price">
+                      از {Number(cheapestSalePrice(product)).toLocaleString('fa-IR')} ریال
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="plc-actions">
+                <button
+                  className="row-action"
+                  onClick={() => {
+                    void refresh(product.id).then(() => setTab('basic'));
+                  }}
+                >
+                  ویرایش
+                </button>
+                <a
+                  className="row-action"
+                  href={`${publicSiteUrl}/product/${encodeURIComponent(product.slug)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  title="نمایش این محصول در سایت عمومی"
+                >
+                  سایت
+                </a>
+                <button
+                  className="row-action danger-text"
+                  onClick={async () => {
+                    if (!window.confirm('محصول حذف نرم شود؟ از سایت پنهان می‌شود.')) return;
+                    try {
+                      await api(`/products/${product.id}`, { method: 'DELETE' });
+                      setMessage('محصول حذف نرم شد.');
+                      await load();
+                    } catch (error) {
+                      setMessage((error as Error).message);
+                    }
+                  }}
+                >
+                  حذف
+                </button>
+              </div>
+            </div>
+            <div className="plc-stock">
+              {product.inventoryItems?.length ? (
+                product.inventoryItems.map((entry) => (
+                  <div className="plc-brand" key={entry.id}>
+                    <span className="brand-name" title={entry.location?.code ?? undefined}>
+                      {entry.brand.name}
+                      {entry.location?.code ? <small> · {entry.location.code}</small> : null}
+                    </span>
+                    <StockStepper
+                      itemId={entry.id}
+                      quantity={entry.quantity}
+                      onMessage={setMessage}
+                      onSaved={() => void load()}
+                    />
+                  </div>
+                ))
+              ) : (
+                <span className="muted">
+                  قلم انباری ثبت نشده — از ویرایشگر تب «قلم‌ها» اضافه کنید.
+                </span>
+              )}
+              <span className="plc-total">
+                جمع: <b>{totalStock(product).toLocaleString('fa-IR')}</b>
+              </span>
+            </div>
+          </article>
         ))}
+        {!visible.length && <p className="muted">محصولی یافت نشد.</p>}
       </div>
 
       {draft && (
@@ -292,6 +284,11 @@ export function ProductsPage() {
       )}
     </section>
   );
+}
+
+function paramsFromHash(hash: string): Record<string, string> {
+  const query = hash.split('?')[1] ?? '';
+  return Object.fromEntries(new URLSearchParams(query));
 }
 
 type EditorProps = {
@@ -351,6 +348,13 @@ function ProductEditor({
     locationId: '',
     initialQuantity: '',
   });
+  /** Inline edits for existing inventory items (price/minStock/shelf). */
+  const [itemEdits, setItemEdits] = useState<
+    Record<
+      string,
+      { salePrice: string; purchasePrice: string; minStock: string; locationId: string }
+    >
+  >({});
   const [busy, setBusy] = useState(false);
 
   const models = useMemo(
@@ -376,8 +380,10 @@ function ProductEditor({
     }
   };
 
-  const saveBasic = async (event: FormEvent) => {
-    event.preventDefault();
+  const saveBasic = async (event?: FormEvent) => {
+    event?.preventDefault();
+    if (!basic.name.trim() || !basic.categoryId)
+      return onMessage('نام محصول و دسته‌بندی الزامی است.');
     await patch(
       {
         name: basic.name,
@@ -469,466 +475,597 @@ function ProductEditor({
     }
   };
 
+  const saveItemEdit = async (itemId: string) => {
+    const edit = itemEdits[itemId];
+    if (!edit) return;
+    setBusy(true);
+    try {
+      await api(`/inventory/items/${itemId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          salePrice: Number(edit.salePrice) || 0,
+          purchasePrice: Number(edit.purchasePrice) || 0,
+          minStock: edit.minStock === '' ? null : Number(edit.minStock),
+          locationId: edit.locationId || null,
+        }),
+      });
+      setItemEdits((current) => {
+        const next = { ...current };
+        delete next[itemId];
+        return next;
+      });
+      onMessage('قلم انبار ذخیره شد');
+      onRefresh();
+    } catch (error) {
+      onMessage((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const itemEditFor = (entry: NonNullable<ProductDetail['inventoryItems']>[number]) =>
+    itemEdits[entry.id] ?? {
+      salePrice: String(entry.salePrice),
+      purchasePrice: String(entry.purchasePrice),
+      minStock: entry.minStock == null ? '' : String(entry.minStock),
+      locationId: entry.location?.id ?? '',
+    };
+  const setItemEdit = (
+    entry: NonNullable<ProductDetail['inventoryItems']>[number],
+    changes: Partial<{
+      salePrice: string;
+      purchasePrice: string;
+      minStock: string;
+      locationId: string;
+    }>,
+  ) =>
+    setItemEdits((current) => ({
+      ...current,
+      [entry.id]: { ...itemEditFor(entry), ...changes },
+    }));
+
+  // The pinned footer save: each tab maps to its own save action, so the
+  // button never scrolls away while the operator switches tabs.
+  const saveActiveTab = () => {
+    if (tab === 'basic') return void saveBasic();
+    if (tab === 'images') return void upload();
+    if (tab === 'aparat')
+      return void patch(
+        { aparatVideoId: aparatId || null },
+        aparatId ? 'ویدیوی آپارات ذخیره شد' : 'ویدیوی آپارات حذف شد',
+      );
+    if (tab === 'vehicles') return void saveCompat();
+    return void createItem();
+  };
+  const footerLabel: Record<Tab, string> = {
+    basic: 'ذخیرهٔ پایه و سئو',
+    images: 'بارگذاری تصویر انتخاب‌شده',
+    aparat: 'ذخیرهٔ ویدیو',
+    vehicles: 'ذخیرهٔ سازگاری',
+    items: 'ثبت قلم جدید',
+  };
+
   return (
-    <div className="editor" role="dialog" aria-label="ویرایش محصول">
-      <div className="editor-head">
-        <h2>
-          {product.name} <code dir="ltr">{product.code}</code>
-        </h2>
-        <button className="close" onClick={onClose}>
-          بستن
-        </button>
-      </div>
-      <div className="tabs" role="tablist">
-        {tabs.map((entry) => (
-          <button
-            key={entry.id}
-            role="tab"
-            aria-selected={tab === entry.id}
-            className={tab === entry.id ? 'tab active' : 'tab'}
-            onClick={() => setTab(entry.id)}
-          >
-            {entry.label}
+    <div className="modal-backdrop" role="presentation" onClick={onClose}>
+      <div
+        className="editor"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`ویرایش ${product.name}`}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="editor-head">
+          <h2>
+            {product.name} <code dir="ltr">{product.code}</code>
+          </h2>
+          <button className="close" onClick={onClose} aria-label="بستن">
+            ✕
           </button>
-        ))}
-      </div>
-
-      {tab === 'basic' && (
-        <form className="product-form" onSubmit={saveBasic}>
-          <label>
-            نام
-            <input
-              required
-              value={basic.name}
-              onChange={(event) => setBasic({ ...basic, name: event.target.value })}
-            />
-          </label>
-          <label>
-            دسته‌بندی
-            <select
-              required
-              value={basic.categoryId}
-              onChange={(event) => setBasic({ ...basic, categoryId: event.target.value })}
-            >
-              <option value="">انتخاب</option>
-              {categories.map((category) => (
-                <option value={category.id} key={category.id}>
-                  {category.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            شماره فنی
-            <input
-              dir="ltr"
-              value={basic.partNumber}
-              onChange={(event) => setBasic({ ...basic, partNumber: event.target.value })}
-            />
-          </label>
-          <label>
-            وضعیت
-            <select
-              value={basic.status}
-              onChange={(event) => setBasic({ ...basic, status: event.target.value })}
-            >
-              <option value="active">فعال</option>
-              <option value="hidden">مخفی</option>
-            </select>
-          </label>
-          <label>
-            نمایش قیمت در سایت
-            <select
-              value={basic.priceDisplay}
-              onChange={(event) => setBasic({ ...basic, priceDisplay: event.target.value })}
-            >
-              <option value="inherit">مطابق تنظیم سایت</option>
-              <option value="show">همیشه نمایش بده</option>
-              <option value="hide">همیشه پنهان (استعلام)</option>
-            </select>
-          </label>
-          <label>
-            توضیحات
-            <input
-              value={basic.description}
-              onChange={(event) => setBasic({ ...basic, description: event.target.value })}
-            />
-          </label>
-          <label>
-            عنوان سئو
-            <input
-              value={basic.seoTitle}
-              onChange={(event) => setBasic({ ...basic, seoTitle: event.target.value })}
-              placeholder="خالی = تولید خودکار"
-            />
-          </label>
-          <label>
-            توضیح سئو
-            <input
-              value={basic.seoDescription}
-              onChange={(event) => setBasic({ ...basic, seoDescription: event.target.value })}
-              placeholder="خالی = تولید خودکار"
-            />
-          </label>
-          <label>
-            کلیدواژه‌ها
-            <input
-              value={basic.seoKeywords}
-              onChange={(event) => setBasic({ ...basic, seoKeywords: event.target.value })}
-              placeholder="لنت، ترمز، پژو ۲۰۶"
-            />
-          </label>
-          <button className="button-primary" disabled={busy}>
-            {busy ? 'در حال ذخیره…' : 'ذخیرهٔ پایه و سئو'}
-          </button>
-        </form>
-      )}
-
-      {tab === 'images' && (
-        <div>
-          <div className="image-grid">
-            {(product.images ?? []).map((image) => (
-              <div className="image-item" key={image.id}>
-                <MediaImage src={image.path} alt={image.alt ?? product.name} />
-                <small>{image.isPrimary ? 'تصویر اصلی' : (image.alt ?? 'بدون Alt')}</small>
-                <button
-                  onClick={() =>
-                    void api(`/media/products/${product.id}/${image.id}/primary`, {
-                      method: 'PATCH',
-                    }).then(() => {
-                      onMessage('تصویر اصلی تغییر کرد');
-                      onRefresh();
-                    })
-                  }
-                >
-                  اصلی
-                </button>
-                <button
-                  className="danger"
-                  onClick={() =>
-                    void api(`/media/products/${product.id}/${image.id}`, {
-                      method: 'DELETE',
-                    }).then(() => {
-                      onMessage('تصویر حذف شد');
-                      onRefresh();
-                    })
-                  }
-                >
-                  حذف
-                </button>
-              </div>
-            ))}
-            {!(product.images ?? []).length && (
-              <p className="muted">هنوز تصویری بارگذاری نشده است.</p>
-            )}
-          </div>
-          <div className="editor-actions">
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(event) => setMediaFile(event.target.files?.[0] ?? null)}
-            />
-            <button disabled={busy} onClick={() => void upload()}>
-              آپلود
-            </button>
-            <input
-              dir="ltr"
-              value={mediaUrl}
-              onChange={(event) => setMediaUrl(event.target.value)}
-              placeholder="https://…"
-            />
-            <button
-              disabled={busy}
-              onClick={async () => {
-                if (!mediaUrl) return onMessage('نشانی تصویر را وارد کنید');
-                try {
-                  await api(`/media/products/${product.id}/url`, {
-                    method: 'POST',
-                    body: JSON.stringify({ url: mediaUrl, alt: product.name }),
-                  });
-                  setMediaUrl('');
-                  onMessage('تصویر از نشانی افزوده شد');
-                  onRefresh();
-                } catch (error) {
-                  onMessage((error as Error).message);
-                }
-              }}
-            >
-              افزودن از نشانی
-            </button>
-            <button
-              type="button"
-              className="outline"
-              disabled={busy}
-              onClick={() => setMediaPickerOpen(true)}
-            >
-              انتخاب از رسانه‌های موجود
-            </button>
-          </div>
-          <p className="muted">
-            تصاویر با همان نشانی در سایت و فاکتور استفاده می‌شوند؛ Alt خالی برای دسترسی‌پذیری و سئو
-            توصیه نمی‌شود.
-          </p>
-          <MediaPicker
-            open={mediaPickerOpen}
-            title={`انتخاب تصویر برای ${product.name}`}
-            onClose={() => setMediaPickerOpen(false)}
-            onSelect={async (item: PickerItem) => {
-              if (item.kind === 'site') return onMessage('رسانه‌های سایت به محصول متصل نمی‌شوند.');
-              try {
-                await api(`/media/products/${product.id}/select`, {
-                  method: 'POST',
-                  body: JSON.stringify({ imageId: item.id, alt: item.alt ?? product.name }),
-                });
-                onMessage('تصویر از کتابخانه افزوده شد');
-                onRefresh();
-              } catch (error) {
-                onMessage((error as Error).message);
-              }
-            }}
-          />
         </div>
-      )}
+        <div className="tabs" role="tablist">
+          {tabs.map((entry) => (
+            <button
+              key={entry.id}
+              role="tab"
+              aria-selected={tab === entry.id}
+              className={tab === entry.id ? 'tab active' : 'tab'}
+              onClick={() => setTab(entry.id)}
+            >
+              {entry.label}
+            </button>
+          ))}
+        </div>
 
-      {tab === 'aparat' && (
-        <div className="form-grid">
-          <label>
-            شناسهٔ ویدیوی آپارات
-            <input
-              dir="ltr"
-              value={aparatId}
-              onChange={(event) => setAparatId(event.target.value)}
-              placeholder="مثلاً a1b2c3d4"
-            />
-          </label>
-          <button
-            disabled={busy}
-            onClick={() =>
-              void patch(
-                { aparatVideoId: aparatId || null },
-                aparatId ? 'ویدیوی آپارات ذخیره شد' : 'ویدیوی آپارات حذف شد',
-              )
-            }
-          >
-            ذخیره
-          </button>
-          {aparatId && (
-            <iframe
-              title="پیش‌نمایش ویدیو"
-              className="aparat-frame"
-              src={aparatEmbed(aparatId)}
-              allowFullScreen
-            />
+        <div className="editor-body">
+          {tab === 'basic' && (
+            <form className="product-form" onSubmit={saveBasic}>
+              <label>
+                نام
+                <input
+                  required
+                  value={basic.name}
+                  onChange={(event) => setBasic({ ...basic, name: event.target.value })}
+                />
+              </label>
+              <label>
+                دسته‌بندی
+                <select
+                  required
+                  value={basic.categoryId}
+                  onChange={(event) => setBasic({ ...basic, categoryId: event.target.value })}
+                >
+                  <option value="">انتخاب</option>
+                  {categories.map((category) => (
+                    <option value={category.id} key={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                شماره فنی
+                <input
+                  dir="ltr"
+                  value={basic.partNumber}
+                  onChange={(event) => setBasic({ ...basic, partNumber: event.target.value })}
+                />
+              </label>
+              <label>
+                وضعیت
+                <select
+                  value={basic.status}
+                  onChange={(event) => setBasic({ ...basic, status: event.target.value })}
+                >
+                  <option value="active">فعال</option>
+                  <option value="hidden">مخفی</option>
+                </select>
+              </label>
+              <label>
+                نمایش قیمت در سایت
+                <select
+                  value={basic.priceDisplay}
+                  onChange={(event) => setBasic({ ...basic, priceDisplay: event.target.value })}
+                >
+                  <option value="inherit">مطابق تنظیم سایت</option>
+                  <option value="show">همیشه نمایش بده</option>
+                  <option value="hide">همیشه پنهان (استعلام)</option>
+                </select>
+              </label>
+              <label>
+                توضیحات
+                <input
+                  value={basic.description}
+                  onChange={(event) => setBasic({ ...basic, description: event.target.value })}
+                />
+              </label>
+              <label>
+                عنوان سئو
+                <input
+                  value={basic.seoTitle}
+                  onChange={(event) => setBasic({ ...basic, seoTitle: event.target.value })}
+                  placeholder="خالی = تولید خودکار"
+                />
+              </label>
+              <label>
+                توضیح سئو
+                <input
+                  value={basic.seoDescription}
+                  onChange={(event) => setBasic({ ...basic, seoDescription: event.target.value })}
+                  placeholder="خالی = تولید خودکار"
+                />
+              </label>
+              <label>
+                کلیدواژه‌ها
+                <input
+                  value={basic.seoKeywords}
+                  onChange={(event) => setBasic({ ...basic, seoKeywords: event.target.value })}
+                  placeholder="لنت، ترموز، پژو ۲۰۶"
+                />
+              </label>
+            </form>
           )}
-          <p className="muted">
-            فقط شناسهٔ ویدیو ذخیره می‌شود؛ پخش در سایت عمومی با iframe همان شناسه انجام می‌شود و
-            فایلی آپلود نمی‌گردد.
-          </p>
-        </div>
-      )}
 
-      {tab === 'vehicles' && (
-        <div>
-          <div className="invoice-product-picker">
-            <select
-              aria-label="مدل خودرو"
-              value={pickModel}
-              onChange={(event) => {
-                setPickModel(event.target.value);
-                setPickTrim('');
-              }}
-            >
-              <option value="">انتخاب مدل</option>
-              {models.map((model) => (
-                <option value={model.id} key={model.id}>
-                  {model.make} — {model.name}
-                </option>
-              ))}
-            </select>
-            <select
-              aria-label="تیپ خودرو"
-              value={pickTrim}
-              onChange={(event) => setPickTrim(event.target.value)}
-            >
-              <option value="">همهٔ تیپ‌ها</option>
-              {trims.map((trim) => (
-                <option value={trim.id} key={trim.id}>
-                  {trim.name}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              disabled={!pickModel}
-              onClick={() =>
-                setCompat((current) =>
-                  current.some((entry) => entry.modelId === pickModel && entry.trimId === pickTrim)
-                    ? current
-                    : [...current, { modelId: pickModel, trimId: pickTrim }],
-                )
-              }
-            >
-              افزودن
-            </button>
-          </div>
-          <div className="invoice-lines">
-            {compat.length ? (
-              compat.map((entry, index) => (
-                <div className="invoice-line" key={`${entry.modelId}-${entry.trimId}-${index}`}>
-                  <span>
-                    <b>
-                      {models.find((model) => model.id === entry.modelId)?.make}{' '}
-                      {models.find((model) => model.id === entry.modelId)?.name}
-                    </b>
-                    <small>
-                      {vehicles
-                        .flatMap((make) => make.models)
-                        .find((model) => model.id === entry.modelId)
-                        ?.trims.find((trim) => trim.id === entry.trimId)?.name ?? 'همهٔ تیپ‌ها'}
-                    </small>
-                  </span>
-                  <button
-                    type="button"
-                    aria-label="حذف سازگاری"
-                    onClick={() => setCompat((current) => current.filter((_, i) => i !== index))}
-                  >
-                    ×
-                  </button>
-                </div>
-              ))
-            ) : (
+          {tab === 'images' && (
+            <div>
+              <div className="image-grid">
+                {(product.images ?? []).map((image) => (
+                  <div className="image-item" key={image.id}>
+                    <MediaImage src={image.path} alt={image.alt ?? product.name} />
+                    <small>{image.isPrimary ? 'تصویر اصلی' : (image.alt ?? 'بدون Alt')}</small>
+                    <button
+                      onClick={() =>
+                        void api(`/media/products/${product.id}/${image.id}/primary`, {
+                          method: 'PATCH',
+                        }).then(() => {
+                          onMessage('تصویر اصلی تغییر کرد');
+                          onRefresh();
+                        })
+                      }
+                    >
+                      اصلی
+                    </button>
+                    <button
+                      className="danger"
+                      onClick={() =>
+                        void api(`/media/products/${product.id}/${image.id}`, {
+                          method: 'DELETE',
+                        }).then(() => {
+                          onMessage('تصویر حذف شد');
+                          onRefresh();
+                        })
+                      }
+                    >
+                      حذف
+                    </button>
+                  </div>
+                ))}
+                {!(product.images ?? []).length && (
+                  <p className="muted">هنوز تصویری بارگذاری نشده است.</p>
+                )}
+              </div>
+              <div className="editor-actions">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => setMediaFile(event.target.files?.[0] ?? null)}
+                />
+                <input
+                  dir="ltr"
+                  value={mediaUrl}
+                  onChange={(event) => setMediaUrl(event.target.value)}
+                  placeholder="https://…"
+                />
+                <button
+                  disabled={busy}
+                  onClick={async () => {
+                    if (!mediaUrl) return onMessage('نشانی تصویر را وارد کنید');
+                    try {
+                      await api(`/media/products/${product.id}/url`, {
+                        method: 'POST',
+                        body: JSON.stringify({ url: mediaUrl, alt: product.name }),
+                      });
+                      setMediaUrl('');
+                      onMessage('تصویر از نشانی افزوده شد');
+                      onRefresh();
+                    } catch (error) {
+                      onMessage((error as Error).message);
+                    }
+                  }}
+                >
+                  افزودن از نشانی
+                </button>
+                <button
+                  type="button"
+                  className="outline"
+                  disabled={busy}
+                  onClick={() => setMediaPickerOpen(true)}
+                >
+                  انتخاب از رسانه‌های موجود
+                </button>
+              </div>
               <p className="muted">
-                هیچ خودرویی ثبت نشده؛ این محصول در فیلتر خودروهای سایت نمایش داده نمی‌شود.
+                تصاویر با همان نشانی در سایت و فاکتور استفاده می‌شوند؛ Alt خالی برای دسترسی‌پذیری و
+                سئو توصیه نمی‌شود.
               </p>
-            )}
-          </div>
-          <button disabled={busy} onClick={() => void saveCompat()}>
-            ذخیرهٔ سازگاری
-          </button>
-        </div>
-      )}
-
-      {tab === 'items' && (
-        <div>
-          <div className="form-grid">
-            <label>
-              برند
-              <select
-                value={item.brandId}
-                onChange={(event) => setItem({ ...item, brandId: event.target.value })}
-              >
-                <option value="">انتخاب برند</option>
-                {brands.map((brand) => (
-                  <option value={brand.id} key={brand.id}>
-                    {brand.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              بارکد EAN-13
-              <input
-                dir="ltr"
-                value={item.barcode}
-                onChange={(event) => setItem({ ...item, barcode: event.target.value })}
+              <MediaPicker
+                open={mediaPickerOpen}
+                title={`انتخاب تصویر برای ${product.name}`}
+                onClose={() => setMediaPickerOpen(false)}
+                onSelect={async (item: PickerItem) => {
+                  if (item.kind === 'site')
+                    return onMessage('رسانه‌های سایت به محصول متصل نمی‌شوند.');
+                  try {
+                    await api(`/media/products/${product.id}/select`, {
+                      method: 'POST',
+                      body: JSON.stringify({ imageId: item.id, alt: item.alt ?? product.name }),
+                    });
+                    onMessage('تصویر از کتابخانه افزوده شد');
+                    onRefresh();
+                  } catch (error) {
+                    onMessage((error as Error).message);
+                  }
+                }}
               />
-            </label>
-            <button
-              type="button"
-              onClick={() =>
-                setItem({
-                  ...item,
-                  barcode: createEan13(
-                    `${Date.now()}${Math.floor(Math.random() * 1000)}`.slice(-9),
-                  ),
-                })
-              }
-            >
-              تولید بارکد
-            </button>
-            <label>
-              قیمت فروش (ریال)
-              <input
-                type="number"
-                min="0"
-                value={item.salePrice}
-                onChange={(event) => setItem({ ...item, salePrice: event.target.value })}
-              />
-            </label>
-            <label>
-              قیمت خرید (ریال)
-              <input
-                type="number"
-                min="0"
-                value={item.purchasePrice}
-                onChange={(event) => setItem({ ...item, purchasePrice: event.target.value })}
-              />
-            </label>
-            <label>
-              آستانهٔ هشدار
-              <input
-                type="number"
-                min="0"
-                value={item.minStock}
-                onChange={(event) => setItem({ ...item, minStock: event.target.value })}
-              />
-            </label>
-            <label>
-              قفسه
-              <select
-                value={item.locationId}
-                onChange={(event) => setItem({ ...item, locationId: event.target.value })}
-              >
-                <option value="">بدون قفسه</option>
-                {locations.map((location) => (
-                  <option value={location.id} key={location.id}>
-                    {location.code} — {location.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              موجودی اولیه
-              <input
-                type="number"
-                min="0"
-                value={item.initialQuantity}
-                onChange={(event) => setItem({ ...item, initialQuantity: event.target.value })}
-              />
-            </label>
-          </div>
-          <button disabled={busy} onClick={() => void createItem()}>
-            ثبت قلم برند
-          </button>
-          <div className="product-table">
-            <div className="table-head">
-              <span>برند</span>
-              <span>بارکد</span>
-              <span>قفسه</span>
-              <span>موجودی</span>
-              <span>قیمت فروش</span>
             </div>
-            {(product.inventoryItems ?? []).map((entry) => (
-              <div className="table-row" key={entry.id}>
-                <strong>{entry.brand.name}</strong>
-                <code dir="ltr">{entry.barcode}</code>
-                <span>{entry.location?.code ?? '—'}</span>
-                <span
-                  className={
-                    entry.minStock != null && entry.quantity <= entry.minStock
-                      ? 'low-stock'
-                      : undefined
+          )}
+
+          {tab === 'aparat' && (
+            <div className="form-grid">
+              <label>
+                شناسهٔ ویدیوی آپارات
+                <input
+                  dir="ltr"
+                  value={aparatId}
+                  onChange={(event) => setAparatId(event.target.value)}
+                  placeholder="مثلاً a1b2c3d4"
+                />
+              </label>
+              {aparatId && (
+                <iframe
+                  title="پیش‌نمایش ویدیو"
+                  className="aparat-frame"
+                  src={aparatEmbed(aparatId)}
+                  allowFullScreen
+                />
+              )}
+              <p className="muted">
+                فقط شناسهٔ ویدیو ذخیره می‌شود؛ پخش در سایت عمومی با iframe همان شناسه انجام می‌شود و
+                فایلی آپلود نمی‌گردد.
+              </p>
+            </div>
+          )}
+
+          {tab === 'vehicles' && (
+            <div>
+              <div className="invoice-product-picker">
+                <select
+                  aria-label="مدل خودرو"
+                  value={pickModel}
+                  onChange={(event) => {
+                    setPickModel(event.target.value);
+                    setPickTrim('');
+                  }}
+                >
+                  <option value="">انتخاب مدل</option>
+                  {models.map((model) => (
+                    <option value={model.id} key={model.id}>
+                      {model.make} — {model.name}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  aria-label="تیپ خودرو"
+                  value={pickTrim}
+                  onChange={(event) => setPickTrim(event.target.value)}
+                >
+                  <option value="">همهٔ تیپ‌ها</option>
+                  {trims.map((trim) => (
+                    <option value={trim.id} key={trim.id}>
+                      {trim.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  disabled={!pickModel}
+                  onClick={() =>
+                    setCompat((current) =>
+                      current.some(
+                        (entry) => entry.modelId === pickModel && entry.trimId === pickTrim,
+                      )
+                        ? current
+                        : [...current, { modelId: pickModel, trimId: pickTrim }],
+                    )
                   }
                 >
-                  {entry.quantity}
-                </span>
-                <strong>{Number(entry.salePrice).toLocaleString('fa-IR')}</strong>
+                  افزودن
+                </button>
               </div>
-            ))}
-          </div>
-          <p className="muted">قیمت خرید هرگز در سایت عمومی یا فاکتور مشتری نمایش داده نمی‌شود.</p>
+              <div className="invoice-lines">
+                {compat.length ? (
+                  compat.map((entry, index) => (
+                    <div className="invoice-line" key={`${entry.modelId}-${entry.trimId}-${index}`}>
+                      <span>
+                        <b>
+                          {models.find((model) => model.id === entry.modelId)?.make}{' '}
+                          {models.find((model) => model.id === entry.modelId)?.name}
+                        </b>
+                        <small>
+                          {vehicles
+                            .flatMap((make) => make.models)
+                            .find((model) => model.id === entry.modelId)
+                            ?.trims.find((trim) => trim.id === entry.trimId)?.name ?? 'همهٔ تیپ‌ها'}
+                        </small>
+                      </span>
+                      <button
+                        type="button"
+                        aria-label="حذف سازگاری"
+                        onClick={() =>
+                          setCompat((current) => current.filter((_, i) => i !== index))
+                        }
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <p className="muted">
+                    هیچ خودرویی ثبت نشده؛ این محصول در فیلتر خودروهای سایت نمایش داده نمی‌شود.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {tab === 'items' && (
+            <div>
+              <h3 className="list-subhead">قلم‌های ثبت‌شدهٔ این محصول</h3>
+              <div className="item-edit-list">
+                {(product.inventoryItems ?? []).map((entry) => {
+                  const edit = itemEditFor(entry);
+                  const dirty = Boolean(itemEdits[entry.id]);
+                  return (
+                    <div className="item-edit-row" key={entry.id}>
+                      <div className="ier-head">
+                        <b>{entry.brand.name}</b>
+                        <code dir="ltr">{entry.barcode}</code>
+                        <StockStepper
+                          itemId={entry.id}
+                          quantity={entry.quantity}
+                          onMessage={onMessage}
+                          onSaved={onRefresh}
+                        />
+                      </div>
+                      <div className="ier-fields">
+                        <label>
+                          قیمت فروش
+                          <input
+                            type="number"
+                            min="0"
+                            value={edit.salePrice}
+                            onChange={(event) =>
+                              setItemEdit(entry, { salePrice: event.target.value })
+                            }
+                          />
+                        </label>
+                        <label>
+                          قیمت خرید
+                          <input
+                            type="number"
+                            min="0"
+                            value={edit.purchasePrice}
+                            onChange={(event) =>
+                              setItemEdit(entry, { purchasePrice: event.target.value })
+                            }
+                          />
+                        </label>
+                        <label>
+                          آستانهٔ هشدار
+                          <input
+                            type="number"
+                            min="0"
+                            value={edit.minStock}
+                            onChange={(event) =>
+                              setItemEdit(entry, { minStock: event.target.value })
+                            }
+                          />
+                        </label>
+                        <label>
+                          قفسه
+                          <select
+                            value={edit.locationId}
+                            onChange={(event) =>
+                              setItemEdit(entry, { locationId: event.target.value })
+                            }
+                          >
+                            <option value="">بدون قفسه</option>
+                            {locations.map((location) => (
+                              <option value={location.id} key={location.id}>
+                                {location.code} — {location.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <button
+                          className={dirty ? 'button-primary' : 'outline'}
+                          disabled={busy}
+                          onClick={() => void saveItemEdit(entry.id)}
+                        >
+                          {dirty ? 'ذخیره' : 'بدون تغییر'}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+                {!(product.inventoryItems ?? []).length && (
+                  <p className="muted">هنوز قلمی برای این محصول ثبت نشده است.</p>
+                )}
+              </div>
+
+              <h3 className="list-subhead">افزودن قلم جدید (برند/بارکد)</h3>
+              <div className="form-grid">
+                <label>
+                  برند
+                  <select
+                    value={item.brandId}
+                    onChange={(event) => setItem({ ...item, brandId: event.target.value })}
+                  >
+                    <option value="">انتخاب برند</option>
+                    {brands.map((brand) => (
+                      <option value={brand.id} key={brand.id}>
+                        {brand.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  بارکد EAN-13
+                  <input
+                    dir="ltr"
+                    value={item.barcode}
+                    onChange={(event) => setItem({ ...item, barcode: event.target.value })}
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setItem({
+                      ...item,
+                      barcode: createEan13(
+                        `${Date.now()}${Math.floor(Math.random() * 1000)}`.slice(-9),
+                      ),
+                    })
+                  }
+                >
+                  تولید بارکد
+                </button>
+                <label>
+                  قیمت فروش (ریال)
+                  <input
+                    type="number"
+                    min="0"
+                    value={item.salePrice}
+                    onChange={(event) => setItem({ ...item, salePrice: event.target.value })}
+                  />
+                </label>
+                <label>
+                  قیمت خرید (ریال)
+                  <input
+                    type="number"
+                    min="0"
+                    value={item.purchasePrice}
+                    onChange={(event) => setItem({ ...item, purchasePrice: event.target.value })}
+                  />
+                </label>
+                <label>
+                  آستانهٔ هشدار
+                  <input
+                    type="number"
+                    min="0"
+                    value={item.minStock}
+                    onChange={(event) => setItem({ ...item, minStock: event.target.value })}
+                  />
+                </label>
+                <label>
+                  قفسه
+                  <select
+                    value={item.locationId}
+                    onChange={(event) => setItem({ ...item, locationId: event.target.value })}
+                  >
+                    <option value="">بدون قفسه</option>
+                    {locations.map((location) => (
+                      <option value={location.id} key={location.id}>
+                        {location.code} — {location.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  موجودی اولیه
+                  <input
+                    type="number"
+                    min="0"
+                    value={item.initialQuantity}
+                    onChange={(event) => setItem({ ...item, initialQuantity: event.target.value })}
+                  />
+                </label>
+              </div>
+              <p className="muted">
+                قیمت خرید هرگز در سایت عمومی یا فاکتور مشتری نمایش داده نمی‌شود.
+              </p>
+            </div>
+          )}
         </div>
-      )}
+
+        <div className="editor-footer">
+          <button type="button" className="outline" onClick={onClose} disabled={busy}>
+            بستن
+          </button>
+          <button type="button" className="button-primary" disabled={busy} onClick={saveActiveTab}>
+            {busy ? 'در حال ذخیره…' : `✓ ${footerLabel[tab]}`}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

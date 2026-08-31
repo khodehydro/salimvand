@@ -12,7 +12,13 @@ export class CatalogAdminService {
     const products = await this.prisma.product.findMany({
       where: { deletedAt: null },
       orderBy: { createdAt: 'desc' },
-      include: { category: true, inventoryItems: { include: { brand: true, location: true } } },
+      include: {
+        category: true,
+        inventoryItems: { include: { brand: true, location: true } },
+        // Primary image first so the panel list can show a thumbnail without
+        // pulling every image of every product.
+        images: { orderBy: [{ isPrimary: 'desc' }, { sort: 'asc' }], take: 1 },
+      },
     });
     return { ok: true, data: products };
   }

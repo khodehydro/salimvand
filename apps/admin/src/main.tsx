@@ -37,19 +37,29 @@ import './styles.css';
 type NavItem = { id: Page; label: string; icon: string };
 const navItems: NavItem[] = [
   { id: 'dashboard', label: 'داشبورد', icon: '⌂' },
+  { id: 'invoices', label: 'فروش و فاکتورها', icon: '▤' },
+  { id: 'customers', label: 'مشتریان', icon: '☏' },
+  { id: 'inventory', label: 'انبار و موجودی', icon: '⌗' },
+  { id: 'products', label: 'محصولات', icon: '▦' },
   { id: 'purchases', label: 'خرید و تأمین', icon: '⇧' },
   { id: 'suppliers', label: 'تأمین‌کنندگان', icon: '♧' },
-  { id: 'invoices', label: 'فروش و فاکتورها', icon: '▤' },
-  { id: 'customers', label: 'مشتریان', icon: '♙' },
-  { id: 'products', label: 'کاتالوگ محصولات', icon: '▦' },
-  { id: 'inventory', label: 'انبار و موجودی', icon: '⌗' },
   { id: 'media', label: 'رسانه‌ها', icon: '◫' },
   { id: 'references', label: 'برندها و خودروها', icon: '◇' },
   { id: 'reports', label: 'گزارش‌ها', icon: '◒' },
-  { id: 'settings', label: 'تنظیمات', icon: '⚙' },
   { id: 'messaging', label: 'پیامک و کانال\u200cها', icon: '✉' },
-  { id: 'users', label: 'کاربران', icon: '♙' },
+  { id: 'users', label: 'کاربران', icon: '☗' },
   { id: 'audit', label: 'تاریخچه تغییرات', icon: '◷' },
+  { id: 'settings', label: 'تنظیمات', icon: '⚙' },
+];
+/** Sidebar sections: related pages sit together under a quiet label instead
+ * of one long flat list, and the daily workflow (sales → stock) comes first. */
+const navGroups: Array<{ label: string; ids: Page[] }> = [
+  { label: 'کار روزانه', ids: ['dashboard', 'invoices', 'customers'] },
+  {
+    label: 'انبار و کاتالوگ',
+    ids: ['inventory', 'products', 'purchases', 'suppliers', 'media', 'references'],
+  },
+  { label: 'مدیریت', ids: ['reports', 'messaging', 'users', 'audit', 'settings'] },
 ];
 const pageTitles: Record<Page, string> = {
   dashboard: 'داشبورد',
@@ -226,17 +236,26 @@ function App() {
           </span>
         </div>
         <nav>
-          {visibleItems.map((item) => (
-            <button
-              className={page === item.id ? 'active' : ''}
-              key={item.id}
-              onClick={() => navigate(item.id)}
-            >
-              <span className="nav-icon">{item.icon}</span>
-              {item.label}
-              {item.id === 'inventory' && <i className="nav-count">!</i>}
-            </button>
-          ))}
+          {navGroups.map((group) => {
+            const groupItems = visibleItems.filter((item) => group.ids.includes(item.id));
+            if (!groupItems.length) return null;
+            return (
+              <div className="nav-group" key={group.label}>
+                <small>{group.label}</small>
+                {groupItems.map((item) => (
+                  <button
+                    className={page === item.id ? 'active' : ''}
+                    key={item.id}
+                    onClick={() => navigate(item.id)}
+                  >
+                    <span className="nav-icon">{item.icon}</span>
+                    {item.label}
+                    {item.id === 'inventory' && <i className="nav-count">!</i>}
+                  </button>
+                ))}
+              </div>
+            );
+          })}
         </nav>
         <div className="aside-footer">
           <span className="online-dot" /> سیستم آنلاین

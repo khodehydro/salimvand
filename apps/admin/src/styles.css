@@ -352,6 +352,54 @@ button.danger:hover:not(:disabled) {
   box-shadow: 0 16px 60px color-mix(in srgb, var(--sv-brand-950) 33%, transparent);
   overflow: auto;
 }
+/* Inside .modal-backdrop the editor becomes a centered dialog whose body
+ * scrolls while the head, tabs and — most importantly — the pinned save
+ * footer stay put. */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: var(--sv-scrim);
+  display: grid;
+  place-items: center;
+  padding: 18px;
+}
+.modal-backdrop .editor {
+  position: static;
+  inset: auto;
+  display: flex;
+  flex-direction: column;
+  width: min(980px, 100%);
+  max-height: min(92vh, 920px);
+  padding: 0;
+  overflow: hidden;
+}
+.modal-backdrop .editor-head {
+  padding: 18px 20px 4px;
+}
+.modal-backdrop .tabs {
+  margin: 10px 20px 0;
+}
+.editor-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px 20px;
+}
+.editor-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--sv-border);
+  background: var(--sv-surface);
+  border-radius: 0 0 16px 16px;
+}
+.modal-hint {
+  margin: 8px 20px 0;
+  color: var(--sv-text-2);
+  font-size: 12px;
+  line-height: 2;
+}
 .editor-head {
   display: flex;
   justify-content: space-between;
@@ -2805,6 +2853,37 @@ body,
   max-height: 100%;
   object-fit: contain;
 }
+/* The shared failure box is 150px tall by default — inside the small preview
+ * frames it used to blow the layout apart. Contain it instead. */
+.asset-preview .media-img-failed {
+  width: 100%;
+  height: 100%;
+  min-height: 44px;
+  font-size: 10px;
+}
+.asset-preview .media-img-failed b {
+  font-size: 10px;
+}
+.asset-preview .media-img-failed small {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 9px;
+}
+.asset-actions input[type='file'] {
+  font-size: 11px;
+}
+.asset-actions input[type='file']::file-selector-button {
+  border: 1px solid var(--sv-border-2);
+  border-radius: 8px;
+  background: var(--sv-surface-3);
+  color: var(--sv-text);
+  font: inherit;
+  padding: 6px 10px;
+  margin-left: 8px;
+  cursor: pointer;
+}
 .asset-preview span {
   font-size: 26px;
   font-weight: 700;
@@ -3025,4 +3104,408 @@ body,
   color: #fff;
   inset-inline-start: auto;
   inset-inline-end: 8px;
+}
+
+/* ============================================================
+   Sidebar groups — the flat 14-item list read as noise; related
+   pages now sit under quiet section labels.
+   ============================================================ */
+.nav-group {
+  display: grid;
+  gap: 3px;
+  margin-bottom: 10px;
+}
+.nav-group > small {
+  color: var(--sv-brand-300);
+  font-size: 10px;
+  padding: 0 12px;
+  margin-bottom: 2px;
+  letter-spacing: 0.4px;
+}
+.admin aside nav {
+  gap: 0;
+}
+
+/* ============================================================
+   Stock stepper — the number alone with −/+ on either side and
+   an instant save per click (no progress bars anywhere).
+   ============================================================ */
+.stock-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  border: 1px solid var(--sv-border-2);
+  border-radius: 999px;
+  background: var(--sv-surface-3);
+  overflow: hidden;
+}
+.stock-stepper button {
+  border: 0;
+  background: transparent;
+  color: var(--sv-text);
+  width: 30px;
+  height: 30px;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 0;
+  padding: 0;
+}
+.stock-stepper button:hover:not(:disabled) {
+  background: var(--sv-brand-100);
+  color: var(--sv-link);
+}
+.stock-stepper button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.stock-stepper b {
+  min-width: 44px;
+  text-align: center;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.stock-stepper b.empty {
+  color: var(--sv-danger);
+}
+
+/* ============================================================
+   Products list — card rows that carry the whole picture (image,
+   codes, category, price, status) plus per-brand stock steppers.
+   Grid rows wrap instead of forcing a horizontal scrollbar.
+   ============================================================ */
+.list-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 12px 0;
+}
+.list-toolbar .table-filter {
+  flex: 1;
+  min-width: 220px;
+}
+.product-list {
+  display: grid;
+  gap: 10px;
+}
+.product-list-card {
+  background: var(--sv-surface);
+  border: 1px solid var(--sv-border);
+  border-radius: 14px;
+  padding: 14px 16px;
+  display: grid;
+  gap: 10px;
+}
+.plc-main {
+  display: grid;
+  grid-template-columns: 56px 1fr auto;
+  gap: 12px;
+  align-items: center;
+}
+.product-thumb {
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  border: 1px solid var(--sv-border);
+  background: var(--sv-surface-3);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  flex: none;
+}
+.product-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.product-thumb > span,
+.product-thumb.placeholder {
+  color: var(--sv-text-3);
+  font-size: 11px;
+}
+.plc-info {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.plc-info b {
+  font-size: 14px;
+}
+.plc-info small {
+  color: var(--sv-text-3);
+  font-size: 11px;
+  direction: ltr;
+  text-align: right;
+}
+.plc-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 2px;
+}
+.chip {
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-size: 11px;
+  background: var(--sv-surface-3);
+  color: var(--sv-text-2);
+  border: 1px solid var(--sv-border);
+  white-space: nowrap;
+}
+.chip.ok {
+  background: var(--sv-ok-soft);
+  color: var(--sv-ok);
+  border-color: transparent;
+}
+.chip.warn {
+  background: var(--sv-warn);
+  color: var(--sv-on-brand);
+  border-color: transparent;
+}
+.chip.price {
+  background: var(--sv-brand-100);
+  color: var(--sv-link);
+  border-color: transparent;
+}
+.plc-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.plc-stock {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  align-items: center;
+  border-top: 1px dashed var(--sv-border);
+  padding-top: 10px;
+}
+.plc-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.plc-brand .brand-name {
+  font-size: 12px;
+  color: var(--sv-text-2);
+  white-space: nowrap;
+}
+.plc-brand .brand-name small {
+  color: var(--sv-text-3);
+}
+.plc-total {
+  margin-right: auto;
+  color: var(--sv-text-3);
+  font-size: 12px;
+}
+
+/* ============================================================
+   Inventory page tabs, stock list, register tab and shelves.
+   ============================================================ */
+.inventory-page .settings-tabs {
+  margin-bottom: 14px;
+}
+.stock-toolbar,
+.barcode-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.barcode-bar {
+  background: var(--sv-surface-2);
+  border: 1px dashed var(--sv-border-2);
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+.barcode-bar input {
+  flex: 1;
+  min-width: 200px;
+}
+.inventory-list {
+  display: grid;
+  gap: 8px;
+}
+.inventory-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 1.4fr) auto minmax(90px, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  background: var(--sv-surface);
+  border: 1px solid var(--sv-border);
+  border-radius: 12px;
+  padding: 10px 14px;
+}
+.inv-info {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.inv-info b {
+  font-size: 13px;
+}
+.inv-info small {
+  color: var(--sv-text-3);
+  font-size: 11px;
+}
+.inv-shelf {
+  color: var(--sv-text-2);
+  font-size: 12px;
+}
+.inv-actions {
+  display: flex;
+  gap: 6px;
+}
+.register-tab {
+  display: grid;
+  place-items: start center;
+  padding: 28px 0;
+}
+.register-card {
+  background: var(--sv-surface);
+  border: 1px solid var(--sv-border);
+  border-radius: 16px;
+  padding: 26px;
+  max-width: 620px;
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+  text-align: right;
+}
+.register-card b {
+  font-size: 16px;
+}
+.shelves-tab {
+  display: grid;
+  grid-template-columns: minmax(260px, 340px) 1fr;
+  gap: 14px;
+  align-items: start;
+}
+.sheet-footer-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* ============================================================
+   Editor items tab: per-item inline editing with its own save.
+   ============================================================ */
+.list-subhead {
+  margin: 14px 0 8px;
+  font-size: 13px;
+  color: var(--sv-text-2);
+}
+.item-edit-list {
+  display: grid;
+  gap: 10px;
+}
+.item-edit-row {
+  background: var(--sv-surface-2);
+  border: 1px solid var(--sv-border);
+  border-radius: 12px;
+  padding: 10px 14px;
+  display: grid;
+  gap: 10px;
+}
+.ier-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+.ier-head b {
+  font-size: 13px;
+}
+.ier-head code {
+  direction: ltr;
+  color: var(--sv-text-3);
+  font-size: 11px;
+}
+.ier-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+  align-items: end;
+}
+.ier-fields label {
+  font-size: 11px;
+  color: var(--sv-text-2);
+  display: grid;
+  gap: 4px;
+}
+.ier-fields input,
+.ier-fields select {
+  border: 1px solid var(--sv-border-2);
+  border-radius: 8px;
+  padding: 8px;
+  background: var(--sv-surface);
+  font: inherit;
+  font-size: 12px;
+  width: 100%;
+}
+
+/* ============================================================
+   Mobile: product and inventory cards stack, actions wrap, the
+   editor dialog fills the screen and its footer buttons stretch.
+   ============================================================ */
+@media (max-width: 700px) {
+  .plc-main {
+    grid-template-columns: 56px 1fr;
+  }
+  .plc-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+  .plc-stock {
+    gap: 8px 12px;
+  }
+  .inventory-row {
+    grid-template-columns: 1fr auto;
+  }
+  .inv-shelf {
+    grid-column: 1 / -1;
+  }
+  .inv-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+  .shelves-tab {
+    grid-template-columns: 1fr;
+  }
+  .modal-backdrop {
+    padding: 0;
+  }
+  .modal-backdrop .editor {
+    width: 100%;
+    max-height: 100vh;
+    height: 100%;
+    border-radius: 0;
+    border: 0;
+  }
+  .modal-backdrop .editor-head,
+  .modal-backdrop .tabs,
+  .modal-hint {
+    margin-left: 14px;
+    margin-right: 14px;
+  }
+  .modal-backdrop .editor-head {
+    padding: 14px 14px 4px;
+  }
+  .editor-body {
+    padding: 12px 14px 16px;
+  }
+  .editor-footer {
+    padding: 12px 14px;
+    flex-direction: column-reverse;
+  }
+  .editor-footer button {
+    width: 100%;
+  }
+  .register-card {
+    padding: 18px;
+  }
 }
