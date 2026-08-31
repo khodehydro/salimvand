@@ -286,12 +286,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
       >
         تماس سریع <span>برای استعلام قطعه</span> ←
       </a>
-      <NavigationButton
-        lat={info.nav.lat}
-        lng={info.nav.lng}
-        app={info.nav.app}
-        storeName={info.name}
-      />
+      <NavigationButton lat={info.nav.lat} lng={info.nav.lng} />
     </main>
   );
 }
