@@ -704,6 +704,14 @@ p {
 .mobile-contact-bar {
   display: none;
 }
+/* Mobile-only fixed bars; the mobile media query further below switches them
+ * on. Declared here — BEFORE the media query — because both selectors have
+ * equal specificity, so a later `display: none` would silently override the
+ * mobile rules (that is exactly how the nav buttons stayed invisible). */
+.mobile-nav-button,
+.mobile-quick-nav {
+  display: none;
+}
 /* Light is the default skin — dark only applies when the visitor picks it
  * (data-theme="dark"). No prefers-color-scheme auto-dark. */
 :root[data-theme='dark'] {
@@ -1994,11 +2002,6 @@ p {
   margin: 0 0 16px;
 }
 
-/* Mobile navigation button (stacked with the quick-call bar). */
-.mobile-nav-button,
-.mobile-quick-nav {
-  display: none;
-}
 .nav-chooser {
   position: fixed;
   inset: 0;
