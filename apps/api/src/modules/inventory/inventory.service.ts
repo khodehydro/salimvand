@@ -37,7 +37,15 @@ export class InventoryService {
           : {}),
       },
       orderBy: { id: 'desc' },
-      include: { product: true, brand: true, location: true },
+      include: {
+        brand: true,
+        location: true,
+        // Primary image first so the panel's grouped stock list can show a
+        // thumbnail without pulling every image of every product.
+        product: {
+          include: { images: { orderBy: [{ isPrimary: 'desc' }, { sort: 'asc' }], take: 1 } },
+        },
+      },
     });
     const filtered =
       filters.status === 'out'

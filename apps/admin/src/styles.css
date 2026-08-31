@@ -3509,3 +3509,206 @@ body,
     padding: 18px;
   }
 }
+
+/* ============================================================
+   Live search field (products + inventory): magnifier icon,
+   instant input and a clear ✕ — no submit button to click.
+   ============================================================ */
+.search-field {
+  width: min(100%, 520px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--sv-border);
+  border-radius: 12px;
+  padding: 0 12px;
+  background: var(--sv-surface);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.search-field:focus-within {
+  border-color: var(--sv-primary);
+  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.15);
+}
+.search-field > span {
+  color: var(--sv-text-3);
+  font-size: 17px;
+  flex: none;
+  line-height: 1;
+}
+.search-field input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  padding: 12px 0;
+  background: transparent;
+  color: var(--sv-text);
+  font: inherit;
+}
+.search-clear {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--sv-surface-3);
+  color: var(--sv-text-2);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+}
+.search-clear:hover {
+  background: var(--sv-border);
+  color: var(--sv-text);
+}
+/* The media library reuses the same field inside its own toolbar. */
+.media-toolbar .search-field {
+  border-radius: 12px;
+}
+
+/* ============================================================
+   Inventory stock list grouped per product: thumbnail, name,
+   «۲ قلم · ۷ قطعه» aggregate, best price, then per-item rows.
+   ============================================================ */
+.inventory-group {
+  background: var(--sv-surface);
+  border: 1px solid var(--sv-border);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.ig-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--sv-border);
+  background: var(--sv-surface-2);
+}
+.ig-head .product-thumb {
+  width: 48px;
+  height: 48px;
+}
+.ig-title {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.ig-title b {
+  font-size: 14px;
+}
+.ig-items {
+  display: grid;
+}
+.ig-items .inventory-row {
+  border: 0;
+  border-bottom: 1px solid var(--sv-border);
+  border-radius: 0;
+  background: transparent;
+}
+.ig-items .inventory-row:last-child {
+  border-bottom: 0;
+}
+.stock-toolbar {
+  margin-bottom: 10px;
+}
+
+/* Scannable barcode inside the item card sheet. */
+.sheet-barcode {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 14px;
+  background: #fff;
+  border: 1px solid var(--sv-border);
+  border-radius: 12px;
+}
+.sheet-barcode svg {
+  max-width: 100%;
+  height: auto;
+}
+.sheet-barcode code {
+  font-size: 14px;
+  letter-spacing: 2px;
+  color: #111;
+}
+
+/* ============================================================
+   Public invoice link dialog: short tokenized link, copy, QR.
+   ============================================================ */
+.link-dialog {
+  width: min(94vw, 480px);
+}
+.link-box {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px dashed var(--sv-border-2);
+  border-radius: 12px;
+  background: var(--sv-surface-2);
+  text-align: center;
+}
+.link-box code {
+  font-size: 15px;
+  font-weight: 700;
+  word-break: break-all;
+  direction: ltr;
+}
+.link-qr {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  margin-top: 12px;
+}
+.link-qr img {
+  width: 168px;
+  height: 168px;
+  border: 1px solid var(--sv-border);
+  border-radius: 12px;
+  background: #fff;
+  padding: 8px;
+}
+.sheet-footer-actions a.outline {
+  text-decoration: none;
+  padding: 9px 14px;
+  border: 1px solid var(--sv-border-2);
+  border-radius: 9px;
+  color: var(--sv-text);
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+}
+.sheet-footer-actions a.outline:hover {
+  border-color: var(--sv-primary);
+  color: var(--sv-primary);
+}
+
+/* Mobile refinements for the blocks above (kept after their base
+   rules so the cascade order stays correct). */
+@media (max-width: 700px) {
+  .search-field {
+    width: 100%;
+  }
+  .ig-head {
+    flex-wrap: wrap;
+  }
+  .ig-head .product-thumb {
+    width: 44px;
+    height: 44px;
+  }
+  .link-dialog {
+    width: 100%;
+  }
+  .sheet-footer-actions {
+    flex-direction: column;
+  }
+  .sheet-footer-actions button,
+  .sheet-footer-actions a.outline {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+  }
+}

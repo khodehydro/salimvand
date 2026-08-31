@@ -94,6 +94,15 @@ export function InvoicesPage({
   const [payments, setPayments] = useState<PaymentRow[]>([{ method: 'cash', amount: '' }]);
   const [paying, setPaying] = useState<Invoice | null>(null);
   const [viewing, setViewing] = useState<Invoice | null>(null);
+  // Public-link dialog: shows the short tokenized link for one invoice.
+  const [linkFor, setLinkFor] = useState<Invoice | null>(null);
+  const [linkInfo, setLinkInfo] = useState<{
+    shortCode: string;
+    token: string;
+    expiresAt: string | null;
+    qrDataUrl?: string;
+  } | null>(null);
+  const [linkBusy, setLinkBusy] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'all' | 'paid' | 'partial' | 'unpaid'>('all');
   const [created, setCreated] = useState<CreatedInvoice | null>(null);
   const [message, setMessage] = useState('');
@@ -105,22 +114,42 @@ export function InvoicesPage({
       .then((result) => setRows(result.data))
       .catch((error: Error) => setMessage(error.message));
 
-  // The public link is stored hashed; "view" issues a fresh link (the previous
-  // one is invalidated) and opens the online invoice for the customer.
-  const openPublicInvoice = async (invoice: Invoice) => {
+  // The public link is stored hashed and is short + random — the invoice
+  // number never appears in it, so no customer can reach another invoice by
+  // editing the code. Issuing a new link invalidates the previous one and it
+  // stays valid for 30 days.
+  const issueLink = async (invoice: Invoice) => {
+    setLinkBusy(true);
+    setLinkInfo(null);
     try {
-      const result = await api<{ data: { publicToken: string } }>(`/invoices/${invoice.id}/link`, {
-        method: 'POST',
-      });
-      window.open(
-        `${publicSiteUrl}/invoice/${result.data.publicToken}`,
-        '_blank',
-        'noopener,noreferrer',
-      );
-      setMessage(`لینک عمومی جدید برای ${invoice.number} صادر شد؛ لینک قبلی دیگر معتبر نیست.`);
+      const result = await api<{
+        data: { publicToken: string; publicShortCode: string; linkExpiresAt: string | null };
+      }>(`/invoices/${invoice.id}/link`, { method: 'POST' });
+      const info = {
+        shortCode: result.data.publicShortCode,
+        token: result.data.publicToken,
+        expiresAt: result.data.linkExpiresAt,
+      };
+      try {
+        const qr = await api<{ data: { dataUrl: string } }>(
+          `/public/invoices/qr/${info.shortCode}`,
+        );
+        setLinkInfo({ ...info, qrDataUrl: qr.data.dataUrl });
+      } catch {
+        setLinkInfo(info); // QR is a bonus; the link works without it.
+      }
     } catch (error) {
       setMessage((error as Error).message);
+      setLinkFor(null);
+    } finally {
+      setLinkBusy(false);
     }
+  };
+
+  const copyInvoiceLink = () => {
+    if (!linkInfo) return;
+    void navigator.clipboard?.writeText(shortLink(linkInfo.shortCode));
+    setMessage('لینک فاکتور کپی شد');
   };
 
   const downloadInvoicePdf = (invoice: Invoice) =>
@@ -397,7 +426,7 @@ export function InvoicesPage({
                 className="button-primary"
                 target="_blank"
                 rel="noreferrer"
-                href={`${publicSiteUrl}/invoice/${created.publicToken}`}
+                href={shortLink(created.publicShortCode)}
               >
                 مشاهده فاکتور
               </a>
@@ -691,6 +720,75 @@ export function InvoicesPage({
         </div>
       )}
 
+      {linkFor && (
+        <div className="modal-backdrop" onClick={() => setLinkFor(null)}>
+          <div
+            className="editor link-dialog"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-label={`لینک فاکتور ${linkFor.number}`}
+          >
+            <div className="editor-head">
+              <div>
+                <span className="eyebrow">لینک امن فاکتور</span>
+                <h2>فاکتور {linkFor.number}</h2>
+              </div>
+              <button className="close" onClick={() => setLinkFor(null)}>
+                بستن
+              </button>
+            </div>
+            <div className="editor-body">
+              {linkBusy && <p className="muted">در حال صدور لینک امن…</p>}
+              {!linkBusy && !linkInfo && <p className="muted">لینکی صادر نشد.</p>}
+              {linkInfo && (
+                <>
+                  <p className="modal-hint">
+                    این لینک کوتاه و تصادفی است؛ شمارهٔ فاکتور در آن نمی‌آید و مشتری نمی‌تواند با
+                    تغییر کد، به فاکتور دیگری برسد. صدور لینک جدید، لینک قبلی را باطل می‌کند.
+                  </p>
+                  <div className="link-box" dir="ltr">
+                    <code>{shortLink(linkInfo.shortCode)}</code>
+                  </div>
+                  <div className="sheet-footer-actions">
+                    <button onClick={copyInvoiceLink}>کپی لینک</button>
+                    <a
+                      className="outline"
+                      href={shortLink(linkInfo.shortCode)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      بازکردن فاکتور آنلاین
+                    </a>
+                    <button
+                      className="outline"
+                      disabled={linkBusy}
+                      onClick={() => void issueLink(linkFor)}
+                    >
+                      لینک جدید (ابطال قبلی)
+                    </button>
+                  </div>
+                  {linkInfo.qrDataUrl && (
+                    <div className="link-qr">
+                      <img src={linkInfo.qrDataUrl} alt={`QR لینک فاکتور ${linkFor.number}`} />
+                      <small className="muted">اسکن با دوربین موبایل مشتری</small>
+                    </div>
+                  )}
+                  <p className="muted">
+                    اعتبار لینک تا:{' '}
+                    <b>
+                      {linkInfo.expiresAt
+                        ? new Date(linkInfo.expiresAt).toLocaleDateString('fa-IR')
+                        : '—'}
+                    </b>{' '}
+                    (۳۰ روز)
+                  </p>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {paying && (
         <div className="notice">
           <strong>ثبت پرداخت {paying.number}</strong>
@@ -861,8 +959,11 @@ export function InvoicesPage({
                       </button>
                       <button
                         className="row-action"
-                        onClick={() => void openPublicInvoice(invoice)}
-                        title="صدور لینک عمومی جدید و نمایش فاکتور آنلاین"
+                        onClick={() => {
+                          setLinkFor(invoice);
+                          void issueLink(invoice);
+                        }}
+                        title="لینک کوتاه امن فاکتور برای مشتری"
                       >
                         لینک
                       </button>

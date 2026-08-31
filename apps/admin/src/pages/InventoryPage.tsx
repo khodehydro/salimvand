@@ -1,8 +1,10 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { api, downloadFile } from '../lib/api';
 import { Sheet } from '@salimvand/ui';
 import { StockStepper } from '../components/StockStepper';
 import { ProductCreateModal } from '../components/ProductCreateModal';
+import { BarcodeSvg } from '../components/BarcodeSvg';
+import { formatRial } from '@salimvand/shared';
 
 const BarcodeScanner = lazy(() =>
   import('../components/BarcodeScanner').then((module) => ({ default: module.BarcodeScanner })),
@@ -12,18 +14,14 @@ type Item = {
   id: string;
   barcode: string;
   quantity: number;
+  salePrice: string;
   minStock?: number | null;
-  product?: { name: string };
+  product?: { id: string; name: string; images?: Array<{ path: string }> };
   brand?: { name: string };
   location?: { id: string; name: string; code: string };
 };
 type Option = { id: string; name: string };
-type Location = {
-  id: string;
-  name: string;
-  code: string;
-  type: string;
-};
+type Location = { id: string; name: string; code: string; type: string };
 type VehicleMake = {
   id: string;
   name: string;
@@ -33,7 +31,7 @@ type Transaction = { id: string; type: string; quantityChange: number; quantityA
 
 const tabs = [
   { id: 'register', label: 'ثبت محصول', hint: 'انبار + کاتالوگ + سایت، همه در یک پنجره' },
-  { id: 'stock', label: 'لیست انبار', hint: 'جست‌وجو، بارکدخوان و اصلاح لحظه‌ای موجودی' },
+  { id: 'stock', label: 'لیست انبار', hint: 'جست‌وجوی لحظه‌ای، بارکدخوان و اصلاح سریع موجودی' },
   { id: 'shelves', label: 'قفسه‌ها', hint: 'ایجاد و مشاهدهٔ محل‌های انبار' },
 ] as const;
 type Tab = (typeof tabs)[number]['id'];
@@ -44,6 +42,15 @@ const locationTypeLabels: Record<string, string> = {
   shelf: 'قفسه',
   level: 'طبقه',
   box: 'باکس',
+};
+
+/** Stock rows grouped per product: «۲ قلم · ۷ قطعه» aggregates the item
+ * count and the total piece count under one card. */
+type ProductGroup = {
+  productId: string;
+  name: string;
+  image?: string;
+  items: Item[];
 };
 
 export function InventoryPage() {
@@ -65,11 +72,10 @@ export function InventoryPage() {
   const [busy, setBusy] = useState(false);
   const [locationForm, setLocationForm] = useState({ name: '', code: '', type: 'shelf' });
   const [locationError, setLocationError] = useState('');
+  const skipFirstSearch = useRef(true);
 
-  const load = (extraFilter = filter) =>
-    api<{ data: Item[] }>(
-      `/inventory/items${extraFilter.trim() ? `?q=${encodeURIComponent(extraFilter.trim())}` : ''}`,
-    )
+  const load = (q = filter) =>
+    api<{ data: Item[] }>(`/inventory/items${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ''}`)
       .then((r) => setItems(r.data))
       .catch((e: Error) => setMessage(e.message));
   const loadLocations = () =>
@@ -78,7 +84,7 @@ export function InventoryPage() {
       .catch(() => undefined);
 
   useEffect(() => {
-    void load();
+    void load('');
     void loadLocations();
     void api<{ data: Option[] }>('/brands')
       .then((r) => setBrands(r.data))
@@ -91,6 +97,34 @@ export function InventoryPage() {
       .catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Live search: every keystroke refreshes the list after a short pause —
+  // no search button to click.
+  useEffect(() => {
+    if (skipFirstSearch.current) {
+      skipFirstSearch.current = false;
+      return;
+    }
+    const timer = setTimeout(() => void load(filter), 300);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter]);
+
+  const groups: ProductGroup[] = useMemo(() => {
+    const map = new Map<string, ProductGroup>();
+    for (const item of items) {
+      const key = item.product?.id ?? item.barcode;
+      const group = map.get(key) ?? {
+        productId: key,
+        name: item.product?.name ?? item.barcode,
+        image: item.product?.images?.[0]?.path,
+        items: [],
+      };
+      group.items.push(item);
+      map.set(key, group);
+    }
+    return [...map.values()];
+  }, [items]);
 
   const lookupBarcode = async (code: string) => {
     if (!code.trim()) return;
@@ -187,11 +221,34 @@ export function InventoryPage() {
     }
   };
 
+  /** Label popup with a real scannable barcode: the SVG is rendered in-page
+   * (jsbarcode), serialized and embedded into the print window. */
   const printLabel = (item: Item) => {
-    const popup = window.open('', '_blank', 'width=420,height=300');
+    const popup = window.open('', '_blank', 'width=420,height=340');
     if (!popup) return;
+    const host = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    // Render with the same library the panel uses, serialize into the popup.
+    import('jsbarcode')
+      .then(({ default: JsBarcode }) => {
+        try {
+          JsBarcode(host, item.barcode, {
+            format: /^\d{13}$/.test(item.barcode) ? 'EAN13' : 'CODE128',
+            height: 60,
+            width: 2,
+            fontSize: 16,
+            margin: 4,
+          });
+        } catch {
+          /* keep text-only fallback */
+        }
+        const barcodeSvg = new XMLSerializer().serializeToString(host);
+        writeLabel(popup, item, barcodeSvg);
+      })
+      .catch(() => writeLabel(popup, item, ''));
+  };
+  const writeLabel = (popup: Window, item: Item, barcodeSvg: string) => {
     popup.document.write(
-      `<html dir="rtl"><head><title>برچسب ${item.barcode}</title><style>body{font-family:Tahoma;text-align:center;padding:24px}h2{margin:8px}code{font:28px monospace;letter-spacing:4px}.line{border:1px solid #222;padding:18px}</style></head><body><div class="line"><h2>${item.product?.name ?? ''}</h2><p>${item.brand?.name ?? ''}</p><code>${item.barcode}</code><p>${item.location?.code ?? ''}</p></div><script>window.print()<\\/script></body></html>`,
+      `<html dir="rtl"><head><title>برچسب ${item.barcode}</title><style>body{font-family:Tahoma;text-align:center;padding:20px}h2{margin:8px 6px}code{font:20px monospace;letter-spacing:3px}.line{border:1px solid #222;padding:14px}svg{max-width:100%}</style></head><body><div class="line"><h2>${item.product?.name ?? ''}</h2><p>${item.brand?.name ?? ''}</p>${barcodeSvg}<p>${item.location?.code ?? ''}</p><code>${item.barcode}</code></div><script>window.print()<\/script></body></html>`,
     );
     popup.document.close();
   };
@@ -243,19 +300,25 @@ export function InventoryPage() {
 
       {tab === 'stock' && (
         <div className="stock-tab">
-          <div className="list-toolbar stock-toolbar">
+          <div className="search-field">
+            <span className="search-icon">⌕</span>
             <input
-              className="table-filter"
-              placeholder="جست‌وجوی کالا یا بارکد…"
+              placeholder="جست‌وجوی لحظه‌ای کالا یا بارکد…"
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') void load();
-              }}
             />
-            <button className="row-action" onClick={() => void load()}>
-              جست‌وجو
-            </button>
+            {filter && (
+              <button
+                type="button"
+                className="search-clear"
+                onClick={() => setFilter('')}
+                aria-label="پاک کردن جست‌وجو"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+          <div className="list-toolbar stock-toolbar">
             <button className="row-action" onClick={() => void lowStock()}>
               فقط کم‌موجودی
             </button>
@@ -301,34 +364,68 @@ export function InventoryPage() {
           </div>
 
           <div className="inventory-list">
-            {items.map((item) => (
-              <div className="inventory-row" key={item.id}>
-                <div className="inv-info">
-                  <b>{item.product?.name ?? '-'}</b>
-                  <small>
-                    {item.brand?.name ?? '-'} · <code dir="ltr">{item.barcode}</code>
-                  </small>
+            {groups.map((group) => {
+              const totalPieces = group.items.reduce((sum, item) => sum + item.quantity, 0);
+              const prices = group.items.map((item) => Number(item.salePrice)).filter(Boolean);
+              const cheapest = prices.length ? Math.min(...prices) : null;
+              return (
+                <div className="inventory-group" key={group.productId}>
+                  <div className="ig-head">
+                    <span className="product-thumb">
+                      {group.image ? (
+                        <img src={group.image} alt={group.name} loading="lazy" />
+                      ) : (
+                        <span>قطعه</span>
+                      )}
+                    </span>
+                    <div className="ig-title">
+                      <b>{group.name}</b>
+                      <div className="plc-chips">
+                        <span className="chip">
+                          {group.items.length.toLocaleString('fa-IR')} قلم ·{' '}
+                          {totalPieces.toLocaleString('fa-IR')} قطعه
+                        </span>
+                        {cheapest != null && (
+                          <span className="chip price">از {formatRial(cheapest)}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="ig-items">
+                    {group.items.map((item) => (
+                      <div className="inventory-row" key={item.id}>
+                        <div className="inv-info">
+                          <b>{item.brand?.name ?? '-'}</b>
+                          <small>
+                            <code dir="ltr">{item.barcode}</code>
+                          </small>
+                        </div>
+                        <StockStepper
+                          itemId={item.id}
+                          quantity={item.quantity}
+                          onMessage={setMessage}
+                          onSaved={() => void load()}
+                        />
+                        <span className="inv-shelf">
+                          {item.location
+                            ? `${item.location.code} · ${item.location.name}`
+                            : 'بدون قفسه'}
+                        </span>
+                        <div className="inv-actions">
+                          <button className="row-action" onClick={() => void openDetail(item)}>
+                            کارت قلم
+                          </button>
+                          <button className="row-action" onClick={() => printLabel(item)}>
+                            چاپ لیبل
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <StockStepper
-                  itemId={item.id}
-                  quantity={item.quantity}
-                  onMessage={setMessage}
-                  onSaved={() => void load()}
-                />
-                <span className="inv-shelf">
-                  {item.location ? `${item.location.code} · ${item.location.name}` : 'بدون قفسه'}
-                </span>
-                <div className="inv-actions">
-                  <button className="row-action" onClick={() => void openDetail(item)}>
-                    کارت قلم
-                  </button>
-                  <button className="row-action" onClick={() => printLabel(item)}>
-                    چاپ لیبل
-                  </button>
-                </div>
-              </div>
-            ))}
-            {!items.length && <p className="muted">قلمی یافت نشد.</p>}
+              );
+            })}
+            {!groups.length && <p className="muted">قلمی یافت نشد.</p>}
           </div>
         </div>
       )}
@@ -418,18 +515,22 @@ export function InventoryPage() {
                 <dd>{detail.brand?.name ?? '—'}</dd>
               </div>
               <div>
-                <dt>بارکد</dt>
-                <dd dir="ltr">{detail.barcode}</dd>
-              </div>
-              <div>
                 <dt>موجودی فعلی</dt>
                 <dd>{detail.quantity}</dd>
+              </div>
+              <div>
+                <dt>قیمت فروش</dt>
+                <dd>{formatRial(Number(detail.salePrice))}</dd>
               </div>
               <div>
                 <dt>آستانهٔ هشدار</dt>
                 <dd>{detail.minStock ?? '—'}</dd>
               </div>
             </dl>
+            <div className="sheet-barcode">
+              <BarcodeSvg value={detail.barcode} />
+              <code dir="ltr">{detail.barcode}</code>
+            </div>
             <div className="two-fields">
               <label>
                 ورود کالا (تعداد)
@@ -458,7 +559,8 @@ export function InventoryPage() {
             </div>
             <p className="muted">
               برای کم و زیاد کردن سریع موجودی، از دکمه‌های − و + کنار خودِ عدد در لیست استفاده کنید؛
-              ورود عمده و انتقال قفسه از همین کارت انجام می‌شود.
+              ورود عمده و انتقال قفسه از همین کارت انجام می‌شود. بارکد بالا قابل خواندن با بارکدخوان
+              است.
             </p>
             {history.length > 0 && (
               <div className="history">

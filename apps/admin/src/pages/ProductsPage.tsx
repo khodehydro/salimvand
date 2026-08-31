@@ -159,13 +159,23 @@ export function ProductsPage() {
         <span className="count">{products.length} محصول</span>
       </div>
 
-      <div className="list-toolbar">
+      <div className="search-field">
+        <span className="search-icon">⌕</span>
         <input
-          className="table-filter"
-          placeholder="جست‌وجوی نام، کد یا شماره فنی…"
+          placeholder="جست‌وجوی لحظه‌ای نام، کد یا شماره فنی…"
           value={filter}
           onChange={(event) => setFilter(event.target.value)}
         />
+        {filter && (
+          <button
+            type="button"
+            className="search-clear"
+            onClick={() => setFilter('')}
+            aria-label="پاک کردن جست‌وجو"
+          >
+            ✕
+          </button>
+        )}
       </div>
 
       {message && <div className="notice">{message}</div>}
