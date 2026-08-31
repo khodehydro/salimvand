@@ -78,6 +78,17 @@ export function neshanRouteUrl(
   return `https://nshn.ir/?lat=${lat}&lng=${lng}`;
 }
 
+/** Balad driving directions to the store. The operator-confirmed link format:
+ * destination takes lng,lat (Balad's order) and the fragment centers the map
+ * at zoom/lat/lng. Opens Balad's web directions in the browser and is picked
+ * up by the Balad app when installed; the app sets the origin automatically.
+ * Coordinates come from the admin settings (navLat/navLng). */
+export function baladDirectionsUrl(lat: number, lng: number): string {
+  return `https://balad.ir/directions/driving?destination=${encodeURIComponent(
+    `${lng},${lat}`,
+  )}#15/${lat}/${lng}`;
+}
+
 /** Standard Android geo: intent — opens a chooser listing every installed map
  * app (Balad, Neshan, …); each app then routes from the current position. */
 export function geoIntentUrl(lat: number, lng: number, label?: string): string {

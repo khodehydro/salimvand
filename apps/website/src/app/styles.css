@@ -859,12 +859,44 @@ p {
     margin-right: auto;
     margin-left: 10px;
   }
+  /* Bottom stack (top to bottom): full navigation chooser, quick-call bar,
+   * quick-navigation link. The call bar only lifts itself when coordinates
+   * are configured — otherwise the two nav buttons stay hidden. */
+  .mobile-contact-bar.has-nav {
+    bottom: 64px;
+  }
+  .mobile-quick-nav {
+    display: flex;
+    position: fixed;
+    z-index: 10;
+    bottom: 12px;
+    left: 12px;
+    right: 12px;
+    justify-content: space-between;
+    align-items: center;
+    padding: 9px 16px;
+    border-radius: 12px;
+    border: 1px solid var(--primary);
+    background: var(--surface);
+    color: var(--primary);
+    text-decoration: none;
+    box-shadow: var(--shadow-card);
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .mobile-quick-nav span {
+    color: var(--text-3);
+    font-size: 10px;
+    font-weight: 400;
+    margin-right: auto;
+    margin-left: 10px;
+  }
   /* Navigation pill stacked right above the quick-call bar. */
   .mobile-nav-button {
     display: block;
     position: fixed;
     z-index: 10;
-    bottom: 74px;
+    bottom: 122px;
     left: 12px;
     right: 12px;
     padding: 10px 16px;
@@ -1963,7 +1995,8 @@ p {
 }
 
 /* Mobile navigation button (stacked with the quick-call bar). */
-.mobile-nav-button {
+.mobile-nav-button,
+.mobile-quick-nav {
   display: none;
 }
 .nav-chooser {

@@ -7,6 +7,7 @@ import {
   extractAparatVideoId,
   extractMapEmbedUrl,
   formatJalaliDate,
+  baladDirectionsUrl,
   geoIntentUrl,
   neshanRouteUrl,
   parseCoordinate,
@@ -61,6 +62,9 @@ describe('shared utilities', () => {
     );
     expect(neshanRouteUrl(36.9692, 46.1027)).toBe('https://nshn.ir/?lat=36.9692&lng=46.1027');
     expect(geoIntentUrl(36.9692, 46.1027)).toBe('geo:36.9692,46.1027');
+    expect(baladDirectionsUrl(36.9680048, 46.0856154)).toBe(
+      'https://balad.ir/directions/driving?destination=46.0856154%2C36.9680048#15/36.9680048/46.0856154',
+    );
     expect(geoIntentUrl(36.9692, 46.1027, 'فروشگاه سلیم وند')).toBe(
       `geo:36.9692,46.1027?q=36.9692,46.1027(${encodeURIComponent('فروشگاه سلیم وند')})`,
     );

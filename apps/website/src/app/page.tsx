@@ -288,7 +288,16 @@ export default async function HomePage({
         </nav>
         <span>قیمت‌ها روزانه تغییر می‌کنند · مبلغ نهایی هنگام صدور فاکتور قطعی است.</span>
       </footer>
-      <a className="mobile-contact-bar" href={telHref(info)}>
+      {/* has-nav stacks the bar above the quick-navigation buttons when the
+          store coordinates are configured in the admin settings. */}
+      <a
+        className={
+          info.nav.lat != null && info.nav.lng != null
+            ? 'mobile-contact-bar has-nav'
+            : 'mobile-contact-bar'
+        }
+        href={telHref(info)}
+      >
         تماس سریع <span>برای استعلام قطعه</span> ←
       </a>
       <NavigationButton

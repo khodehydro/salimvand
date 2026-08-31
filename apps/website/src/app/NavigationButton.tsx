@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { geoIntentUrl, neshanRouteUrl } from '@salimvand/shared';
+import { baladDirectionsUrl, neshanRouteUrl } from '@salimvand/shared';
 
 /**
  * Floating mobile «مسیریابی» button shown next to the quick-call bar. It
@@ -39,9 +39,10 @@ export function NavigationButton({
   const openWith = async (target: 'neshan' | 'balad') => {
     setChooserOpen(false);
     if (target === 'balad') {
-      // The geo: intent lets Balad (or any installed map app) route from the
-      // visitor's current position to the store marker.
-      window.location.href = geoIntentUrl(lat, lng, storeName);
+      // Balad's own directions URL (destination = store, origin = the
+      // visitor's live position inside Balad) works in the browser and in the
+      // app, on Android and iOS alike.
+      window.location.href = baladDirectionsUrl(lat, lng);
       return;
     }
     setBusy(true);
@@ -66,6 +67,17 @@ export function NavigationButton({
       >
         {busy ? 'در حال دریافت موقعیت…' : '🧭 مسیریابی به فروشگاه'}
       </button>
+      {/* One-tap quick navigation for mobile: a plain link (no geolocation
+       * permission, no chooser) straight to Balad driving directions using
+       * the store coordinates from the admin settings. */}
+      <a
+        className="mobile-quick-nav"
+        href={baladDirectionsUrl(lat, lng)}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        🧭 مسیریابی سریع <span>مسیر تا فروشگاه با بلد</span>
+      </a>
       {chooserOpen && (
         <div
           className="nav-chooser"
