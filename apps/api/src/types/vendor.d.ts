@@ -16,5 +16,5 @@ declare module 'bidi-js' {
     getReorderedIndices(text: string, embeddingLevels: EmbeddingLevels): number[];
   }
   function bidiFactory(): Bidi;
-  export default bidiFactory;
+  export = bidiFactory;
 }

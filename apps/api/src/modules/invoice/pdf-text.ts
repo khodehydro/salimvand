@@ -1,5 +1,7 @@
 import { PersianShaper } from 'arabic-persian-reshaper';
-import bidiFactory from 'bidi-js';
+// CJS import form: this codebase compiles without esModuleInterop, and
+// bidi-js's UMD build assigns module.exports = bidiFactory directly.
+import bidiFactory = require('bidi-js');
 
 const bidi = bidiFactory();
 
