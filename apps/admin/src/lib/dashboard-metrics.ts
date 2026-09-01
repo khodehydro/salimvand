@@ -6,6 +6,22 @@ export type StockItem = {
 };
 
 /** Share of each brand in the total stock; the long tail is merged into «سایر». */
+/** Donut data grouped by product category — the dashboard's main donut. */
+export function categoryComposition(
+  items: Array<{ quantity: number; product?: { category?: { name?: string } | null } | null }>,
+  top = 6,
+): Array<{ name: string; value: number }> {
+  const totals = new Map<string, number>();
+  for (const item of items) {
+    const name = item.product?.category?.name?.trim() || 'بدون دسته';
+    totals.set(name, (totals.get(name) ?? 0) + Math.max(0, item.quantity));
+  }
+  const sorted = [...totals.entries()].filter(([, value]) => value > 0).sort((a, b) => b[1] - a[1]);
+  const head = sorted.slice(0, top).map(([name, value]) => ({ name, value }));
+  const rest = sorted.slice(top).reduce((sum, [, value]) => sum + value, 0);
+  return rest > 0 ? [...head, { name: 'سایر دسته‌ها', value: rest }] : head;
+}
+
 export function brandComposition(
   items: StockItem[],
   top = 6,

@@ -3,8 +3,8 @@ import { api } from '../lib/api';
 import { DonutChart } from '@salimvand/ui';
 import {
   brandComposition,
+  categoryComposition,
   debtReminderMessage,
-  stockHealth,
   totalDebt,
 } from '../lib/dashboard-metrics';
 import type { ProfitTrend } from './DashboardCharts';
@@ -33,11 +33,16 @@ type Summary = {
     location?: { code: string; name: string } | null;
   }>;
   stockComposition: StockRow[];
+  categoryComposition: Array<{
+    quantity: number;
+    product?: { category?: { name?: string } | null } | null;
+  }>;
   recentTransactions: Array<{
     id: string;
     type: string;
     quantityChange: number;
     quantityAfter?: number;
+    createdAt: string;
     item?: { product?: { name: string }; brand?: { name: string } };
   }>;
 };
@@ -48,18 +53,75 @@ type Health = {
   channels: Record<string, { configured: boolean; provider: string | null }>;
   queue: Record<string, number>;
 };
-const channelLabels: Record<string, string> = { sms: 'پیامک', telegram: 'تلگرام', bale: 'بله' };
+const channelLabels: Record<string, string> = {
+  sms: 'پیامک فاکتور',
+  telegram: 'ربات تلگرام',
+  bale: 'بله',
+};
 type InventoryTrend = { date: string; inbound: number; outbound: number; returns: number };
 const transactionLabels: Record<string, string> = {
   initial: 'موجودی اولیه',
-  purchase: 'خرید',
+  purchase: 'ورود کالا',
   sale: 'فروش',
   return: 'مرجوعی',
-  adjustment: 'اصلاح',
-  transfer: 'انتقال',
+  adjustment: 'اصلاح موجودی',
+  transfer: 'جابه‌جایی قفسه',
 };
-const money = (value: number | string) =>
-  `${new Intl.NumberFormat('fa-IR').format(Number(value))} ریال`;
+const faNum = (value: number | string) => new Intl.NumberFormat('fa-IR').format(Number(value));
+const money = (value: number | string) => `${faNum(value)} ریال`;
+/** Compact money for KPI values: ۴۸٫۶ میلیون ریال / ۱٫۲ میلیارد ریال */
+const moneyCompact = (value: number) => {
+  if (Math.abs(value) >= 1_000_000_000)
+    return `${faNum(Math.round(value / 100_000_000) / 10)} میلیارد ریال`;
+  if (Math.abs(value) >= 1_000_000) return `${faNum(Math.round(value / 100_000) / 10)} میلیون ریال`;
+  return money(value);
+};
+const PERIODS: Array<{ days: 1 | 7 | 30 | 90; label: string }> = [
+  { days: 1, label: 'امروز' },
+  { days: 7, label: '۷ روز' },
+  { days: 30, label: '۳۰ روز' },
+  { days: 90, label: '۹۰ روز' },
+];
+
+function Ic({ name }: { name: 'money' | 'file' | 'users' | 'alert' | 'refresh' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      {name === 'money' && (
+        <>
+          <path d="M12 2v20" />
+          <path d="M17 6.5H9.75a3.75 3.75 0 0 0 0 7.5h4.5a3.75 3.75 0 0 1 0 7.5H6" />
+        </>
+      )}
+      {name === 'file' && (
+        <>
+          <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7z" />
+          <path d="M14 2v5h5" />
+          <path d="M9 13h6M9 17h4" />
+        </>
+      )}
+      {name === 'users' && (
+        <>
+          <path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" />
+          <circle cx="9.5" cy="7" r="4" />
+          <path d="M21 21v-2a4 4 0 0 0-3-3.87M16.5 3.13a4 4 0 0 1 0 7.75" />
+        </>
+      )}
+      {name === 'alert' && (
+        <>
+          <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
+          <path d="M12 9v4M12 17h.01" />
+        </>
+      )}
+      {name === 'refresh' && (
+        <>
+          <path d="M21 12a9 9 0 1 1-2.6-6.4" />
+          <path d="M21 3v6h-6" />
+        </>
+      )}
+    </svg>
+  );
+}
+
 export function DashboardPage({
   canViewSales = true,
   canViewInventory = true,
@@ -79,20 +141,19 @@ export function DashboardPage({
   const [trend, setTrend] = useState<Trend[]>([]);
   const [inventoryTrend, setInventoryTrend] = useState<InventoryTrend[]>([]);
   const [profitTrend, setProfitTrend] = useState<ProfitTrend[]>([]);
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
+  const [periodDays, setPeriodDays] = useState<1 | 7 | 30 | 90>(30);
   const [debtors, setDebtors] = useState<Debtor[]>([]);
   const [health, setHealth] = useState<Health | null>(null);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
-  const query = useMemo(
-    () =>
-      from || to
-        ? `?${new URLSearchParams({ ...(from ? { from } : {}), ...(to ? { to } : {}) }).toString()}`
-        : '',
-    [from, to],
-  );
+  const query = useMemo(() => {
+    const to = new Date();
+    const from = new Date(to.getTime() - (periodDays - 1) * 86_400_000);
+    const iso = (d: Date) => d.toISOString().slice(0, 10);
+    return `?from=${iso(from)}&to=${iso(to)}`;
+  }, [periodDays]);
+  const periodLabel = PERIODS.find((p) => p.days === periodDays)?.label ?? '۳۰ روز';
   const load = async () => {
     setLoading(true);
     setError('');
@@ -129,251 +190,404 @@ export function DashboardPage({
   };
   useEffect(() => {
     void load();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
+
+  // KPI deltas: compare the latest day of the trend with the day before.
+  const last = trend.at(-1);
+  const prev = trend.at(-2);
+  const revenueToday = last ? Number(last.revenue) : 0;
+  const revenueDelta =
+    last && prev && Number(prev.revenue) > 0
+      ? Math.round(((Number(last.revenue) - Number(prev.revenue)) / Number(prev.revenue)) * 100)
+      : null;
+  const invoiceToday = last?.invoiceCount ?? 0;
+  const invoiceDelta = last && prev ? invoiceToday - prev.invoiceCount : null;
+  const donutData = categoryComposition(summary?.categoryComposition ?? []);
+  const donutFallback = donutData.length
+    ? donutData
+    : brandComposition(summary?.stockComposition ?? []);
+  const todayLabel = new Intl.DateTimeFormat('fa-IR', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(new Date());
+  const timeLabel = (iso: string) =>
+    new Intl.DateTimeFormat('fa-IR', { hour: '2-digit', minute: '2-digit' }).format(new Date(iso));
+
   return (
-    <section className="products-page">
-      <div className="page-title">
+    <section className="dash-page">
+      <div className="page-h">
         <div>
-          <span className="eyebrow">نمای کلی</span>
-          <h1>داشبورد</h1>
-          <p className="muted">وضعیت لحظه‌ای فروشگاه و انبار</p>
+          <h2>داشبورد</h2>
+          <div className="crumb">
+            <span>خانه</span>
+            <i>·</i>
+            <span>امروز، {todayLabel}</span>
+          </div>
         </div>
-        <button className="button-primary" onClick={load}>
-          به‌روزرسانی
-        </button>
+        <div className="page-h-tools">
+          <div className="seg" role="tablist" aria-label="بازهٔ گزارش">
+            {PERIODS.map((p) => (
+              <button
+                key={p.days}
+                className={periodDays === p.days ? 'on' : ''}
+                onClick={() => setPeriodDays(p.days)}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <button className="icon-btn" title="به‌روزرسانی" onClick={load} disabled={loading}>
+            <Ic name="refresh" />
+          </button>
+        </div>
       </div>
       {error && <div className="notice">{error}</div>}
-      {loading && <div className="notice">در حال دریافت اطلاعات داشبورد...</div>}
-      <div className="cards dashboard-cards">
-        <article>
-          <small>محصولات فعال</small>
-          <strong>{summary?.products ?? '—'}</strong>
-        </article>
-        <article>
-          <small>اقلام موجودی</small>
-          <strong>{summary?.inventoryItems ?? '—'}</strong>
-        </article>
-        <article>
-          <small>کمبود واقعی</small>
-          <strong className="low-stock">{summary?.lowStock ?? '—'}</strong>
-          <small>بر اساس حداقل موجودی</small>
-        </article>
+      {loading && !summary && <div className="notice">در حال دریافت اطلاعات داشبورد...</div>}
+
+      <div className="kpis">
+        {canViewSales ? (
+          <article className="kpi" title={money(revenueToday)}>
+            <div className="hd">
+              <span className="ic">
+                <Ic name="money" />
+              </span>
+              <small>فروش امروز</small>
+            </div>
+            <div className="v">{revenueToday ? moneyCompact(revenueToday) : '—'}</div>
+            <div className="f">
+              {revenueDelta === null ? (
+                <span className="fl">بدون مرجع مقایسه</span>
+              ) : (
+                <span className={revenueDelta >= 0 ? 'up' : 'dn'}>
+                  {revenueDelta >= 0 ? '▲' : '▼'} {faNum(Math.abs(revenueDelta))}٪ نسبت به دیروز
+                </span>
+              )}
+            </div>
+          </article>
+        ) : (
+          <article className="kpi">
+            <div className="hd">
+              <span className="ic">
+                <Ic name="file" />
+              </span>
+              <small>محصولات فعال</small>
+            </div>
+            <div className="v">{summary ? faNum(summary.products) : '—'}</div>
+            <div className="f">
+              <span className="fl">کالای قابل فروش</span>
+            </div>
+          </article>
+        )}
+        {canViewSales ? (
+          <article className="kpi">
+            <div className="hd">
+              <span className="ic">
+                <Ic name="file" />
+              </span>
+              <small>فاکتورهای امروز</small>
+            </div>
+            <div className="v">
+              {faNum(invoiceToday)} <small className="unit">فاکتور</small>
+            </div>
+            <div className="f">
+              {invoiceDelta === null ? (
+                <span className="fl">بدون مرجع مقایسه</span>
+              ) : invoiceDelta === 0 ? (
+                <span className="fl">مثل دیروز</span>
+              ) : (
+                <span className={invoiceDelta > 0 ? 'up' : 'dn'}>
+                  {faNum(Math.abs(invoiceDelta))} فاکتور {invoiceDelta > 0 ? 'بیشتر' : 'کمتر'}
+                </span>
+              )}
+            </div>
+          </article>
+        ) : (
+          <article className="kpi">
+            <div className="hd">
+              <span className="ic">
+                <Ic name="file" />
+              </span>
+              <small>اقلام موجودی</small>
+            </div>
+            <div className="v">{summary ? faNum(summary.inventoryItems) : '—'}</div>
+            <div className="f">
+              <span className="fl">اقلام فعال انبار</span>
+            </div>
+          </article>
+        )}
         {canViewDebtors && (
-          <article>
-            <small>بدهی مشتریان</small>
-            <strong>{money(totalDebt(debtors))}</strong>
-            <small>{new Intl.NumberFormat('fa-IR').format(debtors.length)} مشتری بدهکار</small>
+          <article className="kpi">
+            <div className="hd">
+              <span className="ic">
+                <Ic name="users" />
+              </span>
+              <small>مشتریان بدهکار</small>
+            </div>
+            <div className="v">
+              {faNum(debtors.length)} <small className="unit">مشتری</small>
+            </div>
+            <div className="f">
+              <span className="fl">مجموع بدهی: {moneyCompact(totalDebt(debtors))}</span>
+            </div>
           </article>
         )}
-        {canViewHealth && (
-          <article className="health-card">
-            <small>سلامت یکپارچه‌سازی‌ها</small>
-            {health ? (
-              Object.entries(health.channels).map(([channel, state]) => (
-                <div className="health-row" key={channel}>
-                  <span>{channelLabels[channel] ?? channel}</span>
-                  <b className={state.configured ? 'status-chip' : 'low-stock'}>
-                    {state.configured
-                      ? `فعال · ${state.provider ?? 'پیکربندی‌شده'}`
-                      : 'پیکربندی نشده'}
-                  </b>
-                </div>
-              ))
-            ) : (
-              <small>در حال دریافت…</small>
-            )}
-            {health && (
-              <small>
-                صف:{' '}
-                {Object.entries(health.queue)
-                  .map(
-                    ([state, count]) => `${state} ${new Intl.NumberFormat('fa-IR').format(count)}`,
-                  )
-                  .join(' · ')}
-              </small>
-            )}
-          </article>
-        )}
+        <article className="kpi alert">
+          <div className="hd">
+            <span className="ic">
+              <Ic name="alert" />
+            </span>
+            <small>هشدار کمبود موجودی</small>
+          </div>
+          <div className="v">
+            {summary ? faNum(summary.lowStock) : '—'} <small className="unit">قلم</small>
+          </div>
+          <div className="f">
+            <span className="dn">بر اساس حداقل موجودی</span>
+          </div>
+        </article>
       </div>
+
       <Suspense
         fallback={<div className="dashboard-chart-loading">در حال آماده‌سازی نمودارها...</div>}
       >
-        {canViewSales && (
-          <div className="dashboard-chart-card">
-            <div className="chart-header">
-              <div>
-                <h2>روند فروش و دریافت</h2>
-                <p className="muted">نمودار خطی روزانه با نقاط قابل بررسی</p>
+        <div className="cols-2">
+          {canViewSales && (
+            <article className="card">
+              <header className="card-h">
+                <h3>روند فروش — {periodLabel} گذشته</h3>
+                <small className="muted">فروش روزانه (میلیون ریال)</small>
+              </header>
+              <DashboardCharts.SalesChart data={trend} />
+            </article>
+          )}
+          <article className="card">
+            <header className="card-h">
+              <h3>ترکیب موجودی بر اساس دسته</h3>
+              <small className="muted">سهم هر دسته از کل موجودی انبار</small>
+            </header>
+            <DonutChart data={donutFallback} />
+          </article>
+        </div>
+
+        <div className="cols-2">
+          {canViewDebtors && (
+            <article className="card">
+              <header className="card-h">
+                <h3>
+                  مشتریان بدهکار
+                  <span className="badge b-danger">{faNum(debtors.length)} مورد</span>
+                </h3>
+                <a className="card-more" href="#/customers">
+                  همهٔ مشتریان ›
+                </a>
+              </header>
+              {debtors.length ? (
+                <div className="dash-tbl">
+                  <div className="thead">
+                    <span>مشتری</span>
+                    <span>موبایل</span>
+                    <span>بدهی</span>
+                    <span>یادآوری</span>
+                  </div>
+                  {debtors.slice(0, 6).map((debtor) => (
+                    <div className="trow" key={debtor.id}>
+                      <b>{debtor.name}</b>
+                      <code dir="ltr">{debtor.mobile}</code>
+                      <b className="num danger">{money(debtor.debt)}</b>
+                      <span>
+                        {canNotify ? (
+                          <button
+                            className="row-action"
+                            onClick={async () => {
+                              try {
+                                await api('/notifications/test', {
+                                  method: 'POST',
+                                  body: JSON.stringify({
+                                    channel: 'sms',
+                                    mobile: debtor.mobile,
+                                    message: debtReminderMessage(debtor.name, Number(debtor.debt)),
+                                  }),
+                                });
+                                setNotice(
+                                  `یادآوری بدهی برای ${debtor.name} در صف پیامک قرار گرفت.`,
+                                );
+                              } catch (e) {
+                                setNotice((e as Error).message);
+                              }
+                            }}
+                          >
+                            پیامک
+                          </button>
+                        ) : (
+                          <span className="muted">—</span>
+                        )}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="muted empty-line">مشتری بدهکاری وجود ندارد.</p>
+              )}
+            </article>
+          )}
+          <article className="card">
+            <header className="card-h">
+              <h3>
+                کمبود موجودی
+                {summary && summary.lowStock > 0 && (
+                  <span className="badge b-danger">{faNum(summary.lowStock)} قلم</span>
+                )}
+              </h3>
+              {canViewInventory && (
+                <a className="card-more" href="#/inventory">
+                  انبار ›
+                </a>
+              )}
+            </header>
+            {summary?.lowStockItems.length ? (
+              <div className="list-rows">
+                {summary.lowStockItems.slice(0, 5).map((row) => {
+                  const min = row.minStock ?? 0;
+                  const ratio = min > 0 ? Math.min(1, row.quantity / min) : 0;
+                  const barClass = row.quantity <= 0 ? '' : ratio <= 0.5 ? 'mid' : 'ok';
+                  return (
+                    <div className="list-row" key={row.id}>
+                      <span className="thumb">{row.product.name.slice(0, 2)}</span>
+                      <span className="grow">
+                        <b>{row.product.name}</b>
+                        <small>
+                          {row.brand.name}
+                          {row.location ? ` · قفسهٔ ${row.location.code}` : ''}
+                        </small>
+                        <i className={`stockbar ${barClass}`}>
+                          <i style={{ width: `${Math.round(ratio * 100)}%` }} />
+                        </i>
+                      </span>
+                      <span className="badge b-warn">
+                        {faNum(row.quantity)} از {faNum(min || 0)}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
-              <div className="chart-filters">
-                <input
-                  type="date"
-                  aria-label="از تاریخ"
-                  value={from}
-                  onChange={(e) => setFrom(e.target.value)}
-                />
-                <input
-                  type="date"
-                  aria-label="تا تاریخ"
-                  value={to}
-                  onChange={(e) => setTo(e.target.value)}
-                />
-                <button onClick={load}>اعمال</button>
-                <button
-                  className="outline"
-                  onClick={() => {
-                    setFrom('');
-                    setTo('');
-                  }}
-                >
-                  همه
-                </button>
+            ) : (
+              <p className="muted empty-line">همهٔ اقلام بالاتر از حداقل موجودی هستند.</p>
+            )}
+          </article>
+        </div>
+
+        <div className="cols-2b">
+          <article className="card">
+            <header className="card-h">
+              <h3>آخرین تراکنش‌های انبار</h3>
+              <small className="muted">دفتر کل — غیرقابل تغییر</small>
+            </header>
+            {summary?.recentTransactions.length ? (
+              <div className="tl">
+                {summary.recentTransactions.map((row) => (
+                  <div
+                    className={`tl-item ${row.quantityChange < 0 ? 'neg' : 'pos'}`}
+                    key={String(row.id)}
+                  >
+                    <b>
+                      {transactionLabels[row.type] ?? row.type} —{' '}
+                      {row.item?.product?.name ?? 'قلم موجودی'}
+                    </b>
+                    <small>
+                      {row.item?.brand?.name ?? ''}
+                      {row.item?.brand?.name ? ' · ' : ''}
+                      {timeLabel(row.createdAt)}
+                      {row.quantityAfter !== undefined
+                        ? ` · موجودی بعد: ${faNum(row.quantityAfter)}`
+                        : ''}
+                    </small>
+                    <span className={`num ${row.quantityChange < 0 ? 'danger' : 'ok'}`}>
+                      {row.quantityChange > 0 ? '+' : ''}
+                      {faNum(row.quantityChange)}
+                    </span>
+                  </div>
+                ))}
               </div>
-            </div>
-            <DashboardCharts.SalesChart data={trend} />
-          </div>
-        )}{' '}
-        {canViewInventory && (
-          <div className="dashboard-chart-card">
-            <div className="chart-header">
-              <div>
-                <h2>گردش موجودی</h2>
-                <p className="muted">ورود، خروج و مرجوعی روزانه</p>
+            ) : (
+              <p className="muted empty-line">تراکنشی ثبت نشده است.</p>
+            )}
+          </article>
+          {canViewHealth && (
+            <article className="card">
+              <header className="card-h">
+                <h3>یکپارچه‌سازی‌ها و سلامت سیستم</h3>
+                <span className="badge b-line">
+                  صف:{' '}
+                  {health && Object.keys(health.queue).length
+                    ? Object.entries(health.queue)
+                        .map(([state, count]) => `${state} ${faNum(count)}`)
+                        .join(' · ')
+                    : 'خالی'}
+                </span>
+              </header>
+              <div className="list-rows">
+                {health
+                  ? Object.entries(health.channels).map(([channel, state]) => (
+                      <div className="list-row" key={channel}>
+                        <span className="thumb ic-thumb">
+                          <Ic name="file" />
+                        </span>
+                        <span className="grow">
+                          <b>{channelLabels[channel] ?? channel}</b>
+                          <small>{state.configured ? 'کانال فعال' : 'پیکربندی نشده'}</small>
+                        </span>
+                        <span className={`badge ${state.configured ? 'b-ok' : 'b-danger'}`}>
+                          {state.configured
+                            ? `فعال · ${state.provider ?? 'پیکربندی‌شده'}`
+                            : 'غیرفعال'}
+                        </span>
+                      </div>
+                    ))
+                  : null}
+                {canViewHealth && (
+                  <div className="list-row">
+                    <span className="thumb ic-thumb">
+                      <Ic name="refresh" />
+                    </span>
+                    <span className="grow">
+                      <b>صف پیامک</b>
+                      <small>پیام‌های در انتظار ارسال</small>
+                    </span>
+                    <span className="badge b-ok">پایش‌شده</span>
+                  </div>
+                )}
               </div>
-            </div>
-            <DashboardCharts.InventoryChart data={inventoryTrend} />
-          </div>
-        )}{' '}
-        {canViewProfit && (
-          <div className="dashboard-chart-card">
-            <div className="chart-header">
-              <div>
-                <h2>روند سود ناخالص</h2>
-                <p className="muted">فروش، هزینهٔ خرید و سود روزانه</p>
-              </div>
-            </div>
-            <DashboardCharts.ProfitChart data={profitTrend} />
+            </article>
+          )}
+        </div>
+
+        {(canViewInventory || canViewProfit) && (
+          <div className="cols-2b">
+            {canViewInventory && (
+              <article className="card">
+                <header className="card-h">
+                  <h3>گردش موجودی</h3>
+                  <small className="muted">ورود، خروج و مرجوعی روزانه</small>
+                </header>
+                <DashboardCharts.InventoryChart data={inventoryTrend} />
+              </article>
+            )}
+            {canViewProfit && (
+              <article className="card">
+                <header className="card-h">
+                  <h3>روند سود ناخالص</h3>
+                  <small className="muted">فروش، هزینهٔ خرید و سود روزانه</small>
+                </header>
+                <DashboardCharts.ProfitChart data={profitTrend} />
+              </article>
+            )}
           </div>
         )}
-        <div className="dashboard-chart-card">
-          <div className="chart-header">
-            <div>
-              <h2>ترکیب موجودی بر اساس برند</h2>
-              <p className="muted">سهم هر برند از کل موجودی انبار</p>
-            </div>
-          </div>
-          <DonutChart data={brandComposition(summary?.stockComposition ?? [])} />
-        </div>
       </Suspense>
       {notice && <div className="notice">{notice}</div>}
-      {canViewDebtors && (
-        <div className="product-table debtors-table">
-          <div className="table-head debtor-head">
-            <span>مشتری</span>
-            <span>موبایل</span>
-            <span>فاکتور باز</span>
-            <span>بدهی</span>
-            <span>عملیات</span>
-          </div>
-          {debtors.length ? (
-            debtors.map((debtor) => (
-              <div className="table-row debtor-head" key={debtor.id}>
-                <strong>{debtor.name}</strong>
-                <code dir="ltr">{debtor.mobile}</code>
-                <span>{new Intl.NumberFormat('fa-IR').format(debtor.invoiceCount)}</span>
-                <strong className="low-stock">{money(debtor.debt)}</strong>
-                <span>
-                  {canNotify && (
-                    <button
-                      className="row-action"
-                      onClick={async () => {
-                        try {
-                          await api('/notifications/test', {
-                            method: 'POST',
-                            body: JSON.stringify({
-                              channel: 'sms',
-                              mobile: debtor.mobile,
-                              message: debtReminderMessage(debtor.name, Number(debtor.debt)),
-                            }),
-                          });
-                          setNotice(`یادآوری بدهی برای ${debtor.name} در صف پیامک قرار گرفت.`);
-                        } catch (e) {
-                          setNotice((e as Error).message);
-                        }
-                      }}
-                    >
-                      ارسال پیامک
-                    </button>
-                  )}
-                </span>
-              </div>
-            ))
-          ) : (
-            <div className="table-row debtor-head">
-              <span className="muted">مشتری بدهکاری وجود ندارد.</span>
-            </div>
-          )}
-        </div>
-      )}
-      <div className="dashboard-columns">
-        <div className="history">
-          <h2>
-            هشدار کمبود موجودی
-            {canViewInventory && (
-              <a className="row-action" href="#/inventory">
-                رفتن به انبار ←
-              </a>
-            )}
-          </h2>
-          {summary?.lowStockItems.length ? (
-            summary.lowStockItems.map((row) => (
-              <div key={row.id}>
-                <span>
-                  <b>{row.product.name}</b>
-                  <small>
-                    {row.brand.name} · {row.product.code}
-                  </small>
-                </span>
-                <strong className="low-stock">
-                  {row.quantity} / حداقل {row.minStock ?? 0}
-                </strong>
-                <small>
-                  {row.location ? `${row.location.code} · ${row.location.name}` : 'بدون قفسه'}
-                </small>
-              </div>
-            ))
-          ) : (
-            <p className="muted">همهٔ اقلام بالاتر از حداقل موجودی هستند.</p>
-          )}
-        </div>
-        <div className="history">
-          <h2>آخرین تراکنش‌ها</h2>
-          {summary?.recentTransactions.length ? (
-            summary.recentTransactions.map((row) => (
-              <div key={String(row.id)}>
-                <span>
-                  {row.item?.product?.name ?? 'قلم موجودی'}
-                  <small>{row.item?.brand?.name ?? ''}</small>
-                </span>
-                <b className={row.quantityChange < 0 ? 'low-stock' : 'status-chip'}>
-                  {row.quantityChange > 0 ? '+' : ''}
-                  {row.quantityChange}
-                </b>
-                <span>
-                  {transactionLabels[row.type] ?? row.type}
-                  <small>
-                    {row.quantityAfter !== undefined
-                      ? `موجودی پس از تراکنش: ${row.quantityAfter}`
-                      : ''}
-                  </small>
-                </span>
-              </div>
-            ))
-          ) : (
-            <p className="muted">تراکنشی ثبت نشده است.</p>
-          )}
-        </div>
-      </div>
     </section>
   );
 }

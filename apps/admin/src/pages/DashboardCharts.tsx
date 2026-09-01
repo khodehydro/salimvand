@@ -1,7 +1,10 @@
 import {
+  Bar,
+  CartesianGrid,
+  Cell,
+  ComposedChart,
   Line,
   LineChart,
-  CartesianGrid,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -15,41 +18,46 @@ const money = (value: number | string) =>
   `${new Intl.NumberFormat('fa-IR').format(Number(value))} ریال`;
 
 export function SalesChart({ data }: { data: Trend[] }) {
-  const chartData = data.map((row) => ({
+  const chartData = data.map((row, index) => ({
     ...row,
     revenueNumber: Number(row.revenue),
     paidNumber: Number(row.paid),
     label: new Intl.DateTimeFormat('fa-IR', { month: 'short', day: 'numeric' }).format(
       new Date(`${row.date}T12:00:00`),
     ),
+    isToday: index === data.length - 1,
+    averageNumber: 0,
   }));
+  const average =
+    chartData.reduce((sum, row) => sum + row.revenueNumber, 0) / (chartData.length || 1);
+  for (const row of chartData) row.averageNumber = Math.round(average);
   return (
     <div className="dashboard-chart">
       <div className="chart-legend">
         <span>
-          <i className="legend-revenue" /> فروش
+          <i className="legend-revenue" /> فروش (میلیون ریال)
         </span>
         <span>
-          <i className="legend-paid" /> دریافت‌شده
+          <i className="legend-avg" /> میانگین
         </span>
       </div>
       {chartData.length ? (
         <ResponsiveContainer width="100%" height={270}>
-          <LineChart data={chartData} margin={{ top: 12, right: 8, left: 8, bottom: 4 }}>
+          <ComposedChart data={chartData} margin={{ top: 12, right: 8, left: 8, bottom: 4 }}>
             <CartesianGrid
-              stroke="var(--a-border)"
+              stroke="var(--sv-border)"
               strokeDasharray="3 3"
               horizontal
               vertical={false}
             />
             <XAxis
               dataKey="label"
-              tick={{ fill: 'var(--a-text-2)', fontSize: 11 }}
+              tick={{ fill: 'var(--sv-text-2)', fontSize: 11 }}
               axisLine={false}
               tickLine={false}
             />
             <YAxis
-              tick={{ fill: 'var(--a-text-2)', fontSize: 10 }}
+              tick={{ fill: 'var(--sv-text-2)', fontSize: 10 }}
               axisLine={false}
               tickLine={false}
               tickFormatter={(value) => `${Math.round(Number(value) / 1000000)}م`}
@@ -58,36 +66,34 @@ export function SalesChart({ data }: { data: Trend[] }) {
             <Tooltip
               formatter={(value, name) => [
                 money(Number(value)),
-                name === 'revenueNumber' ? 'فروش' : 'دریافت‌شده',
+                name === 'revenueNumber' ? 'فروش' : 'میانگین دوره',
               ]}
               labelFormatter={(label) => `تاریخ: ${label}`}
               contentStyle={{
                 direction: 'rtl',
-                background: 'var(--a-surface)',
-                border: '1px solid var(--a-border)',
+                background: 'var(--sv-surface)',
+                border: '1px solid var(--sv-border)',
                 borderRadius: 8,
-                color: 'var(--a-text)',
+                color: 'var(--sv-text)',
               }}
             />
+            {/* Bar per day like the design mock; the last (today) bar is
+                highlighted with a lighter fill. */}
+            <Bar dataKey="revenueNumber" name="revenueNumber" radius={[5, 5, 2, 2]} maxBarSize={26}>
+              {chartData.map((row, index) => (
+                <Cell key={index} fill={row.isToday ? 'var(--sv-brand-300)' : 'var(--sv-link)'} />
+              ))}
+            </Bar>
             <Line
               type="monotone"
-              dataKey="revenueNumber"
-              name="revenueNumber"
-              stroke="var(--a-link)"
-              strokeWidth={3}
-              dot={{ r: 4, fill: 'var(--a-link)', strokeWidth: 2, stroke: 'var(--a-surface)' }}
-              activeDot={{ r: 6 }}
-            />
-            <Line
-              type="monotone"
-              dataKey="paidNumber"
-              name="paidNumber"
-              stroke="var(--a-ok)"
+              dataKey="averageNumber"
+              name="averageNumber"
+              stroke="var(--sv-border-2)"
               strokeWidth={2}
-              dot={{ r: 3, fill: 'var(--a-ok)', strokeWidth: 2, stroke: 'var(--a-surface)' }}
-              activeDot={{ r: 5 }}
+              strokeDasharray="5 4"
+              dot={false}
             />
-          </LineChart>
+          </ComposedChart>
         </ResponsiveContainer>
       ) : (
         <p className="muted chart-empty">در این بازه فروش ثبت نشده است.</p>
@@ -103,9 +109,9 @@ export function InventoryChart({ data }: { data: InventoryTrend[] }) {
     ),
   }));
   const lines = [
-    { key: 'inbound', label: 'ورود', color: 'var(--a-link)' },
-    { key: 'outbound', label: 'خروج', color: 'var(--a-danger)' },
-    { key: 'returns', label: 'مرجوعی', color: 'var(--a-warn)' },
+    { key: 'inbound', label: 'ورود', color: 'var(--sv-link)' },
+    { key: 'outbound', label: 'خروج', color: 'var(--sv-danger)' },
+    { key: 'returns', label: 'مرجوعی', color: 'var(--sv-warn)' },
   ];
   return (
     <div className="dashboard-chart">
@@ -121,19 +127,19 @@ export function InventoryChart({ data }: { data: InventoryTrend[] }) {
         <ResponsiveContainer width="100%" height={270}>
           <LineChart data={chartData} margin={{ top: 12, right: 8, left: 8, bottom: 4 }}>
             <CartesianGrid
-              stroke="var(--a-border)"
+              stroke="var(--sv-border)"
               strokeDasharray="3 3"
               horizontal
               vertical={false}
             />
             <XAxis
               dataKey="label"
-              tick={{ fill: 'var(--a-text-2)', fontSize: 11 }}
+              tick={{ fill: 'var(--sv-text-2)', fontSize: 11 }}
               axisLine={false}
               tickLine={false}
             />
             <YAxis
-              tick={{ fill: 'var(--a-text-2)', fontSize: 10 }}
+              tick={{ fill: 'var(--sv-text-2)', fontSize: 10 }}
               axisLine={false}
               tickLine={false}
               width={30}
@@ -146,10 +152,10 @@ export function InventoryChart({ data }: { data: InventoryTrend[] }) {
               ]}
               contentStyle={{
                 direction: 'rtl',
-                background: 'var(--a-surface)',
-                border: '1px solid var(--a-border)',
+                background: 'var(--sv-surface)',
+                border: '1px solid var(--sv-border)',
                 borderRadius: 8,
-                color: 'var(--a-text)',
+                color: 'var(--sv-text)',
               }}
             />
             {lines.map((line) => (
@@ -159,7 +165,7 @@ export function InventoryChart({ data }: { data: InventoryTrend[] }) {
                 dataKey={line.key}
                 stroke={line.color}
                 strokeWidth={2}
-                dot={{ r: 3, fill: line.color, strokeWidth: 2, stroke: 'var(--a-surface)' }}
+                dot={{ r: 3, fill: line.color, strokeWidth: 2, stroke: 'var(--sv-surface)' }}
                 activeDot={{ r: 5 }}
               />
             ))}
@@ -182,9 +188,9 @@ export function ProfitChart({ data }: { data: ProfitTrend[] }) {
     ),
   }));
   const lines = [
-    { key: 'revenueNumber', label: 'فروش', color: 'var(--a-link)' },
-    { key: 'costNumber', label: 'هزینه', color: 'var(--a-danger)' },
-    { key: 'profitNumber', label: 'سود', color: 'var(--a-ok)' },
+    { key: 'revenueNumber', label: 'فروش', color: 'var(--sv-link)' },
+    { key: 'costNumber', label: 'هزینه', color: 'var(--sv-danger)' },
+    { key: 'profitNumber', label: 'سود', color: 'var(--sv-ok)' },
   ];
   return (
     <div className="dashboard-chart">
@@ -200,19 +206,19 @@ export function ProfitChart({ data }: { data: ProfitTrend[] }) {
         <ResponsiveContainer width="100%" height={270}>
           <LineChart data={chartData} margin={{ top: 12, right: 8, left: 8, bottom: 4 }}>
             <CartesianGrid
-              stroke="var(--a-border)"
+              stroke="var(--sv-border)"
               strokeDasharray="3 3"
               horizontal
               vertical={false}
             />
             <XAxis
               dataKey="label"
-              tick={{ fill: 'var(--a-text-2)', fontSize: 11 }}
+              tick={{ fill: 'var(--sv-text-2)', fontSize: 11 }}
               axisLine={false}
               tickLine={false}
             />
             <YAxis
-              tick={{ fill: 'var(--a-text-2)', fontSize: 10 }}
+              tick={{ fill: 'var(--sv-text-2)', fontSize: 10 }}
               axisLine={false}
               tickLine={false}
               width={38}
@@ -226,10 +232,10 @@ export function ProfitChart({ data }: { data: ProfitTrend[] }) {
               ]}
               contentStyle={{
                 direction: 'rtl',
-                background: 'var(--a-surface)',
-                border: '1px solid var(--a-border)',
+                background: 'var(--sv-surface)',
+                border: '1px solid var(--sv-border)',
                 borderRadius: 8,
-                color: 'var(--a-text)',
+                color: 'var(--sv-text)',
               }}
             />
             {lines.map((line) => (
@@ -239,7 +245,7 @@ export function ProfitChart({ data }: { data: ProfitTrend[] }) {
                 dataKey={line.key}
                 stroke={line.color}
                 strokeWidth={2}
-                dot={{ r: 3, fill: line.color, strokeWidth: 2, stroke: 'var(--a-surface)' }}
+                dot={{ r: 3, fill: line.color, strokeWidth: 2, stroke: 'var(--sv-surface)' }}
                 activeDot={{ r: 5 }}
               />
             ))}

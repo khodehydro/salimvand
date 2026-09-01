@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { brandComposition, debtReminderMessage, stockHealth, totalDebt } from './dashboard-metrics';
+import {
+  brandComposition,
+  categoryComposition,
+  debtReminderMessage,
+  stockHealth,
+  totalDebt,
+} from './dashboard-metrics';
 
 const item = (brand: string | null, quantity: number, minStock: number | null = null) => ({
   quantity,
@@ -52,5 +58,28 @@ describe('dashboard metrics', () => {
       '۲٬۵۰۰٬۰۰۰ ریال',
     );
     expect(debtReminderMessage('علی', 100)).toContain('هماهنگ');
+  });
+});
+
+describe('categoryComposition', () => {
+  it('groups quantities by product category and buckets the tail', () => {
+    const rows = [
+      { quantity: 10, product: { category: { name: 'ترمز و جلوبندی' } } },
+      { quantity: 6, product: { category: { name: 'فیلتراسیون' } } },
+      { quantity: 4, product: { category: { name: 'ترمز و جلوبندی' } } },
+      { quantity: 2, product: null },
+      { quantity: 0, product: { category: { name: 'خالی' } } },
+    ];
+    expect(categoryComposition(rows, 2)).toEqual([
+      { name: 'ترمز و جلوبندی', value: 14 },
+      { name: 'فیلتراسیون', value: 6 },
+      { name: 'سایر دسته‌ها', value: 2 },
+    ]);
+  });
+
+  it('falls back to بدون دسته when the category is missing', () => {
+    expect(categoryComposition([{ quantity: 3, product: { category: null } }])).toEqual([
+      { name: 'بدون دسته', value: 3 },
+    ]);
   });
 });

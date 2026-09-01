@@ -38,6 +38,10 @@ describe('DashboardService', () => {
       .mockResolvedValueOnce([
         { quantity: 12, brand: { name: 'اصلی' } },
         { quantity: 8, brand: { name: 'بوش' } },
+      ])
+      .mockResolvedValueOnce([
+        { quantity: 12, product: { category: { name: 'ترمز و جلوبندی' } } },
+        { quantity: 8, product: { category: null } },
       ]);
     prisma.inventoryTransaction.findMany.mockResolvedValue([{ id: '1', quantityChange: 2 }]);
     await expect(service.summary()).resolves.toEqual({
@@ -59,6 +63,10 @@ describe('DashboardService', () => {
         stockComposition: [
           { quantity: 12, brand: { name: 'اصلی' } },
           { quantity: 8, brand: { name: 'بوش' } },
+        ],
+        categoryComposition: [
+          { quantity: 12, product: { category: { name: 'ترمز و جلوبندی' } } },
+          { quantity: 8, product: { category: null } },
         ],
         recentTransactions: [{ id: '1', quantityChange: 2 }],
       },

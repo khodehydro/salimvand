@@ -169,33 +169,47 @@ export class DashboardService {
   }
 
   async summary() {
-    const [products, inventoryItems, lowStockItems, stockComposition, recentTransactions] =
-      await Promise.all([
-        this.prisma.product.count({ where: { deletedAt: null, status: 'active' } }),
-        this.prisma.inventoryItem.count({ where: { isActive: true } }),
-        this.prisma.inventoryItem.findMany({
-          where: { isActive: true },
-          orderBy: { quantity: 'asc' },
-          take: 20,
-          select: {
-            id: true,
-            quantity: true,
-            minStock: true,
-            product: { select: { name: true, code: true } },
-            brand: { select: { name: true } },
-            location: { select: { code: true, name: true } },
-          },
-        }),
-        this.prisma.inventoryItem.findMany({
-          where: { isActive: true, quantity: { gt: 0 } },
-          select: { quantity: true, brand: { select: { name: true } } },
-        }),
-        this.prisma.inventoryTransaction.findMany({
-          orderBy: { createdAt: 'desc' },
-          take: 8,
-          include: { item: { include: { product: true, brand: true } } },
-        }),
-      ]);
+    const [
+      products,
+      inventoryItems,
+      lowStockItems,
+      stockComposition,
+      categoryComposition,
+      recentTransactions,
+    ] = await Promise.all([
+      this.prisma.product.count({ where: { deletedAt: null, status: 'active' } }),
+      this.prisma.inventoryItem.count({ where: { isActive: true } }),
+      this.prisma.inventoryItem.findMany({
+        where: { isActive: true },
+        orderBy: { quantity: 'asc' },
+        take: 20,
+        select: {
+          id: true,
+          quantity: true,
+          minStock: true,
+          product: { select: { name: true, code: true } },
+          brand: { select: { name: true } },
+          location: { select: { code: true, name: true } },
+        },
+      }),
+      this.prisma.inventoryItem.findMany({
+        where: { isActive: true, quantity: { gt: 0 } },
+        select: { quantity: true, brand: { select: { name: true } } },
+      }),
+      // Dashboard donut is grouped by product category (per the design doc).
+      this.prisma.inventoryItem.findMany({
+        where: { isActive: true, quantity: { gt: 0 } },
+        select: {
+          quantity: true,
+          product: { select: { category: { select: { name: true } } } },
+        },
+      }),
+      this.prisma.inventoryTransaction.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: 8,
+        include: { item: { include: { product: true, brand: true } } },
+      }),
+    ]);
     const lowStock = lowStockItems.filter((item) => item.quantity <= (item.minStock ?? 0));
     return {
       ok: true,
@@ -205,6 +219,7 @@ export class DashboardService {
         lowStock: lowStock.length,
         lowStockItems: lowStock,
         stockComposition,
+        categoryComposition,
         recentTransactions,
       },
     };
