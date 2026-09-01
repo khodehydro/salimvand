@@ -145,7 +145,22 @@ export class NotificationsService implements OnModuleDestroy {
   }
 
   async enqueue(payload: NotificationJob) {
-    return this.queue.add(payload.type as NotificationName, payload, notificationJobOptions);
+    // Notifications are strictly best-effort: a down or degraded Redis must
+    // never bubble up and fail the business operation (invoice issue, payment
+    // registration, ...) that queued the message. Log and move on.
+    try {
+      return await this.queue.add(
+        payload.type as NotificationName,
+        payload,
+        notificationJobOptions,
+      );
+    } catch (error) {
+      console.error(
+        '[notifications] enqueue skipped (queue unavailable):',
+        (error as Error)?.message ?? error,
+      );
+      return null;
+    }
   }
 
   async enqueueTest(channel: Channel, message: string, mobile?: string) {

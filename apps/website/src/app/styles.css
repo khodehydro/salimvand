@@ -908,7 +908,7 @@ p {
 .inv-band {
   background: var(--brand-900);
   color: #fff;
-  padding: 18px 26px;
+  padding: 20px 26px 34px;
   display: flex;
   align-items: center;
   gap: 14px;
@@ -994,8 +994,10 @@ p {
   box-shadow: 0 12px 35px #0b1c2f0c;
 }
 .inv-top {
-  margin-top: -24px;
+  margin-top: -18px;
   padding: 18px;
+  position: relative;
+  z-index: 1;
 }
 .inv-top-head {
   display: flex;

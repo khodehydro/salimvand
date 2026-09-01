@@ -53,6 +53,12 @@ type Health = {
   channels: Record<string, { configured: boolean; provider: string | null }>;
   queue: Record<string, number>;
 };
+/** GET /dashboard/system — server RAM/disk usage (managers only). */
+type SystemStats = {
+  memory: { total: number; used: number; free: number };
+  disk: { total: number; used: number; free: number } | null;
+  uptimeSeconds: number;
+};
 const channelLabels: Record<string, string> = {
   sms: 'پیامک فاکتور',
   telegram: 'ربات تلگرام',
@@ -68,6 +74,7 @@ const transactionLabels: Record<string, string> = {
   transfer: 'جابه‌جایی قفسه',
 };
 const faNum = (value: number | string) => new Intl.NumberFormat('fa-IR').format(Number(value));
+const gigabytes = (bytes: number) => faNum(Math.round((bytes / 1024 ** 3) * 10) / 10);
 const money = (value: number | string) => `${faNum(value)} ریال`;
 /** Compact money for KPI values: ۴۸٫۶ میلیون ریال / ۱٫۲ میلیارد ریال */
 const moneyCompact = (value: number) => {
@@ -144,6 +151,7 @@ export function DashboardPage({
   const [periodDays, setPeriodDays] = useState<1 | 7 | 30 | 90>(30);
   const [debtors, setDebtors] = useState<Debtor[]>([]);
   const [health, setHealth] = useState<Health | null>(null);
+  const [system, setSystem] = useState<SystemStats | null>(null);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -158,7 +166,7 @@ export function DashboardPage({
     setLoading(true);
     setError('');
     try {
-      const [s, t, i, p, d, h] = await Promise.all([
+      const [s, t, i, p, d, h, sys] = await Promise.all([
         api<{ data: Summary }>('/dashboard/summary'),
         canViewSales
           ? api<{ data: Trend[] }>(`/dashboard/sales-trend${query}`)
@@ -175,6 +183,9 @@ export function DashboardPage({
         canViewHealth
           ? api<{ data: Health }>('/notifications/health')
           : Promise.resolve({ data: null as Health | null }),
+        canViewHealth
+          ? api<{ data: SystemStats }>('/dashboard/system')
+          : Promise.resolve({ data: null as SystemStats | null }),
       ]);
       setSummary(s.data);
       setTrend(t.data);
@@ -182,6 +193,7 @@ export function DashboardPage({
       setProfitTrend(p.data);
       setDebtors(d.data);
       setHealth(h.data);
+      setSystem(sys.data);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -557,6 +569,70 @@ export function DashboardPage({
                       <small>پیام‌های در انتظار ارسال</small>
                     </span>
                     <span className="badge b-ok">پایش‌شده</span>
+                  </div>
+                )}
+                {system && (
+                  <div className="list-row">
+                    <span className="thumb ic-thumb">
+                      <Ic name="alert" />
+                    </span>
+                    <span className="grow">
+                      <b>حافظهٔ سرور</b>
+                      <small>
+                        {gigabytes(system.memory.used)} از {gigabytes(system.memory.total)} گیگابایت
+                        مصرف‌شده
+                      </small>
+                      <i
+                        className={`stockbar ${system.memory.total ? (system.memory.used / system.memory.total > 0.85 ? '' : system.memory.used / system.memory.total > 0.6 ? 'mid' : 'ok') : ''}`}
+                      >
+                        <i
+                          style={{
+                            width: `${Math.min(100, Math.round((system.memory.used / (system.memory.total || 1)) * 100))}%`,
+                          }}
+                        />
+                      </i>
+                    </span>
+                    <span className="badge b-line">
+                      {faNum(
+                        Math.min(
+                          100,
+                          Math.round((system.memory.used / (system.memory.total || 1)) * 100),
+                        ),
+                      )}
+                      ٪
+                    </span>
+                  </div>
+                )}
+                {system?.disk && (
+                  <div className="list-row">
+                    <span className="thumb ic-thumb">
+                      <Ic name="file" />
+                    </span>
+                    <span className="grow">
+                      <b>فضای دیسک</b>
+                      <small>
+                        {gigabytes(system.disk.used)} از {gigabytes(system.disk.total)} گیگابایت
+                        اشغال‌شده
+                      </small>
+                      <i
+                        className={`stockbar ${system.disk.total ? (system.disk.used / system.disk.total > 0.85 ? '' : system.disk.used / system.disk.total > 0.6 ? 'mid' : 'ok') : ''}`}
+                      >
+                        <i
+                          style={{
+                            width: `${Math.min(100, Math.round((system.disk.used / (system.disk.total || 1)) * 100))}%`,
+                          }}
+                        />
+                      </i>
+                    </span>
+                    <span className="badge b-line">
+                      {faNum(
+                        Math.min(
+                          100,
+                          Math.round((system.disk.used / (system.disk.total || 1)) * 100),
+                        ),
+                      )}
+                      ٪
+                    </span>
                   </div>
                 )}
               </div>

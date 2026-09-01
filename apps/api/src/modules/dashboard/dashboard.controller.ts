@@ -12,6 +12,12 @@ export class DashboardController {
   @Get('summary') summary() {
     return this.dashboard.summary();
   }
+  /** Server RAM/disk usage for the dashboard health card (managers only). */
+  @Get('system')
+  @Roles('manager')
+  systemStats() {
+    return this.dashboard.systemStats();
+  }
   @Roles('accountant')
   @Get('profit-trend')
   profitTrend(@Query('from') from?: string, @Query('to') to?: string) {

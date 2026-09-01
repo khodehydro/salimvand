@@ -18,16 +18,22 @@ const money = (value: number | string) =>
   `${new Intl.NumberFormat('fa-IR').format(Number(value))} ریال`;
 
 export function SalesChart({ data }: { data: Trend[] }) {
-  const chartData = data.map((row, index) => ({
-    ...row,
-    revenueNumber: Number(row.revenue),
-    paidNumber: Number(row.paid),
-    label: new Intl.DateTimeFormat('fa-IR', { month: 'short', day: 'numeric' }).format(
-      new Date(`${row.date}T12:00:00`),
-    ),
-    isToday: index === data.length - 1,
-    averageNumber: 0,
-  }));
+  const dayLabel = new Intl.DateTimeFormat('fa-IR', { month: 'short', day: 'numeric' });
+  const chartData = data.map((row, index) => {
+    // `date` is an ISO day on the dashboard, but the reports screen feeds
+    // pre-formatted Jalali month labels — never let an invalid Date crash
+    // the render (that was the reports white screen).
+    const parsed = row.date ? new Date(`${row.date}T12:00:00`) : undefined;
+    const valid = parsed !== undefined && !Number.isNaN(parsed.getTime());
+    return {
+      ...row,
+      revenueNumber: Number(row.revenue),
+      paidNumber: Number(row.paid),
+      label: valid ? dayLabel.format(parsed as Date) : String(row.date ?? ''),
+      isToday: index === data.length - 1,
+      averageNumber: 0,
+    };
+  });
   const average =
     chartData.reduce((sum, row) => sum + row.revenueNumber, 0) / (chartData.length || 1);
   for (const row of chartData) row.averageNumber = Math.round(average);

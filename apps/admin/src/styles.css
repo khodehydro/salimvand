@@ -1247,13 +1247,14 @@ body,
 }
 .customer-head,
 .customer-row {
-  grid-template-columns: 1.4fr 1.1fr 0.6fr 1.3fr 0.8fr 1fr;
-  min-width: 760px;
+  grid-template-columns: 1.5fr 1.2fr 0.7fr 1.4fr 1fr;
+  min-width: 720px;
 }
-.customer-actions {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
+.customer-search {
+  align-items: center;
+}
+.customer-search input {
+  flex: 1;
 }
 @media (max-width: 700px) {
   .customer-form {
@@ -4770,4 +4771,38 @@ button.btn-primary-lg:hover:not(:disabled) {
   .irow .num.b {
     font-size: 11px;
   }
+}
+
+/* In-modal notice: page-level messages are hidden behind the backdrop. */
+.modal-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 10px 18px 0;
+  font-size: 12px;
+}
+.modal-notice .search-clear {
+  width: 22px;
+  height: 22px;
+  flex: none;
+}
+
+/* Customers page */
+.customer-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.customer-panel {
+  width: min(620px, 94%);
+}
+.customer-panel .pay-modal-body {
+  display: grid;
+  gap: 10px;
+}
+.customer-panel .dash-tbl .thead,
+.customer-panel .dash-tbl .trow {
+  grid-template-columns: 110px 90px 1fr 1.3fr;
+  gap: 8px;
 }

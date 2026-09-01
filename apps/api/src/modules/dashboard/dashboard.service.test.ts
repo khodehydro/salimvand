@@ -130,3 +130,19 @@ describe('DashboardService', () => {
     );
   });
 });
+
+describe('DashboardService.systemStats', () => {
+  it('reports JSON-safe memory and disk counters', async () => {
+    const stats = await new DashboardService({} as never).systemStats();
+    expect(stats.ok).toBe(true);
+    expect(stats.data.memory.total).toBeGreaterThan(0);
+    expect(stats.data.memory.used).toBeLessThanOrEqual(stats.data.memory.total);
+    expect(stats.data.memory.used + stats.data.memory.free).toBe(stats.data.memory.total);
+    if (stats.data.disk !== null) {
+      expect(stats.data.disk.total).toBeGreaterThan(0);
+      expect(stats.data.disk.used + stats.data.disk.free).toBe(stats.data.disk.total);
+    }
+    // every number must survive JSON serialization (BigInt leaks 500 here)
+    expect(() => JSON.stringify(stats)).not.toThrow();
+  });
+});

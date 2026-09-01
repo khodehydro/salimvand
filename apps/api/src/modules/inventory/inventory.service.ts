@@ -74,6 +74,18 @@ export class InventoryService {
     });
     if (!product) throw new NotFoundException('محصول پیدا نشد');
     const barcode = input.barcode?.trim() || createEan13(`${Date.now()}`);
+    // Readable 400s instead of an opaque unique-constraint 500 — these are
+    // the two duplicates an operator actually hits from the product form.
+    const barcodeTaken = await this.prisma.inventoryItem.findFirst({
+      where: { barcode },
+      select: { id: true },
+    });
+    if (barcodeTaken) throw new BadRequestException('این بارکد قبلاً برای قلم دیگری ثبت شده است');
+    const brandDuplicate = await this.prisma.inventoryItem.findFirst({
+      where: { productId: input.productId, brandId: input.brandId },
+      select: { id: true },
+    });
+    if (brandDuplicate) throw new BadRequestException('این برند قبلاً برای همین محصول ثبت شده است');
     const initialQuantity = input.initialQuantity ?? 0;
     if (!Number.isInteger(initialQuantity) || initialQuantity < 0)
       throw new BadRequestException('موجودی اولیه باید عدد صحیح و غیرمنفی باشد');

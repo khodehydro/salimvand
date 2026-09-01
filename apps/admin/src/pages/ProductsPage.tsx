@@ -366,6 +366,13 @@ function ProductEditor({
     >
   >({});
   const [busy, setBusy] = useState(false);
+  /** Notices must render INSIDE the modal: the page-level message strip sits
+   *  behind the backdrop and is invisible while the editor is open. */
+  const [notice, setNotice] = useState('');
+  const notify = (text: string) => {
+    setNotice(text);
+    onMessage(text);
+  };
 
   const models = useMemo(
     () => vehicles.flatMap((make) => make.models.map((model) => ({ ...model, make: make.name }))),
@@ -381,10 +388,10 @@ function ProductEditor({
     setBusy(true);
     try {
       await api(`/products/${product.id}`, { method: 'PATCH', body: JSON.stringify(payload) });
-      onMessage(success);
+      notify(success);
       onRefresh();
     } catch (error) {
-      onMessage((error as Error).message);
+      notify((error as Error).message);
     } finally {
       setBusy(false);
     }
@@ -392,8 +399,7 @@ function ProductEditor({
 
   const saveBasic = async (event?: FormEvent) => {
     event?.preventDefault();
-    if (!basic.name.trim() || !basic.categoryId)
-      return onMessage('نام محصول و دسته‌بندی الزامی است.');
+    if (!basic.name.trim() || !basic.categoryId) return notify('نام محصول و دسته‌بندی الزامی است.');
     await patch(
       {
         name: basic.name,
@@ -414,17 +420,17 @@ function ProductEditor({
   };
 
   const upload = async () => {
-    if (!mediaFile) return onMessage('ابتدا یک فایل انتخاب کنید');
+    if (!mediaFile) return notify('ابتدا یک فایل انتخاب کنید');
     setBusy(true);
     try {
       const data = new FormData();
       data.append('file', mediaFile);
       await api(`/media/products/${product.id}/upload`, { method: 'POST', body: data });
       setMediaFile(null);
-      onMessage('تصویر آپلود شد');
+      notify('تصویر آپلود شد');
       onRefresh();
     } catch (error) {
-      onMessage((error as Error).message);
+      notify((error as Error).message);
     } finally {
       setBusy(false);
     }
@@ -442,17 +448,17 @@ function ProductEditor({
           })),
         }),
       });
-      onMessage('سازگاری خودرو ذخیره شد');
+      notify('سازگاری خودرو ذخیره شد');
       onRefresh();
     } catch (error) {
-      onMessage((error as Error).message);
+      notify((error as Error).message);
     } finally {
       setBusy(false);
     }
   };
 
   const createItem = async () => {
-    if (!item.brandId) return onMessage('برند قلم را انتخاب کنید');
+    if (!item.brandId) return notify('برند قلم را انتخاب کنید');
     setBusy(true);
     try {
       await api('/inventory/items', {
@@ -468,7 +474,7 @@ function ProductEditor({
           initialQuantity: item.initialQuantity ? Number(item.initialQuantity) : 0,
         }),
       });
-      onMessage('قلم برند با بارکد ثبت شد');
+      notify('قلم برند با بارکد ثبت شد');
       setItem({
         ...item,
         brandId: '',
@@ -479,7 +485,7 @@ function ProductEditor({
       });
       onRefresh();
     } catch (error) {
-      onMessage((error as Error).message);
+      notify((error as Error).message);
     } finally {
       setBusy(false);
     }
@@ -504,10 +510,10 @@ function ProductEditor({
         delete next[itemId];
         return next;
       });
-      onMessage('قلم انبار ذخیره شد');
+      notify('قلم انبار ذخیره شد');
       onRefresh();
     } catch (error) {
-      onMessage((error as Error).message);
+      notify((error as Error).message);
     } finally {
       setBusy(false);
     }
@@ -545,14 +551,23 @@ function ProductEditor({
         aparatId ? 'ویدیوی آپارات ذخیره شد' : 'ویدیوی آپارات حذف شد',
       );
     if (tab === 'vehicles') return void saveCompat();
-    return void createItem();
+    return void saveItemsTab();
+  };
+  /** The items-tab footer button saves everything on the tab: pending row
+   *  edits first, then the new-item form when a brand was selected. */
+  const saveItemsTab = async () => {
+    const dirtyIds = Object.keys(itemEdits);
+    for (const itemId of dirtyIds) await saveItemEdit(itemId);
+    if (item.brandId) await createItem();
+    if (!dirtyIds.length && !item.brandId)
+      notify('تغییری برای ذخیره نیست؛ برای افزودن قلم، برند را انتخاب کنید.');
   };
   const footerLabel: Record<Tab, string> = {
     basic: 'ذخیرهٔ پایه و سئو',
     images: 'بارگذاری تصویر انتخاب‌شده',
     aparat: 'ذخیرهٔ ویدیو',
     vehicles: 'ذخیرهٔ سازگاری',
-    items: 'ثبت قلم جدید',
+    items: 'ذخیرهٔ تغییرات اقلام',
   };
 
   return (
@@ -572,6 +587,19 @@ function ProductEditor({
             ✕
           </button>
         </div>
+        {notice && (
+          <div className="notice modal-notice" role="status">
+            {notice}
+            <button
+              type="button"
+              className="search-clear"
+              aria-label="بستن پیام"
+              onClick={() => setNotice('')}
+            >
+              ✕
+            </button>
+          </div>
+        )}
         <div className="tabs" role="tablist">
           {tabs.map((entry) => (
             <button
@@ -687,7 +715,7 @@ function ProductEditor({
                         void api(`/media/products/${product.id}/${image.id}/primary`, {
                           method: 'PATCH',
                         }).then(() => {
-                          onMessage('تصویر اصلی تغییر کرد');
+                          notify('تصویر اصلی تغییر کرد');
                           onRefresh();
                         })
                       }
@@ -700,7 +728,7 @@ function ProductEditor({
                         void api(`/media/products/${product.id}/${image.id}`, {
                           method: 'DELETE',
                         }).then(() => {
-                          onMessage('تصویر حذف شد');
+                          notify('تصویر حذف شد');
                           onRefresh();
                         })
                       }
@@ -728,17 +756,17 @@ function ProductEditor({
                 <button
                   disabled={busy}
                   onClick={async () => {
-                    if (!mediaUrl) return onMessage('نشانی تصویر را وارد کنید');
+                    if (!mediaUrl) return notify('نشانی تصویر را وارد کنید');
                     try {
                       await api(`/media/products/${product.id}/url`, {
                         method: 'POST',
                         body: JSON.stringify({ url: mediaUrl, alt: product.name }),
                       });
                       setMediaUrl('');
-                      onMessage('تصویر از نشانی افزوده شد');
+                      notify('تصویر از نشانی افزوده شد');
                       onRefresh();
                     } catch (error) {
-                      onMessage((error as Error).message);
+                      notify((error as Error).message);
                     }
                   }}
                 >
@@ -762,17 +790,16 @@ function ProductEditor({
                 title={`انتخاب تصویر برای ${product.name}`}
                 onClose={() => setMediaPickerOpen(false)}
                 onSelect={async (item: PickerItem) => {
-                  if (item.kind === 'site')
-                    return onMessage('رسانه‌های سایت به محصول متصل نمی‌شوند.');
+                  if (item.kind === 'site') return notify('رسانه‌های سایت به محصول متصل نمی‌شوند.');
                   try {
                     await api(`/media/products/${product.id}/select`, {
                       method: 'POST',
                       body: JSON.stringify({ imageId: item.id, alt: item.alt ?? product.name }),
                     });
-                    onMessage('تصویر از کتابخانه افزوده شد');
+                    notify('تصویر از کتابخانه افزوده شد');
                     onRefresh();
                   } catch (error) {
-                    onMessage((error as Error).message);
+                    notify((error as Error).message);
                   }
                 }}
               />
@@ -902,7 +929,7 @@ function ProductEditor({
                         <StockStepper
                           itemId={entry.id}
                           quantity={entry.quantity}
-                          onMessage={onMessage}
+                          onMessage={notify}
                           onSaved={onRefresh}
                         />
                       </div>

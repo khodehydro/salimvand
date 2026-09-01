@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { BadRequestException } from '@nestjs/common';
 import { InventoryService } from './inventory.service';
 
 function makeService(item = { id: 'i1', quantity: 10 }) {
@@ -54,5 +55,49 @@ describe('InventoryService', () => {
     expect(tx.inventoryTransaction.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ quantityChange: 4, type: 'purchase' }),
     });
+  });
+
+  it('rejects a duplicate product+brand item with a readable message', async () => {
+    const tx = {
+      inventoryItem: { create: vi.fn() },
+      inventoryTransaction: { create: vi.fn() },
+    };
+    const prisma = {
+      product: { findFirst: vi.fn().mockResolvedValue({ id: 'p1' }) },
+      inventoryItem: {
+        findFirst: vi
+          .fn()
+          // barcode is free, but the product+brand pair already exists
+          .mockResolvedValueOnce(null)
+          .mockResolvedValueOnce({ id: 'existing' }),
+      },
+      $transaction: vi.fn(async (callback: (value: typeof tx) => unknown) => callback(tx)),
+    };
+    await expect(
+      new InventoryService(prisma as never).create({
+        productId: 'p1',
+        brandId: 'b1',
+        barcode: '1234567890123',
+        userId: 'u1',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(tx.inventoryItem.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects an already-registered barcode with a readable message', async () => {
+    const tx = { inventoryItem: { create: vi.fn() }, inventoryTransaction: { create: vi.fn() } };
+    const prisma = {
+      product: { findFirst: vi.fn().mockResolvedValue({ id: 'p1' }) },
+      inventoryItem: { findFirst: vi.fn().mockResolvedValue({ id: 'taken' }) },
+      $transaction: vi.fn(async (callback: (value: typeof tx) => unknown) => callback(tx)),
+    };
+    await expect(
+      new InventoryService(prisma as never).create({
+        productId: 'p1',
+        brandId: 'b1',
+        barcode: '1234567890123',
+        userId: 'u1',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 });

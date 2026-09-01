@@ -212,11 +212,6 @@ describe('InvoiceService', () => {
       'user-1',
     );
     expect(result.data.paymentStatus).toBe('partial');
-    // The payment row is written through the typed Prisma create (client-side
-    // uuid, native BigInt) — no raw SQL on this path anymore.
-    expect(paymentCreate).toHaveBeenCalledWith({
-      data: { invoiceId: 'invoice-1', amount: 100n, method: 'card', receivedById: 'user-1' },
-    });
     expect(update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -226,6 +221,14 @@ describe('InvoiceService', () => {
         }),
       }),
     );
+    expect(paymentCreate).toHaveBeenCalledWith({
+      data: {
+        invoiceId: 'invoice-1',
+        amount: 100n,
+        method: 'card',
+        receivedById: 'user-1',
+      },
+    });
   });
 
   it('rejects a return greater than the purchased quantity', async () => {

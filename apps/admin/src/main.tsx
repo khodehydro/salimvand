@@ -6,7 +6,7 @@ import {
   type PaletteGroup,
 } from '@salimvand/ui';
 import { DesignSystemRoute } from './DesignSystemRoute';
-import { useEffect, useState } from 'react';
+import { Component, useEffect, useState, type ReactNode } from 'react';
 import { APP_NAME, type UserRole } from '@salimvand/shared';
 import { MediaPage } from './pages/MediaPage';
 import { api } from './lib/api';
@@ -162,6 +162,33 @@ function AdminPalette({
   );
 }
 
+/** A render crash in one page must show a readable card, never a white screen. */
+class PageErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state: { error: Error | null } = { error: null };
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+  componentDidCatch(error: unknown) {
+    console.error('[admin] page render failed:', error);
+  }
+  render() {
+    if (this.state.error)
+      return (
+        <section style={{ padding: 30 }}>
+          <div className="notice">در نمایش این بخش خطایی رخ داد: {this.state.error.message}</div>
+          <button
+            className="outline"
+            style={{ marginTop: 12 }}
+            onClick={() => this.setState({ error: null })}
+          >
+            تلاش دوباره
+          </button>
+        </section>
+      );
+    return this.props.children;
+  }
+}
+
 function App() {
   const [authenticated, setAuthenticated] = useState(() =>
     Boolean(localStorage.getItem('salimvand.accessToken')),
@@ -306,35 +333,37 @@ function App() {
             خروج
           </button>
         </header>
-        {page === 'dashboard' ? (
-          <DashboardPage {...dashboardAccess} />
-        ) : page === 'products' ? (
-          <ProductsPage />
-        ) : page === 'invoices' ? (
-          <InvoicesPage {...invoiceAccess} />
-        ) : page === 'media' ? (
-          <MediaPage />
-        ) : page === 'inventory' ? (
-          <InventoryPage />
-        ) : page === 'reports' ? (
-          <ReportsPage />
-        ) : page === 'settings' ? (
-          <SettingsPage />
-        ) : page === 'messaging' ? (
-          <MessagingPage />
-        ) : page === 'users' ? (
-          <UsersPage />
-        ) : page === 'audit' ? (
-          <AuditLogsPage />
-        ) : page === 'customers' ? (
-          <CustomersPage {...customerAccess} />
-        ) : page === 'suppliers' ? (
-          <SuppliersPage canManage={role === 'manager' || role === 'super_admin'} />
-        ) : page === 'purchases' ? (
-          <PurchasesPage canCreate={role === 'manager' || role === 'super_admin'} />
-        ) : (
-          <ReferencesPage />
-        )}
+        <PageErrorBoundary>
+          {page === 'dashboard' ? (
+            <DashboardPage {...dashboardAccess} />
+          ) : page === 'products' ? (
+            <ProductsPage />
+          ) : page === 'invoices' ? (
+            <InvoicesPage {...invoiceAccess} />
+          ) : page === 'media' ? (
+            <MediaPage />
+          ) : page === 'inventory' ? (
+            <InventoryPage />
+          ) : page === 'reports' ? (
+            <ReportsPage />
+          ) : page === 'settings' ? (
+            <SettingsPage />
+          ) : page === 'messaging' ? (
+            <MessagingPage />
+          ) : page === 'users' ? (
+            <UsersPage />
+          ) : page === 'audit' ? (
+            <AuditLogsPage />
+          ) : page === 'customers' ? (
+            <CustomersPage {...customerAccess} />
+          ) : page === 'suppliers' ? (
+            <SuppliersPage canManage={role === 'manager' || role === 'super_admin'} />
+          ) : page === 'purchases' ? (
+            <PurchasesPage canCreate={role === 'manager' || role === 'super_admin'} />
+          ) : (
+            <ReferencesPage />
+          )}
+        </PageErrorBoundary>
       </main>
       {paletteOpen && (
         <AdminPalette

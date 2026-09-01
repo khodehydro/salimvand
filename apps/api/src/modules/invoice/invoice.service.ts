@@ -163,9 +163,8 @@ export class InvoiceService {
         include: { items: true },
       });
       if (customerName && customerMobile) {
-        // Typed upsert: the client supplies the uuid and BigInt-safe values,
-        // so no raw SQL (and no gen_random_uuid()/DEFAULT dependency) is
-        // involved in the issue path.
+        // Prisma upsert: ids are generated client-side, no database-side
+        // uuid function has to exist for this to work.
         const customer = await tx.customer.upsert({
           where: { mobile: customerMobile },
           create: { name: customerName, mobile: customerMobile },
@@ -214,23 +213,18 @@ export class InvoiceService {
       this.notifications &&
       (input.customerMobile || integrationConfigured('telegram') || integrationConfigured('bale'))
     )
-      try {
-        await this.notifications.enqueue({
-          type: 'invoice.issued',
-          invoiceId: invoice.id,
-          mobile: input.customerMobile,
-          message: buildInvoiceMessage(
-            invoice.number,
-            publicShortCode.code,
-            totals.total.toString(),
-            false,
-            await this.smsTemplate('invoice'),
-          ),
-        });
-      } catch (error) {
-        // SMS is best-effort: a queue hiccup must never fail the issuance.
-        console.error('[invoices] issue notification enqueue failed:', error);
-      }
+      await this.notifications.enqueue({
+        type: 'invoice.issued',
+        invoiceId: invoice.id,
+        mobile: input.customerMobile,
+        message: buildInvoiceMessage(
+          invoice.number,
+          publicShortCode.code,
+          totals.total.toString(),
+          false,
+          await this.smsTemplate('invoice'),
+        ),
+      });
     return {
       ok: true,
       data: { ...invoice, publicToken: publicToken.token, publicShortCode: publicShortCode.code },
@@ -568,19 +562,12 @@ export class InvoiceService {
     const name = input.name?.trim();
     const mobile = input.mobile?.trim();
     if (!name || !mobile) throw new BadRequestException('نام و موبایل مشتری الزامی است');
-    const rows = await this.queryRaw<{
-      id: string;
-      name: string;
-      mobile: string;
-      notes: string | null;
-    }>(
-      this.prisma as unknown as { $queryRawUnsafe: unknown },
-      'INSERT INTO "customers" ("id", "name", "mobile", "notes", "updatedAt") VALUES (gen_random_uuid(), $1, $2, $3, CURRENT_TIMESTAMP) ON CONFLICT ("mobile") DO UPDATE SET "name" = EXCLUDED."name", "notes" = EXCLUDED."notes", "updatedAt" = CURRENT_TIMESTAMP RETURNING "id", "name", "mobile", "notes"',
-      name,
-      mobile,
-      input.notes?.trim() || null,
-    );
-    return { ok: true, data: rows[0] };
+    const customer = await this.prisma.customer.upsert({
+      where: { mobile },
+      create: { name, mobile, notes: input.notes?.trim() || undefined },
+      update: { name, notes: input.notes?.trim() || undefined },
+    });
+    return { ok: true, data: customer };
   }
 
   async options() {
@@ -624,7 +611,7 @@ export class InvoiceService {
       throw new BadRequestException('مبلغ پرداخت معتبر نیست');
     }
     if (paidAmount <= 0n) throw new BadRequestException('مبلغ پرداخت باید مثبت باشد');
-    const updated = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const result = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const invoice = await tx.invoice.findUnique({ where: { id } });
       if (!invoice || invoice.status === 'voided') throw new NotFoundException('فاکتور پیدا نشد');
       // Returns shrink what the customer can still owe: cap new payments at
@@ -638,7 +625,7 @@ export class InvoiceService {
       if (nextPaid > netTotal)
         throw new BadRequestException('مجموع پرداخت بیشتر از مبلغ فاکتور پس از برگشتی‌ها است');
       const status = nextPaid === netTotal ? 'paid' : 'partial';
-      const updatedInvoice = await tx.invoice.update({
+      const updated = await tx.invoice.update({
         where: { id },
         data: {
           paidAmount: nextPaid,
@@ -648,10 +635,8 @@ export class InvoiceService {
         },
         include: { items: true },
       });
-      // Typed create: the Prisma client generates the uuid and maps the
-      // BigInt amount natively. The previous raw INSERT depended on
-      // gen_random_uuid() and raw-parameter mapping — the pay endpoint's 500
-      // on the server traced to that raw path.
+      // Prisma supplies the uuid client-side: no raw SQL, no dependency on
+      // gen_random_uuid()/pgcrypto being available on the server database.
       await tx.payment.create({
         data: {
           invoiceId: id,
@@ -668,24 +653,18 @@ export class InvoiceService {
         before: { paidAmount: invoice.paidAmount.toString(), paymentStatus: invoice.paymentStatus },
         after: { paidAmount: nextPaid.toString(), paymentStatus: status, method },
       });
-      return { invoice, updatedInvoice };
+      return { ok: true, data: updated };
     });
-    // The SMS notification is best-effort and MUST NOT live inside the payment
-    // transaction: a Redis/notification hiccup can never roll back or fail a
-    // registered payment.
-    if (this.notifications && updated.invoice.customerMobile) {
-      try {
-        await this.notifications.enqueue({
-          type: 'invoice.paid',
-          invoiceId: id,
-          mobile: updated.invoice.customerMobile,
-          message: `پرداخت فاکتور ${updated.invoice.number} ثبت شد. مبلغ: ${paidAmount.toString()} ریال`,
-        });
-      } catch (error) {
-        console.error('[invoices] payment notification enqueue failed:', error);
-      }
-    }
-    return { ok: true, data: updated.updatedInvoice };
+    // The receipt SMS is best-effort and intentionally queued AFTER the
+    // transaction: a degraded Redis must never fail the payment itself.
+    if (this.notifications && result.data.customerMobile)
+      await this.notifications.enqueue({
+        type: 'invoice.paid',
+        invoiceId: id,
+        mobile: result.data.customerMobile,
+        message: `پرداخت فاکتور ${result.data.number} ثبت شد. مبلغ: ${paidAmount.toString()} ریال`,
+      });
+    return result;
   }
 
   async returnItems(

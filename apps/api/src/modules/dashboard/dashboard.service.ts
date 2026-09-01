@@ -1,8 +1,38 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { freemem, totalmem } from 'node:os';
+import { statfs } from 'node:fs/promises';
 import { PrismaService } from '../../prisma.service';
 
 @Injectable()
 export class DashboardService {
+  /**
+   * Server resources for the dashboard health card: RAM (used vs total) and
+   * disk usage of the deployment volume. Both are JSON-safe byte counters.
+   */
+  async systemStats() {
+    const total = totalmem();
+    const free = freemem();
+    let disk: { total: number; used: number; free: number } | null = null;
+    try {
+      const stats = await statfs(process.env.DISK_ROOT ?? '/');
+      const blockSize = Number(stats.bsize) || 4096;
+      const totalBytes = Number(stats.blocks) * blockSize;
+      const freeBytes = Number(stats.bavail) * blockSize;
+      disk = { total: totalBytes, used: totalBytes - freeBytes, free: freeBytes };
+    } catch {
+      disk = null; // non-POSIX or restricted environments
+    }
+    return {
+      ok: true,
+      data: {
+        memory: { total, used: total - free, free },
+        disk,
+        uptimeSeconds: Math.round(process.uptime()),
+        nodeVersion: process.version,
+      },
+    };
+  }
+
   constructor(private readonly prisma: PrismaService) {}
   async audit(page = 1, pageSize = 50, entityType?: string) {
     const safePage = Math.max(1, page);
