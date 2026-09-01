@@ -17,9 +17,25 @@ export class ApiExceptionFilter implements ExceptionFilter {
     const message = Array.isArray(details.message) ? details.message[0] : details.message;
     const code = details.code ?? this.codeFor(status);
     if (status >= 500) console.error({ path: request.url, method: request.method, exception });
-    response
-      .status(status)
-      .json({ ok: false, error: { code, message: message ?? 'خطای داخلی سرور' } });
+    // For unexpected failures, surface a short diagnostic (e.g. the Prisma
+    // error code) so operators can pinpoint the cause from the panel without
+    // SSH access. Never includes stack traces or full SQL.
+    const diagnostic =
+      status >= 500 && typeof exception === 'object' && exception !== null
+        ? String(
+            (exception as { code?: unknown }).code ??
+              (exception as { name?: unknown }).name ??
+              'UNKNOWN',
+          ).slice(0, 60)
+        : undefined;
+    response.status(status).json({
+      ok: false,
+      error: {
+        code,
+        message: message ?? 'خطای داخلی سرور',
+        ...(diagnostic ? { detail: diagnostic } : {}),
+      },
+    });
   }
   private codeFor(status: number) {
     return (

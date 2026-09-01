@@ -46,7 +46,11 @@ export function CustomersPage({
 }) {
   const [rows, setRows] = useState<Customer[]>([]);
   const [search, setSearch] = useState('');
+  // Two tabs mirror the invoices page: registering lives apart from the register.
+  const [tab, setTab] = useState<'new' | 'list'>('list');
   const [form, setForm] = useState({ name: '', mobile: '', address: '', notes: '' });
+  const [editFor, setEditFor] = useState<Customer | null>(null);
+  const [editForm, setEditForm] = useState({ name: '', mobile: '', address: '', notes: '' });
   const [message, setMessage] = useState('');
   const [fieldErrors, setFieldErrors] = useState<{ name?: string; mobile?: string }>({});
   const [loading, setLoading] = useState(false);
@@ -77,13 +81,22 @@ export function CustomersPage({
       setMessage((error as Error).message);
     }
   };
-  const load = () =>
+  const load = (query = search) =>
     void api<{ data: Customer[] }>(
-      `/customers${search ? `?search=${encodeURIComponent(search)}` : ''}`,
+      `/customers${query.trim() ? `?search=${encodeURIComponent(query.trim())}` : ''}`,
     )
       .then((result) => setRows(result.data))
       .catch((error: Error) => setMessage(error.message));
-  useEffect(load, []);
+  useEffect(() => {
+    void load('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // The register is searchable the moment you type — no submit button.
+  useEffect(() => {
+    const handle = window.setTimeout(() => load(search), 300);
+    return () => window.clearTimeout(handle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
   // Deep link from the global palette (#/customers?customer=<id>) opens the profile.
   useEffect(() => {
     const openFromHash = () => {
@@ -111,6 +124,36 @@ export function CustomersPage({
       setMessage('مشتری ثبت شد');
       setForm({ name: '', mobile: '', address: '', notes: '' });
       load();
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+  /** Edit dialog save: PATCHes the customer profile and refreshes the list. */
+  const updateCustomer = async () => {
+    if (!editFor) return;
+    const errors: { name?: string; mobile?: string } = {};
+    if (!editForm.name.trim()) errors.name = 'نام مشتری الزامی است';
+    if (!/^09\d{9}$/.test(editForm.mobile))
+      errors.mobile = 'شماره موبایل باید ۱۱ رقم و با ۰۹ شروع شود';
+    if (Object.keys(errors).length) return setFieldErrors(errors);
+    setFieldErrors({});
+    setLoading(true);
+    try {
+      await api(`/customers/${editFor.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          name: editForm.name.trim(),
+          mobile: editForm.mobile.trim(),
+          address: editForm.address,
+          notes: editForm.notes,
+        }),
+      });
+      setMessage(`اطلاعات ${editFor.name} به‌روزرسانی شد`);
+      setEditFor(null);
+      await load();
+      if (selected?.id === editFor.id) await loadDetail(editFor.id);
     } catch (error) {
       setMessage((error as Error).message);
     } finally {
@@ -182,14 +225,41 @@ export function CustomersPage({
         <div>
           <span className="eyebrow">فروش</span>
           <h1>مشتریان</h1>
-          <p className="muted">مشتری‌ها، فاکتورها و مانده بدهی</p>
+          <p className="muted">
+            {tab === 'new' ? 'ثبت پروندهٔ مشتری جدید' : 'مشتری‌ها، فاکتورها و مانده بدهی'}
+          </p>
         </div>
         <span className="count">{formatPersianNumber(rows.length)} مشتری</span>
       </div>
+
+      <nav className="settings-tabs" aria-label="بخش‌های مشتریان">
+        <button
+          type="button"
+          className={tab === 'list' ? 'active' : ''}
+          onClick={() => setTab('list')}
+          aria-current={tab === 'list' ? 'true' : undefined}
+        >
+          <b>لیست مشتریان</b>
+          <small>جست‌وجوی لحظه‌ای، پرداخت بدهی و پروندهٔ مشتری</small>
+        </button>
+        {canManage && (
+          <button
+            type="button"
+            className={tab === 'new' ? 'active' : ''}
+            onClick={() => setTab('new')}
+            aria-current={tab === 'new' ? 'true' : undefined}
+          >
+            <b>ثبت مشتری جدید</b>
+            <small>نام، موبایل، آدرس و یادداشت</small>
+          </button>
+        )}
+      </nav>
+
       {message && <div className="notice">{message}</div>}
-      {canManage && (
+
+      {tab === 'new' && canManage && (
         <form className="product-form customer-form" onSubmit={submit}>
-          <h2>ثبت مشتری</h2>
+          <h2>ثبت مشتری جدید</h2>
           <label>
             نام و نام خانوادگی
             <input
@@ -234,55 +304,152 @@ export function CustomersPage({
           <button disabled={loading}>{loading ? 'در حال ثبت...' : 'ثبت مشتری'}</button>
         </form>
       )}
-      <div className="adjust-box customer-search">
-        <input
-          placeholder="جست‌وجوی نام یا موبایل"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') load();
-          }}
-        />
-        <button onClick={load}>جست‌وجو</button>
-        <button
-          className="outline"
-          onClick={() => {
-            setSearch('');
-            window.setTimeout(load, 0);
-          }}
-        >
-          همه
-        </button>
-      </div>
-      <div className="product-table">
-        <div className="table-head customer-head">
-          <span>مشتری</span>
-          <span>موبایل</span>
-          <span>فاکتورها</span>
-          <span>بدهی</span>
-          <span>وضعیت</span>
-        </div>
-        {rows.map((customer) => (
-          <div className="table-row customer-row" key={customer.id}>
-            <button className="row-action" onClick={() => void loadDetail(customer.id)}>
-              {customer.name}
-            </button>
-            <code>{customer.mobile}</code>
-            <span>{formatPersianNumber(customer.invoiceCount)}</span>
-            <b className={Number(customer.debt) > 0 ? 'low-stock' : 'status-chip'}>
-              {formatRial(Number(customer.debt))}
-            </b>
-            <span>
-              {Number(customer.debt) > 0 ? 'بدهکار' : 'تسویه'}{' '}
-              {canPay && Number(customer.debt) > 0 && (
-                <button className="row-action" onClick={() => setPaymentFor(customer)}>
-                  ثبت پرداخت
+
+      {tab === 'list' && (
+        <>
+          <div className="list-toolbar">
+            <div className="search-field">
+              <span className="search-icon">⌕</span>
+              <input
+                placeholder="جست‌وجوی لحظه‌ای نام یا موبایل مشتری…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              {search && (
+                <button
+                  type="button"
+                  className="search-clear"
+                  onClick={() => setSearch('')}
+                  aria-label="پاک کردن جست‌وجو"
+                >
+                  ✕
                 </button>
               )}
-            </span>
+            </div>
           </div>
-        ))}
-      </div>
+          <div className="product-table">
+            <div className="table-head customer-head">
+              <span>مشتری</span>
+              <span>موبایل</span>
+              <span>فاکتورها</span>
+              <span>بدهی</span>
+              <span>وضعیت</span>
+              <span>عملیات</span>
+            </div>
+            {rows.map((customer) => (
+              <div className="table-row customer-row" key={customer.id}>
+                <button className="row-action" onClick={() => void loadDetail(customer.id)}>
+                  {customer.name}
+                </button>
+                <code>{customer.mobile}</code>
+                <span>{formatPersianNumber(customer.invoiceCount)}</span>
+                <b className={Number(customer.debt) > 0 ? 'low-stock' : 'status-chip'}>
+                  {formatRial(Number(customer.debt))}
+                </b>
+                <span>{Number(customer.debt) > 0 ? 'بدهکار' : 'تسویه'}</span>
+                <span className="customer-actions">
+                  {canManage && (
+                    <button
+                      className="row-action"
+                      onClick={() => {
+                        setEditFor(customer);
+                        setEditForm({
+                          name: customer.name,
+                          mobile: customer.mobile,
+                          address: customer.address ?? '',
+                          notes: customer.notes ?? '',
+                        });
+                      }}
+                    >
+                      ویرایش
+                    </button>
+                  )}
+                  {canPay && Number(customer.debt) > 0 && (
+                    <button className="row-action" onClick={() => setPaymentFor(customer)}>
+                      ثبت پرداخت
+                    </button>
+                  )}
+                </span>
+              </div>
+            ))}
+            {!rows.length && (
+              <div className="table-row customer-row">
+                <span className="muted">مشتری‌ای پیدا نشد.</span>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {editFor && (
+        <div className="modal-backdrop" onClick={() => setEditFor(null)}>
+          <div
+            className="editor customer-edit"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label="ویرایش مشتری"
+          >
+            <div className="editor-head">
+              <h2>ویرایش مشتری</h2>
+              <button className="close" onClick={() => setEditFor(null)}>
+                بستن
+              </button>
+            </div>
+            <label>
+              نام و نام خانوادگی
+              <input
+                value={editForm.name}
+                onChange={(e) => {
+                  setEditForm({ ...editForm, name: e.target.value });
+                  setFieldErrors((current) => ({ ...current, name: undefined }));
+                }}
+              />
+            </label>
+            {fieldErrors.name && <small className="field-error">{fieldErrors.name}</small>}
+            <label>
+              موبایل
+              <input
+                dir="ltr"
+                value={editForm.mobile}
+                onChange={(e) => {
+                  setEditForm({ ...editForm, mobile: e.target.value });
+                  setFieldErrors((current) => ({ ...current, mobile: undefined }));
+                }}
+              />
+            </label>
+            {fieldErrors.mobile && <small className="field-error">{fieldErrors.mobile}</small>}
+            <label>
+              آدرس
+              <input
+                value={editForm.address}
+                onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
+                placeholder="آدرس مشتری"
+              />
+            </label>
+            <label>
+              یادداشت
+              <input
+                value={editForm.notes}
+                onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                placeholder="یادداشت پرونده"
+              />
+            </label>
+            <div className="editor-footer">
+              <button
+                className="button-primary"
+                disabled={loading}
+                onClick={() => void updateCustomer()}
+              >
+                {loading ? 'در حال ذخیره...' : 'ذخیرهٔ تغییرات'}
+              </button>
+              <button className="outline" onClick={() => setEditFor(null)}>
+                انصراف
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {paymentFor && (
         <div className="editor customer-payment">
           <div className="editor-head">
@@ -329,6 +496,16 @@ export function CustomersPage({
           <p>
             مانده بدهی: <strong>{formatRial(Number(selected.debt))}</strong>
           </p>
+          {selected.address && (
+            <p>
+              آدرس: <span className="muted">{selected.address}</span>
+            </p>
+          )}
+          {selected.notes && (
+            <p>
+              یادداشت: <span className="muted">{selected.notes}</span>
+            </p>
+          )}
           <h3>خودروهای مشتری</h3>
           <div className="customer-vehicles">
             {vehicles.map((vehicle) => (

@@ -183,7 +183,7 @@ describe('InvoiceService', () => {
       paidAmount: 600n,
       items: [],
     }));
-    const executeRaw = vi.fn(async () => 1);
+    const paymentCreate = vi.fn(async () => ({}));
     const tx = {
       invoice: {
         findUnique: vi.fn(async () => ({
@@ -198,8 +198,7 @@ describe('InvoiceService', () => {
         update,
       },
       returnRecord: { aggregate: vi.fn(async () => ({ _sum: { refundAmount: 0n } })) },
-      payments: { create: vi.fn() },
-      $executeRawUnsafe: executeRaw,
+      payment: { create: paymentCreate },
     };
     const prisma = {
       $transaction: vi.fn(async (callback: (client: typeof tx) => Promise<unknown>) =>
@@ -213,6 +212,11 @@ describe('InvoiceService', () => {
       'user-1',
     );
     expect(result.data.paymentStatus).toBe('partial');
+    // The payment row is written through the typed Prisma create (client-side
+    // uuid, native BigInt) — no raw SQL on this path anymore.
+    expect(paymentCreate).toHaveBeenCalledWith({
+      data: { invoiceId: 'invoice-1', amount: 100n, method: 'card', receivedById: 'user-1' },
+    });
     expect(update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -222,7 +226,6 @@ describe('InvoiceService', () => {
         }),
       }),
     );
-    expect(executeRaw).toHaveBeenCalledTimes(1);
   });
 
   it('rejects a return greater than the purchased quantity', async () => {

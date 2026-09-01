@@ -1247,14 +1247,13 @@ body,
 }
 .customer-head,
 .customer-row {
-  grid-template-columns: 1.5fr 1.2fr 0.7fr 1.4fr 1fr;
-  min-width: 720px;
+  grid-template-columns: 1.4fr 1.1fr 0.6fr 1.3fr 0.8fr 1fr;
+  min-width: 760px;
 }
-.customer-search {
-  align-items: center;
-}
-.customer-search input {
-  flex: 1;
+.customer-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 @media (max-width: 700px) {
   .customer-form {

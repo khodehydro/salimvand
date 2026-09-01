@@ -163,19 +163,19 @@ export class InvoiceService {
         include: { items: true },
       });
       if (customerName && customerMobile) {
-        const customer = await this.queryRaw<{ id: string }>(
-          tx,
-          'INSERT INTO "customers" ("id", "name", "mobile", "updatedAt") VALUES (gen_random_uuid(), $1, $2, CURRENT_TIMESTAMP) ON CONFLICT ("mobile") DO UPDATE SET "name" = EXCLUDED."name", "updatedAt" = CURRENT_TIMESTAMP RETURNING "id"',
-          customerName,
-          customerMobile,
-        );
-        if (customer[0])
-          await this.executeRaw(
-            tx,
-            'UPDATE "invoices" SET "customerId" = $1 WHERE "id" = $2',
-            customer[0].id,
-            created.id,
-          );
+        // Typed upsert: the client supplies the uuid and BigInt-safe values,
+        // so no raw SQL (and no gen_random_uuid()/DEFAULT dependency) is
+        // involved in the issue path.
+        const customer = await tx.customer.upsert({
+          where: { mobile: customerMobile },
+          create: { name: customerName, mobile: customerMobile },
+          update: { name: customerName },
+          select: { id: true },
+        });
+        await tx.invoice.update({
+          where: { id: created.id },
+          data: { customerId: customer.id },
+        });
       }
       for (const line of lines)
         await tx.inventoryTransaction.create({
@@ -214,18 +214,23 @@ export class InvoiceService {
       this.notifications &&
       (input.customerMobile || integrationConfigured('telegram') || integrationConfigured('bale'))
     )
-      await this.notifications.enqueue({
-        type: 'invoice.issued',
-        invoiceId: invoice.id,
-        mobile: input.customerMobile,
-        message: buildInvoiceMessage(
-          invoice.number,
-          publicShortCode.code,
-          totals.total.toString(),
-          false,
-          await this.smsTemplate('invoice'),
-        ),
-      });
+      try {
+        await this.notifications.enqueue({
+          type: 'invoice.issued',
+          invoiceId: invoice.id,
+          mobile: input.customerMobile,
+          message: buildInvoiceMessage(
+            invoice.number,
+            publicShortCode.code,
+            totals.total.toString(),
+            false,
+            await this.smsTemplate('invoice'),
+          ),
+        });
+      } catch (error) {
+        // SMS is best-effort: a queue hiccup must never fail the issuance.
+        console.error('[invoices] issue notification enqueue failed:', error);
+      }
     return {
       ok: true,
       data: { ...invoice, publicToken: publicToken.token, publicShortCode: publicShortCode.code },
@@ -619,7 +624,7 @@ export class InvoiceService {
       throw new BadRequestException('مبلغ پرداخت معتبر نیست');
     }
     if (paidAmount <= 0n) throw new BadRequestException('مبلغ پرداخت باید مثبت باشد');
-    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const updated = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const invoice = await tx.invoice.findUnique({ where: { id } });
       if (!invoice || invoice.status === 'voided') throw new NotFoundException('فاکتور پیدا نشد');
       // Returns shrink what the customer can still owe: cap new payments at
@@ -633,7 +638,7 @@ export class InvoiceService {
       if (nextPaid > netTotal)
         throw new BadRequestException('مجموع پرداخت بیشتر از مبلغ فاکتور پس از برگشتی‌ها است');
       const status = nextPaid === netTotal ? 'paid' : 'partial';
-      const updated = await tx.invoice.update({
+      const updatedInvoice = await tx.invoice.update({
         where: { id },
         data: {
           paidAmount: nextPaid,
@@ -643,14 +648,18 @@ export class InvoiceService {
         },
         include: { items: true },
       });
-      await this.executeRaw(
-        tx,
-        'INSERT INTO "payments" ("id", "invoiceId", "amount", "method", "receivedById") VALUES (gen_random_uuid(), $1, $2, CAST($3 AS "PaymentMethod"), $4)',
-        id,
-        paidAmount,
-        method,
-        userId,
-      );
+      // Typed create: the Prisma client generates the uuid and maps the
+      // BigInt amount natively. The previous raw INSERT depended on
+      // gen_random_uuid() and raw-parameter mapping — the pay endpoint's 500
+      // on the server traced to that raw path.
+      await tx.payment.create({
+        data: {
+          invoiceId: id,
+          amount: paidAmount,
+          method,
+          receivedById: userId,
+        },
+      });
       await writeAudit(tx, {
         userId,
         action: 'pay',
@@ -659,15 +668,24 @@ export class InvoiceService {
         before: { paidAmount: invoice.paidAmount.toString(), paymentStatus: invoice.paymentStatus },
         after: { paidAmount: nextPaid.toString(), paymentStatus: status, method },
       });
-      if (this.notifications && invoice.customerMobile)
+      return { invoice, updatedInvoice };
+    });
+    // The SMS notification is best-effort and MUST NOT live inside the payment
+    // transaction: a Redis/notification hiccup can never roll back or fail a
+    // registered payment.
+    if (this.notifications && updated.invoice.customerMobile) {
+      try {
         await this.notifications.enqueue({
           type: 'invoice.paid',
           invoiceId: id,
-          mobile: invoice.customerMobile,
-          message: `پرداخت فاکتور ${invoice.number} ثبت شد. مبلغ: ${paidAmount.toString()} ریال`,
+          mobile: updated.invoice.customerMobile,
+          message: `پرداخت فاکتور ${updated.invoice.number} ثبت شد. مبلغ: ${paidAmount.toString()} ریال`,
         });
-      return { ok: true, data: updated };
-    });
+      } catch (error) {
+        console.error('[invoices] payment notification enqueue failed:', error);
+      }
+    }
+    return { ok: true, data: updated.updatedInvoice };
   }
 
   async returnItems(
