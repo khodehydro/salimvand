@@ -448,7 +448,36 @@ export class InvoiceService {
       '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
     ].filter((candidate): candidate is string => Boolean(candidate));
     const fontPath = fontCandidates.find((candidate) => existsSync(candidate));
-    if (fontPath) doc.font(fontPath);
+    if (fontPath) {
+      doc.font(fontPath);
+      // pdfkit word-splits text and fontkit's layout engine then REVERSES
+      // every Arabic word (the arab script defaults to rtl) before it is
+      // drawn. faText() already emits visual left-to-right order, so that
+      // second reversal mirrors each word on the page («وند» shows as «دنو»).
+      // Force this one font instance to lay out ltr: glyphs are then drawn
+      // exactly in the order bidi-js computed, while Persian digits, Latin
+      // runs and punctuation keep their bidi-js positions too.
+      const engine = (
+        doc as unknown as {
+          _font?: { font?: { _layoutEngine?: Record<string, unknown> } };
+        }
+      )._font?.font?._layoutEngine as
+        | {
+            layout: (
+              string: string,
+              features?: unknown,
+              script?: unknown,
+              language?: unknown,
+              direction?: string,
+            ) => unknown;
+          }
+        | undefined;
+      if (engine) {
+        const originalLayout = engine.layout.bind(engine);
+        engine.layout = (string, features, script, language, _direction) =>
+          originalLayout(string, features, script, language, 'ltr');
+      }
+    }
     doc.on('data', (chunk: Buffer) => chunks.push(chunk));
     const finished = new Promise<Buffer>((resolve, reject) => {
       doc.on('end', () => resolve(Buffer.concat(chunks)));

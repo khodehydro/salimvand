@@ -14,6 +14,21 @@ describe('customer payment accounting', () => {
   it('does not produce a negative debt when invoices are fully settled', () => {
     expect(calculateCustomerDebt([{ total: 1000n, paidAmount: 1000n }])).toBe(0n);
   });
+  it('stops counting returned items as debt', () => {
+    // 50k debt + a 50k return → debt 0 (the «عملیات فاکتور و پرداخت» scenario).
+    expect(
+      calculateCustomerDebt([
+        { total: 100_000n, paidAmount: 50_000n, returns: [{ refundAmount: 50_000n }] },
+      ]),
+    ).toBe(0n);
+    expect(
+      calculateCustomerDebt([
+        { total: 100_000n, paidAmount: 0n, returns: [{ refundAmount: 30_000n }] },
+      ]),
+    ).toBe(70_000n);
+    // no returns field at all (older payloads) keeps working
+    expect(calculateCustomerDebt([{ total: 1000n, paidAmount: 200n }])).toBe(800n);
+  });
   it('allocates a customer payment across oldest invoice balances', async () => {
     const invoiceUpdate = vi.fn(async () => ({}));
     const paymentCreate = vi.fn(async () => ({}));

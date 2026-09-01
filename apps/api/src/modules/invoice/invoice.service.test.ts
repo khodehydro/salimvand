@@ -750,10 +750,33 @@ describe('InvoiceService.list and panel link/pdf actions', () => {
     // rendered as reversed disconnected letters.
     const PDFDocument = require('pdfkit');
     const originalText = PDFDocument.prototype.text;
+    const originalFont = PDFDocument.prototype.font;
     const drawn: string[] = [];
     PDFDocument.prototype.text = function (str: string, ...rest: unknown[]) {
       drawn.push(String(str));
       return originalText.call(this, str, ...rest);
+    };
+    // Spy on the fontkit layout engine: pdfkit word-splits text and fontkit
+    // reverses every Arabic word when the run direction is rtl — which
+    // mirrors words that faText already put in visual order. renderPdf must
+    // force the direction to ltr on the embedded font instance.
+    const directions: (string | undefined)[] = [];
+    PDFDocument.prototype.font = function (...args: unknown[]) {
+      const result = originalFont.apply(this, args);
+      const engine = (
+        this as unknown as {
+          _font?: { font?: { _layoutEngine?: { layout: (...a: unknown[]) => unknown } } };
+        }
+      )._font?.font?._layoutEngine;
+      if (engine && !(engine as unknown as { __dirSpy?: boolean }).__dirSpy) {
+        (engine as unknown as { __dirSpy?: boolean }).__dirSpy = true;
+        const originalLayout = engine.layout.bind(engine);
+        engine.layout = (...args: unknown[]) => {
+          directions.push(args[4] as string | undefined);
+          return originalLayout(...args);
+        };
+      }
+      return result;
     };
     try {
       const service = new InvoiceService({} as never);
@@ -802,6 +825,7 @@ describe('InvoiceService.list and panel link/pdf actions', () => {
       expect(buffer.length).toBeGreaterThan(1000);
     } finally {
       PDFDocument.prototype.text = originalText;
+      PDFDocument.prototype.font = originalFont;
     }
     // presentation forms (FB50–FEFF) are outside the base Arabic block
     const persianLines = drawn.filter((line) => /[\u0600-\u06FF\uFB50-\uFEFF]/.test(line));
@@ -812,5 +836,8 @@ describe('InvoiceService.list and panel link/pdf actions', () => {
       expect(unshapedLetter.test(line), `unshaped line: ${line}`).toBe(false);
     // and every Persian line actually carries presentation forms
     for (const line of persianLines) expect(/[\uFB50-\uFEFF]/.test(line)).toBe(true);
+    // the fontkit engine must never run rtl (it would mirror each word)
+    expect(directions.length).toBeGreaterThan(0);
+    for (const direction of directions) expect(direction).toBe('ltr');
   });
 });
