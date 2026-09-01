@@ -59,6 +59,11 @@ export function LabelsPage() {
   const [showFoot, setShowFoot] = useState(true);
   const [count, setCount] = useState('24');
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  // Keeps the hashchange listener fresh without re-subscribing per keystroke.
+  const itemsRef = useRef<LabelItem[]>([]);
+  const typeRef = useRef<BarcodeType>('ean13');
+  itemsRef.current = items;
+  typeRef.current = barcodeType;
 
   useEffect(() => {
     api<{ data: LabelItem[] }>('/inventory/labels')
@@ -72,8 +77,8 @@ export function LabelsPage() {
       .catch((error: Error) => setMessage(error.message));
     const onHash = () => {
       const wanted = paramsFromHash(window.location.hash).item;
-      const found = items.find((item) => item.id === wanted);
-      if (found) loadItem(found, barcodeType);
+      const found = itemsRef.current.find((item) => item.id === wanted);
+      if (found) loadItem(found, typeRef.current);
     };
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
