@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  LABEL_CSS,
   barcodeSVG,
   buildSheetHTML,
   code128Bits,
@@ -99,6 +100,25 @@ describe('renderLabelHTML', () => {
     const html = renderLabelHTML({ ...base, code: 'ABC', type: 'ean13' });
     expect(html).toContain('شمارهٔ بارکد نامعتبر');
     expect(html).not.toContain('<svg');
+  });
+  it('renders the site logo when provided and the «س» mark otherwise', () => {
+    const withLogo = renderLabelHTML({ ...base, logoUrl: '/uploads/site/logo.webp' });
+    expect(withLogo).toContain('src="/uploads/site/logo.webp"');
+    expect(withLogo).not.toContain('class="mk"');
+    const withoutLogo = renderLabelHTML(base);
+    expect(withoutLogo).toContain('<div class="mk">س</div>');
+    expect(withoutLogo).not.toContain('lb-logo');
+  });
+  it('uses the store name from settings when provided', () => {
+    const html = renderLabelHTML({ ...base, storeName: 'فروشگاه علی' });
+    expect(html).toContain('فروشگاه علی');
+    expect(html).not.toContain('فروشگاه سلیم‌وند');
+  });
+  it('keeps the barcode bars inside their fixed-height box (no overlap)', () => {
+    // `height:auto` made the SVG overflow its mm-sized wrapper onto the
+    // digits and footer — the exact bug reported from the panel.
+    expect(LABEL_CSS).toMatch(/\.lb-bc svg\{[^}]*height:100%/);
+    expect(LABEL_CSS).not.toMatch(/\.lb-bc svg\{[^}]*height:auto/);
   });
   it('applies size, style and code128 classes', () => {
     const html = renderLabelHTML({ ...base, size: '60x40', style: 'mono', type: 'code128' });

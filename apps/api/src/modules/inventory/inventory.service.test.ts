@@ -25,6 +25,7 @@ describe('InventoryService', () => {
         quantity: 4,
         brand: { name: 'ایساکو' },
         product: {
+          id: 'prod-1',
           name: 'لنت ترمز جلو پژو ۲۰۶',
           code: 'BRK-00452',
           deletedAt: null,
@@ -51,6 +52,7 @@ describe('InventoryService', () => {
     expect(result.data).toEqual([
       {
         id: 'item-1',
+        productId: 'prod-1',
         barcode: '6260000000123',
         name: 'لنت ترمز جلو پژو ۲۰۶',
         sku: 'BRK-00452',

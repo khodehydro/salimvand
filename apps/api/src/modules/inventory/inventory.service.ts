@@ -105,6 +105,9 @@ export class InventoryService {
             : vehicles.join(' · ');
         return {
           id: item.id,
+          // Lets the products list deep-link into the label studio by
+          // product (#/labels?product=…) even before any item is picked.
+          productId: item.product.id,
           barcode: item.barcode,
           name: item.product.name,
           sku: item.product.code,

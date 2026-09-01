@@ -278,6 +278,11 @@ export type LabelOptions = {
   showSku: boolean;
   showMeta: boolean;
   showFoot: boolean;
+  /** Store name from settings (falls back to فروشگاه سلیم‌وند). */
+  storeName?: string;
+  /** Site logo path from settings (e.g. /uploads/site/logo.webp); when
+   * empty the «س» monogram mark is used instead. */
+  logoUrl?: string;
 };
 
 export function renderLabelHTML(o: LabelOptions): string {
@@ -322,11 +327,14 @@ export function renderLabelHTML(o: LabelOptions): string {
       </div>`
       : '';
 
+  const mark = o.logoUrl
+    ? `<img class="lb-logo" src="${esc(o.logoUrl)}" alt="" />`
+    : '<div class="mk">س</div>';
   return `
   <div class="lb ${size} ${sty}">
     <div class="lb-h">
-      <div class="mk">س</div>
-      <div class="nm">${STORE_NAME}</div>
+      ${mark}
+      <div class="nm">${esc(o.storeName || STORE_NAME)}</div>
       <div class="lb-digits-latin lb-h-url">${STORE_SITE}</div>
     </div>
     <div class="lb-b">
@@ -354,6 +362,8 @@ export const LABEL_CSS = `
   padding:0 1.6mm;position:relative}
 .lb-h .mk{width:3.8mm;height:3.8mm;border-radius:1mm;background:#fff;color:#0d2b4b;
   display:grid;place-items:center;font-weight:700;line-height:1;flex:none}
+.lb-h .lb-logo{width:3.8mm;height:3.8mm;border-radius:1mm;background:#fff;flex:none;
+  object-fit:contain;padding:.25mm;display:block}
 .lb-h .nm{font-weight:700;letter-spacing:.01em;white-space:nowrap}
 .lb-h .lb-h-url{margin-inline-start:auto;color:#bcd7f5;font-weight:600;
   font-family:ui-monospace,Menlo,Consolas,monospace}
@@ -367,7 +377,10 @@ export const LABEL_CSS = `
 .lb-sku{direction:ltr;font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:700;color:#0d2b4b;letter-spacing:.02em}
 .lb-bc{margin-top:auto;flex:none;display:flex;flex-direction:column;align-items:center;gap:.2mm;
   background:#fff;padding-top:.4mm}
-.lb-bc svg{display:block;width:100%;height:auto}
+/* SVG fills the fixed-height bar wrapper exactly: height:auto would size
+   it by the viewBox ratio (~12.6mm on a 50mm label) and the bars would
+   overflow onto the digits and footer below. */
+.lb-bc svg{display:block;width:100%;height:100%}
 .lb-digits{direction:ltr;font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:600;
   letter-spacing:.14em;color:#0b1c2f;line-height:1.25}
 .lb-digits-latin{direction:ltr;font-family:ui-monospace,Menlo,Consolas,monospace}
@@ -409,6 +422,7 @@ export const LABEL_CSS = `
 .lb.s-60x40{width:60mm;height:40mm;font-size:2.3mm}
 .lb.s-60x40 .lb-h{height:6.6mm;font-size:2.5mm}
 .lb.s-60x40 .lb-h .mk{width:4.4mm;height:4.4mm}
+.lb.s-60x40 .lb-h .lb-logo{width:4.4mm;height:4.4mm}
 .lb.s-60x40 .lb-h .lb-h-url{font-size:2mm}
 .lb.s-60x40 .lb-b{padding:1.8mm 2.2mm 1.2mm}
 .lb.s-60x40 .lb-name{font-size:3mm}
@@ -419,6 +433,7 @@ export const LABEL_CSS = `
 .lb.s-38x22{width:38mm;height:22mm;font-size:1.7mm}
 .lb.s-38x22 .lb-h{height:4.2mm;font-size:1.75mm;padding:0 1.1mm}
 .lb.s-38x22 .lb-h .mk{width:2.9mm;height:2.9mm;border-radius:.7mm}
+.lb.s-38x22 .lb-h .lb-logo{width:2.9mm;height:2.9mm;border-radius:.7mm;padding:.2mm}
 .lb.s-38x22 .lb-h .lb-h-url{font-size:1.45mm}
 .lb.s-38x22 .lb-b{padding:.9mm 1.2mm .7mm;gap:.3mm}
 .lb.s-38x22 .lb-name{font-size:1.95mm;-webkit-line-clamp:1}

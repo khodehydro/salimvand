@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { createEan13 } from '@salimvand/shared';
 import { api } from '../lib/api';
+import { hashForPage } from '../lib/admin-route';
 import { publicSiteUrl } from '../lib/public-site';
 import { MediaPicker, type PickerItem } from '../components/MediaPicker';
 import { MediaImage } from '../components/MediaImage';
@@ -230,6 +231,15 @@ export function ProductsPage() {
                 >
                   سایت
                 </a>
+                <button
+                  className="row-action"
+                  title="ساخت برچسب برای این محصول"
+                  onClick={() => {
+                    window.location.hash = hashForPage('labels', { product: product.id });
+                  }}
+                >
+                  برچسب
+                </button>
                 <button
                   className="row-action danger-text"
                   onClick={async () => {

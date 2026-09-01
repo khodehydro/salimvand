@@ -19,6 +19,7 @@ import {
 
 type LabelItem = {
   id: string;
+  productId: string;
   barcode: string;
   name: string;
   sku: string;
@@ -41,6 +42,9 @@ const ZOOMS = [2, 3, 4] as const;
 export function LabelsPage() {
   const [items, setItems] = useState<LabelItem[]>([]);
   const [message, setMessage] = useState('');
+  /** Site identity from settings: logo + store name go on every label. */
+  const [logoUrl, setLogoUrl] = useState('');
+  const [storeName, setStoreName] = useState('');
   const [filter, setFilter] = useState('');
   const [selectedId, setSelectedId] = useState('');
 
@@ -66,18 +70,33 @@ export function LabelsPage() {
   typeRef.current = barcodeType;
 
   useEffect(() => {
+    // Site logo and store name (from تنظیمات) replace the «س» mark and the
+    // hard-coded store name on the label header.
+    void api<{ data: Record<string, { name?: string; logoUrl?: string }> }>('/settings')
+      .then((result) => {
+        const profile = result.data['store.profile'];
+        if (profile?.logoUrl) setLogoUrl(profile.logoUrl);
+        if (profile?.name) setStoreName(profile.name);
+      })
+      .catch(() => undefined);
     api<{ data: LabelItem[] }>('/inventory/labels')
       .then((result) => {
         setItems(result.data);
-        // Deep link from the inventory rows: #/labels?item=<id>
-        const wanted = paramsFromHash(window.location.hash).item;
-        const initial = result.data.find((item) => item.id === wanted) ?? result.data[0];
+        // Deep links: #/labels?item=<inventoryItemId> from the inventory
+        // rows, or #/labels?product=<productId> from the products list.
+        const params = paramsFromHash(window.location.hash);
+        const initial =
+          result.data.find((item) => item.id === params.item) ??
+          result.data.find((item) => item.productId === params.product) ??
+          result.data[0];
         if (initial) loadItem(initial, 'ean13');
       })
       .catch((error: Error) => setMessage(error.message));
     const onHash = () => {
-      const wanted = paramsFromHash(window.location.hash).item;
-      const found = itemsRef.current.find((item) => item.id === wanted);
+      const params = paramsFromHash(window.location.hash);
+      const found =
+        itemsRef.current.find((item) => item.id === params.item) ??
+        itemsRef.current.find((item) => item.productId === params.product);
       if (found) loadItem(found, typeRef.current);
     };
     window.addEventListener('hashchange', onHash);
@@ -120,6 +139,8 @@ export function LabelsPage() {
     showSku,
     showMeta,
     showFoot,
+    storeName: storeName || undefined,
+    logoUrl: logoUrl || undefined,
   };
   const currentHTML = renderLabelHTML(options);
   const selected = items.find((item) => item.id === selectedId);
@@ -343,6 +364,9 @@ export function LabelsPage() {
                   روی ۱۰۰٪ بگذارید.
                 </small>
               </div>
+              <button className="button-primary lbl-print-inline" onClick={printSheet}>
+                ⎙ چاپ برگهٔ A4 ({persianDigits(printCount)} برچسب)
+              </button>
             </div>
           </div>
         </aside>

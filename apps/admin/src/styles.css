@@ -4830,9 +4830,15 @@ button.btn-primary-lg:hover:not(:disabled) {
   gap: 18px;
   align-items: start;
 }
+/* NO position:sticky here — the settings card is taller than most screens,
+   and a stuck element's lower half (size/style/type/count) would become
+   unreachable, which is exactly "can't pick the label style". */
 .lbl-side {
-  position: sticky;
-  top: 14px;
+  position: static;
+}
+.lbl-print-inline {
+  width: 100%;
+  margin-top: 4px;
 }
 .lbl-card {
   background: var(--sv-surface);
@@ -4998,9 +5004,6 @@ button.btn-primary-lg:hover:not(:disabled) {
 @media (max-width: 1020px) {
   .labels-layout {
     grid-template-columns: 1fr;
-  }
-  .lbl-side {
-    position: static;
   }
 }
 @media (max-width: 640px) {
