@@ -3716,21 +3716,42 @@ body,
 /* ============================================================
    Invoices: issue/list tabs, invoice addresses, partial returns.
    ============================================================ */
-.invoice-addresses {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+/* Issue form: read-only store contact block from settings + the optional
+   customer address — nothing store-related is typed per invoice anymore. */
+.invoice-store-hint {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+  background: var(--sv-surface-2);
+  border: 1px dashed var(--sv-border-2);
+  border-radius: 12px;
+  padding: 12px 14px;
 }
-.invoice-addresses label {
+.invoice-store-hint > b {
+  font-size: 12px;
+  color: var(--sv-text-2);
+}
+.customer-address-field {
   display: grid;
   gap: 6px;
   font-size: 12px;
   color: var(--sv-text-2);
+}
+.customer-address-field textarea {
+  border: 1px solid var(--sv-border);
+  background: var(--sv-surface);
+  color: var(--sv-text);
+  border-radius: 8px;
+  padding: 10px;
+  font: 13px Vazirmatn;
+  resize: vertical;
 }
 .invoice-dialog {
   width: min(94vw, 780px);
 }
 .invoice-address-edit {
   display: grid;
-  grid-template-columns: 1fr 1fr auto;
+  grid-template-columns: 1.2fr 0.8fr 1.2fr auto;
   gap: 10px;
   align-items: end;
   margin: 14px 0;
@@ -3829,7 +3850,6 @@ body,
 }
 
 @media (max-width: 700px) {
-  .invoice-addresses,
   .invoice-address-edit {
     grid-template-columns: 1fr;
   }

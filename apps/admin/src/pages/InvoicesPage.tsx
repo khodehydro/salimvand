@@ -22,6 +22,7 @@ type Invoice = {
   customerName?: string | null;
   customerMobile?: string | null;
   storeAddress?: string | null;
+  storePhone?: string | null;
   customerAddress?: string | null;
   subtotal: string;
   discount: string;
@@ -137,9 +138,11 @@ export function InvoicesPage({
   // can work the POS flow and the archive independently.
   const [tab, setTab] = useState<'issue' | 'list'>(canCreate ? 'issue' : 'list');
   // Addresses on the invoice (store snapshot + customer), editable later.
+  // Read-only store contact block from settings (issue-form hint).
   const [storeAddress, setStoreAddress] = useState('');
+  const [storePhone, setStorePhone] = useState('');
   const [customerAddress, setCustomerAddress] = useState('');
-  const [addressDraft, setAddressDraft] = useState({ store: '', customer: '' });
+  const [addressDraft, setAddressDraft] = useState({ store: '', phone: '', customer: '' });
   const [addressBusy, setAddressBusy] = useState(false);
   // Partial return dialog: one invoice line, qty 1..remaining, reason and a
   // restock switch (damaged goods stay out of sellable stock).
@@ -232,12 +235,15 @@ export function InvoicesPage({
   useEffect(() => {
     void load();
     if (canCreate)
-      void api<{ data: StockOption[]; storeAddress?: string }>('/invoices/options')
+      void api<{ data: StockOption[]; storeAddress?: string; storePhone?: string }>(
+        '/invoices/options',
+      )
         .then((result) => {
           setOptions(result.data);
-          // Store address snapshot from settings — sellers cannot read
-          // /settings directly, so it travels with the invoice options.
+          // Store contact block from settings — shown read-only in the issue
+          // form; the server snapshots it onto the invoice automatically.
           if (result.storeAddress) setStoreAddress(result.storeAddress);
+          if (result.storePhone) setStorePhone(result.storePhone);
         })
         .catch((error: Error) => setMessage(error.message));
   }, [canCreate]);
@@ -349,7 +355,8 @@ export function InvoicesPage({
         body: JSON.stringify({
           customerName: customerName || undefined,
           customerMobile: mobile || undefined,
-          storeAddress: storeAddress.trim() || undefined,
+          // Store address/phone are NOT sent: the server snapshots them from
+          // the settings store profile on its own.
           customerAddress: customerAddress.trim() || undefined,
           discount: discountValue,
           items: lines.map((line) => ({
@@ -422,7 +429,11 @@ export function InvoicesPage({
   /** Opens the invoice detail modal with a fresh address draft. */
   const openViewing = (invoice: Invoice) => {
     setViewing(invoice);
-    setAddressDraft({ store: invoice.storeAddress ?? '', customer: invoice.customerAddress ?? '' });
+    setAddressDraft({
+      store: invoice.storeAddress ?? '',
+      phone: invoice.storePhone ?? '',
+      customer: invoice.customerAddress ?? '',
+    });
   };
 
   /** Addresses stay editable after issue (store snapshot / customer address). */
@@ -434,6 +445,7 @@ export function InvoicesPage({
         method: 'PATCH',
         body: JSON.stringify({
           storeAddress: addressDraft.store,
+          storePhone: addressDraft.phone,
           customerAddress: addressDraft.customer,
         }),
       });
@@ -799,17 +811,19 @@ export function InvoicesPage({
               />
             </div>
 
-            <div className="form-grid invoice-addresses">
-              <label>
-                آدرس فروشگاه (روی فاکتور چاپ و نمایش داده می‌شود)
-                <textarea
-                  rows={2}
-                  value={storeAddress}
-                  onChange={(event) => setStoreAddress(event.target.value)}
-                  placeholder="آدرس فروشگاه — از تنظیمات پیش‌فرض آمده و قابل ویرایش است"
-                />
-              </label>
-              <label>
+            <div className="invoice-store-hint">
+              <b>اطلاعات فروشگاه (خودکار از تنظیمات)</b>
+              <div className="plc-chips">
+                {storeAddress && <span className="chip">{storeAddress}</span>}
+                {storePhone && <span className="chip">{storePhone}</span>}
+                {!storeAddress && !storePhone && (
+                  <span className="muted">
+                    آدرس و شمارهٔ تماس فروشگاه در تنظیمات («پروفایل فروشگاه») ثبت نشده است؛ بعد از
+                    ثبت، خودکار روی همهٔ فاکتورها درج می‌شود.
+                  </span>
+                )}
+              </div>
+              <label className="customer-address-field">
                 آدرس مشتری (اختیاری — برای ارسال و پروندهٔ مشتری)
                 <textarea
                   rows={2}
@@ -1213,6 +1227,9 @@ export function InvoicesPage({
                   مشتری: <b>{viewing.customerName ?? 'مشتری حضوری'}</b>
                 </span>
                 <span>
+                  شماره تماس مشتری: <b dir="ltr">{viewing.customerMobile ?? '—'}</b>
+                </span>
+                <span>
                   تاریخ صدور: <b>{new Date(viewing.issuedAt).toLocaleDateString('fa-IR')}</b>
                 </span>
                 <span>
@@ -1243,6 +1260,16 @@ export function InvoicesPage({
                     value={addressDraft.store}
                     onChange={(event) =>
                       setAddressDraft({ ...addressDraft, store: event.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  شماره تماس فروشگاه
+                  <input
+                    dir="ltr"
+                    value={addressDraft.phone}
+                    onChange={(event) =>
+                      setAddressDraft({ ...addressDraft, phone: event.target.value })
                     }
                   />
                 </label>

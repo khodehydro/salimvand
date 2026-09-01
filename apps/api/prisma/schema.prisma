@@ -279,6 +279,7 @@ model Invoice {
   customerName String?       @db.VarChar(150)
   customerMobile String?     @db.VarChar(20)
   storeAddress    String?
+  storePhone      String?
   customerAddress String?
   subtotal     BigInt        @default(0)
   discount     BigInt        @default(0)

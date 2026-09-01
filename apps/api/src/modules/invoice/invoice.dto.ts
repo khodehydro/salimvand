@@ -23,6 +23,7 @@ export class CreateInvoiceDto {
   @IsOptional() @IsString() @MaxLength(150) customerName?: string;
   @IsOptional() @IsMobilePhone('fa-IR') customerMobile?: string;
   @IsOptional() @IsString() @MaxLength(500) storeAddress?: string;
+  @IsOptional() @IsString() @MaxLength(30) storePhone?: string;
   @IsOptional() @IsString() @MaxLength(500) customerAddress?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(9_000_000_000_000_000) discount?: number;
   @ValidateNested({ each: true }) @Type(() => InvoiceItemDto) items!: InvoiceItemDto[];
@@ -32,6 +33,7 @@ export class CreateInvoiceDto {
  * customer address is only filled in later (e.g. for delivery). */
 export class UpdateInvoiceAddressesDto {
   @IsOptional() @IsString() @MaxLength(500) storeAddress?: string;
+  @IsOptional() @IsString() @MaxLength(30) storePhone?: string;
   @IsOptional() @IsString() @MaxLength(500) customerAddress?: string;
 }
 

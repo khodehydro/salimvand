@@ -653,6 +653,9 @@ describe('InvoiceService.list and panel link/pdf actions', () => {
       number: 'INV-000012',
       customerName: 'رضا',
       customerMobile: '09121112233',
+      storeAddress: 'میاندوآب، خیابان اصلی',
+      storePhone: '041-12345678',
+      customerAddress: 'میاندوآب، محلهٔ جدید',
       subtotal: 500_000n,
       discount: 50_000n,
       total: 450_000n,
@@ -673,5 +676,8 @@ describe('InvoiceService.list and panel link/pdf actions', () => {
     const file = await new InvoiceService(prisma as never).pdfById('inv-12');
     expect(file.length).toBeGreaterThan(500);
     expect(file.subarray(0, 5).toString()).toBe('%PDF-');
+    // The bundled Vazirmatn font (with Persian presentation forms) must be
+    // embedded — the old DejaVu/Helvetica fallback produced garbled output.
+    expect(file.toString('latin1')).toContain('Vazirmatn');
   });
 });

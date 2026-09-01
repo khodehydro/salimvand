@@ -8,6 +8,7 @@ export type PublicInvoice = {
   customerMobile?: string | null;
   customerAddress?: string | null;
   storeAddress?: string | null;
+  storePhone?: string | null;
   vehicle?: string | null;
   salesPerson?: string | null;
   subtotal: string | number;
@@ -136,6 +137,12 @@ export async function InvoiceDocument({
             <div>
               <small>آدرس مشتری</small>
               <b>{invoice.customerAddress}</b>
+            </div>
+          )}
+          {invoice.storePhone && (
+            <div>
+              <small>تماس فروشگاه</small>
+              <b dir="ltr">{invoice.storePhone}</b>
             </div>
           )}
           {invoice.storeAddress && (

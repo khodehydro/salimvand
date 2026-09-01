@@ -17,13 +17,16 @@ import { calculateInvoiceTotals, InvoiceLineInput } from './invoice.rules';
 import * as QRCode from 'qrcode';
 import PDFDocument = require('pdfkit');
 import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { createPublicShortCode, createPublicToken, hashPublicToken } from './public-token';
+import { faText } from './pdf-text';
 
 type DraftLine = InvoiceLineInput & { inventoryItemId: string; productName: string };
 type CreateInput = {
   customerName?: string;
   customerMobile?: string;
   storeAddress?: string;
+  storePhone?: string;
   customerAddress?: string;
   discount?: string | number;
   items?: Array<{ inventoryItemId?: string; quantity?: number; unitPrice?: string | number }>;
@@ -65,6 +68,22 @@ export class InvoiceService {
     };
   }
 
+  /** Store contact block from settings (store.profile): used to default the
+   * invoice snapshot so sellers never type the store address/phone per
+   * invoice — settings stay the single source of truth. */
+  private async storeProfile(): Promise<{ address: string; phone: string }> {
+    try {
+      const row = await this.prisma.setting.findUnique({ where: { key: 'store.profile' } });
+      const profile = (row?.value ?? {}) as { address?: unknown; phones?: unknown };
+      return {
+        address: typeof profile.address === 'string' ? profile.address.trim() : '',
+        phone: typeof profile.phones === 'string' ? profile.phones.trim() : '',
+      };
+    } catch {
+      return { address: '', phone: '' };
+    }
+  }
+
   async create(input: CreateInput, userId: string) {
     if (!userId || !input.items?.length)
       throw new BadRequestException('کاربر و حداقل یک قلم فاکتور الزامی است');
@@ -87,6 +106,11 @@ export class InvoiceService {
     });
     const discount = BigInt(input.discount ?? 0);
     const totals = calculateInvoiceTotals(lines, discount);
+    // Store address/phone default from settings when the panel did not send
+    // an explicit override — nobody should retype them on every invoice.
+    const profile = await this.storeProfile();
+    const storeAddress = input.storeAddress?.trim() || profile.address || undefined;
+    const storePhone = input.storePhone?.trim() || profile.phone || undefined;
     const publicToken = createPublicToken();
     const publicShortCode = createPublicShortCode();
     const publicTokenExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
@@ -119,7 +143,8 @@ export class InvoiceService {
           publicTokenExpiresAt,
           customerName: customerName || undefined,
           customerMobile: customerMobile || undefined,
-          storeAddress: input.storeAddress?.trim() || undefined,
+          storeAddress,
+          storePhone,
           customerAddress: input.customerAddress?.trim() || undefined,
           subtotal: totals.subtotal,
           discount: totals.discount,
@@ -140,7 +165,7 @@ export class InvoiceService {
       if (customerName && customerMobile) {
         const customer = await this.queryRaw<{ id: string }>(
           tx,
-          'INSERT INTO "customers" ("name", "mobile") VALUES ($1, $2) ON CONFLICT ("mobile") DO UPDATE SET "name" = EXCLUDED."name", "updatedAt" = CURRENT_TIMESTAMP RETURNING "id"',
+          'INSERT INTO "customers" ("id", "name", "mobile", "updatedAt") VALUES (gen_random_uuid(), $1, $2, CURRENT_TIMESTAMP) ON CONFLICT ("mobile") DO UPDATE SET "name" = EXCLUDED."name", "updatedAt" = CURRENT_TIMESTAMP RETURNING "id"',
           customerName,
           customerMobile,
         );
@@ -223,6 +248,7 @@ export class InvoiceService {
         customerName: true,
         customerMobile: true,
         storeAddress: true,
+        storePhone: true,
         customerAddress: true,
         subtotal: true,
         discount: true,
@@ -299,10 +325,21 @@ export class InvoiceService {
         record.invoiceItemId,
         (returnedPerLine.get(record.invoiceItemId) ?? 0) + record.quantity,
       );
+    // Older invoices were issued before the store snapshot existed — fill
+    // the store contact block from settings so the customer still sees it.
+    let storeContact: { storeAddress?: string | null; storePhone?: string | null } = {};
+    if (!publicInvoice.storeAddress || !publicInvoice.storePhone) {
+      const profile = await this.storeProfile();
+      storeContact = {
+        storeAddress: publicInvoice.storeAddress || profile.address || null,
+        storePhone: publicInvoice.storePhone || profile.phone || null,
+      };
+    }
     return {
       ok: true,
       data: {
         ...publicInvoice,
+        ...storeContact,
         returnedTotal,
         netTotal,
         items: invoice.items.map(
@@ -371,6 +408,7 @@ export class InvoiceService {
       customerName?: string | null;
       customerMobile?: string | null;
       storeAddress?: string | null;
+      storePhone?: string | null;
       customerAddress?: string | null;
       subtotal: bigint | number;
       discount: bigint | number;
@@ -402,14 +440,22 @@ export class InvoiceService {
       info: { Title: `Invoice ${invoice.number}`, Author: 'Salimvand' },
     });
     const chunks: Buffer[] = [];
-    const fontPath = process.env.PDF_FONT_PATH ?? '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf';
-    if (existsSync(fontPath)) doc.font(fontPath);
+    // PDFKit cannot shape Persian on its own, so the bundled Vazirmatn (which
+    // carries the contextual presentation forms) plus faText() are both
+    // required — without them the PDF renders as disconnected latin junk.
+    const fontCandidates = [
+      process.env.PDF_FONT_PATH,
+      join(__dirname, '..', '..', '..', 'assets', 'fonts', 'Vazirmatn-Regular.ttf'),
+      '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+    ].filter((candidate): candidate is string => Boolean(candidate));
+    const fontPath = fontCandidates.find((candidate) => existsSync(candidate));
+    if (fontPath) doc.font(fontPath);
     doc.on('data', (chunk: Buffer) => chunks.push(chunk));
     const finished = new Promise<Buffer>((resolve, reject) => {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
     });
-    const text = (value: unknown) => String(value ?? '').replace(/[<>]/g, '');
+    const text = (value: unknown) => faText(String(value ?? '').replace(/[<>]/g, ''));
     doc.fillColor('#0d2b4b').fontSize(20).text('فاکتور فروشگاه سلیم وند', { align: 'right' });
     doc
       .moveDown(0.4)
@@ -419,6 +465,8 @@ export class InvoiceService {
         `شماره: ${text(invoice.number)}    تاریخ: ${new Intl.DateTimeFormat('fa-IR').format(new Date(invoice.issuedAt))}`,
         { align: 'right' },
       );
+    if (invoice.storePhone)
+      doc.text(`شماره تماس فروشگاه: ${text(invoice.storePhone)}`, { align: 'right' });
     if (invoice.storeAddress)
       doc.text(`آدرس فروشگاه: ${text(invoice.storeAddress)}`, { align: 'right' });
     doc
@@ -522,7 +570,7 @@ export class InvoiceService {
       notes: string | null;
     }>(
       this.prisma as unknown as { $queryRawUnsafe: unknown },
-      'INSERT INTO "customers" ("name", "mobile", "notes") VALUES ($1, $2, $3) ON CONFLICT ("mobile") DO UPDATE SET "name" = EXCLUDED."name", "notes" = EXCLUDED."notes", "updatedAt" = CURRENT_TIMESTAMP RETURNING "id", "name", "mobile", "notes"',
+      'INSERT INTO "customers" ("id", "name", "mobile", "notes", "updatedAt") VALUES (gen_random_uuid(), $1, $2, $3, CURRENT_TIMESTAMP) ON CONFLICT ("mobile") DO UPDATE SET "name" = EXCLUDED."name", "notes" = EXCLUDED."notes", "updatedAt" = CURRENT_TIMESTAMP RETURNING "id", "name", "mobile", "notes"',
       name,
       mobile,
       input.notes?.trim() || null,
@@ -544,14 +592,16 @@ export class InvoiceService {
         location: { select: { code: true, name: true } },
       },
     });
-    // Sellers cannot read /settings (manager-only), so the store address
-    // snapshot travels with the invoice options for the issue form prefill.
-    const profile = await this.prisma.setting.findUnique({ where: { key: 'store.profile' } });
-    const storeAddress =
-      typeof (profile?.value as { address?: unknown } | null)?.address === 'string'
-        ? ((profile?.value as { address?: string }).address ?? '').trim()
-        : '';
-    return { ok: true, data: items, storeAddress };
+    // Sellers cannot read /settings (manager-only), so the store contact
+    // block travels with the invoice options: the issue form shows it as a
+    // read-only hint (no per-invoice typing) and the server snapshots it.
+    const profile = await this.storeProfile();
+    return {
+      ok: true,
+      data: items,
+      storeAddress: profile.address,
+      storePhone: profile.phone,
+    };
   }
 
   async pay(
@@ -595,7 +645,7 @@ export class InvoiceService {
       });
       await this.executeRaw(
         tx,
-        'INSERT INTO "payments" ("invoiceId", "amount", "method", "receivedById") VALUES ($1, $2, CAST($3 AS "PaymentMethod"), $4)',
+        'INSERT INTO "payments" ("id", "invoiceId", "amount", "method", "receivedById") VALUES (gen_random_uuid(), $1, $2, CAST($3 AS "PaymentMethod"), $4)',
         id,
         paidAmount,
         method,
@@ -691,28 +741,42 @@ export class InvoiceService {
     });
   }
 
-  /** Editable store/customer addresses on an issued invoice. */
+  /** Editable store/customer contact block on an issued invoice. Empty store
+   * fields fall back to the settings profile instead of being wiped. */
   async updateAddresses(
     id: string,
-    input: { storeAddress?: string; customerAddress?: string },
+    input: { storeAddress?: string; storePhone?: string; customerAddress?: string },
     userId: string,
     ip?: string,
   ) {
     if (!userId) throw new BadRequestException('کاربر الزامی است');
     const storeAddress = input.storeAddress?.trim();
+    const storePhone = input.storePhone?.trim();
     const customerAddress = input.customerAddress?.trim();
-    if (storeAddress === undefined && customerAddress === undefined)
-      throw new BadRequestException('حداقل یکی از آدرس‌ها را وارد کنید');
+    if (storeAddress === undefined && customerAddress === undefined && storePhone === undefined)
+      throw new BadRequestException('حداقل یکی از فیلدها را وارد کنید');
     const invoice = await this.prisma.invoice.findUnique({
       where: { id },
-      select: { id: true, status: true, storeAddress: true, customerAddress: true },
+      select: {
+        id: true,
+        status: true,
+        storeAddress: true,
+        storePhone: true,
+        customerAddress: true,
+      },
     });
     if (!invoice || invoice.status === 'voided')
       throw new NotFoundException('فاکتور فعال پیدا نشد');
+    const profile = await this.storeProfile();
+    const nextStoreAddress =
+      storeAddress !== undefined ? storeAddress || profile.address || null : invoice.storeAddress;
+    const nextStorePhone =
+      storePhone !== undefined ? storePhone || profile.phone || null : invoice.storePhone;
     const updated = await this.prisma.invoice.update({
       where: { id },
       data: {
-        ...(storeAddress !== undefined ? { storeAddress: storeAddress || null } : {}),
+        ...(storeAddress !== undefined ? { storeAddress: nextStoreAddress } : {}),
+        ...(storePhone !== undefined ? { storePhone: nextStorePhone } : {}),
         ...(customerAddress !== undefined ? { customerAddress: customerAddress || null } : {}),
       },
     });
@@ -722,9 +786,14 @@ export class InvoiceService {
       action: 'update',
       entityType: 'invoice',
       entityId: id,
-      before: { storeAddress: invoice.storeAddress, customerAddress: invoice.customerAddress },
+      before: {
+        storeAddress: invoice.storeAddress,
+        storePhone: invoice.storePhone,
+        customerAddress: invoice.customerAddress,
+      },
       after: {
-        storeAddress: storeAddress ?? invoice.storeAddress,
+        storeAddress: nextStoreAddress,
+        storePhone: nextStorePhone,
         customerAddress: customerAddress ?? invoice.customerAddress,
       },
     });
@@ -995,6 +1064,7 @@ export class InvoiceService {
         customerName: true,
         customerMobile: true,
         storeAddress: true,
+        storePhone: true,
         customerAddress: true,
         subtotal: true,
         discount: true,
@@ -1028,11 +1098,13 @@ export class InvoiceService {
     const invoiceReturns = invoice.returns ?? [];
     const { returnedTotal } = netInvoiceTotals(invoice.total, invoiceReturns);
     const lineName = new Map(invoice.items.map((item) => [item.id, item.productName]));
+    const profile = await this.storeProfile();
     return this.renderPdf({
       number: invoice.number,
       customerName: invoice.customerName,
       customerMobile: invoice.customerMobile,
-      storeAddress: invoice.storeAddress,
+      storeAddress: invoice.storeAddress || profile.address || null,
+      storePhone: invoice.storePhone || profile.phone || null,
       customerAddress: invoice.customerAddress,
       subtotal: invoice.subtotal,
       discount: invoice.discount,
