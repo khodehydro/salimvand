@@ -260,13 +260,19 @@ describe('InvoiceService', () => {
   it('restocks a valid partial return inside the transaction', async () => {
     const inventoryUpdate = vi.fn(async () => ({ quantity: 6 }));
     const returnCreate = vi.fn(async () => ({ id: 'return-1', quantity: 1, refundAmount: 100n }));
+    const invoiceUpdate = vi.fn();
     const tx = {
       invoice: {
         findUnique: vi.fn(async () => ({
           id: 'invoice-1',
           status: 'issued',
+          total: 200n,
+          paidAmount: 0n,
+          paymentStatus: 'unpaid',
+          paidAt: null,
           items: [{ id: 'line-1', quantity: 2, unitPrice: 100n, inventoryItemId: 'item-1' }],
         })),
+        update: invoiceUpdate,
       },
       returnRecord: {
         aggregate: vi.fn(async () => ({ _sum: { quantity: 0, refundAmount: 0n } })),
@@ -290,6 +296,53 @@ describe('InvoiceService', () => {
       expect.objectContaining({ where: { id: 'item-1' }, data: { quantity: { increment: 1 } } }),
     );
     expect(returnCreate).toHaveBeenCalledTimes(1);
+    // Unpaid invoice stays unpaid after a partial return — no phantom write.
+    expect(invoiceUpdate).not.toHaveBeenCalled();
+  });
+
+  it('settles the payment status when a return covers the remaining debt', async () => {
+    const invoiceUpdate = vi.fn(async () => ({ id: 'invoice-1' }));
+    const returnCreate = vi.fn(async () => ({ id: 'return-3', quantity: 1, refundAmount: 100n }));
+    // First aggregate = line guard (nothing returned yet); second aggregate =
+    // the post-return recompute (100n refunded → net 100n, paid 100n → paid).
+    const aggregate = vi
+      .fn()
+      .mockResolvedValueOnce({ _sum: { quantity: 0, refundAmount: 0n } })
+      .mockResolvedValueOnce({ _sum: { quantity: 1, refundAmount: 100n } });
+    const tx = {
+      invoice: {
+        findUnique: vi.fn(async () => ({
+          id: 'invoice-1',
+          status: 'issued',
+          total: 200n,
+          paidAmount: 100n,
+          paymentStatus: 'partial',
+          paidAt: null,
+          items: [{ id: 'line-1', quantity: 2, unitPrice: 100n, inventoryItemId: 'item-1' }],
+        })),
+        update: invoiceUpdate,
+      },
+      returnRecord: { aggregate, create: returnCreate },
+      inventoryItem: { update: vi.fn(async () => ({ quantity: 6 })) },
+      inventoryTransaction: { create: vi.fn() },
+      auditLog: { create: vi.fn() },
+    };
+    const prisma = {
+      $transaction: vi.fn(async (callback: (client: typeof tx) => Promise<unknown>) =>
+        callback(tx),
+      ),
+    };
+    await new InvoiceService(prisma as never).returnItems(
+      'invoice-1',
+      { invoiceItemId: 'line-1', quantity: 1, reason: 'مغایرت' },
+      'user-1',
+    );
+    expect(invoiceUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'invoice-1' },
+        data: expect.objectContaining({ paymentStatus: 'paid' }),
+      }),
+    );
   });
 
   it('computes net totals after partial returns for the public payload', async () => {
@@ -379,6 +432,10 @@ describe('InvoiceService', () => {
         findUnique: vi.fn(async () => ({
           id: 'invoice-1',
           status: 'issued',
+          total: 300n,
+          paidAmount: 300n,
+          paymentStatus: 'paid',
+          paidAt: new Date('2026-08-01'),
           items: [{ id: 'line-1', quantity: 3, unitPrice: 100n, inventoryItemId: 'item-1' }],
         })),
       },
@@ -685,5 +742,75 @@ describe('InvoiceService.list and panel link/pdf actions', () => {
     // The bundled Vazirmatn font (with Persian presentation forms) must be
     // embedded — the old DejaVu/Helvetica fallback produced garbled output.
     expect(file.toString('latin1')).toContain('Vazirmatn');
+  });
+
+  it('shapes every Persian line drawn into the PDF (labels included)', async () => {
+    // Regression for the "completely broken" PDF: only values were passed
+    // through faText, so every label (فاکتور فروشگاه سلیم وند, جمع اقلام: …)
+    // rendered as reversed disconnected letters.
+    const PDFDocument = require('pdfkit');
+    const originalText = PDFDocument.prototype.text;
+    const drawn: string[] = [];
+    PDFDocument.prototype.text = function (str: string, ...rest: unknown[]) {
+      drawn.push(String(str));
+      return originalText.call(this, str, ...rest);
+    };
+    try {
+      const service = new InvoiceService({} as never);
+      // renderPdf stays private; reach it without widening the public API.
+      const renderPdf = (
+        service as unknown as {
+          renderPdf: (invoice: unknown, qrDataUrl?: string) => Promise<Buffer>;
+        }
+      ).renderPdf;
+      const buffer = await renderPdf(
+        {
+          number: '1405/00348',
+          customerName: 'علی محمدی',
+          customerMobile: '09123456789',
+          storeAddress: 'میاندوآب، خیابان اصلی',
+          storePhone: '041-1234567',
+          customerAddress: null,
+          subtotal: 150000000n,
+          discount: 5000000n,
+          total: 145000000n,
+          returnedTotal: 20000000n,
+          paymentStatus: 'partial',
+          paidAmount: 90000000n,
+          issuedAt: new Date('2026-09-01T10:00:00Z'),
+          items: [
+            {
+              productName: 'لنت ترمز جلو پژو ۲۰۶',
+              brand: 'ایساکو',
+              quantity: 2,
+              unitPrice: 50000000n,
+              lineTotal: 100000000n,
+            },
+          ],
+          returns: [
+            {
+              productName: 'فیلتر روغن',
+              quantity: 1,
+              refundAmount: 20000000n,
+              restock: true,
+              reason: 'مغایرت',
+            },
+          ],
+        },
+        undefined,
+      );
+      expect(buffer.length).toBeGreaterThan(1000);
+    } finally {
+      PDFDocument.prototype.text = originalText;
+    }
+    // presentation forms (FB50–FEFF) are outside the base Arabic block
+    const persianLines = drawn.filter((line) => /[\u0600-\u06FF\uFB50-\uFEFF]/.test(line));
+    expect(persianLines.length).toBeGreaterThan(8);
+    // No line may carry unshaped Persian LETTERS (digits/punctuation are fine).
+    const unshapedLetter = /[\u0621-\u063A\u063F-\u064A\u067E\u0686\u0698\u06A9\u06AF\u06CC]/;
+    for (const line of persianLines)
+      expect(unshapedLetter.test(line), `unshaped line: ${line}`).toBe(false);
+    // and every Persian line actually carries presentation forms
+    for (const line of persianLines) expect(/[\uFB50-\uFEFF]/.test(line)).toBe(true);
   });
 });

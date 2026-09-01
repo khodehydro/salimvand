@@ -454,34 +454,51 @@ export class InvoiceService {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
     });
-    const text = (value: unknown) => faText(String(value ?? '').replace(/[<>]/g, ''));
-    doc.fillColor('#0d2b4b').fontSize(20).text('فاکتور فروشگاه سلیم وند', { align: 'right' });
+    // EVERY drawn line goes through faText: pdfkit has no shaping engine, so
+    // an unshaped Persian label (labels used to bypass it) renders as reversed,
+    // disconnected letters. Persian digits have no presentation forms and pass
+    // through untouched; embedded Latin runs stay readable via bidi.
+    const text = (value: unknown) => faText(String(value ?? '').replace(/[<>]/g, '')) as string;
+    const statusLabels: Record<string, string> = {
+      paid: 'تسویه شده',
+      partial: 'پرداخت بخشی',
+      unpaid: 'پرداخت نشده',
+    };
+    doc.fillColor('#0d2b4b').fontSize(20).text(text('فاکتور فروشگاه سلیم وند'), { align: 'right' });
     doc
       .moveDown(0.4)
       .fillColor('#4a5f79')
       .fontSize(10)
       .text(
-        `شماره: ${text(invoice.number)}    تاریخ: ${new Intl.DateTimeFormat('fa-IR').format(new Date(invoice.issuedAt))}`,
+        text(
+          `شماره: ${invoice.number}    تاریخ: ${new Intl.DateTimeFormat('fa-IR').format(new Date(invoice.issuedAt))}`,
+        ),
         { align: 'right' },
       );
     if (invoice.storePhone)
-      doc.text(`شماره تماس فروشگاه: ${text(invoice.storePhone)}`, { align: 'right' });
+      doc.text(text(`شماره تماس فروشگاه: ${invoice.storePhone}`), { align: 'right' });
     if (invoice.storeAddress)
-      doc.text(`آدرس فروشگاه: ${text(invoice.storeAddress)}`, { align: 'right' });
+      doc.text(text(`آدرس فروشگاه: ${invoice.storeAddress}`), { align: 'right' });
     doc
       .moveDown(1)
       .fillColor('#0b1c2f')
       .fontSize(12)
-      .text(`مشتری: ${text(invoice.customerName ?? 'مشتری حضوری')}`, { align: 'right' });
+      .text(text(`مشتری: ${invoice.customerName ?? 'مشتری حضوری'}`), { align: 'right' });
     if (invoice.customerMobile)
-      doc.text(`شماره تماس: ${text(invoice.customerMobile)}`, { align: 'right' });
+      doc.text(text(`شماره تماس: ${invoice.customerMobile}`), { align: 'right' });
     if (invoice.customerAddress)
-      doc.text(`آدرس مشتری: ${text(invoice.customerAddress)}`, { align: 'right' });
-    doc.moveDown(0.8).fontSize(11).fillColor('#0d2b4b').text('اقلام فاکتور', { align: 'right' });
+      doc.text(text(`آدرس مشتری: ${invoice.customerAddress}`), { align: 'right' });
+    doc
+      .moveDown(0.8)
+      .fontSize(11)
+      .fillColor('#0d2b4b')
+      .text(text('اقلام فاکتور'), { align: 'right' });
     doc.moveDown(0.3).fillColor('#0b1c2f').fontSize(9);
     for (const [index, item] of invoice.items.entries())
       doc.text(
-        `${index + 1}. ${text(item.productName)}${item.brand ? ` | برند: ${text(item.brand)}` : ''} | تعداد: ${text(item.quantity)} | فی: ${text(item.unitPrice)} ریال | جمع: ${text(item.lineTotal)} ریال`,
+        text(
+          `${index + 1}. ${item.productName}${item.brand ? ` | برند: ${item.brand}` : ''} | تعداد: ${item.quantity} | فی: ${item.unitPrice} ریال | جمع: ${item.lineTotal} ریال`,
+        ),
         { align: 'right' },
       );
     if (invoice.returns?.length) {
@@ -489,33 +506,38 @@ export class InvoiceService {
         .moveDown(0.8)
         .fontSize(11)
         .fillColor('#0d2b4b')
-        .text('مرجوعی‌ها', { align: 'right' })
+        .text(text('مرجوعی‌ها'), { align: 'right' })
         .moveDown(0.2)
         .fillColor('#0b1c2f')
         .fontSize(9);
       for (const record of invoice.returns)
         doc.text(
-          `${text(record.productName)} | تعداد برگشتی: ${text(record.quantity)} | مبلغ برگشتی: ${text(record.refundAmount)} ریال | ${record.restock ? 'به انبار برگشت' : 'خراب — بدون بازگشت به انبار'} | دلیل: ${text(record.reason)}`,
+          text(
+            `${record.productName} | تعداد برگشتی: ${record.quantity} | مبلغ برگشتی: ${record.refundAmount} ریال | ${record.restock ? 'به انبار برگشت' : 'خراب — بدون بازگشت به انبار'} | دلیل: ${record.reason}`,
+          ),
           { align: 'right' },
         );
     }
+    const returnedTotal = BigInt(invoice.returnedTotal ?? 0);
+    const netTotal = BigInt(invoice.total) - returnedTotal;
+    const paidAmount = BigInt(invoice.paidAmount);
+    const remaining = netTotal - paidAmount;
     doc
       .moveDown(1)
       .fontSize(11)
-      .text(`جمع اقلام: ${text(invoice.subtotal)} ریال`, { align: 'right' })
-      .text(`تخفیف: ${text(invoice.discount)} ریال`, { align: 'right' });
-    if (BigInt(invoice.returnedTotal ?? 0) > 0n) {
-      const net = BigInt(invoice.total) - BigInt(invoice.returnedTotal ?? 0);
-      doc.text(`برگشتی: ${text(invoice.returnedTotal)} ریال`, { align: 'right' });
+      .text(text(`جمع اقلام: ${invoice.subtotal} ریال`), { align: 'right' })
+      .text(text(`تخفیف: ${invoice.discount} ریال`), { align: 'right' });
+    if (returnedTotal > 0n) {
+      doc.text(text(`برگشتی: ${returnedTotal} ریال`), { align: 'right' });
       doc
         .fontSize(14)
         .fillColor('#0d2b4b')
-        .text(`مبلغ نهایی پس از برگشتی: ${text(net)} ریال`, { align: 'right' });
+        .text(text(`مبلغ نهایی پس از برگشتی: ${netTotal} ریال`), { align: 'right' });
     } else {
       doc
         .fontSize(14)
         .fillColor('#0d2b4b')
-        .text(`مبلغ نهایی: ${text(invoice.total)} ریال`, {
+        .text(text(`مبلغ نهایی: ${invoice.total} ریال`), {
           align: 'right',
         });
     }
@@ -523,8 +545,11 @@ export class InvoiceService {
       .moveDown(0.5)
       .fillColor('#0b1c2f')
       .fontSize(11)
-      .text(`پرداخت‌شده: ${text(invoice.paidAmount)} ریال`, { align: 'right' })
-      .text(`وضعیت: ${text(invoice.paymentStatus)}`, { align: 'right' });
+      .text(text(`پرداخت‌شده: ${paidAmount} ریال`), { align: 'right' });
+    if (remaining > 0n) doc.text(text(`باقی‌مانده (بدهی): ${remaining} ریال`), { align: 'right' });
+    doc.text(text(`وضعیت: ${statusLabels[invoice.paymentStatus] ?? invoice.paymentStatus}`), {
+      align: 'right',
+    });
     if (qrDataUrl) {
       doc.image(Buffer.from(qrDataUrl.split(',')[1], 'base64'), 42, doc.page.height - 150, {
         fit: [105, 105],
@@ -532,10 +557,15 @@ export class InvoiceService {
       doc
         .fontSize(8)
         .fillColor('#4a5f79')
-        .text('این فاکتور از طریق لینک امن و کوتاه قابل مشاهده است.', 165, doc.page.height - 105, {
-          width: 380,
-          align: 'right',
-        });
+        .text(
+          text('این فاکتور از طریق لینک امن و کوتاه قابل مشاهده است.'),
+          165,
+          doc.page.height - 105,
+          {
+            width: 380,
+            align: 'right',
+          },
+        );
     }
     doc.end();
     return finished;
@@ -722,6 +752,24 @@ export class InvoiceService {
           userId,
         },
       });
+      // A return shrinks what the customer still owes: settle the payment
+      // status against the NET amount so a fully-covered invoice stops
+      // showing debt (50k debt + a 50k return → status "paid", debt 0).
+      const refunded = await tx.returnRecord.aggregate({
+        where: { invoiceId: id },
+        _sum: { refundAmount: true },
+      });
+      const netTotal = invoice.total - (refunded._sum.refundAmount ?? 0n);
+      const nextStatus =
+        invoice.paidAmount >= netTotal ? 'paid' : invoice.paidAmount > 0n ? 'partial' : 'unpaid';
+      if (nextStatus !== invoice.paymentStatus)
+        await tx.invoice.update({
+          where: { id },
+          data: {
+            paymentStatus: nextStatus,
+            paidAt: nextStatus === 'paid' ? (invoice.paidAt ?? new Date()) : invoice.paidAt,
+          },
+        });
       await writeAudit(tx, {
         userId,
         action: 'return',
@@ -732,6 +780,7 @@ export class InvoiceService {
           quantity,
           refundAmount: refundAmount.toString(),
           restock: input.restock !== false,
+          ...(nextStatus !== invoice.paymentStatus ? { paymentStatus: nextStatus } : {}),
         },
       });
       return { ok: true, data: { ...record, quantityAfter } };

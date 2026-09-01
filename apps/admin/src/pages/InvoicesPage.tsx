@@ -125,6 +125,9 @@ export function InvoicesPage({
   /** The customer picked from the lookup — drives the customer bar chip. */
   const [pickedCustomer, setPickedCustomer] = useState<CustomerOption | null>(null);
   const [customerQuery, setCustomerQuery] = useState('');
+  /** True once the debounced lookup finished with zero matches — drives the
+   * "will be issued as a walk-in" hint under the name/mobile inputs. */
+  const [noCustomerMatch, setNoCustomerMatch] = useState(false);
   const [customerName, setCustomerName] = useState('');
   const [mobile, setMobile] = useState('');
   const [discount, setDiscount] = useState('');
@@ -258,16 +261,25 @@ export function InvoicesPage({
   }, [canCreate]);
 
   // Customer lookup is debounced: typing a mobile must not fire a request per key.
+  // The query comes from the NAME/MOBILE inputs themselves — typing there
+  // suggests existing customers; no separate search box is needed.
   useEffect(() => {
     const query = customerQuery.trim();
-    if (!canCreate || !query) {
+    if (!canCreate || query.length < 2) {
       setCustomers([]);
+      setNoCustomerMatch(false);
       return;
     }
     const handle = window.setTimeout(() => {
       void api<{ data: CustomerOption[] }>(`/customers?search=${encodeURIComponent(query)}`)
-        .then((result) => setCustomers(result.data))
-        .catch(() => setCustomers([]));
+        .then((result) => {
+          setCustomers(result.data);
+          setNoCustomerMatch(result.data.length === 0);
+        })
+        .catch(() => {
+          setCustomers([]);
+          setNoCustomerMatch(false);
+        });
     }, 250);
     return () => window.clearTimeout(handle);
   }, [canCreate, customerQuery]);
@@ -729,6 +741,7 @@ export function InvoicesPage({
                     setPickedCustomer(null);
                     setCustomerName('');
                     setMobile('');
+                    setCustomerQuery('');
                     setCustomerAddress('');
                   }}
                 >
@@ -736,34 +749,33 @@ export function InvoicesPage({
                 </button>
               </div>
             ) : (
-              <div className="cust-empty">
-                <input
-                  aria-label="نام مشتری"
-                  placeholder="نام مشتری حضوری…"
-                  value={customerName}
-                  onChange={(event) => setCustomerName(event.target.value)}
-                />
-                <input
-                  aria-label="موبایل مشتری"
-                  dir="ltr"
-                  placeholder="09xxxxxxxxx"
-                  value={mobile}
-                  onChange={(event) => setMobile(event.target.value)}
-                />
-              </div>
-            )}
-            <div className="cust-search search-field">
-              <span className="search-icon">⌕</span>
-              <input
-                aria-label="جست‌وجوی مشتری"
-                placeholder="نام یا موبایل مشتری…"
-                value={customerQuery}
-                onChange={(event) => setCustomerQuery(event.target.value)}
-              />
-              {customerQuery && (
-                <div className="invoice-candidates cust-candidates">
-                  {customers.length ? (
-                    customers.map((customer) => (
+              <div className="cust-empty-wrap">
+                <div className="cust-empty">
+                  <input
+                    aria-label="نام مشتری"
+                    placeholder="نام مشتری (انتخاب از لیست یا تایپ جدید)…"
+                    autoComplete="off"
+                    value={customerName}
+                    onChange={(event) => {
+                      setCustomerName(event.target.value);
+                      setCustomerQuery(event.target.value);
+                    }}
+                  />
+                  <input
+                    aria-label="موبایل مشتری"
+                    dir="ltr"
+                    placeholder="09xxxxxxxxx"
+                    autoComplete="off"
+                    value={mobile}
+                    onChange={(event) => {
+                      setMobile(event.target.value);
+                      setCustomerQuery(event.target.value);
+                    }}
+                  />
+                </div>
+                {!pickedCustomer && customerQuery.trim().length >= 2 && customers.length > 0 && (
+                  <div className="invoice-candidates cust-candidates">
+                    {customers.map((customer) => (
                       <button
                         type="button"
                         key={customer.id}
@@ -774,6 +786,7 @@ export function InvoicesPage({
                           setCustomerAddress(customer.address ?? '');
                           setCustomerQuery('');
                           setCustomers([]);
+                          setNoCustomerMatch(false);
                         }}
                       >
                         <b>{customer.name}</b>
@@ -782,13 +795,17 @@ export function InvoicesPage({
                           {money(customer.debt ?? 0)}
                         </span>
                       </button>
-                    ))
-                  ) : (
-                    <small>مشتری پیدا نشد؛ نام و موبایل را دستی وارد کنید.</small>
-                  )}
-                </div>
-              )}
-            </div>
+                    ))}
+                  </div>
+                )}
+                {!pickedCustomer && noCustomerMatch && (
+                  <small className="walkin-hint">
+                    مشتری ثبت‌شده‌ای با این مشخصات نیست؛ فاکتور با همین نام به‌صورت حضوری صادر
+                    می‌شود.
+                  </small>
+                )}
+              </div>
+            )}
             <a className="btn-soft-sm" href="#/customers">
               + مشتری جدید
             </a>
@@ -1201,15 +1218,21 @@ export function InvoicesPage({
             <div className="pay-modal-body">
               <div className="ln">
                 <span>مبلغ فاکتور</span>
-                <b>{money(paying.total)}</b>
+                <b>{money(net(paying))}</b>
               </div>
+              {Number(paying.returnedTotal ?? 0) > 0 && (
+                <div className="ln">
+                  <span>کسر مرجوعی‌ها</span>
+                  <b>{money(paying.returnedTotal ?? 0)}</b>
+                </div>
+              )}
               <div className="ln">
                 <span>دریافت‌شده تاکنون</span>
                 <b>{money(paying.paidAmount)}</b>
               </div>
               <div className="ln grand">
                 <span>مانده</span>
-                <b>{money(Math.max(0, Number(paying.total) - Number(paying.paidAmount)))}</b>
+                <b>{money(Math.max(0, net(paying) - Number(paying.paidAmount)))}</b>
               </div>
               <div className="paybox">
                 {methods.map((method) => {
@@ -1376,7 +1399,7 @@ export function InvoicesPage({
                         >
                           لینک
                         </button>
-                        {canPay && Number(invoice.total) > Number(invoice.paidAmount) && (
+                        {canPay && net(invoice) > Number(invoice.paidAmount) && (
                           <button
                             className="row-action"
                             onClick={() => {
@@ -1385,7 +1408,7 @@ export function InvoicesPage({
                                 {
                                   method: 'cash',
                                   amount: String(
-                                    Math.max(0, Number(invoice.total) - Number(invoice.paidAmount)),
+                                    Math.max(0, net(invoice) - Number(invoice.paidAmount)),
                                   ),
                                 },
                               ]);

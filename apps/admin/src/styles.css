@@ -4124,12 +4124,21 @@ body,
 .cust .wrap {
   min-width: 0;
 }
+.cust-empty-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 240px;
+}
 .cust-empty {
   display: flex;
   gap: 8px;
-  flex: 1;
-  min-width: 240px;
   flex-wrap: wrap;
+}
+.walkin-hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--sv-text-3);
 }
 .cust-empty input {
   flex: 1;
@@ -4142,19 +4151,11 @@ body,
   color: var(--sv-text);
   font: 12px Vazirmatn;
 }
-.cust-search {
-  width: 250px;
-  position: relative;
-  padding: 0;
-}
-.cust-search input {
-  padding: 9px 0;
-  font-size: 12px;
-}
 .cust-candidates {
   top: 44px;
   left: 0;
   right: 0;
+  max-width: 480px;
 }
 .cust-extra {
   display: flex;
@@ -4754,8 +4755,11 @@ button.btn-primary-lg:hover:not(:disabled) {
   .irow .hd-hide {
     display: none;
   }
-  .cust-search {
-    width: 100%;
+  .cust-empty-wrap {
+    min-width: 100%;
+  }
+  .cust-candidates {
+    max-width: none;
   }
   .cust-bar .lab {
     display: none;
