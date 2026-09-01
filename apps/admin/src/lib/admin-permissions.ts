@@ -9,6 +9,7 @@ export const pageRoles: Record<AdminPage, readonly UserRole[]> = {
   invoices: ['super_admin', 'manager', 'seller', 'accountant'],
   customers: ['super_admin', 'manager', 'seller', 'accountant'],
   inventory: ['super_admin', 'manager', 'warehouse'],
+  labels: ['super_admin', 'manager', 'warehouse', 'seller'],
   purchases: ['super_admin', 'manager', 'accountant'],
   suppliers: ['super_admin', 'manager', 'accountant'],
   reports: ['super_admin', 'manager', 'accountant'],

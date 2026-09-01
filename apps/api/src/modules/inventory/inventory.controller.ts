@@ -26,6 +26,10 @@ export class InventoryController {
   ) {
     return this.inventory.list({ q, brandId, locationId, status });
   }
+  /** Flat label rows for the product-label studio page (برچسب محصولات). */
+  @Get('labels') @Roles('warehouse', 'accountant') labels(@Query('q') q?: string) {
+    return this.inventory.labelItems(q);
+  }
   @Post('items') create(
     @Body() body: CreateInventoryItemDto,
     @Req() request: AuthenticatedRequest,

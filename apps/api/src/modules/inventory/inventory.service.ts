@@ -56,6 +56,67 @@ export class InventoryService {
     return { ok: true, data: filtered };
   }
 
+  /** Label-ready rows for the panel's product-label studio (برچسب محصولات):
+   * one flat DTO per inventory item — product name, SKU (product code), brand,
+   * category chip, compatible vehicles string and the real scannable barcode. */
+  async labelItems(q?: string) {
+    const query = q?.trim();
+    const items = await this.prisma.inventoryItem.findMany({
+      where: {
+        isActive: true,
+        product: { deletedAt: null },
+        ...(query
+          ? {
+              OR: [
+                { barcode: { contains: query } },
+                { product: { name: { contains: query, mode: 'insensitive' } } },
+                { product: { code: { contains: query, mode: 'insensitive' } } },
+              ],
+            }
+          : {}),
+      },
+      orderBy: [{ product: { name: 'asc' } }],
+      take: 200,
+      include: {
+        brand: true,
+        product: {
+          include: {
+            category: true,
+            compatibilities: { include: { model: { include: { make: true } } } },
+          },
+        },
+      },
+    });
+    return {
+      ok: true,
+      data: items.map((item) => {
+        const seen = new Set<string>();
+        const vehicles: string[] = [];
+        for (const entry of item.product.compatibilities) {
+          const label = entry.model.name;
+          if (seen.has(label)) continue;
+          seen.add(label);
+          vehicles.push(label);
+        }
+        // The label meta row ellipsizes, but keep the payload small anyway.
+        const vehicleText =
+          vehicles.length > 4
+            ? `${vehicles.slice(0, 4).join(' · ')} و ${vehicles.length - 4} مورد دیگر`
+            : vehicles.join(' · ');
+        return {
+          id: item.id,
+          barcode: item.barcode,
+          name: item.product.name,
+          sku: item.product.code,
+          brand: item.brand.name,
+          category: item.product.category.name,
+          vehicles: vehicleText,
+          quantity: item.quantity,
+        };
+      }),
+    };
+  }
+
   async create(input: {
     productId?: string;
     brandId?: string;

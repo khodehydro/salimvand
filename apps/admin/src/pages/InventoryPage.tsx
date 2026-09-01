@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { hashForPage } from '../lib/admin-route';
 import { api, downloadFile } from '../lib/api';
 import { Sheet } from '@salimvand/ui';
 import { StockStepper } from '../components/StockStepper';
@@ -221,36 +222,10 @@ export function InventoryPage() {
     }
   };
 
-  /** Label popup with a real scannable barcode: the SVG is rendered in-page
-   * (jsbarcode), serialized and embedded into the print window. */
-  const printLabel = (item: Item) => {
-    const popup = window.open('', '_blank', 'width=420,height=340');
-    if (!popup) return;
-    const host = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    // Render with the same library the panel uses, serialize into the popup.
-    import('jsbarcode')
-      .then(({ default: JsBarcode }) => {
-        try {
-          JsBarcode(host, item.barcode, {
-            format: /^\d{13}$/.test(item.barcode) ? 'EAN13' : 'CODE128',
-            height: 60,
-            width: 2,
-            fontSize: 16,
-            margin: 4,
-          });
-        } catch {
-          /* keep text-only fallback */
-        }
-        const barcodeSvg = new XMLSerializer().serializeToString(host);
-        writeLabel(popup, item, barcodeSvg);
-      })
-      .catch(() => writeLabel(popup, item, ''));
-  };
-  const writeLabel = (popup: Window, item: Item, barcodeSvg: string) => {
-    popup.document.write(
-      `<html dir="rtl"><head><title>برچسب ${item.barcode}</title><style>body{font-family:Tahoma;text-align:center;padding:20px}h2{margin:8px 6px}code{font:20px monospace;letter-spacing:3px}.line{border:1px solid #222;padding:14px}svg{max-width:100%}</style></head><body><div class="line"><h2>${item.product?.name ?? ''}</h2><p>${item.brand?.name ?? ''}</p>${barcodeSvg}<p>${item.location?.code ?? ''}</p><code>${item.barcode}</code></div><script>window.print()<\/script></body></html>`,
-    );
-    popup.document.close();
+  /** One click → the full label studio with this item preselected
+   * (#/labels?item=<id>): real barcode, three sizes, three styles, A4 sheet. */
+  const openLabelStudio = (item: Item) => {
+    window.location.hash = hashForPage('labels', { item: item.id });
   };
 
   const activeTab = tabs.find((entry) => entry.id === tab) ?? tabs[0];
@@ -415,8 +390,8 @@ export function InventoryPage() {
                           <button className="row-action" onClick={() => void openDetail(item)}>
                             کارت قلم
                           </button>
-                          <button className="row-action" onClick={() => printLabel(item)}>
-                            چاپ لیبل
+                          <button className="row-action" onClick={() => openLabelStudio(item)}>
+                            برچسب
                           </button>
                         </div>
                       </div>

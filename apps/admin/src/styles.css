@@ -4810,3 +4810,206 @@ button.btn-primary-lg:hover:not(:disabled) {
   grid-template-columns: 110px 90px 1fr 1.3fr;
   gap: 8px;
 }
+
+/* ============ صفحهٔ برچسب محصولات (پورت قالب داکیومنت more features) ============ */
+.labels-page .page-h-tools {
+  align-items: center;
+}
+.lbl-print-frame {
+  position: fixed;
+  inset: auto 0 0 0;
+  width: 0;
+  height: 0;
+  border: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.labels-layout {
+  display: grid;
+  grid-template-columns: 330px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+.lbl-side {
+  position: sticky;
+  top: 14px;
+}
+.lbl-card {
+  background: var(--sv-surface);
+  border: 1px solid var(--sv-border);
+  border-radius: 15px;
+  box-shadow: var(--sv-shadow-1, 0 1px 2px rgba(9, 28, 47, 0.07));
+  overflow: hidden;
+}
+.lbl-main .lbl-card + .lbl-card {
+  margin-top: 18px;
+}
+.lbl-card-h {
+  padding: 12px 15px;
+  border-bottom: 1px solid var(--sv-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.lbl-card-h h3 {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 700;
+}
+.lbl-card-h small {
+  color: var(--sv-text-3, #8095ad);
+  font-size: 11px;
+}
+.lbl-card-b {
+  padding: 15px;
+}
+.lbl-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 12px;
+}
+.lbl-field > label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--sv-text-2);
+}
+.lbl-field input,
+.lbl-field select {
+  height: 38px;
+  padding: 0 10px;
+  border-radius: 9px;
+  background: var(--sv-surface);
+  border: 1px solid var(--sv-border-2, var(--sv-border));
+  color: var(--sv-text);
+  font: 12.5px Vazirmatn;
+  width: 100%;
+}
+.lbl-field input:focus,
+.lbl-field select:focus {
+  outline: none;
+  border-color: var(--sv-brand-400, #3f8ede);
+  box-shadow: 0 0 0 3px rgba(31, 111, 190, 0.14);
+}
+.lbl-latin {
+  text-align: left;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
+}
+.lbl-hint {
+  font-size: 10.5px;
+  color: var(--sv-text-3, #8095ad);
+  line-height: 1.8;
+}
+.lbl-hr {
+  border: 0;
+  border-top: 1px solid var(--sv-border);
+  margin: 14px 0;
+}
+.lbl-seg {
+  display: flex;
+  width: 100%;
+}
+.lbl-seg button {
+  flex: 1;
+}
+.lbl-chk {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--sv-text-2);
+  margin-bottom: 9px;
+  cursor: pointer;
+}
+.lbl-chk input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--sv-brand-600, #175894);
+}
+.lbl-zoom-btns {
+  display: flex;
+  gap: 6px;
+}
+.lbl-zoom-btn {
+  height: 29px;
+  padding: 0 11px;
+  border-radius: 8px;
+  border: 1px solid var(--sv-border);
+  background: var(--sv-surface);
+  color: var(--sv-text-2);
+  font: 12px Vazirmatn;
+  font-weight: 600;
+  cursor: pointer;
+}
+.lbl-zoom-btn:hover:not(:disabled) {
+  border-color: var(--sv-brand-400, #3f8ede);
+  color: var(--sv-primary-2, var(--sv-primary));
+}
+.lbl-zoom-btn.on {
+  background: var(--sv-primary, #0d2b4b);
+  border-color: var(--sv-primary, #0d2b4b);
+  color: #fff;
+}
+/* صحنهٔ پیش‌نمایش: کاغذ شطرنجی مثل قالب داکیومنت */
+.lbl-stage {
+  background:
+    linear-gradient(var(--sv-surface-3, #eef3f9) 1px, transparent 1px) 0 0 / 22px 22px,
+    linear-gradient(90deg, var(--sv-surface-3, #eef3f9) 1px, transparent 1px) 0 0 / 22px 22px,
+    var(--sv-surface);
+  border: 1px solid var(--sv-border);
+  border-radius: 13px;
+  padding: 24px;
+  min-height: 260px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  align-items: flex-start;
+  justify-content: center;
+}
+.lbl-zoomwrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.lbl-zoombox {
+  position: relative;
+  overflow: visible;
+}
+.lbl-zoom {
+  position: absolute;
+  top: 0;
+  right: 0;
+  transform-origin: top right;
+}
+.lbl-spec {
+  font-size: 11px;
+  color: var(--sv-text-3, #8095ad);
+  text-align: center;
+  margin-top: 8px;
+}
+.lbl-foot-note {
+  font-size: 11.5px;
+  color: var(--sv-text-3, #8095ad);
+  line-height: 2;
+  margin: 14px 4px 0;
+}
+@media (max-width: 1020px) {
+  .labels-layout {
+    grid-template-columns: 1fr;
+  }
+  .lbl-side {
+    position: static;
+  }
+}
+@media (max-width: 640px) {
+  .lbl-stage {
+    padding: 14px;
+    gap: 16px;
+  }
+  .labels-page .page-h-tools {
+    width: 100%;
+    justify-content: space-between;
+  }
+}

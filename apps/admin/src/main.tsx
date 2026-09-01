@@ -13,6 +13,7 @@ import { api } from './lib/api';
 import { LoginPage } from './pages/LoginPage';
 import { ProductsPage } from './pages/ProductsPage';
 import { InventoryPage } from './pages/InventoryPage';
+import { LabelsPage } from './pages/LabelsPage';
 import { ReferencesPage } from './pages/ReferencesPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { InvoicesPage } from './pages/InvoicesPage';
@@ -40,6 +41,7 @@ const navItems: NavItem[] = [
   { id: 'invoices', label: 'فروش و فاکتورها', icon: '▤' },
   { id: 'customers', label: 'مشتریان', icon: '☏' },
   { id: 'inventory', label: 'انبار و موجودی', icon: '⌗' },
+  { id: 'labels', label: 'برچسب محصولات', icon: '▣' },
   { id: 'products', label: 'محصولات', icon: '▦' },
   { id: 'purchases', label: 'خرید و تأمین', icon: '⇧' },
   { id: 'suppliers', label: 'تأمین‌کنندگان', icon: '♧' },
@@ -57,7 +59,7 @@ const navGroups: Array<{ label: string; ids: Page[] }> = [
   { label: 'کار روزانه', ids: ['dashboard', 'invoices', 'customers'] },
   {
     label: 'انبار و کاتالوگ',
-    ids: ['inventory', 'products', 'purchases', 'suppliers', 'media', 'references'],
+    ids: ['inventory', 'labels', 'products', 'purchases', 'suppliers', 'media', 'references'],
   },
   { label: 'مدیریت', ids: ['reports', 'messaging', 'users', 'audit', 'settings'] },
 ];
@@ -66,6 +68,7 @@ const pageTitles: Record<Page, string> = {
   messaging: 'پیامک و کانال\u200cها',
   products: 'کاتالوگ محصولات',
   inventory: 'انبار و موجودی',
+  labels: 'برچسب محصولات',
   invoices: 'فروش و فاکتورها',
   media: 'رسانه‌ها',
   references: 'برندها و خودروها',
@@ -344,6 +347,8 @@ function App() {
             <MediaPage />
           ) : page === 'inventory' ? (
             <InventoryPage />
+          ) : page === 'labels' ? (
+            <LabelsPage />
           ) : page === 'reports' ? (
             <ReportsPage />
           ) : page === 'settings' ? (
