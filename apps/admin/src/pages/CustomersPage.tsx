@@ -24,6 +24,7 @@ type Customer = {
   id: string;
   name: string;
   mobile: string;
+  address?: string | null;
   notes?: string | null;
   debt: string | number;
   invoiceCount: number;
@@ -45,7 +46,7 @@ export function CustomersPage({
 }) {
   const [rows, setRows] = useState<Customer[]>([]);
   const [search, setSearch] = useState('');
-  const [form, setForm] = useState({ name: '', mobile: '', notes: '' });
+  const [form, setForm] = useState({ name: '', mobile: '', address: '', notes: '' });
   const [message, setMessage] = useState('');
   const [fieldErrors, setFieldErrors] = useState<{ name?: string; mobile?: string }>({});
   const [loading, setLoading] = useState(false);
@@ -108,7 +109,7 @@ export function CustomersPage({
     try {
       await api('/customers', { method: 'POST', body: JSON.stringify(form) });
       setMessage('مشتری ثبت شد');
-      setForm({ name: '', mobile: '', notes: '' });
+      setForm({ name: '', mobile: '', address: '', notes: '' });
       load();
     } catch (error) {
       setMessage((error as Error).message);
@@ -215,6 +216,14 @@ export function CustomersPage({
             />
           </label>
           {fieldErrors.mobile && <small className="field-error">{fieldErrors.mobile}</small>}
+          <label>
+            آدرس
+            <input
+              value={form.address}
+              onChange={(e) => setForm({ ...form, address: e.target.value })}
+              placeholder="آدرس مشتری — هنگام صدور فاکتور پیش‌فرض می‌شود"
+            />
+          </label>
           <label>
             یادداشت
             <input

@@ -3712,3 +3712,132 @@ body,
     text-align: center;
   }
 }
+
+/* ============================================================
+   Invoices: issue/list tabs, invoice addresses, partial returns.
+   ============================================================ */
+.invoice-addresses {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.invoice-addresses label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--sv-text-2);
+}
+.invoice-dialog {
+  width: min(94vw, 780px);
+}
+.invoice-address-edit {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 10px;
+  align-items: end;
+  margin: 14px 0;
+}
+.invoice-address-edit label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--sv-text-2);
+}
+.invoice-address-edit textarea {
+  border: 1px solid var(--sv-border);
+  background: var(--sv-surface-2);
+  color: var(--sv-text);
+  border-radius: 8px;
+  padding: 10px;
+  font: 13px Vazirmatn;
+  resize: vertical;
+}
+.inv-detail-line {
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  align-items: center;
+}
+.inv-detail-line .chip {
+  flex: none;
+}
+.returns-history {
+  margin-top: 14px;
+  display: grid;
+  gap: 6px;
+}
+.returns-history h3 {
+  margin: 0 0 4px;
+  font-size: 13px;
+  color: var(--sv-text-2);
+}
+.returns-history > div {
+  display: grid;
+  grid-template-columns: minmax(120px, 1.4fr) auto auto 1fr 1fr auto;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+  border-bottom: 1px dashed var(--sv-border);
+  padding-bottom: 6px;
+}
+.returns-history small {
+  color: var(--sv-text-3);
+}
+.return-dialog {
+  width: min(94vw, 540px);
+}
+.return-form {
+  display: grid;
+  gap: 12px;
+}
+.return-form label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--sv-text-2);
+}
+.return-form input {
+  border: 1px solid var(--sv-border);
+  background: var(--sv-surface-2);
+  color: var(--sv-text);
+  border-radius: 8px;
+  padding: 10px;
+  font: 13px Vazirmatn;
+}
+.restock-toggle {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  background: var(--sv-surface-2);
+  border: 1px solid var(--sv-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.restock-toggle input {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  accent-color: var(--sv-primary);
+  flex: none;
+}
+.restock-toggle span {
+  display: grid;
+  gap: 4px;
+  color: var(--sv-text);
+  font-size: 13px;
+}
+.restock-toggle small {
+  color: var(--sv-text-3);
+  font-size: 11px;
+}
+
+@media (max-width: 700px) {
+  .invoice-addresses,
+  .invoice-address-edit {
+    grid-template-columns: 1fr;
+  }
+  .invoice-dialog,
+  .return-dialog {
+    width: 100%;
+  }
+  .returns-history > div {
+    grid-template-columns: 1fr auto;
+  }
+}

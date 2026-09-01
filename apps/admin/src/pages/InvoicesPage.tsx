@@ -4,7 +4,9 @@ import {
   discountedUnitPrice,
   invoiceTotals,
   isValidIranMobile,
+  lineRemaining,
   money,
+  netInvoiceAmount,
   paymentTotal as sumPayments,
   persianNumber,
   remainingDebt as debtLeft,
@@ -19,20 +21,21 @@ type Invoice = {
   number: string;
   customerName?: string | null;
   customerMobile?: string | null;
+  storeAddress?: string | null;
+  customerAddress?: string | null;
   subtotal: string;
   discount: string;
   total: string;
+  /** Sum of every return's refundAmount (serialized BigInt). */
+  returnedTotal?: string;
+  /** total - returnedTotal: what the customer effectively owes. */
+  netTotal?: string;
   paidAmount: string;
   paymentStatus: string;
   status: string;
   issuedAt: string;
-  items: Array<{
-    productName: string;
-    quantity: number;
-    unitPrice: string;
-    lineTotal: string;
-    inventoryItem?: { brand: { name: string } } | null;
-  }>;
+  items: InvoiceItemRow[];
+  returns?: ReturnRow[];
 };
 type StockOption = {
   id: string;
@@ -43,7 +46,31 @@ type StockOption = {
   product: { name: string; code: string };
   brand: { name: string };
 };
-type CustomerOption = { id: string; name: string; mobile: string; debt?: string | number };
+type CustomerOption = {
+  id: string;
+  name: string;
+  mobile: string;
+  address?: string | null;
+  debt?: string | number;
+};
+type InvoiceItemRow = {
+  id: string;
+  productName: string;
+  quantity: number;
+  returnedQuantity?: number;
+  unitPrice: string;
+  lineTotal: string;
+  inventoryItem?: { brand: { name: string } } | null;
+};
+type ReturnRow = {
+  id: string;
+  invoiceItemId: string;
+  quantity: number;
+  refundAmount: string;
+  reason: string;
+  restock: boolean;
+  createdAt: string;
+};
 type DraftLine = { item: StockOption; quantity: number; lineDiscount: number };
 type CreatedInvoice = {
   id: string;
@@ -104,15 +131,39 @@ export function InvoicesPage({
   } | null>(null);
   const [linkBusy, setLinkBusy] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'all' | 'paid' | 'partial' | 'unpaid'>('all');
+  const [invoiceQuery, setInvoiceQuery] = useState('');
   const [created, setCreated] = useState<CreatedInvoice | null>(null);
+  // Two tabs: issuing lives apart from the issued-invoices register so sellers
+  // can work the POS flow and the archive independently.
+  const [tab, setTab] = useState<'issue' | 'list'>(canCreate ? 'issue' : 'list');
+  // Addresses on the invoice (store snapshot + customer), editable later.
+  const [storeAddress, setStoreAddress] = useState('');
+  const [customerAddress, setCustomerAddress] = useState('');
+  const [addressDraft, setAddressDraft] = useState({ store: '', customer: '' });
+  const [addressBusy, setAddressBusy] = useState(false);
+  // Partial return dialog: one invoice line, qty 1..remaining, reason and a
+  // restock switch (damaged goods stay out of sellable stock).
+  const [returnLine, setReturnLine] = useState<{ invoice: Invoice; item: InvoiceItemRow } | null>(
+    null,
+  );
+  const [returnQty, setReturnQty] = useState('1');
+  const [returnReason, setReturnReason] = useState('');
+  const [returnRestock, setReturnRestock] = useState(true);
+  const [returnBusy, setReturnBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [scanning, setScanning] = useState(false);
   const searchRef = useRef<HTMLInputElement | null>(null);
 
   const load = () =>
     api<{ data: Invoice[] }>('/invoices')
-      .then((result) => setRows(result.data))
-      .catch((error: Error) => setMessage(error.message));
+      .then((result) => {
+        setRows(result.data);
+        return result.data;
+      })
+      .catch((error: Error) => {
+        setMessage(error.message);
+        return [] as Invoice[];
+      });
 
   // The public link is stored hashed and is short + random — the invoice
   // number never appears in it, so no customer can reach another invoice by
@@ -162,13 +213,13 @@ export function InvoicesPage({
       const invoiceId = paramsFromHash(window.location.hash).invoice;
       if (!invoiceId) return;
       const match = rows.find((row) => row.id === invoiceId);
-      if (match) setViewing(match);
+      if (match) openViewing(match);
       else
         void api<{ data: Invoice[] }>('/invoices')
           .then((result) => {
             setRows(result.data);
             const found = result.data.find((row) => row.id === invoiceId);
-            if (found) setViewing(found);
+            if (found) openViewing(found);
           })
           .catch(() => undefined);
     };
@@ -181,8 +232,13 @@ export function InvoicesPage({
   useEffect(() => {
     void load();
     if (canCreate)
-      void api<{ data: StockOption[] }>('/invoices/options')
-        .then((result) => setOptions(result.data))
+      void api<{ data: StockOption[]; storeAddress?: string }>('/invoices/options')
+        .then((result) => {
+          setOptions(result.data);
+          // Store address snapshot from settings — sellers cannot read
+          // /settings directly, so it travels with the invoice options.
+          if (result.storeAddress) setStoreAddress(result.storeAddress);
+        })
         .catch((error: Error) => setMessage(error.message));
   }, [canCreate]);
 
@@ -293,6 +349,8 @@ export function InvoicesPage({
         body: JSON.stringify({
           customerName: customerName || undefined,
           customerMobile: mobile || undefined,
+          storeAddress: storeAddress.trim() || undefined,
+          customerAddress: customerAddress.trim() || undefined,
           discount: discountValue,
           items: lines.map((line) => ({
             inventoryItemId: line.item.id,
@@ -331,6 +389,7 @@ export function InvoicesPage({
       setCustomerName('');
       setMobile('');
       setCustomerQuery('');
+      setCustomerAddress('');
       setDiscount('');
       setPayments([{ method: 'cash', amount: '' }]);
       await load();
@@ -360,6 +419,79 @@ export function InvoicesPage({
   };
   const payAmountValid = () => payments.some((row) => Number(row.amount) > 0);
 
+  /** Opens the invoice detail modal with a fresh address draft. */
+  const openViewing = (invoice: Invoice) => {
+    setViewing(invoice);
+    setAddressDraft({ store: invoice.storeAddress ?? '', customer: invoice.customerAddress ?? '' });
+  };
+
+  /** Addresses stay editable after issue (store snapshot / customer address). */
+  const saveAddresses = async () => {
+    if (!viewing) return;
+    setAddressBusy(true);
+    try {
+      await api(`/invoices/${viewing.id}/addresses`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          storeAddress: addressDraft.store,
+          customerAddress: addressDraft.customer,
+        }),
+      });
+      setMessage(`آدرس‌های فاکتور ${viewing.number} ذخیره شد.`);
+      const updated = await load();
+      setViewing(updated.find((row) => row.id === viewing.id) ?? null);
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setAddressBusy(false);
+    }
+  };
+
+  /** Partial return of ONE line: 1 of 3 brake pads can go back while 2 stay. */
+  const openReturn = (invoice: Invoice, item: InvoiceItemRow) => {
+    const remaining = lineRemaining(item.quantity, item.returnedQuantity);
+    if (invoice.status === 'voided') return setMessage('فاکتور باطل‌شده قابل مرجوعی نیست');
+    if (remaining <= 0) return setMessage('این قلم کاملاً برگشت خورده است');
+    setReturnLine({ invoice, item });
+    setReturnQty('1');
+    setReturnReason('');
+    setReturnRestock(true);
+  };
+
+  const submitReturn = async () => {
+    if (!returnLine) return;
+    const remaining = lineRemaining(returnLine.item.quantity, returnLine.item.returnedQuantity);
+    const qty = Number(returnQty);
+    const reason = returnReason.trim();
+    if (!Number.isInteger(qty) || qty <= 0 || qty > remaining)
+      return setMessage(`تعداد برگشت باید بین ۱ تا ${remaining} باشد`);
+    if (!reason) return setMessage('دلیل مرجوعی الزامی است');
+    setReturnBusy(true);
+    try {
+      await api(`/invoices/${returnLine.invoice.id}/returns`, {
+        method: 'POST',
+        body: JSON.stringify({
+          invoiceItemId: returnLine.item.id,
+          quantity: qty,
+          reason,
+          restock: returnRestock,
+        }),
+      });
+      setMessage(
+        `${qty} عدد «${returnLine.item.productName}» برگشت خورده شد؛ مبلغ فاکتور کم شد${
+          returnRestock ? ' و قطعه به دارایی انبار برگشت' : ' (خراب — به انبار برنگشت)'
+        }.`,
+      );
+      const updated = await load();
+      if (viewing) setViewing(updated.find((row) => row.id === returnLine.invoice.id) ?? null);
+      setReturnLine(null);
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setReturnBusy(false);
+    }
+  };
+
   // Resending rotates the short link, so the operator gets the new URL to hand over.
   const resend = async (invoice: Invoice) => {
     const mobile = window.prompt('شمارهٔ موبایل گیرنده (خالی = شمارهٔ ثبت‌شدهٔ فاکتور)') ?? '';
@@ -376,15 +508,60 @@ export function InvoicesPage({
     }
   };
 
+  // The archive is searchable the moment you type — number, name or mobile.
+  const filteredRows = useMemo(() => {
+    const query = invoiceQuery.trim().toLocaleLowerCase();
+    return rows
+      .filter((invoice) => statusFilter === 'all' || invoice.paymentStatus === statusFilter)
+      .filter(
+        (invoice) =>
+          !query ||
+          `${invoice.number} ${invoice.customerName ?? ''} ${invoice.customerMobile ?? ''}`
+            .toLocaleLowerCase()
+            .includes(query),
+      );
+  }, [rows, statusFilter, invoiceQuery]);
+
+  const net = (invoice: Invoice) => netInvoiceAmount(invoice.total, invoice.netTotal);
+  const returnedOf = (invoice: Invoice) => Number(invoice.returnedTotal ?? 0);
+
   return (
-    <section>
+    <section className="invoices-page">
       <div className="page-title">
         <div>
           <h1>فروش و فاکتورها</h1>
-          <p className="muted">صدور فاکتور چندقلمی با اسکنر، مصرف اتمیک موجودی و پرداخت چندروشه</p>
+          <p className="muted">
+            {tab === 'issue'
+              ? 'صدور فاکتور چندقلمی با اسکنر، مصرف اتمیک موجودی و پرداخت چندروشه'
+              : 'جست‌وجوی فاکتور، مشاهده، لینک امن و ثبت برگشت جزیی اقلام'}
+          </p>
         </div>
         <span className="count">{persianNumber(rows.length)} فاکتور</span>
       </div>
+
+      <nav className="settings-tabs" aria-label="بخش‌های فروش">
+        {canCreate && (
+          <button
+            type="button"
+            className={tab === 'issue' ? 'active' : ''}
+            onClick={() => setTab('issue')}
+            aria-current={tab === 'issue' ? 'true' : undefined}
+          >
+            <b>صدور فاکتور</b>
+            <small>ثبت فروش جدید با بارکدخوان و پرداخت چندروشه</small>
+          </button>
+        )}
+        <button
+          type="button"
+          className={tab === 'list' ? 'active' : ''}
+          onClick={() => setTab('list')}
+          aria-current={tab === 'list' ? 'true' : undefined}
+        >
+          <b>فاکتورهای صادر شده</b>
+          <small>آرشیو، جست‌وجو، برگشت جزیی اقلام و لینک امن</small>
+        </button>
+      </nav>
+
       {message && <div className="notice">{message}</div>}
 
       {created && (
@@ -444,7 +621,7 @@ export function InvoicesPage({
         </div>
       )}
 
-      {canCreate && (
+      {tab === 'issue' && canCreate && (
         <div className="cards invoice-form">
           <div>
             <h2>صدور فاکتور جدید</h2>
@@ -581,6 +758,7 @@ export function InvoicesPage({
                           onClick={() => {
                             setCustomerName(customer.name);
                             setMobile(customer.mobile);
+                            setCustomerAddress(customer.address ?? '');
                             setCustomerQuery('');
                             setCustomers([]);
                           }}
@@ -619,6 +797,27 @@ export function InvoicesPage({
                 value={discount}
                 onChange={(event) => setDiscount(event.target.value)}
               />
+            </div>
+
+            <div className="form-grid invoice-addresses">
+              <label>
+                آدرس فروشگاه (روی فاکتور چاپ و نمایش داده می‌شود)
+                <textarea
+                  rows={2}
+                  value={storeAddress}
+                  onChange={(event) => setStoreAddress(event.target.value)}
+                  placeholder="آدرس فروشگاه — از تنظیمات پیش‌فرض آمده و قابل ویرایش است"
+                />
+              </label>
+              <label>
+                آدرس مشتری (اختیاری — برای ارسال و پروندهٔ مشتری)
+                <textarea
+                  rows={2}
+                  value={customerAddress}
+                  onChange={(event) => setCustomerAddress(event.target.value)}
+                  placeholder="آدرس مشتری؛ با انتخاب مشتری از لیست، از پروندهٔ او پر می‌شود"
+                />
+              </label>
             </div>
 
             <h3 className="muted">دریافت‌ها</h3>
@@ -844,176 +1043,362 @@ export function InvoicesPage({
         </div>
       )}
 
-      <div className="list-toolbar">
-        <h2>فاکتورهای اخیر</h2>
-        <div className="pill-filters" role="tablist" aria-label="فیلتر وضعیت پرداخت">
-          {(
-            [
-              { id: 'all', label: 'همه' },
-              { id: 'unpaid', label: 'پرداخت‌نشده' },
-              { id: 'partial', label: 'پرداخت بخشی' },
-              { id: 'paid', label: 'تسویه‌شده' },
-            ] as const
-          ).map((entry) => (
-            <button
-              key={entry.id}
-              role="tab"
-              aria-selected={statusFilter === entry.id}
-              className={statusFilter === entry.id ? 'pill active' : 'pill'}
-              onClick={() => setStatusFilter(entry.id)}
-            >
-              {entry.label}
-            </button>
-          ))}
-        </div>
-      </div>
-      {viewing && (
-        <div className="notice invoice-detail">
-          <strong>
-            جزئیات فاکتور {viewing.number}
-            <button className="row-action" onClick={() => setViewing(null)}>
-              بستن ✕
-            </button>
-          </strong>
-          <div className="invoice-detail-grid">
-            <span>
-              مشتری: <b>{viewing.customerName ?? 'مشتری حضوری'}</b>
-            </span>
-            <span>
-              تاریخ صدور: <b>{new Date(viewing.issuedAt).toLocaleDateString('fa-IR')}</b>
-            </span>
-            <span>
-              جمع اقلام: <b>{money(viewing.subtotal)}</b>
-            </span>
-            <span>
-              تخفیف: <b>{money(viewing.discount)}</b>
-            </span>
-            <span>
-              مبلغ نهایی: <b>{money(viewing.total)}</b>
-            </span>
-            <span>
-              پرداخت‌شده: <b>{money(viewing.paidAmount)}</b>
-            </span>
+      {tab === 'list' && (
+        <>
+          <div className="list-toolbar">
+            <div className="search-field">
+              <span className="search-icon">⌕</span>
+              <input
+                placeholder="جست‌وجوی لحظه‌ای شمارهٔ فاکتور، نام یا موبایل مشتری…"
+                value={invoiceQuery}
+                onChange={(event) => setInvoiceQuery(event.target.value)}
+              />
+              {invoiceQuery && (
+                <button
+                  type="button"
+                  className="search-clear"
+                  onClick={() => setInvoiceQuery('')}
+                  aria-label="پاک کردن جست‌وجو"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+            <div className="pill-filters" role="tablist" aria-label="فیلتر وضعیت پرداخت">
+              {(
+                [
+                  { id: 'all', label: 'همه' },
+                  { id: 'unpaid', label: 'پرداخت‌نشده' },
+                  { id: 'partial', label: 'پرداخت بخشی' },
+                  { id: 'paid', label: 'تسویه‌شده' },
+                ] as const
+              ).map((entry) => (
+                <button
+                  key={entry.id}
+                  role="tab"
+                  aria-selected={statusFilter === entry.id}
+                  className={statusFilter === entry.id ? 'pill active' : 'pill'}
+                  onClick={() => setStatusFilter(entry.id)}
+                >
+                  {entry.label}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="invoice-detail-items">
-            {viewing.items.map((item, index) => (
-              <div key={index}>
-                <span>
-                  {item.productName}
-                  {item.inventoryItem?.brand?.name ? (
-                    <small> · {item.inventoryItem.brand.name}</small>
-                  ) : null}
-                </span>
-                <span>
-                  {persianNumber(item.quantity)} × {money(item.unitPrice)} ={' '}
-                  <b>{money(item.lineTotal)}</b>
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-      <div className="product-table">
-        <div className="table-head invoice-head">
-          <span>شماره</span>
-          <span>مشتری</span>
-          <span>اقلام</span>
-          <span>مبلغ</span>
-          <span>پرداخت</span>
-          <span>بدهی</span>
-          <span>عملیات</span>
-        </div>
-        {rows
-          .filter((invoice) => statusFilter === 'all' || invoice.paymentStatus === statusFilter)
-          .map((invoice) => {
-            const debt = Math.max(0, Number(invoice.total) - Number(invoice.paidAmount));
-            return (
-              <div className="table-row invoice-row" key={invoice.id}>
-                <code>{invoice.number}</code>
-                <span>{invoice.customerName ?? 'مشتری حضوری'}</span>
-                <span>{persianNumber(invoice.items.length)}</span>
-                <strong>{money(invoice.total)}</strong>
-                <span className={invoice.paymentStatus === 'paid' ? 'status-chip' : 'low-stock'}>
-                  {labels[invoice.paymentStatus] ?? invoice.paymentStatus}
-                  <small> · {money(invoice.paidAmount)}</small>
-                </span>
-                {invoice.status === 'voided' || debt === 0 ? (
-                  <span className="muted">—</span>
-                ) : (
-                  <span className="low-stock">{money(debt)}</span>
-                )}
-                <span>
-                  {invoice.status === 'voided' ? (
-                    labels.voided
+          <div className="product-table">
+            <div className="table-head invoice-head">
+              <span>شماره</span>
+              <span>مشتری</span>
+              <span>اقلام</span>
+              <span>مبلغ</span>
+              <span>پرداخت</span>
+              <span>بدهی</span>
+              <span>عملیات</span>
+            </div>
+            {filteredRows.map((invoice) => {
+              const debt = Math.max(0, net(invoice) - Number(invoice.paidAmount));
+              const returned = returnedOf(invoice);
+              return (
+                <div className="table-row invoice-row" key={invoice.id}>
+                  <code>{invoice.number}</code>
+                  <span>{invoice.customerName ?? 'مشتری حضوری'}</span>
+                  <span>
+                    {persianNumber(invoice.items.length)}
+                    {returned > 0 && <small className="chip warn">برگشتی {money(returned)}</small>}
+                  </span>
+                  <strong>{money(net(invoice))}</strong>
+                  <span className={invoice.paymentStatus === 'paid' ? 'status-chip' : 'low-stock'}>
+                    {labels[invoice.paymentStatus] ?? invoice.paymentStatus}
+                    <small> · {money(invoice.paidAmount)}</small>
+                  </span>
+                  {invoice.status === 'voided' || debt === 0 ? (
+                    <span className="muted">—</span>
                   ) : (
-                    <span className="row-actions">
-                      <button className="row-action" onClick={() => setViewing(invoice)}>
-                        نمایش
-                      </button>
-                      <button
-                        className="row-action"
-                        onClick={() => void downloadInvoicePdf(invoice)}
-                        title="دانلود پی‌دی‌اف"
-                      >
-                        PDF
-                      </button>
-                      <button
-                        className="row-action"
-                        onClick={() => {
-                          setLinkFor(invoice);
-                          void issueLink(invoice);
-                        }}
-                        title="لینک کوتاه امن فاکتور برای مشتری"
-                      >
-                        لینک
-                      </button>
-                      {canPay && Number(invoice.total) > Number(invoice.paidAmount) && (
+                    <span className="low-stock">{money(debt)}</span>
+                  )}
+                  <span>
+                    {invoice.status === 'voided' ? (
+                      labels.voided
+                    ) : (
+                      <span className="row-actions">
+                        <button className="row-action" onClick={() => openViewing(invoice)}>
+                          نمایش / برگشت
+                        </button>
+                        <button
+                          className="row-action"
+                          onClick={() => void downloadInvoicePdf(invoice)}
+                          title="دانلود پی‌دی‌اف"
+                        >
+                          PDF
+                        </button>
                         <button
                           className="row-action"
                           onClick={() => {
-                            setPaying(invoice);
-                            setPayments([
-                              {
-                                method: 'cash',
-                                amount: String(
-                                  Math.max(0, Number(invoice.total) - Number(invoice.paidAmount)),
-                                ),
-                              },
-                            ]);
+                            setLinkFor(invoice);
+                            void issueLink(invoice);
                           }}
+                          title="لینک کوتاه امن فاکتور برای مشتری"
                         >
-                          پرداخت
+                          لینک
                         </button>
-                      )}
-                      {canResend && (
-                        <button className="row-action" onClick={() => void resend(invoice)}>
-                          پیامک مجدد
-                        </button>
-                      )}
-                      {canVoid && (
-                        <button
-                          className="row-action danger-text"
-                          onClick={async () => {
-                            if (!window.confirm('فاکتور باطل شود؟')) return;
-                            try {
-                              await api(`/invoices/${invoice.id}/void`, { method: 'POST' });
-                              setMessage('فاکتور باطل و موجودی برگشت داده شد.');
-                              await load();
-                            } catch (error) {
-                              setMessage((error as Error).message);
-                            }
-                          }}
-                        >
-                          ابطال
-                        </button>
-                      )}
-                    </span>
-                  )}
+                        {canPay && Number(invoice.total) > Number(invoice.paidAmount) && (
+                          <button
+                            className="row-action"
+                            onClick={() => {
+                              setPaying(invoice);
+                              setPayments([
+                                {
+                                  method: 'cash',
+                                  amount: String(
+                                    Math.max(0, Number(invoice.total) - Number(invoice.paidAmount)),
+                                  ),
+                                },
+                              ]);
+                            }}
+                          >
+                            پرداخت
+                          </button>
+                        )}
+                        {canResend && (
+                          <button className="row-action" onClick={() => void resend(invoice)}>
+                            پیامک مجدد
+                          </button>
+                        )}
+                        {canVoid && (
+                          <button
+                            className="row-action danger-text"
+                            onClick={async () => {
+                              if (!window.confirm('فاکتور باطل شود؟')) return;
+                              try {
+                                await api(`/invoices/${invoice.id}/void`, { method: 'POST' });
+                                setMessage('فاکتور باطل و موجودی برگشت داده شد.');
+                                await load();
+                              } catch (error) {
+                                setMessage((error as Error).message);
+                              }
+                            }}
+                          >
+                            ابطال
+                          </button>
+                        )}
+                      </span>
+                    )}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+      {viewing && (
+        <div className="modal-backdrop" onClick={() => setViewing(null)}>
+          <div
+            className="editor invoice-dialog"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-label={`جزئیات فاکتور ${viewing.number}`}
+          >
+            <div className="editor-head">
+              <div>
+                <span className="eyebrow">جزئیات و برگشت اقلام</span>
+                <h2>فاکتور {viewing.number}</h2>
+              </div>
+              <button className="close" onClick={() => setViewing(null)}>
+                بستن
+              </button>
+            </div>
+            <div className="editor-body">
+              <div className="invoice-detail-grid">
+                <span>
+                  مشتری: <b>{viewing.customerName ?? 'مشتری حضوری'}</b>
+                </span>
+                <span>
+                  تاریخ صدور: <b>{new Date(viewing.issuedAt).toLocaleDateString('fa-IR')}</b>
+                </span>
+                <span>
+                  مبلغ اولیه: <b>{money(viewing.total)}</b>
+                </span>
+                {returnedOf(viewing) > 0 && (
+                  <span>
+                    برگشتی: <b>{money(returnedOf(viewing))}</b>
+                  </span>
+                )}
+                <span>
+                  مبلغ نهایی: <b>{money(net(viewing))}</b>
+                </span>
+                <span>
+                  پرداخت‌شده: <b>{money(viewing.paidAmount)}</b>
+                </span>
+                <span>
+                  {net(viewing) - Number(viewing.paidAmount) >= 0 ? 'بدهی' : 'بازپرداخت به مشتری'}:{' '}
+                  <b>{money(Math.abs(net(viewing) - Number(viewing.paidAmount)))}</b>
                 </span>
               </div>
-            );
-          })}
-      </div>
+
+              <div className="invoice-address-edit">
+                <label>
+                  آدرس فروشگاه
+                  <textarea
+                    rows={2}
+                    value={addressDraft.store}
+                    onChange={(event) =>
+                      setAddressDraft({ ...addressDraft, store: event.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  آدرس مشتری
+                  <textarea
+                    rows={2}
+                    value={addressDraft.customer}
+                    onChange={(event) =>
+                      setAddressDraft({ ...addressDraft, customer: event.target.value })
+                    }
+                  />
+                </label>
+                <button
+                  className="row-action"
+                  disabled={addressBusy}
+                  onClick={() => void saveAddresses()}
+                >
+                  {addressBusy ? 'در حال ذخیره…' : 'ذخیرهٔ آدرس‌ها'}
+                </button>
+              </div>
+
+              <div className="invoice-detail-items">
+                {viewing.items.map((item) => {
+                  const returnedQty = item.returnedQuantity ?? 0;
+                  const remaining = lineRemaining(item.quantity, returnedQty);
+                  return (
+                    <div className="inv-detail-line" key={item.id}>
+                      <span>
+                        <b>{item.productName}</b>
+                        {item.inventoryItem?.brand?.name ? (
+                          <small> · {item.inventoryItem.brand.name}</small>
+                        ) : null}
+                      </span>
+                      <span>
+                        {persianNumber(item.quantity)} × {money(item.unitPrice)} ={' '}
+                        <b>{money(item.lineTotal)}</b>
+                      </span>
+                      {returnedQty > 0 && (
+                        <span className="chip warn">
+                          {persianNumber(returnedQty)} برگشتی · {persianNumber(remaining)} باقی
+                        </span>
+                      )}
+                      {viewing.status !== 'voided' && remaining > 0 && (
+                        <button className="row-action" onClick={() => openReturn(viewing, item)}>
+                          برگشت
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {viewing.returns?.length ? (
+                <div className="returns-history">
+                  <h3>تاریخچهٔ برگشتی‌ها</h3>
+                  {viewing.returns.map((record) => {
+                    const line = viewing.items.find((item) => item.id === record.invoiceItemId);
+                    return (
+                      <div key={record.id}>
+                        <b>{line?.productName ?? '—'}</b>
+                        <span>{persianNumber(record.quantity)} عدد</span>
+                        <span>{money(record.refundAmount)}</span>
+                        <small>
+                          {record.restock ? 'به انبار برگشت' : 'خراب — بدون بازگشت به انبار'}
+                        </small>
+                        <small>{record.reason}</small>
+                        <small>{new Date(record.createdAt).toLocaleDateString('fa-IR')}</small>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {returnLine && (
+        <div className="modal-backdrop" onClick={() => setReturnLine(null)}>
+          <div
+            className="editor return-dialog"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-label={`ثبت برگشت ${returnLine.item.productName}`}
+          >
+            <div className="editor-head">
+              <div>
+                <span className="eyebrow">برگشت جزیی قلم</span>
+                <h2>{returnLine.item.productName}</h2>
+              </div>
+              <button className="close" onClick={() => setReturnLine(null)}>
+                بستن
+              </button>
+            </div>
+            <div className="editor-body">
+              <p className="modal-hint">
+                از {persianNumber(returnLine.item.quantity)} عددِ این قلم در فاکتور،{' '}
+                {persianNumber(returnLine.item.returnedQuantity ?? 0)} عدد برگشت خورده است. حداکثر{' '}
+                {persianNumber(returnLine.item.quantity - (returnLine.item.returnedQuantity ?? 0))}{' '}
+                عدد می‌توانید برگشت بزنید؛ باقی در فاکتور می‌ماند.
+              </p>
+              <div className="return-form">
+                <label>
+                  تعداد برگشتی
+                  <input
+                    type="number"
+                    min="1"
+                    max={returnLine.item.quantity - (returnLine.item.returnedQuantity ?? 0)}
+                    value={returnQty}
+                    onChange={(event) => setReturnQty(event.target.value)}
+                  />
+                </label>
+                <label>
+                  دلیل مرجوعی (الزامی)
+                  <input
+                    value={returnReason}
+                    onChange={(event) => setReturnReason(event.target.value)}
+                    placeholder="مثلاً: ناسازگاری با خودرو / خرابی / توافق با مشتری"
+                  />
+                </label>
+                <label className="restock-toggle">
+                  <input
+                    type="checkbox"
+                    checked={returnRestock}
+                    onChange={(event) => setReturnRestock(event.target.checked)}
+                  />
+                  <span>
+                    قطعه سالم است و به دارایی انبار برگردد
+                    <small>
+                      اگر خاموش بماند (قطعهٔ خراب)، موجودی انبار زیاد نمی‌شود و فقط مبلغ فاکتور کم
+                      می‌شود.
+                    </small>
+                  </span>
+                </label>
+                <p className="muted">
+                  مبلغ کسرشده از فاکتور:{' '}
+                  <b>{money(Number(returnLine.item.unitPrice) * (Number(returnQty) || 0))}</b>
+                </p>
+              </div>
+            </div>
+            <div className="editor-footer">
+              <button
+                className="button-primary"
+                disabled={returnBusy}
+                onClick={() => void submitReturn()}
+              >
+                {returnBusy ? 'در حال ثبت…' : 'ثبت برگشت'}
+              </button>
+              <button className="outline" onClick={() => setReturnLine(null)}>
+                انصراف
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

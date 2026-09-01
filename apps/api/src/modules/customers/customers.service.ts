@@ -57,7 +57,7 @@ export class CustomersService {
     };
   }
   async create(
-    input: { name?: string; mobile?: string; notes?: string },
+    input: { name?: string; mobile?: string; address?: string; notes?: string },
     actorId?: string,
     ip?: string,
   ) {
@@ -66,7 +66,12 @@ export class CustomersService {
     if (!name || !mobile || !/^09\d{9}$/.test(mobile))
       throw new BadRequestException('نام و شماره موبایل معتبر الزامی است');
     const customer = await this.prisma.customer.create({
-      data: { name, mobile, notes: input.notes?.trim() || undefined },
+      data: {
+        name,
+        mobile,
+        address: input.address?.trim() || undefined,
+        notes: input.notes?.trim() || undefined,
+      },
     });
     if (actorId)
       await writeAudit(this.prisma, {
@@ -81,7 +86,7 @@ export class CustomersService {
   }
   async update(
     id: string,
-    input: { name?: string; mobile?: string; notes?: string; isActive?: boolean },
+    input: { name?: string; mobile?: string; address?: string; notes?: string; isActive?: boolean },
     actorId?: string,
     ip?: string,
   ) {
@@ -93,6 +98,7 @@ export class CustomersService {
       if (!/^09\d{9}$/.test(input.mobile)) throw new BadRequestException('شماره موبایل معتبر نیست');
       data.mobile = input.mobile;
     }
+    if (input.address !== undefined) data.address = input.address.trim() || null;
     if (input.notes !== undefined) data.notes = input.notes.trim() || null;
     if (input.isActive !== undefined) data.isActive = input.isActive;
     const customer = await this.prisma.customer.update({ where: { id }, data });

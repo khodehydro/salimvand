@@ -6,11 +6,17 @@ export type PublicInvoice = {
   number: string;
   customerName?: string | null;
   customerMobile?: string | null;
+  customerAddress?: string | null;
+  storeAddress?: string | null;
   vehicle?: string | null;
   salesPerson?: string | null;
   subtotal: string | number;
   discount: string | number;
   total: string | number;
+  /** Sum of every partial return — what the invoice shrinks by. */
+  returnedTotal?: string | number;
+  /** total - returnedTotal: the effective amount. */
+  netTotal?: string | number;
   paidAmount?: string | number;
   paymentStatus?: string;
   paymentMethod?: string | null;
@@ -26,6 +32,7 @@ export type PublicInvoice = {
     productName: string;
     brand?: string;
     quantity: number;
+    returnedQuantity?: number;
     discount?: string | number;
     unitPrice: string | number;
     lineTotal: string | number;
@@ -78,7 +85,9 @@ export async function InvoiceDocument({
   shareUrl: string;
 }) {
   const paid = Number(invoice.paidAmount ?? 0);
-  const remaining = Math.max(0, Number(invoice.total) - paid);
+  const returnedTotal = Number(invoice.returnedTotal ?? 0);
+  const payable = Number(invoice.netTotal ?? invoice.total);
+  const remaining = Math.max(0, payable - paid);
   const status = invoice.paymentStatus ?? 'unpaid';
   const qr = await QRCode.toDataURL(shareUrl, { errorCorrectionLevel: 'M', width: 260, margin: 1 });
   const expiry = invoice.linkExpiresAt ? shamsi(invoice.linkExpiresAt) : '۳۰ روز از تاریخ صدور';
@@ -123,6 +132,18 @@ export async function InvoiceDocument({
               <b>{invoice.salesPerson}</b>
             </div>
           )}
+          {invoice.customerAddress && (
+            <div>
+              <small>آدرس مشتری</small>
+              <b>{invoice.customerAddress}</b>
+            </div>
+          )}
+          {invoice.storeAddress && (
+            <div>
+              <small>آدرس فروشگاه</small>
+              <b>{invoice.storeAddress}</b>
+            </div>
+          )}
           {invoice.vehicle && (
             <div>
               <small>خودرو</small>
@@ -155,7 +176,15 @@ export async function InvoiceDocument({
             <div className="invoice-item" key={`${item.productName}-${index}`}>
               <strong>{item.productName}</strong>
               <span>{item.brand ?? '—'}</span>
-              <span>{formatPersianNumber(item.quantity)}</span>
+              <span>
+                {formatPersianNumber(item.quantity)}
+                {item.returnedQuantity ? (
+                  <small className="invoice-item-returned">
+                    {' '}
+                    ({formatPersianNumber(item.returnedQuantity)} برگشتی)
+                  </small>
+                ) : null}
+              </span>
               <span>{money(item.unitPrice)}</span>
               <b>{money(item.lineTotal)}</b>
             </div>
@@ -186,9 +215,15 @@ export async function InvoiceDocument({
             <span>تخفیف</span>
             <b>− {money(invoice.discount)}</b>
           </div>
+          {returnedTotal > 0 && (
+            <div className="invoice-returned">
+              <span>برگشتی</span>
+              <b>− {money(returnedTotal)}</b>
+            </div>
+          )}
           <div className="invoice-total">
             <span>مبلغ قابل پرداخت</span>
-            <strong>{money(invoice.total)}</strong>
+            <strong>{money(payable)}</strong>
           </div>
           <div className="invoice-paid">
             <span>پرداخت‌شده</span>

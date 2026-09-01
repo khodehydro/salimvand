@@ -12,11 +12,13 @@ import {
 export class CustomerDto {
   @IsString() @MaxLength(150) name!: string;
   @Matches(/^09\d{9}$/) mobile!: string;
+  @IsOptional() @IsString() @MaxLength(500) address?: string;
   @IsOptional() @IsString() @MaxLength(1000) notes?: string;
 }
 export class UpdateCustomerDto {
   @IsOptional() @IsString() @MaxLength(150) name?: string;
   @IsOptional() @Matches(/^09\d{9}$/) mobile?: string;
+  @IsOptional() @IsString() @MaxLength(500) address?: string;
   @IsOptional() @IsString() @MaxLength(1000) notes?: string;
   @IsOptional() @IsBoolean() isActive?: boolean;
 }

@@ -6,6 +6,8 @@ import {
   lineTotal,
   paymentTotal,
   remainingDebt,
+  netInvoiceAmount,
+  lineRemaining,
 } from './invoice-math';
 
 describe('invoice math', () => {
@@ -57,5 +59,23 @@ describe('invoice math', () => {
       ]),
     ).toBe(500_000);
     expect(remainingDebt(3_000_000, [{ method: 'cash', amount: '4000000' }])).toBe(0);
+  });
+
+  describe('net amounts after partial returns', () => {
+    it('uses netTotal when returns exist and total otherwise', () => {
+      expect(netInvoiceAmount('300000', '200000')).toBe(200000);
+      expect(netInvoiceAmount('300000', undefined)).toBe(300000);
+      expect(netInvoiceAmount('300000', '0')).toBe(0);
+    });
+    it('never returns a negative or broken net amount', () => {
+      expect(netInvoiceAmount('300000', '-5')).toBe(300000);
+      expect(netInvoiceAmount('abc')).toBe(0);
+    });
+    it('counts the pieces still with the customer', () => {
+      expect(lineRemaining(3, 1)).toBe(2);
+      expect(lineRemaining(3, 3)).toBe(0);
+      expect(lineRemaining(3, 9)).toBe(0);
+      expect(lineRemaining(3)).toBe(3);
+    });
   });
 });

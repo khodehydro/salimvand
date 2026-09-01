@@ -162,6 +162,7 @@ describe('InvoiceService', () => {
         })),
         update,
       },
+      returnRecord: { aggregate: vi.fn(async () => ({ _sum: { refundAmount: 0n } })) },
       payments: { create: vi.fn() },
     };
     const prisma = {
@@ -171,7 +172,7 @@ describe('InvoiceService', () => {
     };
     await expect(
       new InvoiceService(prisma as never).pay('invoice-1', 201, 'cash', 'user-1'),
-    ).rejects.toThrow('مجموع پرداخت بیشتر از مبلغ فاکتور است');
+    ).rejects.toThrow('مجموع پرداخت بیشتر از مبلغ فاکتور پس از برگشتی‌ها است');
     expect(update).not.toHaveBeenCalled();
   });
 
@@ -196,6 +197,7 @@ describe('InvoiceService', () => {
         })),
         update,
       },
+      returnRecord: { aggregate: vi.fn(async () => ({ _sum: { refundAmount: 0n } })) },
       payments: { create: vi.fn() },
       $executeRawUnsafe: executeRaw,
     };
@@ -282,6 +284,121 @@ describe('InvoiceService', () => {
       expect.objectContaining({ where: { id: 'item-1' }, data: { quantity: { increment: 1 } } }),
     );
     expect(returnCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it('computes net totals after partial returns for the public payload', async () => {
+    const invoice = {
+      id: 'inv-2',
+      number: 'INV-0006',
+      status: 'issued',
+      publicTokenExpiresAt: new Date(Date.now() + 86_400_000),
+      customerName: 'علی',
+      customerMobile: '0912',
+      storeAddress: 'میاندوآب، خیابان اصلی',
+      customerAddress: 'میاندوآب، محلهٔ جدید',
+      subtotal: 300n,
+      discount: 0n,
+      total: 300n,
+      paymentStatus: 'paid',
+      paymentMethod: null,
+      paidAmount: 300n,
+      paidAt: null,
+      issuedAt: new Date(),
+      voidedAt: null,
+      items: [
+        {
+          id: 'line-1',
+          productName: 'لنت جلو پژو',
+          quantity: 3,
+          unitPrice: 100n,
+          lineTotal: 300n,
+          inventoryItem: { brand: { name: 'اصلی' } },
+        },
+      ],
+      // 1 of the 3 brake pads returned — damaged, so it never re-entered stock.
+      returns: [{ invoiceItemId: 'line-1', quantity: 1, refundAmount: 100n }],
+      payments: [],
+      issuedBy: { name: 'فروشنده' },
+    };
+    const prisma = { invoice: { findFirst: async () => invoice } };
+    const result = await new InvoiceService(prisma as never).getPublic('short-code');
+    expect(result.data.returnedTotal).toBe(100n);
+    expect(result.data.netTotal).toBe(200n);
+    expect(result.data.items[0].returnedQuantity).toBe(1);
+    expect(result.data.storeAddress).toBe('میاندوآب، خیابان اصلی');
+    expect(result.data.customerAddress).toBe('میاندوآب، محلهٔ جدید');
+    // The raw returns (with internal line ids) must never leak publicly.
+    expect(result.data).not.toHaveProperty('returns');
+    expect(
+      JSON.stringify(result.data, (_key, value: unknown) =>
+        typeof value === 'bigint' ? value.toString() : value,
+      ),
+    ).not.toContain('invoiceItemId');
+  });
+
+  it('caps new payments at the net amount after returns', async () => {
+    const update = vi.fn();
+    const tx = {
+      invoice: {
+        findUnique: vi.fn(async () => ({
+          id: 'invoice-1',
+          status: 'issued',
+          paidAmount: 100n,
+          total: 300n,
+          customerMobile: null,
+        })),
+        update,
+      },
+      // 100 of 300 already returned: the customer can only owe 200 more.
+      returnRecord: { aggregate: vi.fn(async () => ({ _sum: { refundAmount: 100n } })) },
+      payments: { create: vi.fn() },
+      $executeRawUnsafe: vi.fn(),
+    };
+    const prisma = {
+      $transaction: vi.fn(async (callback: (client: typeof tx) => Promise<unknown>) =>
+        callback(tx),
+      ),
+    };
+    await expect(
+      new InvoiceService(prisma as never).pay('invoice-1', 201, 'cash', 'user-1'),
+    ).rejects.toThrow('مجموع پرداخت بیشتر از مبلغ فاکتور پس از برگشتی‌ها است');
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('marks a damaged return without restocking the warehouse', async () => {
+    const inventoryUpdate = vi.fn();
+    const returnCreate = vi.fn(async () => ({ id: 'return-2', quantity: 1, refundAmount: 100n }));
+    const tx = {
+      invoice: {
+        findUnique: vi.fn(async () => ({
+          id: 'invoice-1',
+          status: 'issued',
+          items: [{ id: 'line-1', quantity: 3, unitPrice: 100n, inventoryItemId: 'item-1' }],
+        })),
+      },
+      returnRecord: {
+        aggregate: vi.fn(async () => ({ _sum: { quantity: 0, refundAmount: 0n } })),
+        create: returnCreate,
+      },
+      inventoryItem: { update: inventoryUpdate },
+      inventoryTransaction: { create: vi.fn() },
+    };
+    const prisma = {
+      $transaction: vi.fn(async (callback: (client: typeof tx) => Promise<unknown>) =>
+        callback(tx),
+      ),
+    };
+    const result = await new InvoiceService(prisma as never).returnItems(
+      'invoice-1',
+      { invoiceItemId: 'line-1', quantity: 1, reason: 'خرابی قطعه', restock: false },
+      'user-1',
+    );
+    // Damaged goods must NOT go back into sellable stock.
+    expect(inventoryUpdate).not.toHaveBeenCalled();
+    expect(returnCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ restock: false, quantity: 1 }) }),
+    );
+    expect(result.data.quantityAfter).toBe(0);
   });
 
   it('restores all invoice quantities when voiding', async () => {

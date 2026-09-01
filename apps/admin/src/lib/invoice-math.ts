@@ -50,3 +50,21 @@ export function isValidIranMobile(mobile: string): boolean {
 export function remainingDebt(total: number, payments: PaymentRow[]): number {
   return Math.max(0, total - paymentTotal(payments));
 }
+
+/** Net invoice amount after partial returns. The server sends netTotal
+ * (= total − returnedTotal) once a return exists; older payloads and fresh
+ * invoices only carry the original total. */
+export function netInvoiceAmount(total: string | number, netTotal?: string | number): number {
+  const net = Number(netTotal ?? total);
+  return Number.isFinite(net) && net >= 0 ? net : Math.max(0, Number(total) || 0);
+}
+
+/** How many pieces of an invoice line are still with the customer after
+ * partial returns (3 bought − 1 returned = 2 remaining). */
+export function lineRemaining(quantity: number, returnedQuantity?: number): number {
+  return Math.max(
+    0,
+    Math.max(0, Math.round(Number(quantity) || 0)) -
+      Math.max(0, Math.round(Number(returnedQuantity) || 0)),
+  );
+}

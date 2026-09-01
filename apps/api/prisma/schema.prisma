@@ -278,6 +278,8 @@ model Invoice {
   customerId   String?       @db.Uuid
   customerName String?       @db.VarChar(150)
   customerMobile String?     @db.VarChar(20)
+  storeAddress    String?
+  customerAddress String?
   subtotal     BigInt        @default(0)
   discount     BigInt        @default(0)
   total        BigInt        @default(0)
@@ -370,6 +372,7 @@ model Customer {
   id          String    @id @default(uuid()) @db.Uuid
   name        String    @db.VarChar(150)
   mobile      String    @unique @db.VarChar(20)
+  address     String?
   notes       String?
   isActive    Boolean   @default(true)
   invoices    Invoice[]

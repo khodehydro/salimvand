@@ -23,9 +23,22 @@ type DraftLine = InvoiceLineInput & { inventoryItemId: string; productName: stri
 type CreateInput = {
   customerName?: string;
   customerMobile?: string;
+  storeAddress?: string;
+  customerAddress?: string;
   discount?: string | number;
   items?: Array<{ inventoryItemId?: string; quantity?: number; unitPrice?: string | number }>;
 };
+
+/** Net amounts after partial returns: the original totals stay untouched as
+ * the paper trail — everything the customer owes is computed against the
+ * returnedTotal (sum of every ReturnRecord refundAmount for the invoice). */
+export function netInvoiceTotals(
+  total: bigint,
+  returns: Array<{ refundAmount: bigint }>,
+): { returnedTotal: bigint; netTotal: bigint } {
+  const returnedTotal = returns.reduce((sum, record) => sum + record.refundAmount, 0n);
+  return { returnedTotal, netTotal: total - returnedTotal };
+}
 
 @Injectable()
 export class InvoiceService {
@@ -106,6 +119,8 @@ export class InvoiceService {
           publicTokenExpiresAt,
           customerName: customerName || undefined,
           customerMobile: customerMobile || undefined,
+          storeAddress: input.storeAddress?.trim() || undefined,
+          customerAddress: input.customerAddress?.trim() || undefined,
           subtotal: totals.subtotal,
           discount: totals.discount,
           total: totals.total,
@@ -207,6 +222,8 @@ export class InvoiceService {
         publicTokenExpiresAt: true,
         customerName: true,
         customerMobile: true,
+        storeAddress: true,
+        customerAddress: true,
         subtotal: true,
         discount: true,
         total: true,
@@ -218,12 +235,16 @@ export class InvoiceService {
         voidedAt: true,
         items: {
           select: {
+            id: true,
             productName: true,
             quantity: true,
             unitPrice: true,
             lineTotal: true,
             inventoryItem: { select: { brand: { select: { name: true } } } },
           },
+        },
+        returns: {
+          select: { invoiceItemId: true, quantity: true, refundAmount: true },
         },
         payments: {
           orderBy: { receivedAt: 'asc' },
@@ -245,8 +266,13 @@ export class InvoiceService {
       publicTokenExpiresAt: _expiresAt,
       publicTokenHash: _tokenHash,
       publicShortCodeHash: _shortCodeHash,
+      returns: _internalReturns,
       ...publicInvoice
-    } = invoice as typeof invoice & { publicTokenHash?: string; publicShortCodeHash?: string };
+    } = invoice as typeof invoice & {
+      publicTokenHash?: string;
+      publicShortCodeHash?: string;
+      returns?: unknown[];
+    };
     const payments =
       (
         invoice as unknown as {
@@ -254,12 +280,34 @@ export class InvoiceService {
         }
       ).payments ?? [];
     const issuedBy = (invoice as unknown as { issuedBy?: { name: string } | null }).issuedBy;
+    // Returns lower what the customer owes: expose per-line returned quantity
+    // and the net totals, but never the internal line ids, users or restock
+    // flags (public payload stays customer-only).
+    const { returnedTotal, netTotal } = netInvoiceTotals(
+      invoice.total,
+      (
+        invoice as unknown as {
+          returns?: Array<{ refundAmount: bigint }>;
+        }
+      ).returns ?? [],
+    );
+    const returnedPerLine = new Map<string, number>();
+    for (const record of (
+      invoice as unknown as { returns?: Array<{ invoiceItemId: string; quantity: number }> }
+    ).returns ?? [])
+      returnedPerLine.set(
+        record.invoiceItemId,
+        (returnedPerLine.get(record.invoiceItemId) ?? 0) + record.quantity,
+      );
     return {
       ok: true,
       data: {
         ...publicInvoice,
+        returnedTotal,
+        netTotal,
         items: invoice.items.map(
           (item: {
+            id: string;
             productName: string;
             quantity: number;
             unitPrice: bigint;
@@ -269,6 +317,7 @@ export class InvoiceService {
             productName: item.productName,
             brand: item.inventoryItem.brand.name,
             quantity: item.quantity,
+            returnedQuantity: returnedPerLine.get(item.id) ?? 0,
             unitPrice: item.unitPrice,
             lineTotal: item.lineTotal,
           }),
@@ -321,9 +370,12 @@ export class InvoiceService {
       number: string;
       customerName?: string | null;
       customerMobile?: string | null;
+      storeAddress?: string | null;
+      customerAddress?: string | null;
       subtotal: bigint | number;
       discount: bigint | number;
       total: bigint | number;
+      returnedTotal?: bigint | number;
       paymentStatus: string;
       paidAmount: bigint | number;
       issuedAt: string | Date;
@@ -333,6 +385,13 @@ export class InvoiceService {
         quantity: number;
         unitPrice: bigint | number;
         lineTotal: bigint | number;
+      }>;
+      returns?: Array<{
+        productName: string;
+        quantity: number;
+        refundAmount: bigint | number;
+        restock: boolean;
+        reason: string;
       }>;
     },
     qrDataUrl?: string,
@@ -360,6 +419,8 @@ export class InvoiceService {
         `شماره: ${text(invoice.number)}    تاریخ: ${new Intl.DateTimeFormat('fa-IR').format(new Date(invoice.issuedAt))}`,
         { align: 'right' },
       );
+    if (invoice.storeAddress)
+      doc.text(`آدرس فروشگاه: ${text(invoice.storeAddress)}`, { align: 'right' });
     doc
       .moveDown(1)
       .fillColor('#0b1c2f')
@@ -367,6 +428,8 @@ export class InvoiceService {
       .text(`مشتری: ${text(invoice.customerName ?? 'مشتری حضوری')}`, { align: 'right' });
     if (invoice.customerMobile)
       doc.text(`شماره تماس: ${text(invoice.customerMobile)}`, { align: 'right' });
+    if (invoice.customerAddress)
+      doc.text(`آدرس مشتری: ${text(invoice.customerAddress)}`, { align: 'right' });
     doc.moveDown(0.8).fontSize(11).fillColor('#0d2b4b').text('اقلام فاکتور', { align: 'right' });
     doc.moveDown(0.3).fillColor('#0b1c2f').fontSize(9);
     for (const [index, item] of invoice.items.entries())
@@ -374,14 +437,41 @@ export class InvoiceService {
         `${index + 1}. ${text(item.productName)}${item.brand ? ` | برند: ${text(item.brand)}` : ''} | تعداد: ${text(item.quantity)} | فی: ${text(item.unitPrice)} ریال | جمع: ${text(item.lineTotal)} ریال`,
         { align: 'right' },
       );
+    if (invoice.returns?.length) {
+      doc
+        .moveDown(0.8)
+        .fontSize(11)
+        .fillColor('#0d2b4b')
+        .text('مرجوعی‌ها', { align: 'right' })
+        .moveDown(0.2)
+        .fillColor('#0b1c2f')
+        .fontSize(9);
+      for (const record of invoice.returns)
+        doc.text(
+          `${text(record.productName)} | تعداد برگشتی: ${text(record.quantity)} | مبلغ برگشتی: ${text(record.refundAmount)} ریال | ${record.restock ? 'به انبار برگشت' : 'خراب — بدون بازگشت به انبار'} | دلیل: ${text(record.reason)}`,
+          { align: 'right' },
+        );
+    }
     doc
       .moveDown(1)
       .fontSize(11)
       .text(`جمع اقلام: ${text(invoice.subtotal)} ریال`, { align: 'right' })
-      .text(`تخفیف: ${text(invoice.discount)} ریال`, { align: 'right' })
-      .fontSize(14)
-      .fillColor('#0d2b4b')
-      .text(`مبلغ نهایی: ${text(invoice.total)} ریال`, { align: 'right' });
+      .text(`تخفیف: ${text(invoice.discount)} ریال`, { align: 'right' });
+    if (BigInt(invoice.returnedTotal ?? 0) > 0n) {
+      const net = BigInt(invoice.total) - BigInt(invoice.returnedTotal ?? 0);
+      doc.text(`برگشتی: ${text(invoice.returnedTotal)} ریال`, { align: 'right' });
+      doc
+        .fontSize(14)
+        .fillColor('#0d2b4b')
+        .text(`مبلغ نهایی پس از برگشتی: ${text(net)} ریال`, { align: 'right' });
+    } else {
+      doc
+        .fontSize(14)
+        .fillColor('#0d2b4b')
+        .text(`مبلغ نهایی: ${text(invoice.total)} ریال`, {
+          align: 'right',
+        });
+    }
     doc
       .moveDown(0.5)
       .fillColor('#0b1c2f')
@@ -454,7 +544,14 @@ export class InvoiceService {
         location: { select: { code: true, name: true } },
       },
     });
-    return { ok: true, data: items };
+    // Sellers cannot read /settings (manager-only), so the store address
+    // snapshot travels with the invoice options for the issue form prefill.
+    const profile = await this.prisma.setting.findUnique({ where: { key: 'store.profile' } });
+    const storeAddress =
+      typeof (profile?.value as { address?: unknown } | null)?.address === 'string'
+        ? ((profile?.value as { address?: string }).address ?? '').trim()
+        : '';
+    return { ok: true, data: items, storeAddress };
   }
 
   async pay(
@@ -475,10 +572,17 @@ export class InvoiceService {
     return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const invoice = await tx.invoice.findUnique({ where: { id } });
       if (!invoice || invoice.status === 'voided') throw new NotFoundException('فاکتور پیدا نشد');
+      // Returns shrink what the customer can still owe: cap new payments at
+      // the net amount, not the original total.
+      const returned = await tx.returnRecord.aggregate({
+        where: { invoiceId: id },
+        _sum: { refundAmount: true },
+      });
+      const netTotal = invoice.total - (returned._sum.refundAmount ?? 0n);
       const nextPaid = invoice.paidAmount + paidAmount;
-      if (nextPaid > invoice.total)
-        throw new BadRequestException('مجموع پرداخت بیشتر از مبلغ فاکتور است');
-      const status = nextPaid === invoice.total ? 'paid' : 'partial';
+      if (nextPaid > netTotal)
+        throw new BadRequestException('مجموع پرداخت بیشتر از مبلغ فاکتور پس از برگشتی‌ها است');
+      const status = nextPaid === netTotal ? 'paid' : 'partial';
       const updated = await tx.invoice.update({
         where: { id },
         data: {
@@ -585,6 +689,46 @@ export class InvoiceService {
       });
       return { ok: true, data: { ...record, quantityAfter } };
     });
+  }
+
+  /** Editable store/customer addresses on an issued invoice. */
+  async updateAddresses(
+    id: string,
+    input: { storeAddress?: string; customerAddress?: string },
+    userId: string,
+    ip?: string,
+  ) {
+    if (!userId) throw new BadRequestException('کاربر الزامی است');
+    const storeAddress = input.storeAddress?.trim();
+    const customerAddress = input.customerAddress?.trim();
+    if (storeAddress === undefined && customerAddress === undefined)
+      throw new BadRequestException('حداقل یکی از آدرس‌ها را وارد کنید');
+    const invoice = await this.prisma.invoice.findUnique({
+      where: { id },
+      select: { id: true, status: true, storeAddress: true, customerAddress: true },
+    });
+    if (!invoice || invoice.status === 'voided')
+      throw new NotFoundException('فاکتور فعال پیدا نشد');
+    const updated = await this.prisma.invoice.update({
+      where: { id },
+      data: {
+        ...(storeAddress !== undefined ? { storeAddress: storeAddress || null } : {}),
+        ...(customerAddress !== undefined ? { customerAddress: customerAddress || null } : {}),
+      },
+    });
+    await writeAudit(this.prisma, {
+      userId,
+      ip,
+      action: 'update',
+      entityType: 'invoice',
+      entityId: id,
+      before: { storeAddress: invoice.storeAddress, customerAddress: invoice.customerAddress },
+      after: {
+        storeAddress: storeAddress ?? invoice.storeAddress,
+        customerAddress: customerAddress ?? invoice.customerAddress,
+      },
+    });
+    return { ok: true, data: updated };
   }
 
   async void(id: string, userId: string) {
@@ -737,6 +881,8 @@ export class InvoiceService {
         status: true,
         customerName: true,
         customerMobile: true,
+        storeAddress: true,
+        customerAddress: true,
         subtotal: true,
         discount: true,
         total: true,
@@ -749,6 +895,7 @@ export class InvoiceService {
         publicTokenExpiresAt: true,
         items: {
           select: {
+            id: true,
             productName: true,
             quantity: true,
             unitPrice: true,
@@ -756,11 +903,46 @@ export class InvoiceService {
             inventoryItem: { select: { brand: { select: { name: true } } } },
           },
         },
+        returns: {
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            invoiceItemId: true,
+            quantity: true,
+            refundAmount: true,
+            reason: true,
+            restock: true,
+            createdAt: true,
+          },
+        },
       },
     });
     // Never surface the token hashes — the raw public link is only ever handed
-    // out once at issue time or through the audited rotate endpoint.
-    return { ok: true, data: rows };
+    // out once at issue time or through the audited rotate endpoint. Net
+    // amounts after partial returns are computed here so the panel and the
+    // debt views always show what the customer effectively owes.
+    return {
+      ok: true,
+      data: rows.map((row) => {
+        const rowReturns = row.returns ?? [];
+        const { returnedTotal, netTotal } = netInvoiceTotals(row.total, rowReturns);
+        const returnedPerLine = new Map<string, number>();
+        for (const record of rowReturns)
+          returnedPerLine.set(
+            record.invoiceItemId,
+            (returnedPerLine.get(record.invoiceItemId) ?? 0) + record.quantity,
+          );
+        return {
+          ...row,
+          returnedTotal,
+          netTotal,
+          items: row.items.map((item) => ({
+            ...item,
+            returnedQuantity: returnedPerLine.get(item.id) ?? 0,
+          })),
+        };
+      }),
+    };
   }
 
   /** Issues a fresh public link for an invoice (the old link stops working). */
@@ -812,6 +994,8 @@ export class InvoiceService {
         number: true,
         customerName: true,
         customerMobile: true,
+        storeAddress: true,
+        customerAddress: true,
         subtotal: true,
         discount: true,
         total: true,
@@ -820,6 +1004,7 @@ export class InvoiceService {
         issuedAt: true,
         items: {
           select: {
+            id: true,
             productName: true,
             quantity: true,
             unitPrice: true,
@@ -827,16 +1012,32 @@ export class InvoiceService {
             inventoryItem: { select: { brand: { select: { name: true } } } },
           },
         },
+        returns: {
+          orderBy: { createdAt: 'asc' },
+          select: {
+            invoiceItemId: true,
+            quantity: true,
+            refundAmount: true,
+            restock: true,
+            reason: true,
+          },
+        },
       },
     });
     if (!invoice) throw new NotFoundException('فاکتور پیدا نشد');
+    const invoiceReturns = invoice.returns ?? [];
+    const { returnedTotal } = netInvoiceTotals(invoice.total, invoiceReturns);
+    const lineName = new Map(invoice.items.map((item) => [item.id, item.productName]));
     return this.renderPdf({
       number: invoice.number,
       customerName: invoice.customerName,
       customerMobile: invoice.customerMobile,
+      storeAddress: invoice.storeAddress,
+      customerAddress: invoice.customerAddress,
       subtotal: invoice.subtotal,
       discount: invoice.discount,
       total: invoice.total,
+      returnedTotal,
       paymentStatus: invoice.paymentStatus,
       paidAmount: invoice.paidAmount,
       issuedAt: invoice.issuedAt,
@@ -846,6 +1047,13 @@ export class InvoiceService {
         quantity: item.quantity,
         unitPrice: item.unitPrice,
         lineTotal: item.lineTotal,
+      })),
+      returns: invoiceReturns.map((record) => ({
+        productName: lineName.get(record.invoiceItemId) ?? '—',
+        quantity: record.quantity,
+        refundAmount: record.refundAmount,
+        restock: record.restock,
+        reason: record.reason,
       })),
     });
   }

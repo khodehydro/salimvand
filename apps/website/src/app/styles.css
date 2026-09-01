@@ -2036,3 +2036,13 @@ p {
 .product-layout .product-video-head h2 {
   font-size: 17px;
 }
+
+/* Partial returns on the public invoice: per-line returned quantity and the
+   returned amount row shrink the payable total. */
+.invoice-item-returned {
+  color: #b45309;
+  font-size: 12px;
+}
+.invoice-returned {
+  color: #b45309;
+}
