@@ -17,7 +17,11 @@ describe('customer payment accounting', () => {
   it('allocates a customer payment across oldest invoice balances', async () => {
     const invoiceUpdate = vi.fn(async () => ({}));
     const paymentCreate = vi.fn(async () => ({}));
-    const receiptCreate = vi.fn(async () => ({ id: 'receipt-1', amount: 1200n }));
+    const receiptCreate = vi.fn(async () => ({
+      id: 'receipt-1',
+      amount: 1200n,
+      paidAt: new Date('2026-09-01T10:00:00Z'),
+    }));
     const tx = {
       customer: {
         findFirst: vi.fn(async () => ({
@@ -42,7 +46,11 @@ describe('customer payment accounting', () => {
       { amount: '1200', method: 'cash' },
       'user-1',
     );
-    expect(result.data.remainingDebt).toBe(300n);
+    expect(result.data.remainingDebt).toBe('300');
+    // Regression guard for the 500 the panel hit: the response body must be
+    // serializable WITHOUT the express bigint `json replacer`.
+    expect(() => JSON.stringify(result)).not.toThrow();
+    expect(JSON.parse(JSON.stringify(result)).data.amount).toBe('1200');
     expect(invoiceUpdate).toHaveBeenCalledTimes(2);
     expect(invoiceUpdate).toHaveBeenNthCalledWith(
       1,

@@ -53,6 +53,7 @@ type CustomerOption = {
   mobile: string;
   address?: string | null;
   debt?: string | number;
+  invoiceCount?: number;
 };
 type InvoiceItemRow = {
   id: string;
@@ -72,7 +73,13 @@ type ReturnRow = {
   restock: boolean;
   createdAt: string;
 };
-type DraftLine = { item: StockOption; quantity: number; lineDiscount: number };
+type DraftLine = {
+  item: StockOption;
+  quantity: number;
+  lineDiscount: number;
+  /** Editable unit price — starts at the stock option's sale price. */
+  price: number;
+};
 type CreatedInvoice = {
   id: string;
   number: string;
@@ -80,14 +87,15 @@ type CreatedInvoice = {
   publicShortCode: string;
   total: number;
   paid: number;
+  itemCount: number;
   qrDataUrl?: string;
 };
 
 const methods = [
   { value: 'cash', label: 'نقدی' },
-  { value: 'card', label: 'کارت' },
-  { value: 'transfer', label: 'واریز' },
-  { value: 'credit', label: 'اعتباری' },
+  { value: 'card', label: 'کارت‌خوان' },
+  { value: 'transfer', label: 'واریز بانکی' },
+  { value: 'credit', label: 'نسیه / چک' },
 ];
 const labels: Record<string, string> = {
   paid: 'پرداخت کامل',
@@ -113,8 +121,9 @@ export function InvoicesPage({
   const [options, setOptions] = useState<StockOption[]>([]);
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [lines, setLines] = useState<DraftLine[]>([]);
-  const [quantity, setQuantity] = useState('1');
   const [search, setSearch] = useState('');
+  /** The customer picked from the lookup — drives the customer bar chip. */
+  const [pickedCustomer, setPickedCustomer] = useState<CustomerOption | null>(null);
   const [customerQuery, setCustomerQuery] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [mobile, setMobile] = useState('');
@@ -278,24 +287,37 @@ export function InvoicesPage({
       .slice(0, 12);
   }, [options, search, lines]);
 
+  /** Scan results grouped per product; each brand under it is a pickable row. */
+  const candidateGroups = useMemo(() => {
+    const groups: Array<{ key: string; name: string; code: string; brands: StockOption[] }> = [];
+    for (const option of candidates) {
+      const key = `${option.product.code}::${option.product.name}`;
+      const group = groups.find((entry) => entry.key === key);
+      if (group) group.brands.push(option);
+      else
+        groups.push({
+          key,
+          name: option.product.name,
+          code: option.product.code,
+          brands: [option],
+        });
+    }
+    return groups;
+  }, [candidates]);
+
   const lineTotal = (line: DraftLine) =>
     invoiceTotals(
-      [
-        {
-          salePrice: Number(line.item.salePrice),
-          quantity: line.quantity,
-          lineDiscount: line.lineDiscount,
-        },
-      ],
+      [{ salePrice: line.price, quantity: line.quantity, lineDiscount: line.lineDiscount }],
       0,
     ).total;
+  const lineDiscountSum = lines.reduce((sum, line) => sum + Math.max(0, line.lineDiscount || 0), 0);
   const {
     subtotal,
     discount: discountValue,
     total,
   } = invoiceTotals(
     lines.map((line) => ({
-      salePrice: Number(line.item.salePrice),
+      salePrice: line.price,
       quantity: line.quantity,
       lineDiscount: line.lineDiscount,
     })),
@@ -304,7 +326,7 @@ export function InvoicesPage({
   const paymentTotal = sumPayments(payments);
   const remainingDebt = debtLeft(total, payments);
 
-  const addLine = (item: StockOption, qty = Number(quantity) || 1) => {
+  const addLine = (item: StockOption, qty = 1) => {
     if (!Number.isInteger(qty) || qty <= 0) return setMessage('تعداد باید عدد صحیح مثبت باشد');
     const existing = lines.find((line) => line.item.id === item.id);
     const nextQty = (existing?.quantity ?? 0) + qty;
@@ -313,11 +335,30 @@ export function InvoicesPage({
     setLines((current) =>
       existing
         ? current.map((line) => (line.item.id === item.id ? { ...line, quantity: nextQty } : line))
-        : [...current, { item, quantity: qty, lineDiscount: 0 }],
+        : [...current, { item, quantity: qty, lineDiscount: 0, price: Number(item.salePrice) }],
     );
-    setQuantity('1');
     setSearch('');
     setMessage('');
+  };
+
+  const setLine = (id: string, patch: Partial<DraftLine>) =>
+    setLines((current) =>
+      current.map((line) => (line.item.id === id ? { ...line, ...patch } : line)),
+    );
+
+  /** «پاک کردن» — wipes the whole draft (customer, lines, payments). */
+  const resetForm = () => {
+    setLines([]);
+    setSearch('');
+    setPickedCustomer(null);
+    setCustomerName('');
+    setMobile('');
+    setCustomerQuery('');
+    setCustomerAddress('');
+    setDiscount('');
+    setPayments([{ method: 'cash', amount: '' }]);
+    setMessage('');
+    searchRef.current?.focus();
   };
 
   // A barcode gun types the code and then sends Enter: resolve it without a click.
@@ -362,12 +403,9 @@ export function InvoicesPage({
           items: lines.map((line) => ({
             inventoryItemId: line.item.id,
             quantity: line.quantity,
-            // Per-line discount is folded into the unit price, the only money field the API accepts.
-            unitPrice: discountedUnitPrice(
-              Number(line.item.salePrice),
-              line.quantity,
-              line.lineDiscount,
-            ),
+            // Per-line price edits and discounts are folded into the unit
+            // price, the only money field the API accepts.
+            unitPrice: discountedUnitPrice(line.price, line.quantity, line.lineDiscount),
           })),
         }),
       });
@@ -389,10 +427,12 @@ export function InvoicesPage({
         publicShortCode: response.data.publicShortCode,
         total,
         paid: paymentTotal,
+        itemCount: lines.length,
         qrDataUrl: qr.data.dataUrl,
       });
       setMessage('فاکتور صادر شد و موجودی به‌صورت اتمیک در Ledger ثبت شد.');
       setLines([]);
+      setPickedCustomer(null);
       setCustomerName('');
       setMobile('');
       setCustomerQuery('');
@@ -577,50 +617,48 @@ export function InvoicesPage({
       {message && <div className="notice">{message}</div>}
 
       {created && (
-        <div
-          className="invoice-success"
-          role="dialog"
-          aria-modal="true"
-          aria-label="فاکتور صادر شد"
-        >
-          <div className="invoice-success-card">
-            <span className="success-mark">✓</span>
-            <h2>فاکتور {created.number} صادر شد</h2>
-            <p>
-              لینک کوتاه و QR فاکتور برای مشتری آماده است و ۳۰ روز اعتبار دارد.{' '}
-              {created.paid > 0 ? `دریافتی ${money(created.paid)} ثبت شد.` : ''}{' '}
-              {created.total - created.paid > 0
-                ? `مانده بدهی ${money(created.total - created.paid)}.`
-                : ''}
-            </p>
-            {created.qrDataUrl ? (
-              <img className="invoice-qr" src={created.qrDataUrl} alt="QR فاکتور" />
-            ) : (
-              <span className="muted">QR در دسترس نیست</span>
-            )}
-            <input
-              readOnly
-              value={shortLink(created.publicShortCode)}
-              onFocus={(event) => event.currentTarget.select()}
-            />
-            <div>
+        <div className="modal-mask" role="dialog" aria-modal="true" aria-label="فاکتور صادر شد">
+          <div className="modal-mask-panel success-modal">
+            <div className="success-box">
+              <span className="ok">✓</span>
+              <h2>فاکتور صادر شد</h2>
+              <p className="muted">
+                شمارهٔ فاکتور <b className="mono">{created.number}</b>
+              </p>
+              <div className="kv">
+                <span className="k">مبلغ</span>
+                <span className="v">{money(created.total)}</span>
+              </div>
+              <div className="kv">
+                <span className="k">دریافتی</span>
+                <span className="v">{money(created.paid)}</span>
+              </div>
+              {created.total - created.paid > 0 && (
+                <div className="kv">
+                  <span className="k">باقی‌مانده (بدهی)</span>
+                  <span className="v warn-text">{money(created.total - created.paid)}</span>
+                </div>
+              )}
+              <div className="kv">
+                <span className="k">کسر از انبار</span>
+                <span className="v">
+                  {persianNumber(created.itemCount)} ردیف · ثبت در دفتر تراکنش‌ها ✓
+                </span>
+              </div>
+              {created.qrDataUrl ? (
+                <img className="success-qr" src={created.qrDataUrl} alt="QR فاکتور" />
+              ) : null}
+              <input
+                className="success-link"
+                readOnly
+                dir="ltr"
+                value={shortLink(created.publicShortCode)}
+                onFocus={(event) => event.currentTarget.select()}
+              />
+            </div>
+            <div className="success-actions">
               <button
-                onClick={() =>
-                  void navigator.clipboard?.writeText(shortLink(created.publicShortCode))
-                }
-              >
-                کپی لینک
-              </button>
-              <a
                 className="button-primary"
-                target="_blank"
-                rel="noreferrer"
-                href={shortLink(created.publicShortCode)}
-              >
-                مشاهده فاکتور
-              </a>
-              <button
-                className="outline"
                 onClick={() => {
                   setCreated(null);
                   searchRef.current?.focus();
@@ -628,307 +666,448 @@ export function InvoicesPage({
               >
                 فاکتور بعدی
               </button>
+              <button
+                className="outline"
+                onClick={() =>
+                  downloadFile(
+                    `/invoices/${created.id}/pdf`,
+                    `invoice-${created.number}.pdf`,
+                  ).catch((error: Error) => setMessage(error.message))
+                }
+              >
+                دانلود PDF
+              </button>
+              <button
+                className="outline"
+                onClick={() =>
+                  void navigator.clipboard?.writeText(shortLink(created.publicShortCode))
+                }
+              >
+                کپی لینک
+              </button>
+              <a
+                className="outline"
+                target="_blank"
+                rel="noreferrer"
+                href={shortLink(created.publicShortCode)}
+              >
+                مشاهده
+              </a>
             </div>
           </div>
         </div>
       )}
 
       {tab === 'issue' && canCreate && (
-        <div className="cards invoice-form">
-          <div>
-            <h2>صدور فاکتور جدید</h2>
-            <div className="invoice-product-picker">
+        <div className="inv-issue">
+          {/* Customer bar: picked-customer chip or inline walk-in fields */}
+          <div className="cust-bar">
+            <span className="lab">مشتری</span>
+            {pickedCustomer ? (
+              <div className="cust">
+                <span className="av">{pickedCustomer.name.slice(0, 2)}</span>
+                <div className="wrap">
+                  <div className="nm">{pickedCustomer.name}</div>
+                  <div className="sub">
+                    <span className="mono" dir="ltr">
+                      {pickedCustomer.mobile}
+                    </span>
+                    {Number(pickedCustomer.debt ?? 0) > 0 && (
+                      <span className="danger-text">بدهی: {money(pickedCustomer.debt ?? 0)}</span>
+                    )}
+                    {typeof pickedCustomer.invoiceCount === 'number' &&
+                      pickedCustomer.invoiceCount > 0 && (
+                        <span>{persianNumber(pickedCustomer.invoiceCount)} فاکتور قبلی</span>
+                      )}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="btn-ghost-sm"
+                  title="جداسازی مشتری"
+                  onClick={() => {
+                    setPickedCustomer(null);
+                    setCustomerName('');
+                    setMobile('');
+                    setCustomerAddress('');
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+            ) : (
+              <div className="cust-empty">
+                <input
+                  aria-label="نام مشتری"
+                  placeholder="نام مشتری حضوری…"
+                  value={customerName}
+                  onChange={(event) => setCustomerName(event.target.value)}
+                />
+                <input
+                  aria-label="موبایل مشتری"
+                  dir="ltr"
+                  placeholder="09xxxxxxxxx"
+                  value={mobile}
+                  onChange={(event) => setMobile(event.target.value)}
+                />
+              </div>
+            )}
+            <div className="cust-search search-field">
+              <span className="search-icon">⌕</span>
               <input
-                ref={searchRef}
-                aria-label="جست‌وجو یا اسکن قلم"
-                placeholder="نام، کد یا بارکد را تایپ کنید (اسکنر + Enter)"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                onKeyDown={onSearchKeyDown}
+                aria-label="جست‌وجوی مشتری"
+                placeholder="نام یا موبایل مشتری…"
+                value={customerQuery}
+                onChange={(event) => setCustomerQuery(event.target.value)}
               />
-              <input
-                aria-label="تعداد قلم"
-                type="number"
-                min="1"
-                value={quantity}
-                onChange={(event) => setQuantity(event.target.value)}
-              />
-              <button
-                type="button"
-                className="row-action"
-                onClick={() => setScanning((current) => !current)}
-              >
-                📷 اسکن دوربین
-              </button>
-              {scanning && <BarcodeHost onCode={(code) => void onScanned(code)} />}
-              {search && !scanning && (
-                <div className="invoice-candidates">
-                  {candidates.length ? (
-                    candidates.map((item) => (
-                      <button type="button" key={item.id} onClick={() => addLine(item)}>
-                        <b>{item.product.name}</b>
+              {customerQuery && (
+                <div className="invoice-candidates cust-candidates">
+                  {customers.length ? (
+                    customers.map((customer) => (
+                      <button
+                        type="button"
+                        key={customer.id}
+                        onClick={() => {
+                          setPickedCustomer(customer);
+                          setCustomerName(customer.name);
+                          setMobile(customer.mobile);
+                          setCustomerAddress(customer.address ?? '');
+                          setCustomerQuery('');
+                          setCustomers([]);
+                        }}
+                      >
+                        <b>{customer.name}</b>
                         <span>
-                          {item.brand.name} · <span dir="ltr">{item.product.code}</span> · بارکد{' '}
-                          <span dir="ltr">{item.barcode}</span> · قفسه {item.location?.code ?? '—'}
+                          <span dir="ltr">{customer.mobile}</span> · بدهی{' '}
+                          {money(customer.debt ?? 0)}
                         </span>
-                        <strong>{persianNumber(item.quantity)} عدد</strong>
                       </button>
                     ))
                   ) : (
-                    <small>قلم موجودی پیدا نشد.</small>
+                    <small>مشتری پیدا نشد؛ نام و موبایل را دستی وارد کنید.</small>
                   )}
                 </div>
               )}
             </div>
+            <a className="btn-soft-sm" href="#/customers">
+              + مشتری جدید
+            </a>
+          </div>
 
-            <div className="invoice-lines">
-              {lines.length ? (
-                lines.map((line) => (
-                  <div className="invoice-line" key={line.item.id}>
-                    <span>
-                      <b>{line.item.product.name}</b>
-                      <small>
-                        {line.item.brand.name} · {money(line.item.salePrice)} · قفسه{' '}
-                        {line.item.location?.code ?? '—'}
-                      </small>
-                    </span>
-                    <input
-                      aria-label={`تعداد ${line.item.product.name}`}
-                      type="number"
-                      min="1"
-                      max={line.item.quantity}
-                      value={line.quantity}
-                      onChange={(event) =>
-                        setLines((current) =>
-                          current.map((entry) =>
-                            entry.item.id === line.item.id
-                              ? {
-                                  ...entry,
-                                  quantity: Math.min(
-                                    line.item.quantity,
-                                    Math.max(1, Number(event.target.value) || 1),
-                                  ),
-                                }
-                              : entry,
-                          ),
-                        )
-                      }
-                    />
-                    <input
-                      aria-label={`تخفیف ${line.item.product.name}`}
-                      type="number"
-                      min="0"
-                      placeholder="تخفیف قلم"
-                      value={line.lineDiscount || ''}
-                      onChange={(event) =>
-                        setLines((current) =>
-                          current.map((entry) =>
-                            entry.item.id === line.item.id
-                              ? {
-                                  ...entry,
-                                  lineDiscount: Math.max(0, Number(event.target.value) || 0),
-                                }
-                              : entry,
-                          ),
-                        )
-                      }
-                    />
-                    <strong>{money(lineTotal(line))}</strong>
-                    <button
-                      type="button"
-                      aria-label={`حذف ${line.item.product.name}`}
-                      onClick={() =>
-                        setLines((current) =>
-                          current.filter((entry) => entry.item.id !== line.item.id),
-                        )
-                      }
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))
-              ) : (
-                <p className="muted">برای شروع، بارکد را اسکن کنید یا نام قلم را جست‌وجو کنید.</p>
+          {/* Store contact (auto from settings) + customer address */}
+          <div className="cust-extra">
+            <div className="plc-chips">
+              {storeAddress && <span className="chip">{storeAddress}</span>}
+              {storePhone && (
+                <span className="chip" dir="ltr">
+                  {storePhone}
+                </span>
+              )}
+              {!storeAddress && !storePhone && (
+                <span className="muted">
+                  آدرس و تماس فروشگاه از تنظیمات («پروفایل فروشگاه») روی فاکتور درج می‌شود.
+                </span>
               )}
             </div>
+            <input
+              aria-label="آدرس مشتری"
+              placeholder="آدرس مشتری (اختیاری — با انتخاب مشتری از پرونده‌اش پر می‌شود)"
+              value={customerAddress}
+              onChange={(event) => setCustomerAddress(event.target.value)}
+            />
+          </div>
 
-            <div className="form-grid">
-              <div className="invoice-product-picker">
-                <input
-                  aria-label="جست‌وجوی مشتری"
-                  placeholder="جست‌وجوی مشتری با نام یا موبایل..."
-                  value={customerQuery}
-                  onChange={(event) => setCustomerQuery(event.target.value)}
-                />
-                {customerQuery && (
-                  <div className="invoice-candidates">
-                    {customers.length ? (
-                      customers.map((customer) => (
-                        <button
-                          type="button"
-                          key={customer.id}
-                          onClick={() => {
-                            setCustomerName(customer.name);
-                            setMobile(customer.mobile);
-                            setCustomerAddress(customer.address ?? '');
-                            setCustomerQuery('');
-                            setCustomers([]);
-                          }}
-                        >
-                          <b>{customer.name}</b>
-                          <span>
-                            <span dir="ltr">{customer.mobile}</span> · بدهی{' '}
-                            {money(customer.debt ?? 0)}
-                          </span>
-                        </button>
+          <div className="inv-grid">
+            <div className="inv-grid-main">
+              {/* Scanner box: type/scan + brand-level results */}
+              <div className={`scan-box${search || scanning ? ' has-res' : ''}`}>
+                <div className="scan-in">
+                  <div className="search-field scan-field">
+                    <span className="search-icon">⌕</span>
+                    <input
+                      ref={searchRef}
+                      aria-label="جست‌وجو یا اسکن قلم"
+                      placeholder="جست‌وجوی قطعه یا اسکن بارکد (Enter = اسکن)…"
+                      value={search}
+                      onChange={(event) => setSearch(event.target.value)}
+                      onKeyDown={onSearchKeyDown}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-o-sm"
+                    onClick={() => setScanning((current) => !current)}
+                    title="اسکن با دوربین"
+                  >
+                    📷
+                  </button>
+                  <span className="badge b-line">بارکدخوان آماده</span>
+                </div>
+                {scanning && <BarcodeHost onCode={(code) => void onScanned(code)} />}
+                {search && !scanning && (
+                  <div className="scan-res">
+                    {candidateGroups.length ? (
+                      candidateGroups.map((group) => (
+                        <div className="sr" key={group.key}>
+                          <span className="thumb">{group.name.slice(0, 2)}</span>
+                          <div className="wrap">
+                            <div className="nm">
+                              {group.name} <span className="badge b-brand">{group.code}</span>
+                            </div>
+                            <div className="brs">
+                              {group.brands.map((option) => (
+                                <button
+                                  type="button"
+                                  className="br"
+                                  key={option.id}
+                                  onClick={() => addLine(option)}
+                                >
+                                  {option.brand.name} <b>{money(option.salePrice)}</b>{' '}
+                                  <span className="mut3">
+                                    {option.location?.code ?? '—'} ·{' '}
+                                    {persianNumber(option.quantity)} عدد
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="val">
+                            <span className="badge b-ok">موجود</span>
+                          </div>
+                        </div>
                       ))
                     ) : (
-                      <small>مشتری پیدا نشد؛ نام و موبایل را دستی وارد کنید.</small>
+                      <p className="muted scan-empty">قلم موجودی پیدا نشد.</p>
                     )}
                   </div>
                 )}
               </div>
-              <input
-                aria-label="نام مشتری"
-                placeholder="نام مشتری (اختیاری)"
-                value={customerName}
-                onChange={(event) => setCustomerName(event.target.value)}
-              />
-              <input
-                aria-label="موبایل مشتری"
-                dir="ltr"
-                placeholder="09xxxxxxxxx"
-                value={mobile}
-                onChange={(event) => setMobile(event.target.value)}
-              />
-              <input
-                aria-label="تخفیف کل"
-                type="number"
-                min="0"
-                placeholder="تخفیف کل (ریال)"
-                value={discount}
-                onChange={(event) => setDiscount(event.target.value)}
-              />
-            </div>
 
-            <div className="invoice-store-hint">
-              <b>اطلاعات فروشگاه (خودکار از تنظیمات)</b>
-              <div className="plc-chips">
-                {storeAddress && <span className="chip">{storeAddress}</span>}
-                {storePhone && <span className="chip">{storePhone}</span>}
-                {!storeAddress && !storePhone && (
-                  <span className="muted">
-                    آدرس و شمارهٔ تماس فروشگاه در تنظیمات («پروفایل فروشگاه») ثبت نشده است؛ بعد از
-                    ثبت، خودکار روی همهٔ فاکتورها درج می‌شود.
-                  </span>
+              {/* Invoice lines */}
+              <div className="rows">
+                <div className="irow hd">
+                  <div>محصول / قفسه</div>
+                  <div>برند</div>
+                  <div>تعداد</div>
+                  <div className="hd-hide num">فی (ریال)</div>
+                  <div className="hd-hide num">تخفیف</div>
+                  <div className="num">جمع</div>
+                  <div />
+                </div>
+                {lines.length ? (
+                  lines.map((line) => (
+                    <div className="irow" key={line.item.id}>
+                      <div>
+                        <div className="pn">{line.item.product.name}</div>
+                        <div className="ps">
+                          {line.item.product.code} · {line.item.location?.code ?? '—'}
+                        </div>
+                      </div>
+                      <div>
+                        <span className="badge b-brand">{line.item.brand.name}</span>
+                      </div>
+                      <div className="qty">
+                        <button
+                          type="button"
+                          aria-label={`کاهش ${line.item.product.name}`}
+                          onClick={() =>
+                            setLine(line.item.id, {
+                              quantity: Math.max(1, line.quantity - 1),
+                            })
+                          }
+                        >
+                          −
+                        </button>
+                        <span>{persianNumber(line.quantity)}</span>
+                        <button
+                          type="button"
+                          aria-label={`افزایش ${line.item.product.name}`}
+                          disabled={line.quantity >= line.item.quantity}
+                          onClick={() =>
+                            setLine(line.item.id, {
+                              quantity: Math.min(line.item.quantity, line.quantity + 1),
+                            })
+                          }
+                        >
+                          +
+                        </button>
+                      </div>
+                      <input
+                        className="money-in hd-hide"
+                        aria-label={`فی ${line.item.product.name}`}
+                        type="number"
+                        min="0"
+                        value={line.price}
+                        onChange={(event) =>
+                          setLine(line.item.id, {
+                            price: Math.max(0, Number(event.target.value) || 0),
+                          })
+                        }
+                      />
+                      <input
+                        className="money-in hd-hide"
+                        aria-label={`تخفیف ${line.item.product.name}`}
+                        type="number"
+                        min="0"
+                        placeholder="۰"
+                        value={line.lineDiscount || ''}
+                        onChange={(event) =>
+                          setLine(line.item.id, {
+                            lineDiscount: Math.max(0, Number(event.target.value) || 0),
+                          })
+                        }
+                      />
+                      <div className="num b">{money(lineTotal(line))}</div>
+                      <button
+                        type="button"
+                        className="btn-icon-danger"
+                        aria-label={`حذف ${line.item.product.name}`}
+                        onClick={() =>
+                          setLines((current) =>
+                            current.filter((entry) => entry.item.id !== line.item.id),
+                          )
+                        }
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <p className="muted rows-empty">
+                    برای شروع، بارکد را اسکن کنید یا نام قطعه را بالا بنویسید.
+                  </p>
                 )}
               </div>
-              <label className="customer-address-field">
-                آدرس مشتری (اختیاری — برای ارسال و پروندهٔ مشتری)
-                <textarea
-                  rows={2}
-                  value={customerAddress}
-                  onChange={(event) => setCustomerAddress(event.target.value)}
-                  placeholder="آدرس مشتری؛ با انتخاب مشتری از لیست، از پروندهٔ او پر می‌شود"
-                />
-              </label>
-            </div>
 
-            <h3 className="muted">دریافت‌ها</h3>
-            {payments.map((row, index) => (
-              <div className="payment-row" key={index}>
-                <select
-                  aria-label="روش پرداخت"
-                  value={row.method}
-                  onChange={(event) =>
-                    setPayments((current) =>
-                      current.map((entry, i) =>
-                        i === index ? { ...entry, method: event.target.value } : entry,
-                      ),
-                    )
-                  }
-                >
-                  {methods.map((method) => (
-                    <option key={method.value} value={method.value}>
-                      {method.label}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  aria-label="مبلغ پرداخت"
-                  type="number"
-                  min="0"
-                  placeholder="مبلغ (ریال)"
-                  value={row.amount}
-                  onChange={(event) =>
-                    setPayments((current) =>
-                      current.map((entry, i) =>
-                        i === index ? { ...entry, amount: event.target.value } : entry,
-                      ),
-                    )
-                  }
-                />
-                <button
-                  type="button"
-                  className="row-action"
-                  onClick={() =>
-                    setPayments((current) =>
-                      current.map((entry, i) =>
-                        i === index
-                          ? {
-                              ...entry,
-                              amount: String(
-                                Math.max(0, total - paymentTotal + (Number(entry.amount) || 0)),
-                              ),
-                            }
-                          : entry,
-                      ),
-                    )
-                  }
-                >
-                  مانده
+              <div className="rows-foot">
+                <span className="mut3">
+                  ⚠ پس از صدور، موجودی به‌صورت خودکار و با ثبت در دفتر تراکنش‌ها کسر می‌شود.
+                </span>
+                <button type="button" className="btn-ghost-sm" onClick={resetForm}>
+                  پاک کردن فرم
                 </button>
-                {payments.length > 1 && (
-                  <button
-                    type="button"
-                    aria-label="حذف ردیف پرداخت"
-                    onClick={() => setPayments((current) => current.filter((_, i) => i !== index))}
-                  >
-                    ×
-                  </button>
-                )}
               </div>
-            ))}
-            <button
-              type="button"
-              className="row-action"
-              onClick={() => setPayments((current) => [...current, { method: 'card', amount: '' }])}
-            >
-              + افزودن روش پرداخت
-            </button>
-
-            <div className="invoice-totals">
-              <span>
-                جمع اقلام: <b>{money(subtotal)}</b>
-              </span>
-              <span>
-                تخفیف: <b>{money(discountValue)}</b>
-              </span>
-              <span>
-                دریافتی: <b>{money(paymentTotal)}</b>
-              </span>
-              <strong>قابل پرداخت: {money(total)}</strong>
-              {remainingDebt > 0 && (
-                <span className="low-stock">بدهی مشتری: {money(remainingDebt)}</span>
-              )}
             </div>
-            <button
-              className="button-primary"
-              disabled={!lines.length}
-              onClick={() => void create()}
-            >
-              صدور فاکتور
-            </button>
+
+            {/* Totals panel */}
+            <div className="tot-panel">
+              <div className="sec-h2">💳 مبالغ فاکتور</div>
+              <div className="tot-b">
+                <div className="ln">
+                  <span>جمع اقلام ({persianNumber(lines.length)} قلم)</span>
+                  <b>{money(subtotal)}</b>
+                </div>
+                {lineDiscountSum > 0 && (
+                  <div className="ln">
+                    <span>تخفیف ردیف‌ها</span>
+                    <b>{money(lineDiscountSum)}</b>
+                  </div>
+                )}
+                <div className="field">
+                  <span className="lab">تخفیف کل فاکتور (ریال)</span>
+                  <input
+                    className="money-in"
+                    aria-label="تخفیف کل"
+                    type="number"
+                    min="0"
+                    value={discount}
+                    placeholder="۰"
+                    onChange={(event) => setDiscount(event.target.value)}
+                  />
+                </div>
+                <div className="ln grand">
+                  <span>مبلغ نهایی</span>
+                  <b>{money(total)}</b>
+                </div>
+
+                <div className="paybox">
+                  {methods.map((method) => {
+                    const row = payments.find((entry) => entry.method === method.value);
+                    const on = Boolean(row);
+                    return (
+                      <div className="pr" key={method.value}>
+                        <button
+                          type="button"
+                          className={`chk${on ? ' on' : ''}`}
+                          aria-pressed={on}
+                          aria-label={method.label}
+                          onClick={() =>
+                            setPayments((current) =>
+                              on
+                                ? current.filter((entry) => entry.method !== method.value)
+                                : [...current, { method: method.value, amount: '' }],
+                            )
+                          }
+                        >
+                          ✓
+                        </button>
+                        {method.label}
+                        <input
+                          className="money-in"
+                          aria-label={`مبلغ ${method.label}`}
+                          type="number"
+                          min="0"
+                          placeholder="۰"
+                          disabled={!on}
+                          value={row?.amount ?? ''}
+                          onChange={(event) =>
+                            setPayments((current) =>
+                              current.map((entry) =>
+                                entry.method === method.value
+                                  ? { ...entry, amount: event.target.value }
+                                  : entry,
+                              ),
+                            )
+                          }
+                        />
+                      </div>
+                    );
+                  })}
+                  <div className="hr" />
+                  <div className="pr">
+                    <span className="mut">پرداخت‌شده</span>
+                    <b className="mono">{money(paymentTotal)}</b>
+                  </div>
+                  {total - paymentTotal > 0 && (
+                    <button
+                      type="button"
+                      className="btn-ghost-sm settle"
+                      onClick={() =>
+                        setPayments((current) => {
+                          const first = current[0] ?? { method: 'cash', amount: '' };
+                          return [
+                            {
+                              ...first,
+                              amount: String(Math.max(0, total - paymentTotal)),
+                            },
+                            ...current.slice(1),
+                          ];
+                        })
+                      }
+                    >
+                      تسویه کامل با مانده
+                    </button>
+                  )}
+                </div>
+
+                {remainingDebt > 0 && (
+                  <div className="debt-note">
+                    <span>
+                      باقی‌مانده <b className="mono">{money(remainingDebt)}</b> به‌صورت خودکار به
+                      بدهی مشتری منتقل می‌شود.
+                    </span>
+                  </div>
+                )}
+
+                <button
+                  className="btn-primary-lg"
+                  disabled={!lines.length}
+                  onClick={() => void create()}
+                >
+                  ✓ صدور فاکتور
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -1003,57 +1182,99 @@ export function InvoicesPage({
       )}
 
       {paying && (
-        <div className="notice">
-          <strong>ثبت پرداخت {paying.number}</strong>
-          <span className="muted">
-            مبلغ فاکتور {money(paying.total)} · دریافت‌شده {money(paying.paidAmount)}
-          </span>
-          {payments.map((row, index) => (
-            <div className="payment-row" key={index}>
-              <select
-                aria-label="روش پرداخت"
-                value={row.method}
-                onChange={(event) =>
-                  setPayments((current) =>
-                    current.map((entry, i) =>
-                      i === index ? { ...entry, method: event.target.value } : entry,
-                    ),
-                  )
-                }
+        <div className="modal-mask" role="dialog" aria-modal="true" aria-label="ثبت پرداخت">
+          <div className="modal-mask-panel pay-modal">
+            <header className="pay-modal-h">
+              <b>ثبت پرداخت فاکتور {paying.number}</b>
+              <button
+                type="button"
+                className="close"
+                aria-label="بستن"
+                onClick={() => {
+                  setPaying(null);
+                  setPayments([{ method: 'cash', amount: '' }]);
+                }}
               >
-                {methods.map((method) => (
-                  <option key={method.value} value={method.value}>
-                    {method.label}
-                  </option>
-                ))}
-              </select>
-              <input
-                aria-label="مبلغ پرداخت"
-                type="number"
-                min="0"
-                value={row.amount}
-                onChange={(event) =>
-                  setPayments((current) =>
-                    current.map((entry, i) =>
-                      i === index ? { ...entry, amount: event.target.value } : entry,
-                    ),
-                  )
-                }
-              />
+                ✕
+              </button>
+            </header>
+            <div className="pay-modal-body">
+              <div className="ln">
+                <span>مبلغ فاکتور</span>
+                <b>{money(paying.total)}</b>
+              </div>
+              <div className="ln">
+                <span>دریافت‌شده تاکنون</span>
+                <b>{money(paying.paidAmount)}</b>
+              </div>
+              <div className="ln grand">
+                <span>مانده</span>
+                <b>{money(Math.max(0, Number(paying.total) - Number(paying.paidAmount)))}</b>
+              </div>
+              <div className="paybox">
+                {methods.map((method) => {
+                  const row = payments.find((entry) => entry.method === method.value);
+                  const on = Boolean(row);
+                  return (
+                    <div className="pr" key={method.value}>
+                      <button
+                        type="button"
+                        className={`chk${on ? ' on' : ''}`}
+                        aria-pressed={on}
+                        aria-label={method.label}
+                        onClick={() =>
+                          setPayments((current) =>
+                            on
+                              ? current.filter((entry) => entry.method !== method.value)
+                              : [...current, { method: method.value, amount: '' }],
+                          )
+                        }
+                      >
+                        ✓
+                      </button>
+                      {method.label}
+                      <input
+                        className="money-in"
+                        aria-label={`مبلغ ${method.label}`}
+                        type="number"
+                        min="0"
+                        placeholder="۰"
+                        disabled={!on}
+                        value={row?.amount ?? ''}
+                        onChange={(event) =>
+                          setPayments((current) =>
+                            current.map((entry) =>
+                              entry.method === method.value
+                                ? { ...entry, amount: event.target.value }
+                                : entry,
+                            ),
+                          )
+                        }
+                      />
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          ))}
-          <button disabled={!payAmountValid()} onClick={() => void pay()}>
-            ثبت
-          </button>
-          <button
-            className="outline"
-            onClick={() => {
-              setPaying(null);
-              setPayments([{ method: 'cash', amount: '' }]);
-            }}
-          >
-            انصراف
-          </button>
+            <footer className="pay-modal-f">
+              <button
+                className="button-primary"
+                disabled={!payAmountValid()}
+                onClick={() => void pay()}
+              >
+                ثبت پرداخت
+              </button>
+              <button
+                className="outline"
+                onClick={() => {
+                  setPaying(null);
+                  setPayments([{ method: 'cash', amount: '' }]);
+                }}
+              >
+                انصراف
+              </button>
+            </footer>
+          </div>
         </div>
       )}
 

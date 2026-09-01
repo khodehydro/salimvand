@@ -31,10 +31,9 @@ export class CustomersService {
       ok: true,
       data: customers.map((customer) => ({
         ...customer,
-        debt: customer.invoices.reduce(
-          (sum, invoice) => sum + invoice.total - invoice.paidAmount,
-          0n,
-        ),
+        debt: customer.invoices
+          .reduce((sum, invoice) => sum + invoice.total - invoice.paidAmount, 0n)
+          .toString(),
         invoiceCount: customer.invoices.length,
         invoices: undefined,
       })),
@@ -52,7 +51,8 @@ export class CustomersService {
         ...customer,
         debt: customer.invoices
           .filter((item) => item.status === 'issued')
-          .reduce((sum, invoice) => sum + invoice.total - invoice.paidAmount, 0n),
+          .reduce((sum, invoice) => sum + invoice.total - invoice.paidAmount, 0n)
+          .toString(),
       },
     };
   }
@@ -120,6 +120,9 @@ export class CustomersService {
     actorId: string,
     ip?: string,
   ) {
+    // An empty actor id would blow up as an FK violation deep inside the
+    // transaction and surface as an opaque 500 — fail with a clear 400 instead.
+    if (!actorId) throw new BadRequestException('کاربر واردشده شناسایی نشد');
     let amount: bigint;
     try {
       amount = BigInt(input.amount ?? 0);
@@ -208,7 +211,17 @@ export class CustomersService {
           })),
         },
       });
-      return { ok: true, data: { ...receipt, remainingDebt: debt - amount } };
+      // JSON-safe: BigInts are stringified here so the endpoint never depends
+      // on the express `json replacer` to serialize the response.
+      return {
+        ok: true,
+        data: {
+          id: receipt.id,
+          paidAt: receipt.paidAt,
+          amount: amount.toString(),
+          remainingDebt: (debt - amount).toString(),
+        },
+      };
     });
   }
 
@@ -225,18 +238,21 @@ export class CustomersService {
     return {
       ok: true,
       data: customers
-        .map((customer) => ({
-          id: customer.id,
-          name: customer.name,
-          mobile: customer.mobile,
-          debt: customer.invoices.reduce(
+        .map((customer) => {
+          const debt = customer.invoices.reduce(
             (sum, invoice) => sum + invoice.total - invoice.paidAmount,
             0n,
-          ),
-          invoiceCount: customer.invoices.length,
-        }))
-        .filter((customer) => customer.debt > 0n)
-        .sort((a, b) => (a.debt > b.debt ? -1 : 1)),
+          );
+          return {
+            id: customer.id,
+            name: customer.name,
+            mobile: customer.mobile,
+            debt: debt.toString(),
+            invoiceCount: customer.invoices.length,
+          };
+        })
+        .filter((customer) => BigInt(customer.debt) > 0n)
+        .sort((a, b) => (BigInt(a.debt) > BigInt(b.debt) ? -1 : 1)),
     };
   }
 
