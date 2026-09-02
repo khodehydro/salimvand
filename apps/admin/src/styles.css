@@ -3185,7 +3185,7 @@ body,
 }
 .shelves-tab {
   display: grid;
-  grid-template-columns: minmax(260px, 340px) 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
   align-items: start;
 }
@@ -5028,6 +5028,7 @@ button.btn-primary-lg:hover:not(:disabled) {
    Block cards (not the inline .adjust-box flex row): each side stacks its
    form, then the group lists. */
 .shelves-box {
+  min-width: 0;
   background: var(--sv-surface);
   border: 1px solid var(--sv-border);
   border-radius: 14px;
@@ -5062,4 +5063,23 @@ button.btn-primary-lg:hover:not(:disabled) {
   margin: 6px 0 2px;
   font-size: 13px;
   color: var(--sv-text-2);
+}
+/* Warehouse/shelf cards inside the boxes: the first column may shrink (the
+   base .inventory-row minmax(140px, …) forced ~530px of min-content and
+   overflowed the panel) while chips, counts and actions keep their size. */
+.shelves-box .inventory-row {
+  grid-template-columns: minmax(0, 1.2fr) auto auto auto;
+}
+/* Stack the two panels on narrower screens instead of squeezing them. */
+@media (max-width: 1000px) {
+  .shelves-tab {
+    grid-template-columns: 1fr;
+  }
+}
+/* Keep the mobile row stacking working inside the boxes too (this override
+   outranks the global mobile rule, so it needs its own counterpart). */
+@media (max-width: 700px) {
+  .shelves-box .inventory-row {
+    grid-template-columns: 1fr auto;
+  }
 }
