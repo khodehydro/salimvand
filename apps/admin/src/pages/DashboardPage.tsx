@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { formatPersianNumber } from '@salimvand/shared';
 import { api } from '../lib/api';
 import { DonutChart } from '@salimvand/ui';
 import {
@@ -407,7 +408,7 @@ export function DashboardPage({
                   {debtors.slice(0, 6).map((debtor) => (
                     <div className="trow" key={debtor.id}>
                       <b>{debtor.name}</b>
-                      <code dir="ltr">{debtor.mobile}</code>
+                      <code dir="ltr">{formatPersianNumber(debtor.mobile)}</code>
                       <b className="num danger">{money(debtor.debt)}</b>
                       <span>
                         {canNotify ? (

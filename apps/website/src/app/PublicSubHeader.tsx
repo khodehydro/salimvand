@@ -123,7 +123,9 @@ export async function StoreContact({
           {resolved.phones.length > 0 && (
             <div>
               <small>تلفن تماس</small>
-              <b dir="ltr">{resolved.phones.join('، ')}</b>
+              <b dir="ltr">
+                {resolved.phones.map((phone) => formatPersianNumber(phone)).join('، ')}
+              </b>
             </div>
           )}
           <div>

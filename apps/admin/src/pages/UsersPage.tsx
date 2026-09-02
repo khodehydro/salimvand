@@ -213,7 +213,8 @@ export function UsersPage() {
             <span>
               <strong>{user.name}</strong>
               <small>
-                {user.mobile || 'بدون موبایل'} · {user.isActive ? 'فعال' : 'غیرفعال'}
+                {formatPersianNumber(user.mobile || 'بدون موبایل')} ·{' '}
+                {user.isActive ? 'فعال' : 'غیرفعال'}
               </small>
             </span>
             <code>{user.username}</code>
@@ -305,7 +306,7 @@ export function UsersPage() {
           {activity.invoices.length ? (
             activity.invoices.map((invoice) => (
               <div className="activity-line" key={invoice.id}>
-                <code>{invoice.number}</code>
+                <code>{formatPersianNumber(invoice.number)}</code>
                 <span>{formatRial(Number(invoice.total))}</span>
                 <small>{formatJalaliDate(invoice.issuedAt, 'dateTime')}</small>
               </div>

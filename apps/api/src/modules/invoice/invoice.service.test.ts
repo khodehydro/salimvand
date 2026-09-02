@@ -839,5 +839,20 @@ describe('InvoiceService.list and panel link/pdf actions', () => {
     // the fontkit engine must never run rtl (it would mirror each word)
     expect(directions.length).toBeGreaterThan(0);
     for (const direction of directions) expect(direction).toBe('ltr');
+
+    // Every drawn number is Persian — money grouped 3-by-3, phones/ids converted.
+    const drawnText = drawn.join('\n');
+    expect(drawnText).toContain('۱۰۰٬۰۰۰٬۰۰۰'); // 100000000n line total
+    expect(drawnText).toContain('۵۰٬۰۰۰٬۰۰۰'); // 50000000n unit price
+    expect(drawnText).toContain('۱۵۰٬۰۰۰٬۰۰۰'); // 150000000n subtotal
+    expect(drawnText).toContain('۱۲۵٬۰۰۰٬۰۰۰'); // net total after returns (145M − 20M)
+    expect(drawnText).toContain('۹۰٬۰۰۰٬۰۰۰'); // 90000000n paid
+    expect(drawnText).toContain('۲۰٬۰۰۰٬۰۰۰'); // 20000000n refund
+    expect(drawnText).toContain('۱۴۰۵/۰۰۳۴۸'); // invoice number in Persian digits
+    expect(drawnText).toContain('۰۹۱۲۳۴۵۶۷۸۹'); // customer mobile in Persian digits
+    // A hyphenated store phone stays readable as one LTR run (LRM-wrapped).
+    expect(drawnText).toContain('۰۴۱-۱۲۳۴۵۶۷');
+    // No ASCII digit runs survive in the drawn lines.
+    expect(drawnText).not.toMatch(/\d{3,}/);
   });
 });

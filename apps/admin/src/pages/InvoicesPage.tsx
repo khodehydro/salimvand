@@ -15,6 +15,8 @@ import {
 import { api, downloadFile } from '../lib/api';
 import { publicSiteUrl } from '../lib/public-site';
 import { paramsFromHash } from '../lib/admin-route';
+import { formatPersianNumber } from '@salimvand/shared';
+import { FaNumberInput } from '../components/FaNumberInput';
 
 type Invoice = {
   id: string;
@@ -343,7 +345,9 @@ export function InvoicesPage({
     const existing = lines.find((line) => line.item.id === item.id);
     const nextQty = (existing?.quantity ?? 0) + qty;
     if (nextQty > item.quantity)
-      return setMessage(`موجودی ${item.product.name} فقط ${item.quantity} عدد است`);
+      return setMessage(
+        `موجودی ${item.product.name} فقط ${formatPersianNumber(item.quantity)} عدد است`,
+      );
     setLines((current) =>
       existing
         ? current.map((line) => (line.item.id === item.id ? { ...line, quantity: nextQty } : line))
@@ -501,7 +505,7 @@ export function InvoicesPage({
           customerAddress: addressDraft.customer,
         }),
       });
-      setMessage(`آدرس‌های فاکتور ${viewing.number} ذخیره شد.`);
+      setMessage(`آدرس‌های فاکتور ${formatPersianNumber(viewing.number)} ذخیره شد.`);
       const updated = await load();
       setViewing(updated.find((row) => row.id === viewing.id) ?? null);
     } catch (error) {
@@ -528,7 +532,7 @@ export function InvoicesPage({
     const qty = Number(returnQty);
     const reason = returnReason.trim();
     if (!Number.isInteger(qty) || qty <= 0 || qty > remaining)
-      return setMessage(`تعداد برگشت باید بین ۱ تا ${remaining} باشد`);
+      return setMessage(`تعداد برگشت باید بین ۱ تا ${formatPersianNumber(remaining)} باشد`);
     if (!reason) return setMessage('دلیل مرجوعی الزامی است');
     setReturnBusy(true);
     try {
@@ -565,7 +569,9 @@ export function InvoicesPage({
         { method: 'POST', body: JSON.stringify(mobile ? { mobile } : {}) },
       );
       const link = shortLink(result.data.publicShortCode);
-      setMessage(`پیامک فاکتور ${invoice.number} در صف ارسال قرار گرفت. لینک جدید: ${link}`);
+      setMessage(
+        `پیامک فاکتور ${formatPersianNumber(invoice.number)} در صف ارسال قرار گرفت. لینک جدید: ${link}`,
+      );
       void navigator.clipboard?.writeText(link);
     } catch (error) {
       setMessage((error as Error).message);
@@ -635,7 +641,7 @@ export function InvoicesPage({
               <span className="ok">✓</span>
               <h2>فاکتور صادر شد</h2>
               <p className="muted">
-                شمارهٔ فاکتور <b className="mono">{created.number}</b>
+                شمارهٔ فاکتور <b className="mono">{formatPersianNumber(created.number)}</b>
               </p>
               <div className="kv">
                 <span className="k">مبلغ</span>
@@ -791,7 +797,7 @@ export function InvoicesPage({
                       >
                         <b>{customer.name}</b>
                         <span>
-                          <span dir="ltr">{customer.mobile}</span> · بدهی{' '}
+                          <span dir="ltr">{formatPersianNumber(customer.mobile)}</span> · بدهی{' '}
                           {money(customer.debt ?? 0)}
                         </span>
                       </button>
@@ -949,28 +955,24 @@ export function InvoicesPage({
                           +
                         </button>
                       </div>
-                      <input
+                      <FaNumberInput
                         className="money-in hd-hide"
                         aria-label={`فی ${line.item.product.name}`}
-                        type="number"
-                        min="0"
-                        value={line.price}
-                        onChange={(event) =>
+                        value={String(line.price)}
+                        onChange={(plain) =>
                           setLine(line.item.id, {
-                            price: Math.max(0, Number(event.target.value) || 0),
+                            price: Math.max(0, Number(plain) || 0),
                           })
                         }
                       />
-                      <input
+                      <FaNumberInput
                         className="money-in hd-hide"
                         aria-label={`تخفیف ${line.item.product.name}`}
-                        type="number"
-                        min="0"
                         placeholder="۰"
-                        value={line.lineDiscount || ''}
-                        onChange={(event) =>
+                        value={line.lineDiscount ? String(line.lineDiscount) : ''}
+                        onChange={(plain) =>
                           setLine(line.item.id, {
-                            lineDiscount: Math.max(0, Number(event.target.value) || 0),
+                            lineDiscount: Math.max(0, Number(plain) || 0),
                           })
                         }
                       />
@@ -1022,14 +1024,12 @@ export function InvoicesPage({
                 )}
                 <div className="field">
                   <span className="lab">تخفیف کل فاکتور (ریال)</span>
-                  <input
+                  <FaNumberInput
                     className="money-in"
                     aria-label="تخفیف کل"
-                    type="number"
-                    min="0"
                     value={discount}
                     placeholder="۰"
-                    onChange={(event) => setDiscount(event.target.value)}
+                    onChange={(plain) => setDiscount(plain)}
                   />
                 </div>
                 <div className="ln grand">
@@ -1059,20 +1059,16 @@ export function InvoicesPage({
                           ✓
                         </button>
                         {method.label}
-                        <input
+                        <FaNumberInput
                           className="money-in"
                           aria-label={`مبلغ ${method.label}`}
-                          type="number"
-                          min="0"
                           placeholder="۰"
                           disabled={!on}
                           value={row?.amount ?? ''}
-                          onChange={(event) =>
+                          onChange={(plain) =>
                             setPayments((current) =>
                               current.map((entry) =>
-                                entry.method === method.value
-                                  ? { ...entry, amount: event.target.value }
-                                  : entry,
+                                entry.method === method.value ? { ...entry, amount: plain } : entry,
                               ),
                             )
                           }
@@ -1202,7 +1198,7 @@ export function InvoicesPage({
         <div className="modal-mask" role="dialog" aria-modal="true" aria-label="ثبت پرداخت">
           <div className="modal-mask-panel pay-modal">
             <header className="pay-modal-h">
-              <b>ثبت پرداخت فاکتور {paying.number}</b>
+              <b>ثبت پرداخت فاکتور {formatPersianNumber(paying.number)}</b>
               <button
                 type="button"
                 className="close"
@@ -1256,20 +1252,16 @@ export function InvoicesPage({
                         ✓
                       </button>
                       {method.label}
-                      <input
+                      <FaNumberInput
                         className="money-in"
                         aria-label={`مبلغ ${method.label}`}
-                        type="number"
-                        min="0"
                         placeholder="۰"
                         disabled={!on}
                         value={row?.amount ?? ''}
-                        onChange={(event) =>
+                        onChange={(plain) =>
                           setPayments((current) =>
                             current.map((entry) =>
-                              entry.method === method.value
-                                ? { ...entry, amount: event.target.value }
-                                : entry,
+                              entry.method === method.value ? { ...entry, amount: plain } : entry,
                             ),
                           )
                         }
@@ -1358,7 +1350,7 @@ export function InvoicesPage({
               const returned = returnedOf(invoice);
               return (
                 <div className="table-row invoice-row" key={invoice.id}>
-                  <code>{invoice.number}</code>
+                  <code>{formatPersianNumber(invoice.number)}</code>
                   <span>{invoice.customerName ?? 'مشتری حضوری'}</span>
                   <span>
                     {persianNumber(invoice.items.length)}
@@ -1454,12 +1446,12 @@ export function InvoicesPage({
             className="editor invoice-dialog"
             onClick={(event) => event.stopPropagation()}
             role="dialog"
-            aria-label={`جزئیات فاکتور ${viewing.number}`}
+            aria-label={`جزئیات فاکتور ${formatPersianNumber(viewing.number)}`}
           >
             <div className="editor-head">
               <div>
                 <span className="eyebrow">جزئیات و برگشت اقلام</span>
-                <h2>فاکتور {viewing.number}</h2>
+                <h2>فاکتور {formatPersianNumber(viewing.number)}</h2>
               </div>
               <button className="close" onClick={() => setViewing(null)}>
                 بستن
@@ -1471,7 +1463,8 @@ export function InvoicesPage({
                   مشتری: <b>{viewing.customerName ?? 'مشتری حضوری'}</b>
                 </span>
                 <span>
-                  شماره تماس مشتری: <b dir="ltr">{viewing.customerMobile ?? '—'}</b>
+                  شماره تماس مشتری:{' '}
+                  <b dir="ltr">{formatPersianNumber(viewing.customerMobile ?? '—')}</b>
                 </span>
                 <span>
                   تاریخ صدور: <b>{new Date(viewing.issuedAt).toLocaleDateString('fa-IR')}</b>
@@ -1619,12 +1612,10 @@ export function InvoicesPage({
               <div className="return-form">
                 <label>
                   تعداد برگشتی
-                  <input
-                    type="number"
-                    min="1"
-                    max={returnLine.item.quantity - (returnLine.item.returnedQuantity ?? 0)}
+                  <FaNumberInput
                     value={returnQty}
-                    onChange={(event) => setReturnQty(event.target.value)}
+                    placeholder="۱"
+                    onChange={(plain) => setReturnQty(plain)}
                   />
                 </label>
                 <label>

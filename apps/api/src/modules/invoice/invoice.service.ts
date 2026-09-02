@@ -19,7 +19,8 @@ import PDFDocument = require('pdfkit');
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { createPublicShortCode, createPublicToken, hashPublicToken } from './public-token';
-import { faText } from './pdf-text';
+import { faText, ltrNumber } from './pdf-text';
+import { formatGroupedPersian, formatPersianNumber } from '@salimvand/shared';
 
 type DraftLine = InvoiceLineInput & { inventoryItemId: string; productName: string };
 type CreateInput = {
@@ -500,12 +501,14 @@ export class InvoiceService {
       .fontSize(10)
       .text(
         text(
-          `شماره: ${invoice.number}    تاریخ: ${new Intl.DateTimeFormat('fa-IR').format(new Date(invoice.issuedAt))}`,
+          `شماره: ${formatPersianNumber(invoice.number)}    تاریخ: ${new Intl.DateTimeFormat('fa-IR').format(new Date(invoice.issuedAt))}`,
         ),
         { align: 'right' },
       );
     if (invoice.storePhone)
-      doc.text(text(`شماره تماس فروشگاه: ${invoice.storePhone}`), { align: 'right' });
+      doc.text(text(`شماره تماس فروشگاه: ${ltrNumber(formatPersianNumber(invoice.storePhone))}`), {
+        align: 'right',
+      });
     if (invoice.storeAddress)
       doc.text(text(`آدرس فروشگاه: ${invoice.storeAddress}`), { align: 'right' });
     doc
@@ -514,7 +517,9 @@ export class InvoiceService {
       .fontSize(12)
       .text(text(`مشتری: ${invoice.customerName ?? 'مشتری حضوری'}`), { align: 'right' });
     if (invoice.customerMobile)
-      doc.text(text(`شماره تماس: ${invoice.customerMobile}`), { align: 'right' });
+      doc.text(text(`شماره تماس: ${ltrNumber(formatPersianNumber(invoice.customerMobile))}`), {
+        align: 'right',
+      });
     if (invoice.customerAddress)
       doc.text(text(`آدرس مشتری: ${invoice.customerAddress}`), { align: 'right' });
     doc
@@ -526,7 +531,7 @@ export class InvoiceService {
     for (const [index, item] of invoice.items.entries())
       doc.text(
         text(
-          `${index + 1}. ${item.productName}${item.brand ? ` | برند: ${item.brand}` : ''} | تعداد: ${item.quantity} | فی: ${item.unitPrice} ریال | جمع: ${item.lineTotal} ریال`,
+          `${formatPersianNumber(index + 1)}. ${item.productName}${item.brand ? ` | برند: ${item.brand}` : ''} | تعداد: ${formatPersianNumber(item.quantity)} | فی: ${formatGroupedPersian(item.unitPrice)} ریال | جمع: ${formatGroupedPersian(item.lineTotal)} ریال`,
         ),
         { align: 'right' },
       );
@@ -542,7 +547,7 @@ export class InvoiceService {
       for (const record of invoice.returns)
         doc.text(
           text(
-            `${record.productName} | تعداد برگشتی: ${record.quantity} | مبلغ برگشتی: ${record.refundAmount} ریال | ${record.restock ? 'به انبار برگشت' : 'خراب — بدون بازگشت به انبار'} | دلیل: ${record.reason}`,
+            `${record.productName} | تعداد برگشتی: ${formatPersianNumber(record.quantity)} | مبلغ برگشتی: ${formatGroupedPersian(record.refundAmount)} ریال | ${record.restock ? 'به انبار برگشت' : 'خراب — بدون بازگشت به انبار'} | دلیل: ${record.reason}`,
           ),
           { align: 'right' },
         );
@@ -554,19 +559,21 @@ export class InvoiceService {
     doc
       .moveDown(1)
       .fontSize(11)
-      .text(text(`جمع اقلام: ${invoice.subtotal} ریال`), { align: 'right' })
-      .text(text(`تخفیف: ${invoice.discount} ریال`), { align: 'right' });
+      .text(text(`جمع اقلام: ${formatGroupedPersian(invoice.subtotal)} ریال`), { align: 'right' })
+      .text(text(`تخفیف: ${formatGroupedPersian(invoice.discount)} ریال`), { align: 'right' });
     if (returnedTotal > 0n) {
-      doc.text(text(`برگشتی: ${returnedTotal} ریال`), { align: 'right' });
+      doc.text(text(`برگشتی: ${formatGroupedPersian(returnedTotal)} ریال`), { align: 'right' });
       doc
         .fontSize(14)
         .fillColor('#0d2b4b')
-        .text(text(`مبلغ نهایی پس از برگشتی: ${netTotal} ریال`), { align: 'right' });
+        .text(text(`مبلغ نهایی پس از برگشتی: ${formatGroupedPersian(netTotal)} ریال`), {
+          align: 'right',
+        });
     } else {
       doc
         .fontSize(14)
         .fillColor('#0d2b4b')
-        .text(text(`مبلغ نهایی: ${invoice.total} ریال`), {
+        .text(text(`مبلغ نهایی: ${formatGroupedPersian(invoice.total)} ریال`), {
           align: 'right',
         });
     }
@@ -574,8 +581,11 @@ export class InvoiceService {
       .moveDown(0.5)
       .fillColor('#0b1c2f')
       .fontSize(11)
-      .text(text(`پرداخت‌شده: ${paidAmount} ریال`), { align: 'right' });
-    if (remaining > 0n) doc.text(text(`باقی‌مانده (بدهی): ${remaining} ریال`), { align: 'right' });
+      .text(text(`پرداخت‌شده: ${formatGroupedPersian(paidAmount)} ریال`), { align: 'right' });
+    if (remaining > 0n)
+      doc.text(text(`باقی‌مانده (بدهی): ${formatGroupedPersian(remaining)} ریال`), {
+        align: 'right',
+      });
     doc.text(text(`وضعیت: ${statusLabels[invoice.paymentStatus] ?? invoice.paymentStatus}`), {
       align: 'right',
     });

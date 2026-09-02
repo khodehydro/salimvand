@@ -12,8 +12,10 @@ import {
   neshanRouteUrl,
   parseCoordinate,
   formatPersianNumber,
+  formatGroupedPersian,
   formatRial,
   normalizeDigits,
+  parseDigitsInput,
 } from './index';
 
 describe('shared utilities', () => {
@@ -77,6 +79,31 @@ describe('shared utilities', () => {
     expect(normalizeDigits('۰۹۱۲۳۴۵۶۷۸۹')).toBe('09123456789');
     expect(normalizeDigits('٠١٢٣')).toBe('0123');
     expect(normalizeDigits('+98 441 ۰۹۱۲')).toBe('+98 441 0912');
+  });
+  it('groups money into Persian digits (fa-IR thousands separator)', () => {
+    expect(formatGroupedPersian(0)).toBe('۰');
+    expect(formatGroupedPersian(999)).toBe('۹۹۹');
+    expect(formatGroupedPersian(1000)).toBe('۱٬۰۰۰');
+    expect(formatGroupedPersian(1234567)).toBe('۱٬۲۳۴٬۵۶۷');
+    // bigint (Prisma money) and numeric strings keep full precision
+    expect(formatGroupedPersian(90000000000000n)).toBe('۹۰٬۰۰۰٬۰۰۰٬۰۰۰٬۰۰۰');
+    expect(formatGroupedPersian('145000000')).toBe('۱۴۵٬۰۰۰٬۰۰۰');
+    expect(formatRial(1500000)).toBe('۱٬۵۰۰٬۰۰۰ ریال');
+    expect(formatRial(20000000n)).toBe('۲۰٬۰۰۰٬۰۰۰ ریال');
+    expect(formatRial('1250000')).toBe('۱٬۲۵۰٬۰۰۰ ریال');
+    expect(formatPersianNumber('09123456789')).toBe('۰۹۱۲۳۴۵۶۷۸۹');
+    expect(formatPersianNumber('INV-000123')).toBe('INV-۰۰۰۱۲۳');
+  });
+  it('parses typed digit input back to plain ASCII digits', () => {
+    expect(parseDigitsInput('1200000')).toBe('1200000');
+    expect(parseDigitsInput('۱٬۲۰۰٬۰۰۰')).toBe('1200000');
+    expect(parseDigitsInput('1,200,000')).toBe('1200000');
+    expect(parseDigitsInput('۱/۲۰۰/۰۰۰')).toBe('1200000');
+    expect(parseDigitsInput('٠١٢٣')).toBe('123'); // leading zero collapses like money inputs
+    expect(parseDigitsInput('007')).toBe('7');
+    expect(parseDigitsInput('0')).toBe('0');
+    expect(parseDigitsInput('')).toBe('');
+    expect(parseDigitsInput('مبلغ: ۱۲۰۰۰')).toBe('12000');
   });
   it('extracts embeddable map URLs from any paste format', () => {
     const embed = 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d4080.abc';

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { createEan13 } from '@salimvand/shared';
+import { FaNumberInput } from './FaNumberInput';
 import { api } from '../lib/api';
 import { MediaImage } from './MediaImage';
 
@@ -330,39 +331,33 @@ export function ProductCreateModal({
                 </label>
                 <label>
                   قیمت فروش (ریال) *
-                  <input
-                    type="number"
-                    min="0"
+                  <FaNumberInput
                     value={item.salePrice}
-                    onChange={(event) => setItem({ ...item, salePrice: event.target.value })}
+                    onChange={(plain) => setItem({ ...item, salePrice: plain })}
                   />
                 </label>
                 <label>
                   قیمت خرید (ریال) *
-                  <input
-                    type="number"
-                    min="0"
+                  <FaNumberInput
                     value={item.purchasePrice}
-                    onChange={(event) => setItem({ ...item, purchasePrice: event.target.value })}
+                    onChange={(plain) => setItem({ ...item, purchasePrice: plain })}
                   />
                 </label>
                 <label>
                   موجودی اولیه
-                  <input
-                    type="number"
-                    min="0"
+                  <FaNumberInput
+                    group={false}
                     value={item.initialQuantity}
-                    onChange={(event) => setItem({ ...item, initialQuantity: event.target.value })}
-                    placeholder="0"
+                    onChange={(plain) => setItem({ ...item, initialQuantity: plain })}
+                    placeholder="۰"
                   />
                 </label>
                 <label>
                   آستانهٔ هشدار
-                  <input
-                    type="number"
-                    min="0"
+                  <FaNumberInput
+                    group={false}
                     value={item.minStock}
-                    onChange={(event) => setItem({ ...item, minStock: event.target.value })}
+                    onChange={(plain) => setItem({ ...item, minStock: plain })}
                     placeholder="مثلاً ۳"
                   />
                 </label>

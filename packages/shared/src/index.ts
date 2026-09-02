@@ -10,8 +10,34 @@ export function formatPersianNumber(value: number | string): string {
   return String(value).replace(/\d/g, (digit) => '۰۱۲۳۴۵۶۷۸۹'[Number(digit)] ?? digit);
 }
 
-export function formatRial(value: number): string {
-  return `${formatPersianNumber(new Intl.NumberFormat('fa-IR').format(value))} ریال`;
+/** Persian digits with 3-digit grouping and no unit — 1234567 → «۱٬۲۳۴٬۵۶۷».
+ * Accepts bigint (Prisma money columns) and plain numeric strings too, so
+ * every rial amount stays exact instead of losing precision through Number(). */
+export function formatGroupedPersian(value: number | string | bigint): string {
+  let numeric: number | bigint;
+  if (typeof value === 'bigint') {
+    numeric = value;
+  } else if (typeof value === 'string' && /^-?\d+$/.test(value.trim())) {
+    numeric = BigInt(value.trim());
+  } else {
+    numeric = Number(value);
+  }
+  return new Intl.NumberFormat('fa-IR').format(numeric);
+}
+
+export function formatRial(value: number | string | bigint): string {
+  return `${formatGroupedPersian(value)} ریال`;
+}
+
+/** Parse whatever an operator typed into a digit field — Persian/Arabic
+ * keyboard digits, thousands separators, spaces — into a plain ASCII digit
+ * string ('' when nothing numeric is left). This is the parse side of the
+ * Persian-digit inputs: the UI shows ۱٬۲۰۰٬۰۰۰ while the app still receives
+ * '1200000', exactly what a type=number input produced before. */
+export function parseDigitsInput(raw: string): string {
+  const digits = normalizeDigits(String(raw ?? '')).replace(/[^0-9]/g, '');
+  if (!digits) return '';
+  return digits.replace(/^0+(?=\d)/, '');
 }
 
 export function createSlug(value: string): string {

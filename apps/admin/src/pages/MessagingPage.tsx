@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import { formatPersianNumber } from '@salimvand/shared';
 
 type SmsRow = {
   id: string;
@@ -171,7 +172,7 @@ export function MessagingPage() {
           {smsRows.length ? (
             smsRows.map((row) => (
               <div className="table-row messaging-head" key={row.id}>
-                <code dir="ltr">{row.mobile ?? '—'}</code>
+                <code dir="ltr">{formatPersianNumber(row.mobile ?? '—')}</code>
                 <span>{row.template}</span>
                 <span className={row.status === 'sent' ? 'status-chip' : 'low-stock'}>
                   {row.status === 'sent'
@@ -269,7 +270,7 @@ export function MessagingPage() {
             failed.map((job) => (
               <div className="table-row messaging-head" key={job.id}>
                 <strong>{job.type}</strong>
-                <code dir="ltr">{job.mobile ?? '—'}</code>
+                <code dir="ltr">{formatPersianNumber(job.mobile ?? '—')}</code>
                 <span>{job.failedReason}</span>
                 <span>{new Intl.NumberFormat('fa-IR').format(job.attemptsMade)}</span>
                 <span>

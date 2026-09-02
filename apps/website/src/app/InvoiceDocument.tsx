@@ -114,7 +114,7 @@ export async function InvoiceDocument({
         {/* Meta card — overlaps the dark band */}
         <section className="inv-card inv-top">
           <div className="inv-top-head">
-            <span className="inv-no">فاکتور شمارهٔ {invoice.number}</span>
+            <span className="inv-no">فاکتور شمارهٔ {formatPersianNumber(invoice.number)}</span>
             <span className={`invoice-status ${status}`}>{statusLabels[status] ?? status}</span>
           </div>
           <div className="inv-top-body">
@@ -130,7 +130,7 @@ export async function InvoiceDocument({
               {invoice.customerMobile && (
                 <div>
                   <small>شمارهٔ تماس</small>
-                  <b dir="ltr">{invoice.customerMobile}</b>
+                  <b dir="ltr">{formatPersianNumber(invoice.customerMobile)}</b>
                 </div>
               )}
               {invoice.salesPerson && (
@@ -148,7 +148,7 @@ export async function InvoiceDocument({
               {invoice.storePhone && (
                 <div>
                   <small>تماس فروشگاه</small>
-                  <b dir="ltr">{invoice.storePhone}</b>
+                  <b dir="ltr">{formatPersianNumber(invoice.storePhone)}</b>
                 </div>
               )}
               {invoice.storeAddress && (
@@ -225,7 +225,7 @@ export async function InvoiceDocument({
                     <strong>{money(payment.amount)}</strong>
                     <small>
                       {payment.paidAt ? shamsi(payment.paidAt) : 'ثبت‌شده'}
-                      {payment.reference ? ` · رسید ${payment.reference}` : ''}
+                      {payment.reference ? ` · رسید ${formatPersianNumber(payment.reference)}` : ''}
                     </small>
                   </div>
                 ))}

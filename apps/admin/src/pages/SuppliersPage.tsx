@@ -252,10 +252,10 @@ export function SuppliersPage({ canManage = true }: { canManage?: boolean }) {
               <small>{supplier.address || 'بدون آدرس'}</small>
             </button>
             <span>
-              <code>{supplier.mobile ?? '—'}</code>
-              <small>{supplier.phone ?? ''}</small>
+              <code dir="ltr">{formatPersianNumber(supplier.mobile ?? '—')}</code>
+              <small dir="ltr">{formatPersianNumber(supplier.phone ?? '')}</small>
             </span>
-            <code>{supplier.taxId ?? '—'}</code>
+            <code dir="ltr">{formatPersianNumber(supplier.taxId ?? '—')}</code>
             <span className={supplier.isActive ? 'status-chip' : 'low-stock'}>
               {supplier.isActive ? 'فعال' : 'غیرفعال'}
             </span>
@@ -320,7 +320,7 @@ export function SuppliersPage({ canManage = true }: { canManage?: boolean }) {
             profile.purchases.map((purchase) => (
               <article className="supplier-purchase" key={purchase.id}>
                 <header>
-                  <code>{purchase.number}</code>
+                  <code>{formatPersianNumber(purchase.number)}</code>
                   <time>{formatJalaliDate(purchase.issuedAt)}</time>
                 </header>
                 <div>

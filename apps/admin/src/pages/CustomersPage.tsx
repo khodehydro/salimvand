@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { api } from '../lib/api';
 import { paramsFromHash } from '../lib/admin-route';
 import { formatRial, formatPersianNumber } from '@salimvand/shared';
+import { FaNumberInput } from '../components/FaNumberInput';
 
 type CustomerVehicle = {
   id: string;
@@ -360,7 +361,7 @@ export function CustomersPage({
                 <button className="row-action" onClick={() => void loadDetail(customer.id)}>
                   {customer.name}
                 </button>
-                <code dir="ltr">{customer.mobile}</code>
+                <code dir="ltr">{formatPersianNumber(customer.mobile)}</code>
                 <span>{formatPersianNumber(customer.invoiceCount)}</span>
                 <b className={Number(customer.debt) > 0 ? 'low-stock' : 'status-chip'}>
                   {formatRial(Number(customer.debt))}
@@ -400,13 +401,10 @@ export function CustomersPage({
               </div>
               <label className="field">
                 <span className="lab">مبلغ پرداختی (ریال)</span>
-                <input
+                <FaNumberInput
                   className="money-in"
-                  type="number"
-                  min="1"
-                  max={Number(paymentFor.debt)}
                   value={paymentAmount}
-                  onChange={(e) => setPaymentAmount(e.target.value)}
+                  onChange={(plain) => setPaymentAmount(plain)}
                   placeholder="۰"
                 />
               </label>
@@ -510,7 +508,8 @@ export function CustomersPage({
           >
             <header className="pay-modal-h">
               <b>
-                {selected.name} · پروندهٔ مشتری <code dir="ltr">{selected.mobile}</code>
+                {selected.name} · پروندهٔ مشتری{' '}
+                <code dir="ltr">{formatPersianNumber(selected.mobile)}</code>
               </b>
               <button type="button" className="close" onClick={() => setSelected(null)}>
                 ✕
@@ -551,7 +550,7 @@ export function CustomersPage({
                   {selected.invoices.map((invoice) => (
                     <div className="trow" key={invoice.id}>
                       <a className="row-action" href={`#/invoices?invoice=${invoice.id}`}>
-                        <code>{invoice.number}</code>
+                        <code>{formatPersianNumber(invoice.number)}</code>
                       </a>
                       <span>{shamsi(invoice.issuedAt)}</span>
                       <b className="num">{formatRial(Number(invoice.total))}</b>
@@ -630,12 +629,10 @@ export function CustomersPage({
                     }
                     placeholder="شماره شاسی"
                   />
-                  <input
-                    type="number"
+                  <FaNumberInput
+                    group={false}
                     value={vehicleForm.year}
-                    onChange={(event) =>
-                      setVehicleForm({ ...vehicleForm, year: event.target.value })
-                    }
+                    onChange={(plain) => setVehicleForm({ ...vehicleForm, year: plain })}
                     placeholder="سال مدل"
                   />
                   <button disabled={loading} onClick={() => void addVehicle()}>

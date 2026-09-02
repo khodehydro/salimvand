@@ -5,7 +5,8 @@ import { Sheet } from '@salimvand/ui';
 import { StockStepper } from '../components/StockStepper';
 import { ProductCreateModal } from '../components/ProductCreateModal';
 import { BarcodeSvg } from '../components/BarcodeSvg';
-import { formatRial } from '@salimvand/shared';
+import { formatPersianNumber, formatRial } from '@salimvand/shared';
+import { FaNumberInput } from '../components/FaNumberInput';
 
 const BarcodeScanner = lazy(() =>
   import('../components/BarcodeScanner').then((module) => ({ default: module.BarcodeScanner })),
@@ -491,7 +492,7 @@ export function InventoryPage() {
               </div>
               <div>
                 <dt>موجودی فعلی</dt>
-                <dd>{detail.quantity}</dd>
+                <dd>{formatPersianNumber(detail.quantity)}</dd>
               </div>
               <div>
                 <dt>قیمت فروش</dt>
@@ -499,7 +500,7 @@ export function InventoryPage() {
               </div>
               <div>
                 <dt>آستانهٔ هشدار</dt>
-                <dd>{detail.minStock ?? '—'}</dd>
+                <dd>{detail.minStock != null ? formatPersianNumber(detail.minStock) : '—'}</dd>
               </div>
             </dl>
             <div className="sheet-barcode">
@@ -509,11 +510,10 @@ export function InventoryPage() {
             <div className="two-fields">
               <label>
                 ورود کالا (تعداد)
-                <input
-                  type="number"
-                  min="1"
+                <FaNumberInput
+                  group={false}
                   value={receiveQty}
-                  onChange={(e) => setReceiveQty(e.target.value)}
+                  onChange={(plain) => setReceiveQty(plain)}
                   placeholder="مثلاً ۱۰"
                 />
               </label>
@@ -545,9 +545,9 @@ export function InventoryPage() {
                     <span>{row.type}</span>
                     <b>
                       {row.quantityChange > 0 ? '+' : ''}
-                      {row.quantityChange}
+                      {formatPersianNumber(row.quantityChange)}
                     </b>
-                    <small>پس از تراکنش: {row.quantityAfter}</small>
+                    <small>پس از تراکنش: {formatPersianNumber(row.quantityAfter)}</small>
                   </div>
                 ))}
               </div>

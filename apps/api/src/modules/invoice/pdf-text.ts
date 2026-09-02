@@ -24,3 +24,13 @@ export function faText(value: unknown): string {
   const levels = bidi.getEmbeddingLevels(reshaped, 'rtl');
   return bidi.getReorderedString(reshaped, levels);
 }
+
+/**
+ * Phone numbers may carry hyphens (۰۴۱-۱۲۳۴۵۶۷). Between two Persian-digit
+ * groups a hyphen resolves RTL in the bidi pass, so the groups swap visually
+ * (۱۲۳۴۵۶۷-۰۴۱). Wrapping the value in LRM marks (U+200E — a zero-width glyph
+ * in Vazirmatn) keeps it a single LTR run that reads exactly as typed.
+ */
+export function ltrNumber(value: string): string {
+  return `\u200E${value}\u200E`;
+}

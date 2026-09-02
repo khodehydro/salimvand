@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { api } from '../lib/api';
+import { formatPersianNumber } from '@salimvand/shared';
 
 /**
  * Inline stock stepper used in the product/inventory lists: just the number
@@ -50,7 +51,7 @@ export function StockStepper({
       >
         −
       </button>
-      <b className={value <= 0 ? 'empty' : undefined}>{value}</b>
+      <b className={value <= 0 ? 'empty' : undefined}>{formatPersianNumber(value)}</b>
       <button type="button" aria-label="افزایش موجودی" disabled={busy} onClick={() => void step(1)}>
         +
       </button>

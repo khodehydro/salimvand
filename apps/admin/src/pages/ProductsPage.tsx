@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { createEan13 } from '@salimvand/shared';
+import { FaNumberInput } from '../components/FaNumberInput';
 import { api } from '../lib/api';
 import { hashForPage } from '../lib/admin-route';
 import { publicSiteUrl } from '../lib/public-site';
@@ -946,35 +947,24 @@ function ProductEditor({
                       <div className="ier-fields">
                         <label>
                           قیمت فروش
-                          <input
-                            type="number"
-                            min="0"
+                          <FaNumberInput
                             value={edit.salePrice}
-                            onChange={(event) =>
-                              setItemEdit(entry, { salePrice: event.target.value })
-                            }
+                            onChange={(plain) => setItemEdit(entry, { salePrice: plain })}
                           />
                         </label>
                         <label>
                           قیمت خرید
-                          <input
-                            type="number"
-                            min="0"
+                          <FaNumberInput
                             value={edit.purchasePrice}
-                            onChange={(event) =>
-                              setItemEdit(entry, { purchasePrice: event.target.value })
-                            }
+                            onChange={(plain) => setItemEdit(entry, { purchasePrice: plain })}
                           />
                         </label>
                         <label>
                           آستانهٔ هشدار
-                          <input
-                            type="number"
-                            min="0"
+                          <FaNumberInput
+                            group={false}
                             value={edit.minStock}
-                            onChange={(event) =>
-                              setItemEdit(entry, { minStock: event.target.value })
-                            }
+                            onChange={(plain) => setItemEdit(entry, { minStock: plain })}
                           />
                         </label>
                         <label>
@@ -1048,29 +1038,24 @@ function ProductEditor({
                 </button>
                 <label>
                   قیمت فروش (ریال)
-                  <input
-                    type="number"
-                    min="0"
+                  <FaNumberInput
                     value={item.salePrice}
-                    onChange={(event) => setItem({ ...item, salePrice: event.target.value })}
+                    onChange={(plain) => setItem({ ...item, salePrice: plain })}
                   />
                 </label>
                 <label>
                   قیمت خرید (ریال)
-                  <input
-                    type="number"
-                    min="0"
+                  <FaNumberInput
                     value={item.purchasePrice}
-                    onChange={(event) => setItem({ ...item, purchasePrice: event.target.value })}
+                    onChange={(plain) => setItem({ ...item, purchasePrice: plain })}
                   />
                 </label>
                 <label>
                   آستانهٔ هشدار
-                  <input
-                    type="number"
-                    min="0"
+                  <FaNumberInput
+                    group={false}
                     value={item.minStock}
-                    onChange={(event) => setItem({ ...item, minStock: event.target.value })}
+                    onChange={(plain) => setItem({ ...item, minStock: plain })}
                   />
                 </label>
                 <label>
@@ -1089,11 +1074,10 @@ function ProductEditor({
                 </label>
                 <label>
                   موجودی اولیه
-                  <input
-                    type="number"
-                    min="0"
+                  <FaNumberInput
+                    group={false}
                     value={item.initialQuantity}
-                    onChange={(event) => setItem({ ...item, initialQuantity: event.target.value })}
+                    onChange={(plain) => setItem({ ...item, initialQuantity: plain })}
                   />
                 </label>
               </div>

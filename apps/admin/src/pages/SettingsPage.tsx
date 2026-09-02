@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { extractMapEmbedUrl } from '@salimvand/shared';
+import { extractMapEmbedUrl, formatPersianNumber } from '@salimvand/shared';
+import { FaNumberInput } from '../components/FaNumberInput';
 import { api } from '../lib/api';
 import { isValidIranMobile } from '../lib/invoice-math';
 import { MediaPicker, type PickerItem } from '../components/MediaPicker';
@@ -847,16 +848,18 @@ export function SettingsPage() {
             <fieldset>
               <legend>صف پیام‌رسانی</legend>
               <div className="queue-stats">
-                در انتظار: {queue?.waiting ?? '—'} · فعال: {queue?.active ?? '—'} · انجام‌شده:{' '}
-                {queue?.completed ?? '—'} · ناموفق: {queue?.failed ?? '—'}
+                در انتظار: {queue ? formatPersianNumber(queue.waiting) : '—'} · فعال:{' '}
+                {queue ? formatPersianNumber(queue.active) : '—'} · انجام‌شده:{' '}
+                {queue ? formatPersianNumber(queue.completed) : '—'} · ناموفق:{' '}
+                {queue ? formatPersianNumber(queue.failed) : '—'}
               </div>
               {failedJobs.length ? (
                 failedJobs.map((job) => (
                   <div className="queue-job" key={job.id}>
                     <span>
-                      {job.type} · {job.mobile ?? 'بدون شماره'}
+                      {job.type} · {formatPersianNumber(job.mobile ?? 'بدون شماره')}
                       <small>
-                        {job.failedReason} · تلاش {job.attemptsMade}
+                        {job.failedReason} · تلاش {formatPersianNumber(job.attemptsMade)}
                       </small>
                     </span>
                     <button
@@ -909,14 +912,13 @@ export function SettingsPage() {
             <legend>انبار و پشتیبان‌گیری</legend>
             <label>
               آستانهٔ پیش‌فرض کمبود
-              <input
-                type="number"
-                min="0"
-                value={settings['inventory.default_min_stock'] ?? 0}
-                onChange={(e) =>
+              <FaNumberInput
+                group={false}
+                value={String(settings['inventory.default_min_stock'] ?? 0)}
+                onChange={(plain) =>
                   setSettings((current) => ({
                     ...current,
-                    'inventory.default_min_stock': Number(e.target.value),
+                    'inventory.default_min_stock': Number(plain || 0),
                   }))
                 }
               />

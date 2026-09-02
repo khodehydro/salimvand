@@ -5016,3 +5016,10 @@ button.btn-primary-lg:hover:not(:disabled) {
     justify-content: space-between;
   }
 }
+
+/* Persian-digit number/money inputs (FaNumberInput): the field is logically
+   LTR so the digit order and caret math stay stable while typing, but the
+   value is right-aligned like every other input of the RTL forms. */
+.fa-num-in {
+  text-align: right;
+}

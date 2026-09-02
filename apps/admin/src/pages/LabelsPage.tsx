@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../lib/api';
 import { paramsFromHash } from '../lib/admin-route';
+import { FaNumberInput } from '../components/FaNumberInput';
 import {
   LABEL_CSS,
   STORE_SITE,
@@ -349,14 +350,11 @@ export function LabelsPage() {
 
               <div className="lbl-field">
                 <label>تعداد در برگهٔ چاپ</label>
-                <input
-                  dir="ltr"
+                <FaNumberInput
                   className="lbl-latin"
-                  type="number"
-                  min={1}
-                  max={200}
+                  group={false}
                   value={count}
-                  onChange={(event) => setCount(event.target.value)}
+                  onChange={(plain) => setCount(plain)}
                 />
                 <small className="lbl-hint">
                   برگهٔ چاپ روی A4 با حاشیهٔ ۸ میلی‌متر و فاصلهٔ ۲ میلی‌متر چیده می‌شود؛ برای چاپگر
