@@ -1,4 +1,7 @@
+import { ProductCard } from './ProductCard';
+import { CatalogFilters } from './CatalogFilters';
 import { ThemeToggle } from './ThemeToggle';
+import { NavigationButton } from './NavigationButton';
 import { APP_NAME, STORE_BRAND, formatPersianNumber } from '@salimvand/shared';
 import { TrustVideo } from './TrustVideo';
 import { getStoreInfo, telHref, type StoreInfo } from './store-info';
@@ -10,6 +13,7 @@ type Product = {
   name: string;
   code: string;
   availability: string;
+  aparatVideoId?: string | null;
   brands: Array<{ name: string; inStock: boolean }>;
   compatibilities?: Array<{
     model: { name: string; make: { name: string } };
@@ -135,32 +139,34 @@ export default async function HomePage({
     getMeta(),
     getStoreInfo(),
   ]);
-  const phone = info.phones[0]?.replace(/[^0-9+]/g, '') ?? '';
+  // vehicleMakeId only scopes the cascading vehicle dropdowns; the API filters
+  // by model/trim, so it is not part of the products query.
   const telegram = info.telegram;
   const bale = info.bale;
   const instagram = info.instagram;
-  const address = info.address;
-  const workingHours = info.workingHours;
-  const mapEmbed = info.mapUrl;
   return (
     <main className="site-shell">
       <header className="site-header">
         <a className="brand-lockup" href="/">
-          <span className="brand-mark">س</span>
+          {info.logoUrl ? (
+            <img className="brand-logo" src={info.logoUrl} alt={info.name} />
+          ) : (
+            <span className="brand-mark">س</span>
+          )}
           <span>
             <strong>{APP_NAME}</strong>
-            <small>قطعات یدکی خودرو</small>
+            <small>{info.header.tagline}</small>
           </span>
         </a>
         <nav className="desktop-nav">
-          <a href="#catalog">کاتالوگ</a>
-          <a href="#video">ویدئوی فروشگاه</a>
-          <a href="#contact">تماس</a>
+          <a href="#catalog">{info.header.navCatalog}</a>
+          <a href="#video">{info.header.navVideo}</a>
+          <a href="#contact">{info.header.navContact}</a>
         </nav>
         <div className="header-tools">
           <ThemeToggle />
           <a className="button button-primary header-cta" href={telHref(info)}>
-            تماس سریع
+            {info.header.cta}
           </a>
         </div>
       </header>
@@ -172,8 +178,9 @@ export default async function HomePage({
             بقیه‌اش با ماست.
           </h1>
           <p>
-            کاتالوگ زندهٔ قطعات یدکی خودرو با اعلام وضعیت موجودی و برندهای موجود در انبار. قیمت‌ها
-            به‌دلیل نوسان بازار فقط با استعلام اعلام می‌شوند.
+            {info.pricing.showPrices
+              ? 'کاتالوگ زندهٔ قطعات یدکی خودرو با قیمت روز، وضعیت موجودی و برندهای موجود در انبار.'
+              : 'کاتالوگ زندهٔ قطعات یدکی خودرو با اعلام وضعیت موجودی و برندهای موجود در انبار. قیمت‌ها به‌دلیل نوسان بازار فقط با استعلام اعلام می‌شوند.'}
           </p>
           <div className="hero-actions">
             <a className="button button-light" href="#catalog">
@@ -189,19 +196,9 @@ export default async function HomePage({
           </div>
         </div>
         <div className="hero-visual">
-          <div className="hero-card">
-            <span className="hero-card-icon">✓</span>
-            <b>موجودی واقعی انبار</b>
-            <small>برند و وضعیت هر قطعه را ببینید</small>
-            <div className="mini-status">
-              <i /> به‌روزرسانی لحظه‌ای
-            </div>
-          </div>
-          <div className="hero-float">
-            بدون قیمت در سایت
-            <br />
-            <small>استعلام روزانه تلفنی</small>
-          </div>
+          {/* The store video lives right in the hero — the old info cards
+              (real stock / brands / no prices) were merged into it. */}
+          <TrustVideo videoId={meta.trustVideo ?? process.env.APARAT_VIDEO_ID} variant="hero" />
         </div>
       </section>
       <section className="trust-strip">
@@ -211,129 +208,31 @@ export default async function HomePage({
         <b>ایران‌خودرو</b>
         <b>و سایر برندها</b>
       </section>
-      <TrustVideo videoId={meta.trustVideo ?? process.env.APARAT_VIDEO_ID} />
       <section className="catalog-section" id="catalog">
+        {' '}
         <div className="section-heading">
           <div>
             <span className="eyebrow">کاتالوگ قطعات</span>
             <h2>قطعهٔ موردنظرت را پیدا کن</h2>
             <p>{formatPersianNumber(products.total)} نتیجه · فیلترها در آدرس صفحه ذخیره می‌شوند</p>
           </div>
-          <span className="price-note">قیمت فقط با استعلام</span>
+          <span className="price-note">
+            {info.pricing.showPrices ? 'قیمت‌های روز انبار' : 'قیمت فقط با استعلام'}
+          </span>
         </div>
-        <form className="catalog-filters" method="get">
-          <label className="search-field">
-            <span>⌕</span>
-            <input name="q" defaultValue={params.q} placeholder="نام قطعه یا شماره فنی..." />
-          </label>
-          <select name="brandId" defaultValue={params.brandId ?? ''}>
-            <option value="">برند خودرو / قطعه</option>
-            {filters.brands.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-          <select name="vehicleModelId" defaultValue={params.vehicleModelId ?? ''}>
-            <option value="">مدل خودرو</option>
-            {filters.vehicles.flatMap((make) =>
-              make.models.map((model) => (
-                <option key={model.id} value={model.id}>
-                  {make.name} · {model.name}
-                </option>
-              )),
-            )}
-          </select>
-          <select name="vehicleTrimId" defaultValue={params.vehicleTrimId ?? ''}>
-            <option value="">تیپ / موتور</option>
-            {filters.vehicles.flatMap((make) =>
-              make.models.flatMap((model) =>
-                (model.trims ?? []).map((trim) => (
-                  <option key={trim.id} value={trim.id}>
-                    {make.name} · {model.name} · {trim.name}
-                  </option>
-                )),
-              ),
-            )}
-          </select>
-          <select name="categoryId" defaultValue={params.categoryId ?? ''}>
-            <option value="">دسته‌بندی</option>
-            {filters.categories.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-          <label className="check-field">
-            <input
-              type="checkbox"
-              name="inStock"
-              value="true"
-              defaultChecked={params.inStock === 'true'}
-            />{' '}
-            فقط موجود
-          </label>
-          <button className="button button-primary" type="submit">
-            اعمال فیلتر
-          </button>
-          {query.toString() && (
-            <a className="clear-filter" href="#catalog">
-              پاک کردن
-            </a>
-          )}
-        </form>
+        <CatalogFilters filters={filters} params={params} />
         {products.items.length ? (
           <div className="product-grid">
             {products.items.map((product) => (
-              <a className="product-card" href={`/product/${product.slug}`} key={product.slug}>
-                <div className="product-image">
-                  {product.images[0] ? (
-                    <img
-                      src={product.images[0].thumbnailPath ?? product.images[0].path}
-                      srcSet={
-                        product.images[0].thumbnailPath
-                          ? `${product.images[0].thumbnailPath} 400w, ${product.images[0].path} 900w`
-                          : undefined
-                      }
-                      sizes="(max-width: 620px) 50vw, (max-width: 900px) 33vw, 25vw"
-                      alt={product.images[0].alt ?? product.name}
-                      loading="lazy"
-                    />
-                  ) : (
-                    <span>قطعه خودرو</span>
-                  )}
-                  <span className={`status-badge ${product.availability}`}>
-                    {product.availability === 'in_stock'
-                      ? 'موجود'
-                      : product.availability === 'low_stock'
-                        ? 'موجود (کم)'
-                        : product.availability === 'coming_soon'
-                          ? 'به‌زودی'
-                          : 'ناموجود'}
-                  </span>
-                </div>
-                <span className="category-label">{product.category.name}</span>
-                <h3>{product.name}</h3>
-                <p className="compatibility">
-                  {product.compatibilities
-                    ?.slice(0, 2)
-                    .map((item) => `${item.model.make.name} ${item.model.name}`)
-                    .join(' · ') || 'مناسب خودروهای داخلی'}
-                </p>
-                <div className="brand-list">
-                  {product.brands.slice(0, 4).map((brand) => (
-                    <span className={brand.inStock ? 'brand-in' : 'brand-out'} key={brand.name}>
-                      {brand.inStock ? '✓' : '×'} {brand.name}
-                    </span>
-                  ))}
-                </div>
-                <div className="card-footer">
-                  <code>{product.code}</code>
-                  <span>
-                    استعلام قیمت <b>←</b>
-                  </span>
-                </div>
-              </a>
+              <ProductCard
+                key={product.slug}
+                product={product}
+                contact={{
+                  tel: telHref(info),
+                  telegram: info.telegram,
+                  bale: info.bale,
+                }}
+              />
             ))}
           </div>
         ) : (
@@ -362,7 +261,7 @@ export default async function HomePage({
           </nav>
         )}
       </section>
-      <StoreContact info={info} />
+      <StoreContact info={info} variant="home" />
       <footer className="site-footer">
         <span>
           © {formatPersianNumber(new Date().getFullYear())} {STORE_BRAND}
@@ -371,13 +270,17 @@ export default async function HomePage({
           <a href="#catalog">کاتالوگ</a>
           <a href="#video">ویدئوی فروشگاه</a>
           <a href="#contact">تماس و آدرس</a>
-          <a href={telegram} rel="noreferrer">
-            تلگرام
-          </a>
-          <a href={bale} rel="noreferrer">
-            بله
-          </a>
-          {instagram && (
+          {/^https?:\/\/.+/.test(telegram) && (
+            <a href={telegram} rel="noreferrer">
+              تلگرام
+            </a>
+          )}
+          {/^https?:\/\/.+/.test(bale) && (
+            <a href={bale} rel="noreferrer">
+              بله
+            </a>
+          )}
+          {/^https?:\/\/.+/.test(instagram) && (
             <a href={instagram} rel="noreferrer">
               اینستاگرام
             </a>
@@ -385,9 +288,19 @@ export default async function HomePage({
         </nav>
         <span>قیمت‌ها روزانه تغییر می‌کنند · مبلغ نهایی هنگام صدور فاکتور قطعی است.</span>
       </footer>
-      <a className="mobile-contact-bar" href={telHref(info)}>
+      {/* has-nav stacks the bar above the quick-navigation buttons when the
+          store coordinates are configured in the admin settings. */}
+      <a
+        className={
+          info.nav.lat != null && info.nav.lng != null
+            ? 'mobile-contact-bar has-nav'
+            : 'mobile-contact-bar'
+        }
+        href={telHref(info)}
+      >
         تماس سریع <span>برای استعلام قطعه</span> ←
       </a>
+      <NavigationButton lat={info.nav.lat} lng={info.nav.lng} />
     </main>
   );
 }

@@ -48,7 +48,9 @@ export function LoginPage({ onLogin }: { onLogin: () => void }) {
           />
         </label>
         {error && <div className="login-error">{error}</div>}
-        <button disabled={loading}>{loading ? 'در حال ورود...' : 'ورود به پنل'}</button>
+        <button className="button-primary" disabled={loading}>
+          {loading ? 'در حال ورود...' : 'ورود به پنل'}
+        </button>
       </form>
     </main>
   );

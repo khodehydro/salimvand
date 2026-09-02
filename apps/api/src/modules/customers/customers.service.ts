@@ -3,10 +3,25 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
 import { writeAudit } from '../../common/audit/audit-log';
 
+/** Outstanding debt per invoice = total − returns − paid (never below 0 for
+ * the sum): a returned item stops counting as debt the moment the return is
+ * registered, everywhere the customer debt is shown. */
 export function calculateCustomerDebt(
-  invoices: ReadonlyArray<{ total: bigint; paidAmount: bigint }>,
+  invoices: ReadonlyArray<{
+    total: bigint;
+    paidAmount: bigint;
+    returns?: ReadonlyArray<{ refundAmount: bigint }> | null;
+  }>,
 ): bigint {
-  return invoices.reduce((sum, invoice) => sum + invoice.total - invoice.paidAmount, 0n);
+  let debt = 0n;
+  for (const invoice of invoices) {
+    const returned = (invoice.returns ?? []).reduce(
+      (refunds, record) => refunds + record.refundAmount,
+      0n,
+    );
+    debt += invoice.total - returned - invoice.paidAmount;
+  }
+  return debt < 0n ? 0n : debt;
 }
 
 @Injectable()
@@ -24,17 +39,17 @@ export class CustomersService {
       orderBy: { createdAt: 'desc' },
       take: 100,
       include: {
-        invoices: { where: { status: 'issued' }, select: { total: true, paidAmount: true } },
+        invoices: {
+          where: { status: 'issued' },
+          select: { total: true, paidAmount: true, returns: { select: { refundAmount: true } } },
+        },
       },
     });
     return {
       ok: true,
       data: customers.map((customer) => ({
         ...customer,
-        debt: customer.invoices.reduce(
-          (sum, invoice) => sum + invoice.total - invoice.paidAmount,
-          0n,
-        ),
+        debt: calculateCustomerDebt(customer.invoices).toString(),
         invoiceCount: customer.invoices.length,
         invoices: undefined,
       })),
@@ -43,21 +58,26 @@ export class CustomersService {
   async get(id: string) {
     const customer = await this.prisma.customer.findFirst({
       where: { id, isActive: true },
-      include: { invoices: { orderBy: { issuedAt: 'desc' }, include: { items: true } } },
+      include: {
+        invoices: {
+          orderBy: { issuedAt: 'desc' },
+          include: { items: true, returns: { select: { refundAmount: true } } },
+        },
+      },
     });
     if (!customer) throw new NotFoundException('مشتری پیدا نشد');
     return {
       ok: true,
       data: {
         ...customer,
-        debt: customer.invoices
-          .filter((item) => item.status === 'issued')
-          .reduce((sum, invoice) => sum + invoice.total - invoice.paidAmount, 0n),
+        debt: calculateCustomerDebt(
+          customer.invoices.filter((item) => item.status === 'issued'),
+        ).toString(),
       },
     };
   }
   async create(
-    input: { name?: string; mobile?: string; notes?: string },
+    input: { name?: string; mobile?: string; address?: string; notes?: string },
     actorId?: string,
     ip?: string,
   ) {
@@ -66,7 +86,12 @@ export class CustomersService {
     if (!name || !mobile || !/^09\d{9}$/.test(mobile))
       throw new BadRequestException('نام و شماره موبایل معتبر الزامی است');
     const customer = await this.prisma.customer.create({
-      data: { name, mobile, notes: input.notes?.trim() || undefined },
+      data: {
+        name,
+        mobile,
+        address: input.address?.trim() || undefined,
+        notes: input.notes?.trim() || undefined,
+      },
     });
     if (actorId)
       await writeAudit(this.prisma, {
@@ -81,7 +106,7 @@ export class CustomersService {
   }
   async update(
     id: string,
-    input: { name?: string; mobile?: string; notes?: string; isActive?: boolean },
+    input: { name?: string; mobile?: string; address?: string; notes?: string; isActive?: boolean },
     actorId?: string,
     ip?: string,
   ) {
@@ -93,6 +118,7 @@ export class CustomersService {
       if (!/^09\d{9}$/.test(input.mobile)) throw new BadRequestException('شماره موبایل معتبر نیست');
       data.mobile = input.mobile;
     }
+    if (input.address !== undefined) data.address = input.address.trim() || null;
     if (input.notes !== undefined) data.notes = input.notes.trim() || null;
     if (input.isActive !== undefined) data.isActive = input.isActive;
     const customer = await this.prisma.customer.update({ where: { id }, data });
@@ -114,6 +140,9 @@ export class CustomersService {
     actorId: string,
     ip?: string,
   ) {
+    // An empty actor id would blow up as an FK violation deep inside the
+    // transaction and surface as an opaque 500 — fail with a clear 400 instead.
+    if (!actorId) throw new BadRequestException('کاربر واردشده شناسایی نشد');
     let amount: bigint;
     try {
       amount = BigInt(input.amount ?? 0);
@@ -130,7 +159,13 @@ export class CustomersService {
           invoices: {
             where: { status: 'issued' },
             orderBy: { issuedAt: 'asc' },
-            select: { id: true, total: true, paidAmount: true, paymentStatus: true },
+            select: {
+              id: true,
+              total: true,
+              paidAmount: true,
+              paymentStatus: true,
+              returns: { select: { refundAmount: true } },
+            },
           },
         },
       });
@@ -146,7 +181,12 @@ export class CustomersService {
       const allocations: Array<{ invoiceId: string; amount: bigint }> = [];
       for (const invoice of allocation) {
         if (remaining <= 0n) break;
-        const outstanding = invoice.total - invoice.paidAmount;
+        // Returns shrink what this invoice can still absorb.
+        const returned = (invoice.returns ?? []).reduce(
+          (refunds, record) => refunds + record.refundAmount,
+          0n,
+        );
+        const outstanding = invoice.total - returned - invoice.paidAmount;
         const applied = remaining < outstanding ? remaining : outstanding;
         if (applied > 0n) {
           allocations.push({ invoiceId: invoice.id, amount: applied });
@@ -168,12 +208,17 @@ export class CustomersService {
       for (const allocationItem of allocations) {
         const invoice = customer.invoices.find((item) => item.id === allocationItem.invoiceId)!;
         const paidAmount = invoice.paidAmount + allocationItem.amount;
+        const returnedTotal = (invoice.returns ?? []).reduce(
+          (refunds, record) => refunds + record.refundAmount,
+          0n,
+        );
+        const netTotal = invoice.total - returnedTotal;
         await tx.invoice.update({
           where: { id: invoice.id },
           data: {
             paidAmount,
-            paymentStatus: paidAmount === invoice.total ? 'paid' : 'partial',
-            paidAt: paidAmount === invoice.total ? new Date() : undefined,
+            paymentStatus: paidAmount >= netTotal ? 'paid' : 'partial',
+            paidAt: paidAmount >= netTotal ? new Date() : undefined,
           },
         });
         await tx.payment.create({
@@ -202,7 +247,17 @@ export class CustomersService {
           })),
         },
       });
-      return { ok: true, data: { ...receipt, remainingDebt: debt - amount } };
+      // JSON-safe: BigInts are stringified here so the endpoint never depends
+      // on the express `json replacer` to serialize the response.
+      return {
+        ok: true,
+        data: {
+          id: receipt.id,
+          paidAt: receipt.paidAt,
+          amount: amount.toString(),
+          remainingDebt: (debt - amount).toString(),
+        },
+      };
     });
   }
 
@@ -212,25 +267,25 @@ export class CustomersService {
       include: {
         invoices: {
           where: { status: 'issued', paymentStatus: { in: ['unpaid', 'partial'] } },
-          select: { total: true, paidAmount: true },
+          select: { total: true, paidAmount: true, returns: { select: { refundAmount: true } } },
         },
       },
     });
     return {
       ok: true,
       data: customers
-        .map((customer) => ({
-          id: customer.id,
-          name: customer.name,
-          mobile: customer.mobile,
-          debt: customer.invoices.reduce(
-            (sum, invoice) => sum + invoice.total - invoice.paidAmount,
-            0n,
-          ),
-          invoiceCount: customer.invoices.length,
-        }))
-        .filter((customer) => customer.debt > 0n)
-        .sort((a, b) => (a.debt > b.debt ? -1 : 1)),
+        .map((customer) => {
+          const debt = calculateCustomerDebt(customer.invoices);
+          return {
+            id: customer.id,
+            name: customer.name,
+            mobile: customer.mobile,
+            debt: debt.toString(),
+            invoiceCount: customer.invoices.length,
+          };
+        })
+        .filter((customer) => BigInt(customer.debt) > 0n)
+        .sort((a, b) => (BigInt(a.debt) > BigInt(b.debt) ? -1 : 1)),
     };
   }
 

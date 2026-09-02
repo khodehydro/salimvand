@@ -1,4 +1,15 @@
-import { Body, Controller, Get, Param, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import type { Request } from 'express';
@@ -6,7 +17,12 @@ import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
 import { RolesGuard } from '../../common/auth/roles.guard';
 import { Roles } from '../../common/auth/roles.decorator';
 import { InvoiceService } from './invoice.service';
-import { CreateInvoiceDto, PayInvoiceDto, ReturnInvoiceItemDto } from './invoice.dto';
+import {
+  CreateInvoiceDto,
+  PayInvoiceDto,
+  ReturnInvoiceItemDto,
+  UpdateInvoiceAddressesDto,
+} from './invoice.dto';
 
 type AuthenticatedRequest = Request & { user?: { id: string } };
 
@@ -23,6 +39,26 @@ export class InvoiceController {
   @Get()
   list() {
     return this.invoices.list();
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('seller', 'accountant')
+  @Get(':id/pdf')
+  async pdf(@Param('id') id: string, @Res() response: Response) {
+    const file = await this.invoices.pdfById(id);
+    response.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="invoice-${id}.pdf"`,
+      'Content-Length': file.length,
+    });
+    return response.end(file);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('seller', 'accountant')
+  @Post(':id/link')
+  link(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
+    return this.invoices.rotateLink(id, request.user?.id ?? '', request.ip);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -69,6 +105,17 @@ export class InvoiceController {
   @Post(':id/pay')
   pay(@Param('id') id: string, @Body() body: PayInvoiceDto, @Req() request: AuthenticatedRequest) {
     return this.invoices.pay(id, body.amount ?? 0, body.method ?? 'cash', request.user?.id ?? '');
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('seller', 'accountant')
+  @Patch(':id/addresses')
+  updateAddresses(
+    @Param('id') id: string,
+    @Body() body: UpdateInvoiceAddressesDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.invoices.updateAddresses(id, body, request.user?.id ?? '', request.ip);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

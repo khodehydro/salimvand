@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { formatJalaliDate, formatPersianNumber, formatRial } from '@salimvand/shared';
+import { FaNumberInput } from '../components/FaNumberInput';
 import { api } from '../lib/api';
 
 type Supplier = { id: string; name: string };
@@ -151,7 +152,9 @@ export function PurchasesPage({ canCreate = true }: { canCreate?: boolean }) {
         method: 'POST',
         body: JSON.stringify({ supplierId, paidAmount, lines }),
       });
-      setMessage(`فاکتور ${created.data.number} ثبت و موجودی به‌صورت اتمیک افزایش یافت.`);
+      setMessage(
+        `فاکتور ${formatPersianNumber(created.data.number)} ثبت و موجودی به‌صورت اتمیک افزایش یافت.`,
+      );
       setLines([]);
       setPaidAmount('0');
       setSupplierId('');
@@ -259,11 +262,11 @@ export function PurchasesPage({ canCreate = true }: { canCreate?: boolean }) {
             </label>
             <label>
               تعداد
-              <input
-                type="number"
-                min="1"
+              <FaNumberInput
+                group={false}
                 value={quantity}
-                onChange={(event) => setQuantity(event.target.value)}
+                placeholder="۱"
+                onChange={(plain) => setQuantity(plain)}
               />
               {fieldErrors.quantity && (
                 <small className="field-error">{fieldErrors.quantity}</small>
@@ -271,12 +274,7 @@ export function PurchasesPage({ canCreate = true }: { canCreate?: boolean }) {
             </label>
             <label>
               قیمت خرید واحد
-              <input
-                dir="ltr"
-                inputMode="numeric"
-                value={unitPrice}
-                onChange={(event) => setUnitPrice(event.target.value)}
-              />
+              <FaNumberInput value={unitPrice} onChange={(plain) => setUnitPrice(plain)} />
               {fieldErrors.unitPrice && (
                 <small className="field-error">{fieldErrors.unitPrice}</small>
               )}
@@ -312,12 +310,7 @@ export function PurchasesPage({ canCreate = true }: { canCreate?: boolean }) {
           <footer>
             <label>
               پرداخت اولیه
-              <input
-                dir="ltr"
-                inputMode="numeric"
-                value={paidAmount}
-                onChange={(event) => setPaidAmount(event.target.value)}
-              />
+              <FaNumberInput value={paidAmount} onChange={(plain) => setPaidAmount(plain)} />
               {fieldErrors.paidAmount && (
                 <small className="field-error">{fieldErrors.paidAmount}</small>
               )}
@@ -367,7 +360,7 @@ export function PurchasesPage({ canCreate = true }: { canCreate?: boolean }) {
           return (
             <div className="table-row purchase-row" key={purchase.id}>
               <button className="purchase-number" onClick={() => void openDetail(purchase.id)}>
-                <code>{purchase.number}</code>
+                <code>{formatPersianNumber(purchase.number)}</code>
               </button>
               <strong>{purchase.supplierName}</strong>
               <span>{formatRial(Number(purchase.total))}</span>
@@ -398,18 +391,16 @@ export function PurchasesPage({ canCreate = true }: { canCreate?: boolean }) {
       {payFor && (
         <div className="editor customer-payment">
           <div className="editor-head">
-            <h2>ثبت پرداخت · {payFor.number}</h2>
+            <h2>ثبت پرداخت · {formatPersianNumber(payFor.number)}</h2>
             <button className="close" onClick={() => setPayFor(null)}>
               بستن
             </button>
           </div>
           <p>مانده: {formatRial(Number(BigInt(payFor.total) - BigInt(payFor.paidAmount)))}</p>
-          <input
-            dir="ltr"
-            inputMode="numeric"
+          <FaNumberInput
             value={paymentAmount}
-            onChange={(event) => setPaymentAmount(event.target.value)}
             placeholder="مبلغ پرداختی به ریال"
+            onChange={(plain) => setPaymentAmount(plain)}
           />
           <select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)}>
             {Object.entries(paymentLabels).map(([value, label]) => (
@@ -434,7 +425,7 @@ export function PurchasesPage({ canCreate = true }: { canCreate?: boolean }) {
             <div>
               <span className="eyebrow">جزئیات فاکتور خرید</span>
               <h2>
-                <code>{detail.number}</code>
+                <code>{formatPersianNumber(detail.number)}</code>
               </h2>
             </div>
             <button className="close" onClick={() => setDetail(null)}>

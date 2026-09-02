@@ -162,6 +162,7 @@ describe('InvoiceService', () => {
         })),
         update,
       },
+      returnRecord: { aggregate: vi.fn(async () => ({ _sum: { refundAmount: 0n } })) },
       payments: { create: vi.fn() },
     };
     const prisma = {
@@ -171,7 +172,7 @@ describe('InvoiceService', () => {
     };
     await expect(
       new InvoiceService(prisma as never).pay('invoice-1', 201, 'cash', 'user-1'),
-    ).rejects.toThrow('مجموع پرداخت بیشتر از مبلغ فاکتور است');
+    ).rejects.toThrow('مجموع پرداخت بیشتر از مبلغ فاکتور پس از برگشتی‌ها است');
     expect(update).not.toHaveBeenCalled();
   });
 
@@ -182,7 +183,7 @@ describe('InvoiceService', () => {
       paidAmount: 600n,
       items: [],
     }));
-    const executeRaw = vi.fn(async () => 1);
+    const paymentCreate = vi.fn(async () => ({}));
     const tx = {
       invoice: {
         findUnique: vi.fn(async () => ({
@@ -196,8 +197,8 @@ describe('InvoiceService', () => {
         })),
         update,
       },
-      payments: { create: vi.fn() },
-      $executeRawUnsafe: executeRaw,
+      returnRecord: { aggregate: vi.fn(async () => ({ _sum: { refundAmount: 0n } })) },
+      payment: { create: paymentCreate },
     };
     const prisma = {
       $transaction: vi.fn(async (callback: (client: typeof tx) => Promise<unknown>) =>
@@ -220,7 +221,14 @@ describe('InvoiceService', () => {
         }),
       }),
     );
-    expect(executeRaw).toHaveBeenCalledTimes(1);
+    expect(paymentCreate).toHaveBeenCalledWith({
+      data: {
+        invoiceId: 'invoice-1',
+        amount: 100n,
+        method: 'card',
+        receivedById: 'user-1',
+      },
+    });
   });
 
   it('rejects a return greater than the purchased quantity', async () => {
@@ -252,13 +260,19 @@ describe('InvoiceService', () => {
   it('restocks a valid partial return inside the transaction', async () => {
     const inventoryUpdate = vi.fn(async () => ({ quantity: 6 }));
     const returnCreate = vi.fn(async () => ({ id: 'return-1', quantity: 1, refundAmount: 100n }));
+    const invoiceUpdate = vi.fn();
     const tx = {
       invoice: {
         findUnique: vi.fn(async () => ({
           id: 'invoice-1',
           status: 'issued',
+          total: 200n,
+          paidAmount: 0n,
+          paymentStatus: 'unpaid',
+          paidAt: null,
           items: [{ id: 'line-1', quantity: 2, unitPrice: 100n, inventoryItemId: 'item-1' }],
         })),
+        update: invoiceUpdate,
       },
       returnRecord: {
         aggregate: vi.fn(async () => ({ _sum: { quantity: 0, refundAmount: 0n } })),
@@ -282,6 +296,172 @@ describe('InvoiceService', () => {
       expect.objectContaining({ where: { id: 'item-1' }, data: { quantity: { increment: 1 } } }),
     );
     expect(returnCreate).toHaveBeenCalledTimes(1);
+    // Unpaid invoice stays unpaid after a partial return — no phantom write.
+    expect(invoiceUpdate).not.toHaveBeenCalled();
+  });
+
+  it('settles the payment status when a return covers the remaining debt', async () => {
+    const invoiceUpdate = vi.fn(async () => ({ id: 'invoice-1' }));
+    const returnCreate = vi.fn(async () => ({ id: 'return-3', quantity: 1, refundAmount: 100n }));
+    // First aggregate = line guard (nothing returned yet); second aggregate =
+    // the post-return recompute (100n refunded → net 100n, paid 100n → paid).
+    const aggregate = vi
+      .fn()
+      .mockResolvedValueOnce({ _sum: { quantity: 0, refundAmount: 0n } })
+      .mockResolvedValueOnce({ _sum: { quantity: 1, refundAmount: 100n } });
+    const tx = {
+      invoice: {
+        findUnique: vi.fn(async () => ({
+          id: 'invoice-1',
+          status: 'issued',
+          total: 200n,
+          paidAmount: 100n,
+          paymentStatus: 'partial',
+          paidAt: null,
+          items: [{ id: 'line-1', quantity: 2, unitPrice: 100n, inventoryItemId: 'item-1' }],
+        })),
+        update: invoiceUpdate,
+      },
+      returnRecord: { aggregate, create: returnCreate },
+      inventoryItem: { update: vi.fn(async () => ({ quantity: 6 })) },
+      inventoryTransaction: { create: vi.fn() },
+      auditLog: { create: vi.fn() },
+    };
+    const prisma = {
+      $transaction: vi.fn(async (callback: (client: typeof tx) => Promise<unknown>) =>
+        callback(tx),
+      ),
+    };
+    await new InvoiceService(prisma as never).returnItems(
+      'invoice-1',
+      { invoiceItemId: 'line-1', quantity: 1, reason: 'مغایرت' },
+      'user-1',
+    );
+    expect(invoiceUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'invoice-1' },
+        data: expect.objectContaining({ paymentStatus: 'paid' }),
+      }),
+    );
+  });
+
+  it('computes net totals after partial returns for the public payload', async () => {
+    const invoice = {
+      id: 'inv-2',
+      number: 'INV-0006',
+      status: 'issued',
+      publicTokenExpiresAt: new Date(Date.now() + 86_400_000),
+      customerName: 'علی',
+      customerMobile: '0912',
+      storeAddress: 'میاندوآب، خیابان اصلی',
+      customerAddress: 'میاندوآب، محلهٔ جدید',
+      subtotal: 300n,
+      discount: 0n,
+      total: 300n,
+      paymentStatus: 'paid',
+      paymentMethod: null,
+      paidAmount: 300n,
+      paidAt: null,
+      issuedAt: new Date(),
+      voidedAt: null,
+      items: [
+        {
+          id: 'line-1',
+          productName: 'لنت جلو پژو',
+          quantity: 3,
+          unitPrice: 100n,
+          lineTotal: 300n,
+          inventoryItem: { brand: { name: 'اصلی' } },
+        },
+      ],
+      // 1 of the 3 brake pads returned — damaged, so it never re-entered stock.
+      returns: [{ invoiceItemId: 'line-1', quantity: 1, refundAmount: 100n }],
+      payments: [],
+      issuedBy: { name: 'فروشنده' },
+    };
+    const prisma = { invoice: { findFirst: async () => invoice } };
+    const result = await new InvoiceService(prisma as never).getPublic('short-code');
+    expect(result.data.returnedTotal).toBe(100n);
+    expect(result.data.netTotal).toBe(200n);
+    expect(result.data.items[0].returnedQuantity).toBe(1);
+    expect(result.data.storeAddress).toBe('میاندوآب، خیابان اصلی');
+    expect(result.data.customerAddress).toBe('میاندوآب، محلهٔ جدید');
+    // The raw returns (with internal line ids) must never leak publicly.
+    expect(result.data).not.toHaveProperty('returns');
+    expect(
+      JSON.stringify(result.data, (_key, value: unknown) =>
+        typeof value === 'bigint' ? value.toString() : value,
+      ),
+    ).not.toContain('invoiceItemId');
+  });
+
+  it('caps new payments at the net amount after returns', async () => {
+    const update = vi.fn();
+    const tx = {
+      invoice: {
+        findUnique: vi.fn(async () => ({
+          id: 'invoice-1',
+          status: 'issued',
+          paidAmount: 100n,
+          total: 300n,
+          customerMobile: null,
+        })),
+        update,
+      },
+      // 100 of 300 already returned: the customer can only owe 200 more.
+      returnRecord: { aggregate: vi.fn(async () => ({ _sum: { refundAmount: 100n } })) },
+      payments: { create: vi.fn() },
+      $executeRawUnsafe: vi.fn(),
+    };
+    const prisma = {
+      $transaction: vi.fn(async (callback: (client: typeof tx) => Promise<unknown>) =>
+        callback(tx),
+      ),
+    };
+    await expect(
+      new InvoiceService(prisma as never).pay('invoice-1', 201, 'cash', 'user-1'),
+    ).rejects.toThrow('مجموع پرداخت بیشتر از مبلغ فاکتور پس از برگشتی‌ها است');
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('marks a damaged return without restocking the warehouse', async () => {
+    const inventoryUpdate = vi.fn();
+    const returnCreate = vi.fn(async () => ({ id: 'return-2', quantity: 1, refundAmount: 100n }));
+    const tx = {
+      invoice: {
+        findUnique: vi.fn(async () => ({
+          id: 'invoice-1',
+          status: 'issued',
+          total: 300n,
+          paidAmount: 300n,
+          paymentStatus: 'paid',
+          paidAt: new Date('2026-08-01'),
+          items: [{ id: 'line-1', quantity: 3, unitPrice: 100n, inventoryItemId: 'item-1' }],
+        })),
+      },
+      returnRecord: {
+        aggregate: vi.fn(async () => ({ _sum: { quantity: 0, refundAmount: 0n } })),
+        create: returnCreate,
+      },
+      inventoryItem: { update: inventoryUpdate },
+      inventoryTransaction: { create: vi.fn() },
+    };
+    const prisma = {
+      $transaction: vi.fn(async (callback: (client: typeof tx) => Promise<unknown>) =>
+        callback(tx),
+      ),
+    };
+    const result = await new InvoiceService(prisma as never).returnItems(
+      'invoice-1',
+      { invoiceItemId: 'line-1', quantity: 1, reason: 'خرابی قطعه', restock: false },
+      'user-1',
+    );
+    // Damaged goods must NOT go back into sellable stock.
+    expect(inventoryUpdate).not.toHaveBeenCalled();
+    expect(returnCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ restock: false, quantity: 1 }) }),
+    );
+    expect(result.data.quantityAfter).toBe(0);
   });
 
   it('restores all invoice quantities when voiding', async () => {
@@ -452,5 +632,227 @@ describe('InvoiceService.getPublic document payload', () => {
     expect(
       JSON.stringify(data, (_key, value) => (typeof value === 'bigint' ? value.toString() : value)),
     ).not.toContain('deadbeef');
+  });
+});
+
+describe('InvoiceService.list and panel link/pdf actions', () => {
+  it('lists invoices without leaking token hashes', async () => {
+    const rows = [
+      {
+        id: 'inv-1',
+        number: 'INV-000001',
+        status: 'issued',
+        customerName: 'علی',
+        customerMobile: '09123456789',
+        subtotal: 100n,
+        discount: 0n,
+        total: 100n,
+        paidAmount: 50n,
+        paymentStatus: 'partial',
+        paymentMethod: null,
+        paidAt: null,
+        issuedAt: new Date(),
+        voidedAt: null,
+        publicTokenExpiresAt: null,
+        items: [
+          {
+            productName: 'لنت ترمز',
+            quantity: 1,
+            unitPrice: 100n,
+            lineTotal: 100n,
+            inventoryItem: { brand: { name: 'ایساکو' } },
+          },
+        ],
+      },
+    ];
+    const prisma = {
+      invoice: {
+        findMany: vi.fn(async () => rows),
+        findUnique: vi.fn(),
+      },
+    };
+    const result = await new InvoiceService(prisma as never).list();
+    const serialized = JSON.stringify(result, (_key, value) =>
+      typeof value === 'bigint' ? String(value) : value,
+    );
+    expect(serialized).not.toContain('publicTokenHash');
+    expect(serialized).not.toContain('publicShortCodeHash');
+    expect(result.data[0].items[0].inventoryItem.brand.name).toBe('ایساکو');
+  });
+
+  it('rotates the public link for panel viewing with an audit trail', async () => {
+    const update = vi.fn(async (_args?: unknown) => undefined);
+    const auditCreate = vi.fn(async (_args?: unknown) => undefined);
+    const prisma = {
+      invoice: {
+        findUnique: async () => ({ id: 'inv-2', status: 'issued' }),
+        update,
+      },
+      $transaction: async (run: (tx: unknown) => Promise<unknown>) =>
+        run({ invoice: { update }, auditLog: { create: auditCreate } }),
+    };
+    const result = await new InvoiceService(prisma as never).rotateLink('inv-2', 'user-1');
+    const call = update.mock.calls[0][0] as {
+      data: { publicTokenHash: string; publicShortCodeHash: string; publicTokenExpiresAt: Date };
+    };
+    expect(matchesPublicToken(result.data.publicToken, call.data.publicTokenHash)).toBe(true);
+    expect(matchesPublicToken(result.data.publicShortCode, call.data.publicShortCodeHash)).toBe(
+      true,
+    );
+    expect(auditCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses to issue a public link for a voided invoice', async () => {
+    const prisma = {
+      invoice: { findUnique: async () => ({ id: 'inv-3', status: 'voided' }) },
+    };
+    await expect(new InvoiceService(prisma as never).rotateLink('inv-3', 'user-1')).rejects.toThrow(
+      'باطل‌شده',
+    );
+  });
+
+  it('renders the panel PDF from the database row with brand names', async () => {
+    const invoice = {
+      number: 'INV-000012',
+      customerName: 'رضا',
+      customerMobile: '09121112233',
+      storeAddress: 'میاندوآب، خیابان اصلی',
+      storePhone: '041-12345678',
+      customerAddress: 'میاندوآب، محلهٔ جدید',
+      subtotal: 500_000n,
+      discount: 50_000n,
+      total: 450_000n,
+      paymentStatus: 'paid',
+      paidAmount: 450_000n,
+      issuedAt: new Date('2026-08-01T10:00:00Z'),
+      items: [
+        {
+          productName: 'فیلتر روغن',
+          quantity: 2,
+          unitPrice: 250_000n,
+          lineTotal: 500_000n,
+          inventoryItem: { brand: { name: 'سرام' } },
+        },
+      ],
+    };
+    const prisma = { invoice: { findUnique: async () => invoice } };
+    const file = await new InvoiceService(prisma as never).pdfById('inv-12');
+    expect(file.length).toBeGreaterThan(500);
+    expect(file.subarray(0, 5).toString()).toBe('%PDF-');
+    // The bundled Vazirmatn font (with Persian presentation forms) must be
+    // embedded — the old DejaVu/Helvetica fallback produced garbled output.
+    expect(file.toString('latin1')).toContain('Vazirmatn');
+  });
+
+  it('shapes every Persian line drawn into the PDF (labels included)', async () => {
+    // Regression for the "completely broken" PDF: only values were passed
+    // through faText, so every label (فاکتور فروشگاه سلیم وند, جمع اقلام: …)
+    // rendered as reversed disconnected letters.
+    const PDFDocument = require('pdfkit');
+    const originalText = PDFDocument.prototype.text;
+    const originalFont = PDFDocument.prototype.font;
+    const drawn: string[] = [];
+    PDFDocument.prototype.text = function (str: string, ...rest: unknown[]) {
+      drawn.push(String(str));
+      return originalText.call(this, str, ...rest);
+    };
+    // Spy on the fontkit layout engine: pdfkit word-splits text and fontkit
+    // reverses every Arabic word when the run direction is rtl — which
+    // mirrors words that faText already put in visual order. renderPdf must
+    // force the direction to ltr on the embedded font instance.
+    const directions: (string | undefined)[] = [];
+    PDFDocument.prototype.font = function (...args: unknown[]) {
+      const result = originalFont.apply(this, args);
+      const engine = (
+        this as unknown as {
+          _font?: { font?: { _layoutEngine?: { layout: (...a: unknown[]) => unknown } } };
+        }
+      )._font?.font?._layoutEngine;
+      if (engine && !(engine as unknown as { __dirSpy?: boolean }).__dirSpy) {
+        (engine as unknown as { __dirSpy?: boolean }).__dirSpy = true;
+        const originalLayout = engine.layout.bind(engine);
+        engine.layout = (...args: unknown[]) => {
+          directions.push(args[4] as string | undefined);
+          return originalLayout(...args);
+        };
+      }
+      return result;
+    };
+    try {
+      const service = new InvoiceService({} as never);
+      // renderPdf stays private; reach it without widening the public API.
+      const renderPdf = (
+        service as unknown as {
+          renderPdf: (invoice: unknown, qrDataUrl?: string) => Promise<Buffer>;
+        }
+      ).renderPdf;
+      const buffer = await renderPdf(
+        {
+          number: '1405/00348',
+          customerName: 'علی محمدی',
+          customerMobile: '09123456789',
+          storeAddress: 'میاندوآب، خیابان اصلی',
+          storePhone: '041-1234567',
+          customerAddress: null,
+          subtotal: 150000000n,
+          discount: 5000000n,
+          total: 145000000n,
+          returnedTotal: 20000000n,
+          paymentStatus: 'partial',
+          paidAmount: 90000000n,
+          issuedAt: new Date('2026-09-01T10:00:00Z'),
+          items: [
+            {
+              productName: 'لنت ترمز جلو پژو ۲۰۶',
+              brand: 'ایساکو',
+              quantity: 2,
+              unitPrice: 50000000n,
+              lineTotal: 100000000n,
+            },
+          ],
+          returns: [
+            {
+              productName: 'فیلتر روغن',
+              quantity: 1,
+              refundAmount: 20000000n,
+              restock: true,
+              reason: 'مغایرت',
+            },
+          ],
+        },
+        undefined,
+      );
+      expect(buffer.length).toBeGreaterThan(1000);
+    } finally {
+      PDFDocument.prototype.text = originalText;
+      PDFDocument.prototype.font = originalFont;
+    }
+    // presentation forms (FB50–FEFF) are outside the base Arabic block
+    const persianLines = drawn.filter((line) => /[\u0600-\u06FF\uFB50-\uFEFF]/.test(line));
+    expect(persianLines.length).toBeGreaterThan(8);
+    // No line may carry unshaped Persian LETTERS (digits/punctuation are fine).
+    const unshapedLetter = /[\u0621-\u063A\u063F-\u064A\u067E\u0686\u0698\u06A9\u06AF\u06CC]/;
+    for (const line of persianLines)
+      expect(unshapedLetter.test(line), `unshaped line: ${line}`).toBe(false);
+    // and every Persian line actually carries presentation forms
+    for (const line of persianLines) expect(/[\uFB50-\uFEFF]/.test(line)).toBe(true);
+    // the fontkit engine must never run rtl (it would mirror each word)
+    expect(directions.length).toBeGreaterThan(0);
+    for (const direction of directions) expect(direction).toBe('ltr');
+
+    // Every drawn number is Persian — money grouped 3-by-3, phones/ids converted.
+    const drawnText = drawn.join('\n');
+    expect(drawnText).toContain('۱۰۰٬۰۰۰٬۰۰۰'); // 100000000n line total
+    expect(drawnText).toContain('۵۰٬۰۰۰٬۰۰۰'); // 50000000n unit price
+    expect(drawnText).toContain('۱۵۰٬۰۰۰٬۰۰۰'); // 150000000n subtotal
+    expect(drawnText).toContain('۱۲۵٬۰۰۰٬۰۰۰'); // net total after returns (145M − 20M)
+    expect(drawnText).toContain('۹۰٬۰۰۰٬۰۰۰'); // 90000000n paid
+    expect(drawnText).toContain('۲۰٬۰۰۰٬۰۰۰'); // 20000000n refund
+    expect(drawnText).toContain('۱۴۰۵/۰۰۳۴۸'); // invoice number in Persian digits
+    expect(drawnText).toContain('۰۹۱۲۳۴۵۶۷۸۹'); // customer mobile in Persian digits
+    // A hyphenated store phone stays readable as one LTR run (LRM-wrapped).
+    expect(drawnText).toContain('۰۴۱-۱۲۳۴۵۶۷');
+    // No ASCII digit runs survive in the drawn lines.
+    expect(drawnText).not.toMatch(/\d{3,}/);
   });
 });

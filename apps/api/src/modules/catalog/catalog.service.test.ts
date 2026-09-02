@@ -8,6 +8,7 @@ function makeService() {
     category: { findMany: vi.fn() },
     vehicleMake: { findMany: vi.fn() },
     brand: { findMany: vi.fn() },
+    setting: { findMany: vi.fn().mockResolvedValue([]) },
   };
   return { service: new CatalogService(prisma as never), prisma };
 }
@@ -26,6 +27,15 @@ const row = {
   images: [],
   inventoryItems: [{ quantity: 3, minStock: null, brand: { name: 'اصلی' } }],
   compatibilities: [],
+};
+/** Row shape used by the price-visibility tests. */
+const pricedRow = {
+  ...row,
+  priceDisplay: 'inherit',
+  inventoryItems: [
+    { quantity: 3, minStock: null, salePrice: 1_800_000n, brand: { name: 'اصلی' } },
+    { quantity: 1, minStock: null, salePrice: 1_500_000n, brand: { name: 'ایساکو' } },
+  ],
 };
 
 describe('CatalogService', () => {
@@ -100,5 +110,72 @@ describe('CatalogService', () => {
     prisma.product.findMany.mockResolvedValue([]);
     prisma.product.count.mockResolvedValue(0);
     await expect(service.getPublicProduct('unknown')).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+describe('storefront price visibility', () => {
+  it('hides prices by default even when the panel has sale prices', async () => {
+    const { service, prisma } = makeService();
+    prisma.setting.findMany.mockResolvedValue([]);
+    prisma.product.findMany.mockResolvedValue([pricedRow]);
+    prisma.product.count.mockResolvedValue(1);
+
+    const result = await service.listPublicProducts({});
+    expect(result.data[0].price).toBeNull();
+  });
+
+  it('exposes the cheapest active brand price when the site-wide switch is on', async () => {
+    const { service, prisma } = makeService();
+    prisma.setting.findMany.mockResolvedValue([
+      { key: 'store.pricing', value: { showPrices: true } },
+    ]);
+    prisma.product.findMany.mockResolvedValue([pricedRow]);
+    prisma.product.count.mockResolvedValue(1);
+
+    const result = await service.listPublicProducts({});
+    expect(result.data[0].price).toBe('1500000');
+  });
+
+  it('lets a single product hide its price while prices are globally on', async () => {
+    const { service, prisma } = makeService();
+    prisma.setting.findMany.mockResolvedValue([
+      { key: 'store.pricing', value: { showPrices: true } },
+    ]);
+    prisma.product.findMany.mockResolvedValue([{ ...pricedRow, priceDisplay: 'hide' }]);
+    prisma.product.count.mockResolvedValue(1);
+
+    const result = await service.listPublicProducts({});
+    expect(result.data[0].price).toBeNull();
+  });
+
+  it('lets a single product show its price while prices are globally off', async () => {
+    const { service, prisma } = makeService();
+    prisma.setting.findMany.mockResolvedValue([]);
+    prisma.product.findMany.mockResolvedValue([{ ...pricedRow, priceDisplay: 'show' }]);
+    prisma.product.count.mockResolvedValue(1);
+
+    const result = await service.listPublicProducts({});
+    expect(result.data[0].price).toBe('1500000');
+  });
+
+  it('returns null price for products without active inventory items', async () => {
+    const { service, prisma } = makeService();
+    prisma.setting.findMany.mockResolvedValue([
+      { key: 'store.pricing', value: { showPrices: true } },
+    ]);
+    prisma.product.findMany.mockResolvedValue([{ ...pricedRow, inventoryItems: [] }]);
+    prisma.product.count.mockResolvedValue(1);
+
+    const result = await service.listPublicProducts({});
+    expect(result.data[0].price).toBeNull();
+  });
+
+  it('reports the pricing switch on the public meta payload', async () => {
+    const { service, prisma } = makeService();
+    prisma.setting.findMany.mockResolvedValue([
+      { key: 'store.pricing', value: { showPrices: true } },
+    ]);
+
+    const meta = await service.meta();
+    expect(meta.data.pricing).toEqual({ showPrices: true });
   });
 });

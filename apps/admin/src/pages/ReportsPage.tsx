@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { api, downloadFile } from '../lib/api';
+import { formatPersianNumber } from '@salimvand/shared';
 import { DonutChart } from '@salimvand/ui';
 import { monthlySales, profitShare } from '../lib/report-metrics';
 
@@ -140,7 +141,7 @@ export function ReportsPage() {
       <div className="cards dashboard-cards">
         <article>
           <small>تعداد فاکتور</small>
-          <strong>{sales?.summary.invoiceCount ?? '—'}</strong>
+          <strong>{sales ? formatPersianNumber(sales.summary.invoiceCount) : '—'}</strong>
         </article>
         <article>
           <small>فروش</small>
@@ -182,7 +183,7 @@ export function ReportsPage() {
             <div key={row.brand}>
               <span>
                 {row.brand}
-                <small>{row.quantity} عدد</small>
+                <small>{formatPersianNumber(row.quantity)} عدد</small>
               </span>
               <b>{money(row.revenue)}</b>
               <strong className={Number(row.profit) >= 0 ? 'status-chip' : 'low-stock'}>
@@ -227,7 +228,7 @@ export function ReportsPage() {
         {sales?.products.slice(0, 10).map((row) => (
           <div key={row.name}>
             <span>{row.name}</span>
-            <b>{row.quantity} عدد</b>
+            <b>{formatPersianNumber(row.quantity)} عدد</b>
             <span>{money(row.revenue)}</span>
           </div>
         ))}
@@ -239,7 +240,7 @@ export function ReportsPage() {
           <div key={row.id}>
             <span>{row.name}</span>
             <small>
-              {row.mobile} · {row.invoiceCount} فاکتور
+              {formatPersianNumber(row.mobile)} · {formatPersianNumber(row.invoiceCount)} فاکتور
             </small>
             <b className="low-stock">{money(row.debt)}</b>
           </div>
@@ -260,7 +261,7 @@ export function ReportsPage() {
           .map((row) => (
             <div key={row.supplierId}>
               <span>{row.supplierName}</span>
-              <small>{row.invoiceCount} فاکتور خرید</small>
+              <small>{formatPersianNumber(row.invoiceCount)} فاکتور خرید</small>
               <b className="low-stock">{money(row.debt)}</b>
             </div>
           ))}

@@ -42,3 +42,35 @@ describe('ApiExceptionFilter', () => {
     expect(res.payload).toEqual({ ok: false, error: { code: 'NOT_FOUND', message: 'یافت نشد' } });
   });
 });
+it('exposes a short diagnostic for unexpected server errors', () => {
+  const res = {
+    statusCode: 0,
+    payload: undefined as unknown,
+    status(code: number) {
+      this.statusCode = code;
+      return this;
+    },
+    json(payload: unknown) {
+      this.payload = payload;
+      return payload;
+    },
+  };
+  new ApiExceptionFilter().catch(
+    Object.assign(new Error('relation "payments" does not exist'), { code: 'P2021' }),
+    {
+      switchToHttp: () => ({
+        getResponse: () => res,
+        getRequest: () => ({ url: '/x', method: 'POST' }),
+      }),
+    } as never,
+  );
+  expect(res.statusCode).toBe(500);
+  expect(res.payload).toEqual({
+    ok: false,
+    error: {
+      code: 'INTERNAL_ERROR',
+      message: 'خطای داخلی سرور',
+      detail: 'P2021',
+    },
+  });
+});

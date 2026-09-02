@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import { formatPersianNumber } from '@salimvand/shared';
 
 type SmsRow = {
   id: string;
@@ -32,6 +33,7 @@ type Health = {
 };
 
 const tabs = [
+  { id: 'config', label: 'پیکربندی' },
   { id: 'sms', label: 'پیامک‌ها' },
   { id: 'channels', label: 'تلگرام و بله' },
   { id: 'send', label: 'ارسال آزمایشی' },
@@ -39,11 +41,33 @@ const tabs = [
 ] as const;
 type Tab = (typeof tabs)[number]['id'];
 
+type MessagingConfig = {
+  sms?: { apiKey?: string; lineNumber?: string };
+  telegram?: { botToken?: string; chatId?: string };
+  bale?: { botToken?: string; chatId?: string };
+};
+type MessagingDraft = {
+  smsApiKey: string;
+  smsLineNumber: string;
+  telegramBotToken: string;
+  telegramChatId: string;
+  baleBotToken: string;
+  baleChatId: string;
+};
+const emptyDraft: MessagingDraft = {
+  smsApiKey: '',
+  smsLineNumber: '',
+  telegramBotToken: '',
+  telegramChatId: '',
+  baleBotToken: '',
+  baleChatId: '',
+};
+
 const channelLabels: Record<string, string> = { sms: 'پیامک', telegram: 'تلگرام', bale: 'بله' };
 const time = (value: string) => new Date(value).toLocaleString('fa-IR');
 
 export function MessagingPage() {
-  const [tab, setTab] = useState<Tab>('sms');
+  const [tab, setTab] = useState<Tab>('config');
   const [smsRows, setSmsRows] = useState<SmsRow[]>([]);
   const [channelRows, setChannelRows] = useState<ChannelRow[]>([]);
   const [failed, setFailed] = useState<FailedJob[]>([]);
@@ -53,6 +77,56 @@ export function MessagingPage() {
   const [mobile, setMobile] = useState('');
   const [text, setText] = useState('فاکتور {invoice_number} به مبلغ {amount} ریال — {link}');
   const [busy, setBusy] = useState(false);
+  const [messaging, setMessaging] = useState<MessagingConfig>({});
+  const [draft, setDraft] = useState<MessagingDraft>(emptyDraft);
+
+  const loadConfig = () => {
+    void api<{ data: Record<string, unknown> }>('/settings')
+      .then((result) => {
+        const config = (result.data['integrations.messaging'] ?? {}) as MessagingConfig;
+        setMessaging(config);
+        setDraft({
+          smsApiKey: '',
+          smsLineNumber: config.sms?.lineNumber ?? '',
+          telegramBotToken: '',
+          telegramChatId: config.telegram?.chatId ?? '',
+          baleBotToken: '',
+          baleChatId: config.bale?.chatId ?? '',
+        });
+      })
+      .catch(() => undefined);
+  };
+
+  const updateDraft = (key: keyof MessagingDraft, value: string) =>
+    setDraft((current) => ({ ...current, [key]: value }));
+
+  const saveConfig = async () => {
+    setBusy(true);
+    setMessage('');
+    try {
+      const payload: MessagingConfig = {
+        sms: { lineNumber: draft.smsLineNumber.trim() || undefined },
+        telegram: { chatId: draft.telegramChatId.trim() || undefined },
+        bale: { chatId: draft.baleChatId.trim() || undefined },
+      };
+      // Secrets are only sent when the operator typed a fresh value; an empty
+      // field keeps the stored credential (the server merges masked values).
+      if (draft.smsApiKey.trim()) payload.sms!.apiKey = draft.smsApiKey.trim();
+      if (draft.telegramBotToken.trim()) payload.telegram!.botToken = draft.telegramBotToken.trim();
+      if (draft.baleBotToken.trim()) payload.bale!.botToken = draft.baleBotToken.trim();
+      await api('/settings', {
+        method: 'PUT',
+        body: JSON.stringify({ 'integrations.messaging': payload }),
+      });
+      setMessage('پیکربندی ذخیره شد؛ برای اطمینان از تب «ارسال آزمایشی» استفاده کنید.');
+      load();
+      loadConfig();
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const load = () => {
     void api<{ data: SmsRow[] }>('/notifications/sms/logs?limit=50')
@@ -70,6 +144,7 @@ export function MessagingPage() {
   };
   useEffect(() => {
     load();
+    loadConfig();
   }, []);
 
   const send = async () => {
@@ -114,7 +189,7 @@ export function MessagingPage() {
               <small>
                 {state.provider
                   ? `provider: ${state.provider}`
-                  : 'متغیرهای Environment تنظیم نشده است'}
+                  : 'از تب «پیکربندی» یا متغیرهای ‎.env تنظیم کنید'}
               </small>
             </article>
           ))
@@ -159,6 +234,92 @@ export function MessagingPage() {
         ))}
       </div>
 
+      {tab === 'config' && (
+        <div className="form-grid messaging-config">
+          <p className="muted messaging-wide">
+            این مقادیر در دیتابیس ذخیره می‌شوند و بر متغیرهای ‎.env اولویت دارند؛ برای تغییرشان
+            نیازی به ورود به سرور نیست. فیلدهای محرمانه فقط به‌صورت ماسک‌شده نمایش داده می‌شوند —
+            برای تغییر، مقدار جدید را کامل وارد کنید؛ فیلد خالی یعنی مقدار فعلی حفظ شود.
+          </p>
+          <fieldset>
+            <legend>پیامک (sms.ir)</legend>
+            <label>
+              کلید API — از پنل کاربری sms.ir «تنظیمات ← کلید API»
+              <input
+                dir="ltr"
+                type="password"
+                value={draft.smsApiKey}
+                placeholder={messaging.sms?.apiKey || 'مثال: a1b2c3d4...'}
+                onChange={(event) => updateDraft('smsApiKey', event.target.value)}
+              />
+            </label>
+            <label>
+              شمارهٔ خط ارسال (برای متد «ارسال گروهی»)
+              <input
+                dir="ltr"
+                value={draft.smsLineNumber}
+                placeholder="مثال: 30005157000000"
+                onChange={(event) => updateDraft('smsLineNumber', event.target.value)}
+              />
+            </label>
+          </fieldset>
+          <fieldset>
+            <legend>ربات تلگرام</legend>
+            <label>
+              توکن ربات — از @BotFather
+              <input
+                dir="ltr"
+                type="password"
+                value={draft.telegramBotToken}
+                placeholder={messaging.telegram?.botToken || 'مثال: 123456:ABC-...'}
+                onChange={(event) => updateDraft('telegramBotToken', event.target.value)}
+              />
+            </label>
+            <label>
+              شناسهٔ چت/کانال مقصد اعلان‌ها
+              <input
+                dir="ltr"
+                value={draft.telegramChatId}
+                placeholder="مثال: -1001234567890"
+                onChange={(event) => updateDraft('telegramChatId', event.target.value)}
+              />
+            </label>
+          </fieldset>
+          <fieldset>
+            <legend>ربات بله</legend>
+            <label>
+              توکن ربات بله
+              <input
+                dir="ltr"
+                type="password"
+                value={draft.baleBotToken}
+                placeholder={messaging.bale?.botToken || 'مثال: 123456:ABC-...'}
+                onChange={(event) => updateDraft('baleBotToken', event.target.value)}
+              />
+            </label>
+            <label>
+              شناسهٔ چت/کانال مقصد در بله
+              <input
+                dir="ltr"
+                value={draft.baleChatId}
+                placeholder="مثال: -1001234567890"
+                onChange={(event) => updateDraft('baleChatId', event.target.value)}
+              />
+            </label>
+          </fieldset>
+          <div className="messaging-wide">
+            <button className="button-primary" disabled={busy} onClick={() => void saveConfig()}>
+              {busy ? 'در حال ذخیره…' : 'ذخیرهٔ پیکربندی'}
+            </button>
+          </div>
+          <p className="muted messaging-wide">
+            پس از ذخیره، بدون ری‌استارت سرویس‌ها اعمال می‌شود؛ وضعیت هر کانال در کارت‌های بالای همین
+            صفحه («پیکربندی شده / نشده») قابل بررسی است. ثبت webhook ربات‌ها همچنان یک‌بار از طریق
+            مستندات (بخش پیام‌رسانی) انجام می‌شود.
+          </p>
+        </div>
+      )}
+
       {tab === 'sms' && (
         <div className="product-table">
           <div className="table-head messaging-head">
@@ -171,7 +332,7 @@ export function MessagingPage() {
           {smsRows.length ? (
             smsRows.map((row) => (
               <div className="table-row messaging-head" key={row.id}>
-                <code dir="ltr">{row.mobile ?? '—'}</code>
+                <code dir="ltr">{formatPersianNumber(row.mobile ?? '—')}</code>
                 <span>{row.template}</span>
                 <span className={row.status === 'sent' ? 'status-chip' : 'low-stock'}>
                   {row.status === 'sent'
@@ -269,7 +430,7 @@ export function MessagingPage() {
             failed.map((job) => (
               <div className="table-row messaging-head" key={job.id}>
                 <strong>{job.type}</strong>
-                <code dir="ltr">{job.mobile ?? '—'}</code>
+                <code dir="ltr">{formatPersianNumber(job.mobile ?? '—')}</code>
                 <span>{job.failedReason}</span>
                 <span>{new Intl.NumberFormat('fa-IR').format(job.attemptsMade)}</span>
                 <span>

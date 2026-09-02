@@ -17,6 +17,25 @@ for service in salimvand-api.service salimvand-website.service salimvand-worker.
   systemctl is-active --quiet "$service" || { echo "Service is not active: $service" >&2; exit 1; }
 done
 fail2ban-client status sshd >/dev/null 2>&1 || { echo 'Fail2ban sshd jail is not available.' >&2; exit 1; }
+
+# Independently verify the credentials stored in .env. When the API is
+# crash-looping this points straight at a bad DATABASE_URL/REDIS_URL instead
+# of forcing a journal dive, and it also catches the classic mismatch where
+# passwords are hashed with one method (e.g. md5) while pg_hba demands
+# another (scram-sha-256), which rejects every password.
+if [[ -n "${DATABASE_URL:-}" ]] && command -v psql >/dev/null 2>&1; then
+  PGCONNECT_TIMEOUT=5 psql "${DATABASE_URL}" -Atq -c 'SELECT 1' >/dev/null 2>&1 || {
+    echo 'PostgreSQL check failed for DATABASE_URL (server down, wrong password, or password_encryption/pg_hba method mismatch).' >&2
+    exit 1
+  }
+fi
+if [[ -n "${REDIS_URL:-}" ]] && command -v redis-cli >/dev/null 2>&1; then
+  [[ "$(redis-cli -u "${REDIS_URL}" --no-auth-warning ping 2>/dev/null || true)" == 'PONG' ]] || {
+    echo 'Redis rejected REDIS_URL credentials (check requirepass against REDIS_URL).' >&2
+    exit 1
+  }
+fi
+
 curl --fail --silent --show-error "$API_URL/api/v1/health/ready" >/dev/null
 curl --fail --silent --show-error --max-time 10 "$BASE_URL/" >/dev/null
 curl --fail --silent --show-error --insecure --max-time 10 "$HTTPS_URL/" >/dev/null
@@ -30,6 +49,18 @@ if [[ -n "${ADMIN_URL:-}" ]]; then
     echo "CMS API proxy returned a non-API response: ${ADMIN_URL%/}/api/v1/health" >&2
     exit 1
   }
+fi
+
+# The media library and settings previews load /uploads same-origin from the
+# CMS. When that Nginx location is missing, the SPA fallback answers with the
+# index.html shell (HTTP 200 + <!doctype html>) and every image breaks.
+if [[ -n "${ADMIN_URL:-}" ]]; then
+  uploads_response="$(curl --silent --max-time 10 -w '\n%{http_code}' "${ADMIN_URL%/}/uploads/" || true)"
+  uploads_code="$(tail -n 1 <<<"$uploads_response")"
+  if [[ "$uploads_code" == "200" ]] && grep -qi '<!doctype html' <<<"$uploads_response"; then
+    echo 'CMS serves the SPA shell on /uploads/ — the Nginx uploads location is missing (rerun deploy).' >&2
+    exit 1
+  fi
 fi
 
 if ss -ltnH 'sport = :4000' | grep -qvE '127\.0\.0\.1:4000|\[::1\]:4000'; then

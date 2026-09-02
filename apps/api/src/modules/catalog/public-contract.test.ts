@@ -46,6 +46,7 @@ function assertPublic(payload: unknown, forbidden: readonly string[] = CATALOG_F
 
 const productRow = {
   id: 'p1',
+  priceDisplay: 'inherit',
   code: 'BRK-00452',
   slug: 'لنت-۲۰۶',
   name: 'لنت ترمز جلو پژو ۲۰۶',
@@ -79,7 +80,7 @@ function makeCatalog() {
     category: { findMany: vi.fn() },
     vehicleMake: { findMany: vi.fn() },
     brand: { findMany: vi.fn() },
-    setting: { findMany: vi.fn() },
+    setting: { findMany: vi.fn().mockResolvedValue([]) },
   };
   return { service: new CatalogService(prisma as never), prisma };
 }
@@ -116,6 +117,23 @@ describe('public API contract — no internal data', () => {
 
     const result = await service.getPublicProduct('لنت-۲۰۶');
     assertPublic(result.data);
+  });
+
+  it('publishes the display price but never internal pricing when prices are on', async () => {
+    const { service, prisma } = makeCatalog();
+    prisma.setting.findMany.mockResolvedValue([
+      { key: 'store.pricing', value: { showPrices: true } },
+    ]);
+    prisma.product.findMany.mockResolvedValue([productRow]);
+    prisma.product.count.mockResolvedValue(1);
+
+    const result = await service.listPublicProducts({ page: 1, pageSize: 12 });
+    const serialized = assertPublic(result.data);
+    // The storefront sees only the resolved display price...
+    expect(result.data[0].price).toBe('1500000');
+    expect(serialized).toContain('"price":"1500000"');
+    // ...not per-brand sale prices, purchase cost or counters.
+    expect(serialized).not.toContain('900000');
   });
 
   it('exposes store meta and filters without inventory internals', async () => {

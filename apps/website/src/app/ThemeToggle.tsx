@@ -13,14 +13,9 @@ export function ThemeToggle() {
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
 
   useEffect(() => {
+    // Light is the store default; only an explicit choice switches the skin.
     const stored = window.localStorage.getItem(STORAGE_KEY);
-    const initial =
-      stored === 'dark' || stored === 'light'
-        ? stored
-        : window.matchMedia('(prefers-color-scheme: dark)').matches
-          ? 'dark'
-          : 'light';
-    setTheme(initial);
+    setTheme(stored === 'dark' || stored === 'light' ? stored : 'light');
   }, []);
 
   const toggle = () => {

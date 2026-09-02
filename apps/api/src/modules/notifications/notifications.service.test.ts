@@ -9,13 +9,15 @@ import {
   NOTIFICATION_QUEUE_NAME,
   notificationJobOptions,
   NotificationsService,
+  smsIrPayload,
+  smsIrSendUrl,
 } from './notifications.service';
 
 describe('notification messages', () => {
   it('uses the short invoice URL and never the long token', () => {
-    process.env.PUBLIC_SITE_URL = 'https://selimvand.ir/';
+    process.env.PUBLIC_SITE_URL = 'https://salimvand.ir/';
     const message = buildInvoiceMessage('INV-0001', 'Ab7kP2xQ9m', '1500000');
-    expect(message).toContain('https://selimvand.ir/i/Ab7kP2xQ9m');
+    expect(message).toContain('https://salimvand.ir/i/Ab7kP2xQ9m');
     expect(message).not.toContain('publicToken');
     expect(message).not.toContain('undefined');
   });
@@ -30,6 +32,23 @@ describe('notification messages', () => {
     expect(integrationConfigured('bale', env)).toBe(true);
     expect(integrationUrl('telegram', env)).toContain('secret');
     expect(integrationUrl('bale', env)).toContain('bale-secret');
+  });
+  it('enables sms.ir only with both the API key and the line number', () => {
+    expect(
+      integrationConfigured('sms', { SMS_API_KEY: 'key', SMS_LINE_NUMBER: '30004505000017' }),
+    ).toBe(true);
+    expect(integrationConfigured('sms', { SMS_API_KEY: 'key' })).toBe(false);
+    expect(integrationConfigured('sms', { SMS_LINE_NUMBER: '30004505000017' })).toBe(false);
+    expect(integrationConfigured('sms', {})).toBe(false);
+  });
+  it('builds the sms.ir bulk request for a single invoice recipient', () => {
+    const env = { SMS_API_KEY: 'key', SMS_LINE_NUMBER: '30004505000017' };
+    expect(smsIrSendUrl(env)).toBe('https://api.sms.ir/v1/send/bulk');
+    expect(smsIrPayload('09121234567', 'فاکتور INV-1', env)).toEqual({
+      lineNumber: 30004505000017,
+      messageText: 'فاکتور INV-1',
+      mobiles: ['09121234567'],
+    });
   });
   it('builds a payment notification with the same short URL', () => {
     const message = buildInvoiceMessage('INV-0002', 'Q9mAb7kP2x', '500000', true);
@@ -101,9 +120,8 @@ describe('notification messages', () => {
 
   it('selects all configured channels for a normal invoice notification', () => {
     const env = {
-      SMS_PROVIDER: 'generic',
-      SMS_API_URL: 'https://sms.test',
       SMS_API_KEY: 'sms',
+      SMS_LINE_NUMBER: '30004505000017',
       TELEGRAM_BOT_TOKEN: 'telegram',
       TELEGRAM_CHAT_ID: 'chat',
       BALE_BOT_TOKEN: 'bale',
@@ -115,9 +133,8 @@ describe('notification messages', () => {
   });
   it('restricts test notifications to the requested provider', () => {
     const env = {
-      SMS_PROVIDER: 'generic',
-      SMS_API_URL: 'https://sms.test',
       SMS_API_KEY: 'sms',
+      SMS_LINE_NUMBER: '30004505000017',
       TELEGRAM_BOT_TOKEN: 'telegram',
       TELEGRAM_CHAT_ID: 'chat',
       BALE_BOT_TOKEN: 'bale',

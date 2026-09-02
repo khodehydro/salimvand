@@ -7,46 +7,78 @@ import { getStoreInfo, telHref, fullMapUrl, type StoreInfo } from './store-info'
  * (product, category, vehicle, location). It reads the same store meta as the
  * homepage, so the phone numbers, social IDs and map set in the admin panel
  * are applied consistently across the whole storefront.
+ *
+ * `showContact={false}` renders only the slim header — used on the product
+ * page, where the big contact/footer block must not sit above the product.
  */
-export async function PublicSubHeader({ context }: { context: string }) {
+export async function PublicSubHeader({
+  context,
+  showContact = true,
+}: {
+  context: string;
+  showContact?: boolean;
+}) {
   const info = await getStoreInfo();
   return (
     <>
       <header className="sub-header">
         <a className="brand-lockup" href="/">
-          <span className="brand-mark">س</span>
+          {info.logoUrl ? (
+            <img className="brand-logo" src={info.logoUrl} alt={info.name} />
+          ) : (
+            <span className="brand-mark">س</span>
+          )}
           <span>
             <strong>{APP_NAME}</strong>
             <small>{context}</small>
           </span>
         </a>
         <nav>
-          <a href="/#catalog">کاتالوگ</a>
-          <a href="/#contact">تماس</a>
+          <a href="/#catalog">{info.header.navCatalog}</a>
+          <a href="/#contact">{info.header.navContact}</a>
           <ThemeToggle />
         </nav>
       </header>
 
-      <StoreContact info={info} />
+      {showContact && (
+        <>
+          <StoreContact info={info} variant="sub" />
 
-      <footer className="sub-footer">
-        <span>
-          © {formatPersianNumber(new Date().getFullYear())} {STORE_BRAND}
-        </span>
-        <nav aria-label="پیوندهای تکراری">
-          <a href="/#catalog">کاتالوگ</a>
-          <a href="/#video">ویدئوی فروشگاه</a>
-          <a href="/#contact">تماس و آدرس</a>
-        </nav>
-      </footer>
+          <footer className="sub-footer">
+            <span>
+              © {formatPersianNumber(new Date().getFullYear())} {STORE_BRAND}
+            </span>
+            <nav aria-label="پیوندهای تکراری">
+              <a href="/#catalog">کاتالوگ</a>
+              <a href="/#video">ویدئوی فروشگاه</a>
+              <a href="/#contact">تماس و آدرس</a>
+            </nav>
+          </footer>
+        </>
+      )}
     </>
   );
 }
 
-export async function StoreContact({ info }: { info?: StoreInfo }) {
+/**
+ * Store contact + map block shared by the homepage (navy `contact-section`
+ * variant with the price-fluctuation note) and the landing pages (compact
+ * `sub-contact` variant). Every field comes from the admin settings through
+ * /public/meta, so the operator-controlled phones, social IDs, working hours
+ * and Google map embed code are applied on every page.
+ */
+export async function StoreContact({
+  info,
+  variant = 'sub',
+}: {
+  info?: StoreInfo;
+  variant?: 'home' | 'sub';
+}) {
   const resolved = info ?? (await getStoreInfo());
+  const hasTelegram = /^https?:\/\//i.test(resolved.telegram);
+  const hasBale = /^https?:\/\//i.test(resolved.bale);
   return (
-    <section className="sub-contact" id="contact">
+    <section className={variant === 'home' ? 'contact-section' : 'sub-contact'} id="contact">
       <div className="sub-contact-copy">
         <span className="eyebrow">آذین خودرو · میاندوآب</span>
         <h2>استعلام قیمت و موجودی</h2>
@@ -57,13 +89,24 @@ export async function StoreContact({ info }: { info?: StoreInfo }) {
           <a className="button button-light" href={telHref(resolved)}>
             تماس با فروشگاه
           </a>
-          <a className="button button-outline-light" href={resolved.telegram} rel="noreferrer">
-            تلگرام
-          </a>
-          <a className="button button-bale" href={resolved.bale} rel="noreferrer">
-            بله
-          </a>
+          {hasTelegram && (
+            <a className="button button-telegram" href={resolved.telegram} rel="noreferrer">
+              تلگرام
+            </a>
+          )}
+          {hasBale && (
+            <a className="button button-bale" href={resolved.bale} rel="noreferrer">
+              بله
+            </a>
+          )}
         </div>
+        {variant === 'home' && (
+          <p className="contact-price-note">
+            {resolved.pricing.showPrices
+              ? 'قیمت‌های روز انبار روی صفحهٔ هر قطعه درج شده است؛ مبلغ نهایی هنگام صدور فاکتور قطعی است.'
+              : 'قیمت‌ها به‌دلیل نوسان روزانهٔ بازار فقط تلفنی اعلام می‌شود؛ مبلغ نهایی هنگام صدور فاکتور قطعی است.'}
+          </p>
+        )}
       </div>
       <div className="contact-details">
         <div className="contact-list">
@@ -80,12 +123,14 @@ export async function StoreContact({ info }: { info?: StoreInfo }) {
           {resolved.phones.length > 0 && (
             <div>
               <small>تلفن تماس</small>
-              <b dir="ltr">{resolved.phones.join('، ')}</b>
+              <b dir="ltr">
+                {resolved.phones.map((phone) => formatPersianNumber(phone)).join('، ')}
+              </b>
             </div>
           )}
           <div>
             <small>ارسال شهرستان</small>
-            <b>باربری و پست پیشتاز</b>
+            <b>{resolved.shippingMethods.join('، ')}</b>
           </div>
         </div>
         <div className="map-embed">

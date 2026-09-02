@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { formatPersianNumber } from '@salimvand/shared';
 import { api } from '../lib/api';
+import { MediaPicker, type PickerItem } from '../components/MediaPicker';
+import { MediaImage } from '../components/MediaImage';
 
 type Product = { id: string; name: string; code: string };
 type Media = {
@@ -8,7 +10,9 @@ type Media = {
   path: string;
   alt?: string | null;
   isPrimary: boolean;
-  product: { id: string; name: string; slug?: string };
+  product: { id: string; name: string; slug?: string } | null;
+  kind?: 'product' | 'site';
+  label?: string;
 };
 
 export function MediaPage() {
@@ -21,6 +25,7 @@ export function MediaPage() {
   const [query, setQuery] = useState('');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const load = async () => {
     try {
@@ -43,7 +48,9 @@ export function MediaPage() {
     const value = query.trim().toLocaleLowerCase('fa');
     return value
       ? items.filter((item) =>
-          `${item.product.name} ${item.alt ?? ''}`.toLocaleLowerCase('fa').includes(value),
+          `${item.product?.name ?? ''} ${item.label ?? ''} ${item.alt ?? ''}`
+            .toLocaleLowerCase('fa')
+            .includes(value),
         )
       : items;
   }, [items, query]);
@@ -86,7 +93,29 @@ export function MediaPage() {
     }
   };
 
+  // Attach an already-uploaded image to the selected product straight from
+  // the media library — no re-upload needed.
+  const attachExisting = async (item: PickerItem) => {
+    if (!productId) return setMessage('ابتدا محصول را انتخاب کنید.');
+    if (item.kind === 'site') return setMessage('رسانه‌های سایت به محصول متصل نمی‌شوند.');
+    setLoading(true);
+    try {
+      await api(`/media/products/${productId}/select`, {
+        method: 'POST',
+        body: JSON.stringify({ imageId: item.id, alt: alt.trim() || item.alt || undefined }),
+      });
+      setMessage('تصویر به محصول متصل شد.');
+      setAlt('');
+      await load();
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const makePrimary = async (item: Media) => {
+    if (!item.product) return;
     try {
       await api(`/media/products/${item.product.id}/${item.id}/primary`, { method: 'PATCH' });
       setMessage('تصویر اصلی محصول تغییر کرد.');
@@ -97,13 +126,30 @@ export function MediaPage() {
   };
 
   const remove = async (item: Media) => {
-    if (!window.confirm(`تصویر «${item.product.name}» حذف شود؟`)) return;
+    const title = item.product
+      ? `تصویر «${item.product.name}»`
+      : `«${item.label ?? 'رسانهٔ سایت'}»`;
+    if (!window.confirm(`${title} حذف شود؟`)) return;
     try {
-      await api(`/media/products/${item.product.id}/${item.id}`, { method: 'DELETE' });
-      setMessage('تصویر حذف شد.');
+      if (item.kind === 'site' || !item.product) {
+        await api(`/media/site/${item.id.replace(/^site:/, '')}`, { method: 'DELETE' });
+      } else {
+        await api(`/media/products/${item.product.id}/${item.id}`, { method: 'DELETE' });
+      }
+      setMessage('رسانه حذف شد.');
       await load();
     } catch (error) {
       setMessage((error as Error).message);
+    }
+  };
+
+  const copyLink = async (item: Media) => {
+    const absolute = new URL(item.path, window.location.origin).href;
+    try {
+      await navigator.clipboard.writeText(absolute);
+      setMessage(`لینک کپی شد: ${absolute}`);
+    } catch {
+      setMessage(absolute);
     }
   };
 
@@ -113,7 +159,9 @@ export function MediaPage() {
         <div>
           <span className="eyebrow">کاتالوگ</span>
           <h1>کتابخانهٔ رسانه</h1>
-          <p className="muted">تصاویر محصول را بدون واردکردن شناسه‌های فنی مدیریت کنید.</p>
+          <p className="muted">
+            همهٔ رسانه‌های سرور — تصاویر محصولات و فایل‌های سایت (لوگو، آیکون) — با کپی لینک و حذف.
+          </p>
         </div>
         <span className="count">{formatPersianNumber(items.length)} تصویر</span>
       </div>
@@ -152,6 +200,7 @@ export function MediaPage() {
         </label>
         <button
           type="button"
+          className="button-primary"
           onClick={() => void upload()}
           disabled={loading || !productId || !file}
         >
@@ -175,6 +224,15 @@ export function MediaPage() {
         >
           اتصال تصویر از نشانی
         </button>
+        <button
+          type="button"
+          className="outline"
+          onClick={() =>
+            productId ? setPickerOpen(true) : setMessage('ابتدا محصول را انتخاب کنید.')
+          }
+        >
+          انتخاب از رسانه‌های موجود
+        </button>
       </div>
       <div className="media-toolbar">
         <label className="search-field">
@@ -192,13 +250,22 @@ export function MediaPage() {
           {filtered.map((item) => (
             <article className="media-card" key={item.id}>
               <div className="media-preview">
-                <img src={item.path} alt={item.alt ?? item.product.name} loading="lazy" />
+                <MediaImage
+                  src={item.path}
+                  alt={item.alt ?? item.product?.name ?? item.label ?? 'رسانه'}
+                />
                 {item.isPrimary && <span className="media-primary">تصویر اصلی</span>}
+                {item.kind === 'site' && (
+                  <span className="media-primary media-site">رسانهٔ سایت</span>
+                )}
               </div>
-              <strong>{item.product.name}</strong>
-              <small>{item.alt || 'متن جایگزین ثبت نشده'}</small>
+              <strong>{item.product ? item.product.name : (item.label ?? 'رسانهٔ سایت')}</strong>
+              <small>{item.alt || item.path}</small>
               <div className="media-actions">
-                {!item.isPrimary && (
+                <button type="button" className="outline" onClick={() => void copyLink(item)}>
+                  کپی لینک
+                </button>
+                {item.product && !item.isPrimary && (
                   <button type="button" className="outline" onClick={() => void makePrimary(item)}>
                     انتخاب به‌عنوان اصلی
                   </button>
@@ -214,8 +281,21 @@ export function MediaPage() {
         <div className="empty-state">
           <b>تصویری پیدا نشد</b>
           <span>یک تصویر بارگذاری کنید یا عبارت جست‌وجو را تغییر دهید.</span>
+          {items.length === 0 && (
+            <small>
+              اگر لوگو یا تصاویری بارگذاری کرده‌اید و اینجا خالی است، یعنی پنل هنوز روی آخرین نسخهٔ
+              منتشرشده نیست — دستور Deploy را روی سرور اجرا کنید (نسخهٔ فعال در پایین منوی کنار
+              نمایش داده می‌شود).
+            </small>
+          )}
         </div>
       )}
+      <MediaPicker
+        open={pickerOpen}
+        title={`انتخاب تصویر برای ${products.find((product) => product.id === productId)?.name ?? 'محصول'}`}
+        onClose={() => setPickerOpen(false)}
+        onSelect={(item) => void attachExisting(item)}
+      />
     </section>
   );
 }

@@ -34,7 +34,11 @@ sudo CERTBOT_EMAIL=admin@example.com ./scripts/enable-tls.sh
 sudo APP_DIR=/opt/salimvand DEPLOY_BRANCH=main ./scripts/deploy.sh
 ```
 
-فرمان بالا به‌ترتیب Fetch، Checkout نسخهٔ Branch، Install قفل‌شده، Prisma Generate، Migration Deploy، Seed، Typecheck، Test، Build، فعال‌سازی Systemd، Restart و Health Check را انجام می‌دهد. در پایان علاوه بر API Readiness، فعال‌بودن API، Website و Worker و پاسخ‌گویی Website نیز بررسی می‌شود؛ همچنین Deploy اگر API روی آدرس عمومی Bind شده باشد، ناموفق اعلام می‌شود.
+فرمان بالا به‌ترتیب Fetch، Checkout نسخهٔ Branch، Install قفل‌شده، Prisma Generate، Migration Deploy، Seed، Typecheck، Test، Build، فعال‌سازی Systemd، Restart و Health Check را انجام می‌دهد.
+
+اسکریپت حتی در پوسته‌های با PATH مینیمال (`sudo bash -c`، cron، ssh مستقیم) خودش Node و pnpm را پیدا می‌کند: مسیرهای نصب متداول (nvm کاربران، `/usr/local/bin`، `/usr/bin`، `/opt/node`، `~/.local/share/pnpm`) را می‌گردد، در صورت نیاز corepack را فعال می‌کند و اگر فقط npm موجود باشد، pnpm نسخهٔ پین‌شده را نصب می‌کند. در پایان علاوه بر API Readiness، فعال‌بودن API، Website و Worker و پاسخ‌گویی Website نیز بررسی می‌شود؛ همچنین Deploy اگر API روی آدرس عمومی Bind شده باشد، ناموفق اعلام می‌شود.
+
+در هر Deploy، اگر vhost پنل (`cms.`) هنوز location مسیر `/uploads/` را نداشته باشد، همین بلاک به‌صورت خودکار به همان server block اضافه و Nginx Reload می‌شود تا پیش‌نمایش تصاویر در کتابخانهٔ رسانه و تنظیمات پنل کار کند. فایل vhost هرگز بازنویسی کامل نمی‌شود تا تغییرات Certbot (بلوک‌های TLS) دست‌نخورده بمانند؛ برای نصب‌های تازه، `setup-server.sh` نسخهٔ کامل داخل `deploy/nginx/salimvand.conf` را می‌گذارد.
 
 ## Smoke Check پس از Deploy
 
@@ -45,7 +49,36 @@ cd /opt/salimvand
 bash scripts/check-production.sh
 ```
 
-این بررسی باید پیام `Production checks passed.` را نمایش دهد و فعال‌بودن API، Website، Worker، Nginx، Fail2ban و Bind داخلی API را کنترل می‌کند.
+این بررسی باید پیام `Production checks passed.` را نمایش دهد و فعال‌بودن API، Website، Worker، Nginx، Fail2ban و Bind داخلی API را کنترل می‌کند؛ علاوه بر آن اعتبار `DATABASE_URL` و `REDIS_URL` داخل `.env` را مستقیماً در برابر PostgreSQL و Redis می‌سنجد تا خرابی رمزها قبل از هر چیز گزارش شود.
+
+## عیب‌یابی: خطای «ارتباط با سرور برقرار نشد» در پنل
+
+این پیام یعنی بک‌اند (سرویس `salimvand-api`) پاسخ نمی‌دهد؛ خود پنل استاتیک است و از Nginx سرو می‌شود، پس صفحهٔ ورود باز می‌ماند ولی لاگین شکست می‌خورد. مسیر تشخیص:
+
+```bash
+systemctl status salimvand-api --no-pager
+journalctl -u salimvand-api -n 50 --no-pager
+bash scripts/check-production.sh
+```
+
+علل رایج:
+
+- تغییر رمز دیتابیس یا Redis بدون به‌روزرسانی `.env` (یا برعکس). رمز سمت دیتابیس را با `.env` هماهنگ کنید:
+
+  ```bash
+  su - postgres -c "psql -qc \"ALTER ROLE parts_store WITH PASSWORD '<رمز داخل DATABASE_URL>'\""
+  ```
+
+- اشارهٔ `DATABASE_URL` به یک دیتابیس **اشتباه یا خالی**: اگر سرویس بالا باشد ولی همهٔ کوئری‌ها ۵۰۰/۴۰۴ شوند، تعداد جدول‌ها را در هر دو دیتابیس مقایسه کنید (`psql -Atc "SELECT datname FROM pg_database WHERE datistemplate=false"` و سپس `SELECT count(*) FROM information_schema.tables` برای هر کدام). مقادیر مرجع پروداکشن در `apps/api/prisma/.env` هم موجود است.
+
+- ناهماهنگی روش هش رمز: اگر `password_encryption` روی `md5` باشد ولی `pg_hba.conf` روش `scram-sha-256` بخواهد، **هر** رمزی رد می‌شود. اصلاح:
+
+  ```bash
+  su - postgres -c "psql -qc \"ALTER SYSTEM SET password_encryption='scram-sha-256';\" -qc 'SELECT pg_reload_conf();'"
+  su - postgres -c "psql -qc \"ALTER ROLE parts_store WITH PASSWORD '<رمز>'\""
+  ```
+
+- اگر `.env` کلاً خراب شده باشد، بازاستقرار از گیت با `scripts/deploy.sh` کد را به حالت سالم برمی‌گرداند؛ کلیدهای ضروری `.env` در `.env.example` و `scripts/verify-production-config.sh` فهرست شده‌اند.
 
 ## Backup و بازبینی
 

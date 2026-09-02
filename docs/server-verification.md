@@ -63,6 +63,17 @@ pnpm --filter @salimvand/api exec prisma migrate deploy
 pnpm --filter @salimvand/api prisma:seed
 ```
 
+### راستی‌آزمایی آفلاین مایگریشن‌ها (پیش از دیپلوی)
+
+اسکریپت `scripts/verify-migrations.js` تمام فایل‌های مایگریشن را مثل `prisma migrate deploy` روی یک Postgres موقت (embedded) اجرا و نتیجه را ستون‌به‌ستون با `schema.prisma` مقایسه می‌کند؛ نام ستون یا nullable بودنِ ناهماهنگ را قبل از رسیدن به سرور پیدا می‌کند (تست‌های واحد Prisma را mock می‌کنند و این کلاس خطا را نمی‌بینند).
+
+```bash
+mkdir /tmp/pgval && cd /tmp/pgval && npm init -y >/dev/null && npm i embedded-postgres pg
+node "$APP_DIR/scripts/verify-migrations.js"   # یا مسیر ریپو
+```
+
+خروجی سالم: «schema matches migrations for every model». وابستگی‌ها عمداً در lockfile نیامده‌اند تا نصب سرور سبز بماند.
+
 ---
 
 ## ۴) دیپلوی
@@ -75,6 +86,15 @@ curl -fsS http://127.0.0.1:4000/api/v1/health/ready
 
 `scripts/deploy.sh` با `set -Eeuo pipefail` اجرا می‌شود؛ اگر `prisma generate` یا بیلد شکست بخورد،
 دیپلوی متوقف می‌شود و نسخهٔ قبلی سر جای خود می‌ماند.
+
+دیپلوی در صورت نیاز location سرو `/uploads/` را به vhost پنل اضافه می‌کند (بدون بازنویسی کامل فایل،
+تا بلوک‌های TLS مربوط به Certbot دست نخورند). پس از دیپلوی، این را هم چک کنید:
+
+```bash
+# اگر ADMIN_URL ست شده باشد، check-production همین را خودکار بررسی می‌کند:
+sudo ADMIN_URL=https://cms.salimvand.ir APP_DIR=/opt/salimvand bash scripts/check-production.sh
+# خروجی مورد انتظار: Production checks passed.
+```
 
 ---
 

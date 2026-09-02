@@ -19,6 +19,11 @@ describe('admin page permissions', () => {
   it('shows daily workspaces only to relevant roles', () => {
     expect(canAccessPage('warehouse', 'inventory')).toBe(true);
     expect(canAccessPage('warehouse', 'invoices')).toBe(false);
+    // The label studio reads /inventory/labels (warehouse+accountant only):
+    // a seller must not see a page whose data endpoint would 403.
+    expect(canAccessPage('warehouse', 'labels')).toBe(true);
+    expect(canAccessPage('seller', 'labels')).toBe(false);
+    expect(canAccessPage('manager', 'labels')).toBe(true);
     expect(canAccessPage('seller', 'products')).toBe(false);
     expect(canAccessPage('manager', 'products')).toBe(true);
     expect(canAccessPage('accountant', 'purchases')).toBe(true);

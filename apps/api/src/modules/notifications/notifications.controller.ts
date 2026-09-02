@@ -12,7 +12,11 @@ export class NotificationsController {
   constructor(private readonly notifications: NotificationsService) {}
   @Post('test') async test(@Body() body: TestNotificationDto) {
     const job = await this.notifications.enqueueTest(body.channel, body.message, body.mobile);
-    return { ok: true, data: { jobId: job.id, channel: body.channel, queued: true } };
+    // enqueue() degrades to null when the queue backend is unreachable.
+    return {
+      ok: true,
+      data: { jobId: job?.id ?? null, channel: body.channel, queued: Boolean(job) },
+    };
   }
   @Get('sms/logs') smsLogs(@Query('limit') limit?: string) {
     return this.notifications

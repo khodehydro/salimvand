@@ -1,6 +1,8 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { api } from '../lib/api';
+import { paramsFromHash } from '../lib/admin-route';
 import { formatRial, formatPersianNumber } from '@salimvand/shared';
+import { FaNumberInput } from '../components/FaNumberInput';
 
 type CustomerVehicle = {
   id: string;
@@ -23,6 +25,7 @@ type Customer = {
   id: string;
   name: string;
   mobile: string;
+  address?: string | null;
   notes?: string | null;
   debt: string | number;
   invoiceCount: number;
@@ -35,6 +38,14 @@ type Customer = {
     issuedAt: string;
   }>;
 };
+const paymentLabels: Record<string, string> = {
+  paid: 'تسویه شده',
+  partial: 'پرداخت بخشی',
+  unpaid: 'پرداخت نشده',
+};
+const shamsi = (value: string) =>
+  new Intl.DateTimeFormat('fa-IR', { dateStyle: 'medium' }).format(new Date(value));
+
 export function CustomersPage({
   canManage = true,
   canPay = true,
@@ -44,7 +55,8 @@ export function CustomersPage({
 }) {
   const [rows, setRows] = useState<Customer[]>([]);
   const [search, setSearch] = useState('');
-  const [form, setForm] = useState({ name: '', mobile: '', notes: '' });
+  const [tab, setTab] = useState<'list' | 'new'>('list');
+  const [form, setForm] = useState({ name: '', mobile: '', address: '', notes: '' });
   const [message, setMessage] = useState('');
   const [fieldErrors, setFieldErrors] = useState<{ name?: string; mobile?: string }>({});
   const [loading, setLoading] = useState(false);
@@ -61,6 +73,10 @@ export function CustomersPage({
     year: '',
     notes: '',
   });
+  /** Inline edit of an existing customer's profile. */
+  const [editing, setEditing] = useState<Customer | null>(null);
+  const [editForm, setEditForm] = useState({ name: '', mobile: '', address: '', notes: '' });
+
   const loadDetail = async (id: string) => {
     try {
       const [result, vehicleResult, treeResult] = await Promise.all([
@@ -76,12 +92,33 @@ export function CustomersPage({
     }
   };
   const load = () =>
-    void api<{ data: Customer[] }>(
-      `/customers${search ? `?search=${encodeURIComponent(search)}` : ''}`,
-    )
+    void api<{ data: Customer[] }>('/customers')
       .then((result) => setRows(result.data))
       .catch((error: Error) => setMessage(error.message));
   useEffect(load, []);
+  // Deep link from the global palette (#/customers?customer=<id>) opens the profile.
+  useEffect(() => {
+    const openFromHash = () => {
+      const customerId = paramsFromHash(window.location.hash).customer;
+      if (customerId) void loadDetail(customerId);
+    };
+    openFromHash();
+    window.addEventListener('hashchange', openFromHash);
+    return () => window.removeEventListener('hashchange', openFromHash);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /** Instant, client-side: the list already carries name + mobile. */
+  const filtered = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase();
+    if (!query) return rows;
+    return rows.filter(
+      (customer) =>
+        customer.name.toLocaleLowerCase().includes(query) ||
+        customer.mobile.includes(query.replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))),
+    );
+  }, [rows, search]);
+
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     const errors: { name?: string; mobile?: string } = {};
@@ -96,7 +133,8 @@ export function CustomersPage({
     try {
       await api('/customers', { method: 'POST', body: JSON.stringify(form) });
       setMessage('مشتری ثبت شد');
-      setForm({ name: '', mobile: '', notes: '' });
+      setForm({ name: '', mobile: '', address: '', notes: '' });
+      setTab('list');
       load();
     } catch (error) {
       setMessage((error as Error).message);
@@ -104,6 +142,43 @@ export function CustomersPage({
       setLoading(false);
     }
   };
+
+  const openEdit = (customer: Customer) => {
+    setEditing(customer);
+    setEditForm({
+      name: customer.name,
+      mobile: customer.mobile,
+      address: customer.address ?? '',
+      notes: customer.notes ?? '',
+    });
+  };
+  const saveEdit = async () => {
+    if (!editing) return;
+    if (!editForm.name.trim()) return setMessage('نام مشتری الزامی است');
+    if (!/^09\d{9}$/.test(editForm.mobile))
+      return setMessage('شماره موبایل باید ۱۱ رقم و با ۰۹ شروع شود');
+    setLoading(true);
+    try {
+      await api(`/customers/${editing.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          name: editForm.name,
+          mobile: editForm.mobile,
+          address: editForm.address,
+          notes: editForm.notes,
+        }),
+      });
+      setMessage('اطلاعات مشتری به‌روزرسانی شد');
+      setEditing(null);
+      load();
+      if (selected?.id === editing.id) await loadDetail(editing.id);
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const registerPayment = async () => {
     if (
       !paymentFor ||
@@ -125,6 +200,7 @@ export function CustomersPage({
       setPaymentFor(null);
       setPaymentAmount('');
       load();
+      if (selected?.id === paymentFor.id) await loadDetail(paymentFor.id);
     } catch (error) {
       setMessage((error as Error).message);
     } finally {
@@ -163,20 +239,46 @@ export function CustomersPage({
       setMessage((error as Error).message);
     }
   };
+
   return (
     <section>
       <div className="page-title">
         <div>
           <span className="eyebrow">فروش</span>
           <h1>مشتریان</h1>
-          <p className="muted">مشتری‌ها، فاکتورها و مانده بدهی</p>
+          <p className="muted">پروندهٔ مشتری‌ها، فاکتورها، خودروها و تسویه بدهی</p>
         </div>
         <span className="count">{formatPersianNumber(rows.length)} مشتری</span>
       </div>
+
+      <nav className="settings-tabs" aria-label="بخش‌های مشتریان">
+        <button
+          type="button"
+          className={tab === 'list' ? 'active' : ''}
+          onClick={() => setTab('list')}
+          aria-current={tab === 'list' ? 'true' : undefined}
+        >
+          <b>لیست مشتریان</b>
+          <small>جست‌وجوی لحظه‌ای، پرونده، فاکتورها و ثبت پرداخت</small>
+        </button>
+        {canManage && (
+          <button
+            type="button"
+            className={tab === 'new' ? 'active' : ''}
+            onClick={() => setTab('new')}
+            aria-current={tab === 'new' ? 'true' : undefined}
+          >
+            <b>ثبت مشتری جدید</b>
+            <small>نام، موبایل، آدرس و یادداشت</small>
+          </button>
+        )}
+      </nav>
+
       {message && <div className="notice">{message}</div>}
-      {canManage && (
+
+      {tab === 'new' && canManage && (
         <form className="product-form customer-form" onSubmit={submit}>
-          <h2>ثبت مشتری</h2>
+          <h2>مشتری جدید</h2>
           <label>
             نام و نام خانوادگی
             <input
@@ -204,190 +306,342 @@ export function CustomersPage({
           </label>
           {fieldErrors.mobile && <small className="field-error">{fieldErrors.mobile}</small>}
           <label>
+            آدرس
+            <input
+              value={form.address}
+              onChange={(e) => setForm({ ...form, address: e.target.value })}
+              placeholder="آدرس مشتری — هنگام صدور فاکتور پیش‌فرض می‌شود"
+            />
+          </label>
+          <label>
             یادداشت
             <input
               value={form.notes}
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
             />
           </label>
-          <button disabled={loading}>{loading ? 'در حال ثبت...' : 'ثبت مشتری'}</button>
+          <button className="button-primary" disabled={loading}>
+            {loading ? 'در حال ثبت...' : 'ثبت مشتری'}
+          </button>
         </form>
       )}
-      <div className="adjust-box customer-search">
-        <input
-          placeholder="جست‌وجوی نام یا موبایل"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') load();
-          }}
-        />
-        <button onClick={load}>جست‌وجو</button>
-        <button
-          className="outline"
-          onClick={() => {
-            setSearch('');
-            window.setTimeout(load, 0);
-          }}
-        >
-          همه
-        </button>
-      </div>
-      <div className="product-table">
-        <div className="table-head customer-head">
-          <span>مشتری</span>
-          <span>موبایل</span>
-          <span>فاکتورها</span>
-          <span>بدهی</span>
-          <span>وضعیت</span>
-        </div>
-        {rows.map((customer) => (
-          <div className="table-row customer-row" key={customer.id}>
-            <button className="row-action" onClick={() => void loadDetail(customer.id)}>
-              {customer.name}
-            </button>
-            <code>{customer.mobile}</code>
-            <span>{formatPersianNumber(customer.invoiceCount)}</span>
-            <b className={Number(customer.debt) > 0 ? 'low-stock' : 'status-chip'}>
-              {formatRial(Number(customer.debt))}
-            </b>
-            <span>
-              {Number(customer.debt) > 0 ? 'بدهکار' : 'تسویه'}{' '}
-              {canPay && Number(customer.debt) > 0 && (
-                <button className="row-action" onClick={() => setPaymentFor(customer)}>
-                  ثبت پرداخت
+
+      {tab === 'list' && (
+        <>
+          <div className="list-toolbar">
+            <div className="search-field">
+              <span className="search-icon">⌕</span>
+              <input
+                placeholder="جست‌وجوی لحظه‌ای نام یا موبایل مشتری…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              {search && (
+                <button
+                  type="button"
+                  className="search-clear"
+                  onClick={() => setSearch('')}
+                  aria-label="پاک کردن جست‌وجو"
+                >
+                  ✕
                 </button>
               )}
-            </span>
+            </div>
           </div>
-        ))}
-      </div>
+          <div className="product-table">
+            <div className="table-head customer-head">
+              <span>مشتری</span>
+              <span>موبایل</span>
+              <span>فاکتورها</span>
+              <span>بدهی</span>
+              <span>وضعیت</span>
+            </div>
+            {filtered.map((customer) => (
+              <div className="table-row customer-row" key={customer.id}>
+                <button className="row-action" onClick={() => void loadDetail(customer.id)}>
+                  {customer.name}
+                </button>
+                <code dir="ltr">{formatPersianNumber(customer.mobile)}</code>
+                <span>{formatPersianNumber(customer.invoiceCount)}</span>
+                <b className={Number(customer.debt) > 0 ? 'low-stock' : 'status-chip'}>
+                  {formatRial(Number(customer.debt))}
+                </b>
+                <span className="customer-actions">
+                  {canPay && Number(customer.debt) > 0 && (
+                    <button className="row-action" onClick={() => setPaymentFor(customer)}>
+                      ثبت پرداخت
+                    </button>
+                  )}
+                  {canManage && (
+                    <button className="row-action" onClick={() => openEdit(customer)}>
+                      ویرایش
+                    </button>
+                  )}
+                </span>
+              </div>
+            ))}
+            {!filtered.length && <p className="muted empty-line">مشتری‌ای پیدا نشد.</p>}
+          </div>
+        </>
+      )}
+
       {paymentFor && (
-        <div className="editor customer-payment">
-          <div className="editor-head">
-            <h2>ثبت پرداخت بدهی · {paymentFor.name}</h2>
-            <button className="close" onClick={() => setPaymentFor(null)}>
-              بستن
-            </button>
+        <div className="modal-mask" role="dialog" aria-modal="true" aria-label="ثبت پرداخت مشتری">
+          <div className="modal-mask-panel pay-modal">
+            <header className="pay-modal-h">
+              <b>ثبت پرداخت بدهی · {paymentFor.name}</b>
+              <button type="button" className="close" onClick={() => setPaymentFor(null)}>
+                ✕
+              </button>
+            </header>
+            <div className="pay-modal-body">
+              <div className="ln grand">
+                <span>بدهی فعلی</span>
+                <b>{formatRial(Number(paymentFor.debt))}</b>
+              </div>
+              <label className="field">
+                <span className="lab">مبلغ پرداختی (ریال)</span>
+                <FaNumberInput
+                  className="money-in"
+                  value={paymentAmount}
+                  onChange={(plain) => setPaymentAmount(plain)}
+                  placeholder="۰"
+                />
+              </label>
+              <label className="field">
+                <span className="lab">روش پرداخت</span>
+                <select
+                  className="money-in"
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                >
+                  <option value="cash">نقدی</option>
+                  <option value="card">کارت‌خوان</option>
+                  <option value="transfer">واریز بانکی</option>
+                  <option value="credit">نسیه / چک</option>
+                </select>
+              </label>
+            </div>
+            <footer className="pay-modal-f">
+              <button
+                className="button-primary"
+                disabled={loading}
+                onClick={() => void registerPayment()}
+              >
+                {loading ? 'در حال ثبت...' : 'ثبت پرداخت'}
+              </button>
+              <button className="outline" onClick={() => setPaymentFor(null)}>
+                انصراف
+              </button>
+            </footer>
           </div>
-          <p>بدهی فعلی: {formatRial(Number(paymentFor.debt))}</p>
-          <input
-            type="number"
-            min="1"
-            max={Number(paymentFor.debt)}
-            value={paymentAmount}
-            onChange={(e) => setPaymentAmount(e.target.value)}
-            placeholder="مبلغ پرداختی به ریال"
-          />
-          <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
-            <option value="cash">نقدی</option>
-            <option value="card">کارت</option>
-            <option value="transfer">واریز</option>
-            <option value="credit">اعتباری</option>
-          </select>
-          <button
-            disabled={loading}
-            className="button-primary"
-            onClick={() => void registerPayment()}
-          >
-            {loading ? 'در حال ثبت...' : 'ثبت پرداخت'}
-          </button>
         </div>
       )}
-      {selected && (
-        <div className="editor customer-detail">
-          <div className="editor-head">
-            <h2>{selected.name} · جزئیات حساب</h2>
-            <button className="close" onClick={() => setSelected(null)}>
-              بستن
-            </button>
-          </div>
-          <p>
-            موبایل: <code>{selected.mobile}</code>
-          </p>
-          <p>
-            مانده بدهی: <strong>{formatRial(Number(selected.debt))}</strong>
-          </p>
-          <h3>خودروهای مشتری</h3>
-          <div className="customer-vehicles">
-            {vehicles.map((vehicle) => (
-              <article key={vehicle.id}>
-                <span>
-                  <strong>
-                    {vehicle.trim
-                      ? `${vehicle.trim.model.make.name} ${vehicle.trim.model.name} · ${vehicle.trim.name}`
-                      : 'خودروی آزاد'}
-                  </strong>
-                  <small>
-                    {vehicle.plate || 'بدون پلاک'}{' '}
-                    {vehicle.year ? `· مدل ${formatPersianNumber(vehicle.year)}` : ''}
-                  </small>
-                </span>
-                {canManage && (
-                  <button
-                    className="row-action danger-text"
-                    onClick={() => void removeVehicle(vehicle.id)}
-                  >
-                    حذف
-                  </button>
-                )}
-              </article>
-            ))}
-          </div>
-          {canManage && (
-            <div className="customer-vehicle-form">
-              <select
-                value={vehicleForm.trimId}
-                onChange={(event) => setVehicleForm({ ...vehicleForm, trimId: event.target.value })}
-              >
-                <option value="">انتخاب خودرو و تیپ</option>
-                {vehicleTree.flatMap((make) =>
-                  make.models.flatMap((model) =>
-                    model.trims.map((trim) => (
-                      <option key={trim.id} value={trim.id}>
-                        {make.name} · {model.name} · {trim.name}
-                      </option>
-                    )),
-                  ),
-                )}
-              </select>
-              <input
-                value={vehicleForm.plate}
-                onChange={(event) => setVehicleForm({ ...vehicleForm, plate: event.target.value })}
-                placeholder="پلاک"
-              />
-              <input
-                dir="ltr"
-                value={vehicleForm.chassis}
-                onChange={(event) =>
-                  setVehicleForm({ ...vehicleForm, chassis: event.target.value })
-                }
-                placeholder="شماره شاسی"
-              />
-              <input
-                type="number"
-                value={vehicleForm.year}
-                onChange={(event) => setVehicleForm({ ...vehicleForm, year: event.target.value })}
-                placeholder="سال مدل"
-              />
-              <button disabled={loading} onClick={() => void addVehicle()}>
-                افزودن خودرو
+
+      {editing && (
+        <div className="modal-mask" role="dialog" aria-modal="true" aria-label="ویرایش مشتری">
+          <div className="modal-mask-panel pay-modal">
+            <header className="pay-modal-h">
+              <b>ویرایش اطلاعات · {editing.name}</b>
+              <button type="button" className="close" onClick={() => setEditing(null)}>
+                ✕
               </button>
+            </header>
+            <div className="pay-modal-body">
+              <label className="field">
+                <span className="lab">نام و نام خانوادگی</span>
+                <input
+                  className="money-in"
+                  value={editForm.name}
+                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                />
+              </label>
+              <label className="field">
+                <span className="lab">موبایل</span>
+                <input
+                  className="money-in"
+                  dir="ltr"
+                  value={editForm.mobile}
+                  onChange={(e) => setEditForm({ ...editForm, mobile: e.target.value })}
+                />
+              </label>
+              <label className="field">
+                <span className="lab">آدرس</span>
+                <input
+                  className="money-in"
+                  value={editForm.address}
+                  onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
+                />
+              </label>
+              <label className="field">
+                <span className="lab">یادداشت</span>
+                <input
+                  className="money-in"
+                  value={editForm.notes}
+                  onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                />
+              </label>
             </div>
-          )}
-          <h3>فاکتورها</h3>
-          {selected.invoices?.length ? (
-            selected.invoices.map((invoice) => (
-              <div className="table-row customer-row" key={invoice.id}>
-                <code>{invoice.number}</code>
-                <span>{formatRial(Number(invoice.total))}</span>
-                <span>پرداخت: {formatRial(Number(invoice.paidAmount))}</span>
-                <b>{invoice.paymentStatus}</b>
+            <footer className="pay-modal-f">
+              <button className="button-primary" disabled={loading} onClick={() => void saveEdit()}>
+                ذخیرهٔ تغییرات
+              </button>
+              <button className="outline" onClick={() => setEditing(null)}>
+                انصراف
+              </button>
+            </footer>
+          </div>
+        </div>
+      )}
+
+      {selected && (
+        <div
+          className="modal-mask"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`پروندهٔ ${selected.name}`}
+          onClick={() => setSelected(null)}
+        >
+          <div
+            className="modal-mask-panel customer-panel"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="pay-modal-h">
+              <b>
+                {selected.name} · پروندهٔ مشتری{' '}
+                <code dir="ltr">{formatPersianNumber(selected.mobile)}</code>
+              </b>
+              <button type="button" className="close" onClick={() => setSelected(null)}>
+                ✕
+              </button>
+            </header>
+            <div className="pay-modal-body">
+              <div className="ln grand">
+                <span>مانده بدهی</span>
+                <b>{formatRial(Number(selected.debt))}</b>
               </div>
-            ))
-          ) : (
-            <p className="muted">فاکتوری ثبت نشده است.</p>
-          )}
+              {selected.address && (
+                <div className="ln">
+                  <span>آدرس</span>
+                  <b>{selected.address}</b>
+                </div>
+              )}
+              {selected.notes && (
+                <div className="ln">
+                  <span>یادداشت</span>
+                  <b>{selected.notes}</b>
+                </div>
+              )}
+              {canManage && (
+                <button className="row-action" onClick={() => openEdit(selected)}>
+                  ✎ ویرایش اطلاعات مشتری
+                </button>
+              )}
+
+              <h3 className="list-subhead">فاکتورهای مشتری</h3>
+              {selected.invoices?.length ? (
+                <div className="dash-tbl">
+                  <div className="thead">
+                    <span>شماره</span>
+                    <span>تاریخ</span>
+                    <span>مبلغ</span>
+                    <span>وضعیت</span>
+                  </div>
+                  {selected.invoices.map((invoice) => (
+                    <div className="trow" key={invoice.id}>
+                      <a className="row-action" href={`#/invoices?invoice=${invoice.id}`}>
+                        <code>{formatPersianNumber(invoice.number)}</code>
+                      </a>
+                      <span>{shamsi(invoice.issuedAt)}</span>
+                      <b className="num">{formatRial(Number(invoice.total))}</b>
+                      <span
+                        className={invoice.paymentStatus === 'paid' ? 'status-chip' : 'low-stock'}
+                      >
+                        {paymentLabels[invoice.paymentStatus] ?? invoice.paymentStatus}
+                        {' · '}
+                        {formatRial(Number(invoice.paidAmount))}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="muted empty-line">فاکتوری ثبت نشده است.</p>
+              )}
+
+              <h3 className="list-subhead">خودروهای مشتری</h3>
+              <div className="customer-vehicles">
+                {vehicles.map((vehicle) => (
+                  <article key={vehicle.id}>
+                    <span>
+                      <strong>
+                        {vehicle.trim
+                          ? `${vehicle.trim.model.make.name} ${vehicle.trim.model.name} · ${vehicle.trim.name}`
+                          : 'خودروی آزاد'}
+                      </strong>
+                      <small>
+                        {vehicle.plate || 'بدون پلاک'}{' '}
+                        {vehicle.year ? `· مدل ${formatPersianNumber(vehicle.year)}` : ''}
+                      </small>
+                    </span>
+                    {canManage && (
+                      <button
+                        className="row-action danger-text"
+                        onClick={() => void removeVehicle(vehicle.id)}
+                      >
+                        حذف
+                      </button>
+                    )}
+                  </article>
+                ))}
+                {!vehicles.length && <p className="muted empty-line">خودرویی ثبت نشده است.</p>}
+              </div>
+              {canManage && (
+                <div className="customer-vehicle-form">
+                  <select
+                    value={vehicleForm.trimId}
+                    onChange={(event) =>
+                      setVehicleForm({ ...vehicleForm, trimId: event.target.value })
+                    }
+                  >
+                    <option value="">انتخاب خودرو و تیپ</option>
+                    {vehicleTree.flatMap((make) =>
+                      make.models.flatMap((model) =>
+                        model.trims.map((trim) => (
+                          <option key={trim.id} value={trim.id}>
+                            {make.name} · {model.name} · {trim.name}
+                          </option>
+                        )),
+                      ),
+                    )}
+                  </select>
+                  <input
+                    value={vehicleForm.plate}
+                    onChange={(event) =>
+                      setVehicleForm({ ...vehicleForm, plate: event.target.value })
+                    }
+                    placeholder="پلاک"
+                  />
+                  <input
+                    dir="ltr"
+                    value={vehicleForm.chassis}
+                    onChange={(event) =>
+                      setVehicleForm({ ...vehicleForm, chassis: event.target.value })
+                    }
+                    placeholder="شماره شاسی"
+                  />
+                  <FaNumberInput
+                    group={false}
+                    value={vehicleForm.year}
+                    onChange={(plain) => setVehicleForm({ ...vehicleForm, year: plain })}
+                    placeholder="سال مدل"
+                  />
+                  <button disabled={loading} onClick={() => void addVehicle()}>
+                    افزودن خودرو
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </section>

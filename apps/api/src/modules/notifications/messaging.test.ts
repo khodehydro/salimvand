@@ -4,6 +4,7 @@ import {
   buildInvoiceMessage,
   parseTelegramCommand,
   renderSmsTemplate,
+  smsIrFailure,
 } from './notifications.service';
 
 function serviceWith(prisma: unknown) {
@@ -27,7 +28,7 @@ describe('SMS templates', () => {
   });
 
   it('uses the operator template when one is configured and falls back otherwise', () => {
-    const siteUrl = (process.env.PUBLIC_SITE_URL ?? 'https://selimvand.ir').replace(/\/$/, '');
+    const siteUrl = (process.env.PUBLIC_SITE_URL ?? 'https://salimvand.ir').replace(/\/$/, '');
     const withTemplate = buildInvoiceMessage(
       'INV-0002',
       'c0de',
@@ -136,5 +137,113 @@ describe('messaging logs', () => {
     expect(await serviceWith(undefined).smsLogs()).toEqual([]);
     expect(await serviceWith(undefined).telegramLogs()).toEqual([]);
     expect(await serviceWith(undefined).answerCommand('/stock')).toContain('در دسترس نیست');
+  });
+});
+
+describe('sms.ir adapter', () => {
+  const job = {
+    data: {
+      type: 'invoice.issued',
+      invoiceId: 'inv-1',
+      mobile: '09121234567',
+      message: 'فاکتور INV-1',
+    },
+  } as never;
+  const withEnv = (values: Record<string, string | undefined>) => {
+    const saved: Record<string, string | undefined> = {};
+    for (const key of [
+      'SMS_API_KEY',
+      'SMS_LINE_NUMBER',
+      'TELEGRAM_BOT_TOKEN',
+      'TELEGRAM_CHAT_ID',
+      'BALE_BOT_TOKEN',
+      'BALE_CHAT_ID',
+    ]) {
+      saved[key] = process.env[key];
+      if (values[key] === undefined) delete process.env[key];
+      else process.env[key] = values[key];
+    }
+    return () => {
+      for (const [key, value] of Object.entries(saved)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    };
+  };
+
+  it('sends through sms.ir bulk with the X-API-KEY header and logs success', async () => {
+    const restore = withEnv({ SMS_API_KEY: 'panel-key', SMS_LINE_NUMBER: '30004505000017' });
+    const originalFetch = global.fetch;
+    const calls: Array<{ url: string; init: RequestInit }> = [];
+    const logs: Array<{ data: { status: string; provider: string } }> = [];
+    const prisma = {
+      smsLog: {
+        create: async (args: { data: { status: string; provider: string } }) => {
+          logs.push(args);
+          return {};
+        },
+      },
+    };
+    global.fetch = (async (url: string | URL, init: RequestInit = {}) => {
+      calls.push({ url: String(url), init });
+      return new Response(JSON.stringify({ status: 1, message: 'موفق', data: { cost: 1 } }), {
+        status: 200,
+      });
+    }) as typeof fetch;
+    try {
+      const service = serviceWith(prisma);
+      await (service as unknown as { process(job: unknown): Promise<void> }).process(job);
+      expect(calls).toHaveLength(1);
+      expect(calls[0].url).toBe('https://api.sms.ir/v1/send/bulk');
+      expect((calls[0].init.headers as Record<string, string>)['x-api-key']).toBe('panel-key');
+      expect(JSON.parse(String(calls[0].init.body))).toEqual({
+        lineNumber: 30004505000017,
+        messageText: 'فاکتور INV-1',
+        mobiles: ['09121234567'],
+      });
+      expect(logs).toHaveLength(1);
+      expect(logs[0].data).toMatchObject({ status: 'sent', provider: 'sms.ir' });
+    } finally {
+      global.fetch = originalFetch;
+      restore();
+    }
+  });
+
+  it('fails the job with a readable reason when sms.ir rejects the send', async () => {
+    const restore = withEnv({ SMS_API_KEY: 'bad-key', SMS_LINE_NUMBER: '30004505000017' });
+    const originalFetch = global.fetch;
+    const logs: Array<{ data: { status: string } }> = [];
+    const prisma = {
+      smsLog: {
+        create: async (args: { data: { status: string } }) => {
+          logs.push(args);
+          return {};
+        },
+      },
+    };
+    global.fetch = (async () =>
+      new Response(JSON.stringify({ status: 3, message: 'کلید نامعتبر' }), {
+        status: 401,
+      })) as typeof fetch;
+    try {
+      const service = serviceWith(prisma);
+      await expect(
+        (service as unknown as { process(job: unknown): Promise<void> }).process(job),
+      ).rejects.toThrow('کلید API نامعتبر');
+      expect(logs).toHaveLength(1);
+      expect(logs[0].data.status).toBe('failed');
+    } finally {
+      global.fetch = originalFetch;
+      restore();
+    }
+  });
+
+  it('maps sms.ir error codes to human-readable text', () => {
+    expect(smsIrFailure(new Response(null, { status: 401 }), null)).toContain('کلید API');
+    expect(smsIrFailure(new Response(null, { status: 429 }), null)).toContain('429');
+    expect(
+      smsIrFailure(new Response(null, { status: 400 }), { status: 2, message: 'خط خطا' }),
+    ).toBe('sms.ir: خط خطا');
+    expect(smsIrFailure(new Response(null, { status: 500 }), null)).toBe('sms.ir: HTTP 500');
   });
 });

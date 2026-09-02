@@ -38,6 +38,10 @@ describe('DashboardService', () => {
       .mockResolvedValueOnce([
         { quantity: 12, brand: { name: 'اصلی' } },
         { quantity: 8, brand: { name: 'بوش' } },
+      ])
+      .mockResolvedValueOnce([
+        { quantity: 12, product: { category: { name: 'ترمز و جلوبندی' } } },
+        { quantity: 8, product: { category: null } },
       ]);
     prisma.inventoryTransaction.findMany.mockResolvedValue([{ id: '1', quantityChange: 2 }]);
     await expect(service.summary()).resolves.toEqual({
@@ -59,6 +63,10 @@ describe('DashboardService', () => {
         stockComposition: [
           { quantity: 12, brand: { name: 'اصلی' } },
           { quantity: 8, brand: { name: 'بوش' } },
+        ],
+        categoryComposition: [
+          { quantity: 12, product: { category: { name: 'ترمز و جلوبندی' } } },
+          { quantity: 8, product: { category: null } },
         ],
         recentTransactions: [{ id: '1', quantityChange: 2 }],
       },
@@ -120,5 +128,21 @@ describe('DashboardService', () => {
     expect(prisma.invoice.findMany.mock.calls[0][0].where.issuedAt.lte.toISOString()).toBe(
       '2026-08-01T23:59:59.999Z',
     );
+  });
+});
+
+describe('DashboardService.systemStats', () => {
+  it('reports JSON-safe memory and disk counters', async () => {
+    const stats = await new DashboardService({} as never).systemStats();
+    expect(stats.ok).toBe(true);
+    expect(stats.data.memory.total).toBeGreaterThan(0);
+    expect(stats.data.memory.used).toBeLessThanOrEqual(stats.data.memory.total);
+    expect(stats.data.memory.used + stats.data.memory.free).toBe(stats.data.memory.total);
+    if (stats.data.disk !== null) {
+      expect(stats.data.disk.total).toBeGreaterThan(0);
+      expect(stats.data.disk.used + stats.data.disk.free).toBe(stats.data.disk.total);
+    }
+    // every number must survive JSON serialization (BigInt leaks 500 here)
+    expect(() => JSON.stringify(stats)).not.toThrow();
   });
 });

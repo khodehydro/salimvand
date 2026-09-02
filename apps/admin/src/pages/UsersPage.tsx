@@ -43,6 +43,7 @@ export function UsersPage() {
   const [form, setForm] = useState(initialForm);
   const [activity, setActivity] = useState<Activity | null>(null);
   const [editing, setEditing] = useState<User | null>(null);
+  const [editName, setEditName] = useState('');
   const [editRole, setEditRole] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [message, setMessage] = useState('');
@@ -90,20 +91,26 @@ export function UsersPage() {
 
   const openEdit = (user: User) => {
     setEditing(user);
+    setEditName(user.name);
     setEditRole(user.role);
     setNewPassword('');
   };
   const saveEdit = async () => {
     if (!editing) return;
+    if (!editName.trim()) return setMessage('نام نمایشی الزامی است.');
     if (newPassword && newPassword.length < 10)
       return setMessage('رمز جدید باید حداقل ۱۰ کاراکتر باشد.');
     setLoading(true);
     try {
       await api(`/users/${editing.id}`, {
         method: 'PATCH',
-        body: JSON.stringify({ role: editRole, ...(newPassword ? { password: newPassword } : {}) }),
+        body: JSON.stringify({
+          name: editName.trim(),
+          role: editRole,
+          ...(newPassword ? { password: newPassword } : {}),
+        }),
       });
-      setMessage('دسترسی کاربر به‌روزرسانی شد.');
+      setMessage('کاربر به‌روزرسانی شد.');
       setEditing(null);
       await load();
     } catch (error) {
@@ -206,7 +213,8 @@ export function UsersPage() {
             <span>
               <strong>{user.name}</strong>
               <small>
-                {user.mobile || 'بدون موبایل'} · {user.isActive ? 'فعال' : 'غیرفعال'}
+                {formatPersianNumber(user.mobile || 'بدون موبایل')} ·{' '}
+                {user.isActive ? 'فعال' : 'غیرفعال'}
               </small>
             </span>
             <code>{user.username}</code>
@@ -219,7 +227,7 @@ export function UsersPage() {
                 فعالیت
               </button>
               <button className="row-action" onClick={() => openEdit(user)}>
-                دسترسی
+                ویرایش
               </button>
               <button className="row-action danger-text" onClick={() => void toggle(user)}>
                 {user.isActive ? 'غیرفعال' : 'فعال'}
@@ -231,11 +239,19 @@ export function UsersPage() {
       {editing && (
         <div className="editor user-editor">
           <div className="editor-head">
-            <h2>ویرایش دسترسی · {editing.name}</h2>
+            <h2>ویرایش کاربر · {editing.name}</h2>
             <button className="close" onClick={() => setEditing(null)}>
               بستن
             </button>
           </div>
+          <label>
+            نام نمایشی
+            <input
+              value={editName}
+              onChange={(event) => setEditName(event.target.value)}
+              placeholder="نامی که در پنل و روی فاکتورها دیده می‌شود"
+            />
+          </label>
           <label>
             نقش
             <select value={editRole} onChange={(event) => setEditRole(event.target.value)}>
@@ -290,7 +306,7 @@ export function UsersPage() {
           {activity.invoices.length ? (
             activity.invoices.map((invoice) => (
               <div className="activity-line" key={invoice.id}>
-                <code>{invoice.number}</code>
+                <code>{formatPersianNumber(invoice.number)}</code>
                 <span>{formatRial(Number(invoice.total))}</span>
                 <small>{formatJalaliDate(invoice.issuedAt, 'dateTime')}</small>
               </div>

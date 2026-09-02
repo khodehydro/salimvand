@@ -1,10 +1,51 @@
 'use client';
 
-import { useState } from 'react';
+import { extractAparatVideoId } from '@salimvand/shared';
 
-export function TrustVideo({ videoId }: { videoId?: string }) {
-  const [started, setStarted] = useState(false);
-  if (!videoId) return null;
+/**
+ * The store's trust video, embedded with the official Aparat iframe. The
+ * player loads with the page (the operator wants the video ready before the
+ * click) while playback stays in the visitor's hands — Aparat's own player
+ * shows the poster and play button. `variant="hero"` renders the compact
+ * card that sits inside the homepage hero; `variant="section"` renders the
+ * full-width band. The operator may paste a bare Aparat hash or a full link.
+ */
+export function TrustVideo({
+  videoId,
+  variant = 'section',
+}: {
+  videoId?: string;
+  variant?: 'hero' | 'section';
+}) {
+  const resolvedVideoId = extractAparatVideoId(videoId ?? '');
+  const player = (
+    <div className="video-frame">
+      {resolvedVideoId ? (
+        <iframe
+          title="ویدئوی معرفی فروشگاه سلیم وند"
+          src={`https://www.aparat.com/video/video/embed/videohash/${encodeURIComponent(resolvedVideoId)}/vt/frame`}
+          allowFullScreen
+        />
+      ) : (
+        <div className="video-placeholder video-empty" aria-label="ویدئوی فروشگاه">
+          <span className="play-icon">▶</span>
+          <span>ویدئوی معرفی فروشگاه به‌زودی اینجا منتشر می‌شود</span>
+          <small>شناسهٔ ویدئو را در پنل ← تنظیمات وارد کنید</small>
+        </div>
+      )}
+    </div>
+  );
+  if (variant === 'hero') {
+    return (
+      <div className="hero-video-card" id="video">
+        <div className="hero-video-head">
+          <b>ویدئوی فروشگاه</b>
+          <small>انبار، قفسه‌بندی و نحوهٔ ارسال را ببینید</small>
+        </div>
+        {player}
+      </div>
+    );
+  }
   return (
     <section className="trust-video" id="video">
       <div>
@@ -12,25 +53,7 @@ export function TrustVideo({ videoId }: { videoId?: string }) {
         <h2>انبار و نحوهٔ ارسال را ببینید</h2>
         <p>ویدئوی معرفی فروشگاه، قفسه‌بندی و بسته‌بندی قطعات روی آپارات میزبانی می‌شود.</p>
       </div>
-      <div className="video-frame">
-        {started ? (
-          <iframe
-            title="ویدئوی معرفی فروشگاه سلیم وند"
-            src={`https://www.aparat.com/video/video/embed/videohash/${encodeURIComponent(videoId)}/vt/frame`}
-            allowFullScreen
-          />
-        ) : (
-          <button
-            className="video-placeholder"
-            onClick={() => setStarted(true)}
-            aria-label="پخش ویدئوی معرفی فروشگاه"
-          >
-            <span className="play-icon">▶</span>
-            <span>پخش ویدئوی معرفی</span>
-            <small>فقط پس از کلیک بارگذاری می‌شود</small>
-          </button>
-        )}
-      </div>
+      {player}
     </section>
   );
 }

@@ -15,14 +15,42 @@ cd "$ROOT_DIR"
 set -a
 . "$ROOT_DIR/.env"
 set +a
+# Minimal-PATH invocations (`sudo bash -c`, cron, plain ssh) must still find
+# Node and pnpm: scan the usual install locations (nvm homes, distro and
+# NodeSource prefixes, pnpm's own directory) before deciding they are missing.
+if ! command -v node >/dev/null 2>&1 \
+  || { ! command -v pnpm >/dev/null 2>&1 && ! command -v corepack >/dev/null 2>&1; }; then
+  for _candidate in \
+    "$HOME"/.nvm/versions/node/*/bin \
+    /home/*/.nvm/versions/node/*/bin \
+    /usr/local/bin \
+    /usr/bin \
+    /opt/node/bin \
+    "$HOME"/.local/share/pnpm; do
+    [[ -d "$_candidate" ]] && PATH="$_candidate:$PATH"
+  done
+  export PATH
+fi
+# nvm keeps corepack beside node; activate its shims so plain `pnpm` resolves.
+if ! command -v pnpm >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then
+  _node_dir="$(dirname "$(command -v node)")"
+  [[ -x "$_node_dir/corepack" ]] && "$_node_dir/corepack" enable >/dev/null 2>&1 || true
+fi
 if command -v corepack >/dev/null 2>&1; then
   PNPM=(corepack pnpm)
 elif command -v pnpm >/dev/null 2>&1; then
   PNPM=(pnpm)
+elif command -v npm >/dev/null 2>&1; then
+  # Node exists without corepack: install the pinned pnpm globally once.
+  echo 'pnpm not found — installing pnpm@9.15.0 with npm...'
+  npm install -g pnpm@9.15.0
+  PNPM=(pnpm)
 else
-  echo 'pnpm or corepack is required.' >&2
+  echo 'Node.js 20+ (with npm, corepack or pnpm) is required on this server.' >&2
+  echo 'See docs/server-verification.md for the approved install steps.' >&2
   exit 1
 fi
+command -v node >/dev/null 2>&1 || { echo 'Node.js 20+ is required (node not found in PATH).' >&2; exit 1; }
 command -v pg_isready >/dev/null || { echo 'PostgreSQL client is required.' >&2; exit 1; }
 
 export NODE_ENV=production
@@ -32,8 +60,16 @@ bash "$ROOT_DIR/scripts/verify-production-config.sh"
 echo "Fetching $BRANCH..."
 git fetch --prune origin "$BRANCH"
 git checkout --detach "origin/$BRANCH"
+# Record the live release: the API exposes it on /health and the panel shows
+# it in the sidebar so anyone can confirm the deploy actually landed.
+printf '{"commit":"%s","branch":"%s","builtAt":"%s"}\n' \
+  "$(git rev-parse HEAD)" "$BRANCH" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$ROOT_DIR/version.json"
+chown salimvand:salimvand "$ROOT_DIR/version.json" 2>/dev/null || true
 # Build, Prisma CLI and seed use devDependencies; production mode must not omit them.
 "${PNPM[@]}" install --frozen-lockfile --prod=false
+# prisma:seed imports @salimvand/shared, whose entry point is dist/ — build it
+# before seeding so a fresh server never runs seed against a stale/missing dist.
+"${PNPM[@]}" --filter @salimvand/shared build
 "${PNPM[@]}" --filter @salimvand/api exec prisma generate
 "${PNPM[@]}" --filter @salimvand/api exec prisma migrate deploy
 "${PNPM[@]}" --filter @salimvand/api prisma:seed
@@ -47,6 +83,11 @@ fi
 # The CMS and API are intentionally same-origin in production. Never allow a
 # local/development VITE_API_URL from .env to be embedded in the browser bundle.
 export VITE_API_URL=/api/v1
+# Customer-facing links (invoice short links, QR codes) are built in the
+# panel bundle and must point at the public storefront — never at the cms.*
+# host the panel itself is served from. PUBLIC_SITE_URL comes from .env
+# (verify-production-config.sh already requires it).
+export VITE_PUBLIC_SITE_URL="${PUBLIC_SITE_URL:-https://salimvand.ir}"
 "${PNPM[@]}" build
 
 # Next standalone is nested because this is a workspace monorepo. Copy runtime assets
@@ -65,6 +106,76 @@ install -d -o salimvand -g salimvand "$STANDALONE/apps/website/.next/cache"
 chown -R salimvand:salimvand "$STANDALONE"
 
 install -d -o salimvand -g salimvand "$ROOT_DIR/uploads/products"
+install -d -o salimvand -g salimvand "$ROOT_DIR/uploads/site"
+# Panel-triggered backups run as the salimvand service user (the API spawns
+# scripts/backup.sh), so both the archive dir and the status dir must be
+# writable by it — otherwise every run dies with "Permission denied".
+install -d -o salimvand -g salimvand -m 0700 /var/backups/salimvand
+install -d -o salimvand -g salimvand -m 0700 /var/lib/salimvand
+# The CMS must serve uploaded media (/uploads) same-origin for the media
+# library and settings previews. Never overwrite the live vhost — certbot
+# edits it in place for TLS — only insert the location if it is missing.
+NGINX_CONF=""
+if [[ -f /etc/nginx/sites-available/salimvand.conf ]]; then
+  NGINX_CONF=/etc/nginx/sites-available/salimvand.conf
+elif [[ -f /etc/nginx/conf.d/salimvand.conf ]]; then
+  NGINX_CONF=/etc/nginx/conf.d/salimvand.conf
+fi
+if [[ -n "$NGINX_CONF" ]] && grep -q 'server_name cms' "$NGINX_CONF" \
+   && { ! grep -q 'location \^~ /uploads/' "$NGINX_CONF" \
+       || ! grep -q 'location = /index.html' "$NGINX_CONF"; }; then
+  python3 - "$NGINX_CONF" <<'NGINXPY'
+import sys
+
+path = sys.argv[1]
+newline = chr(10)
+raw = open(path).read()
+lines = raw.split(newline)
+block = []
+if 'location ^~ /uploads/' not in raw:
+    block += [
+        '    # Uploaded media (product images, logo, favicon) served to the CMS.',
+        '    location ^~ /uploads/ {',
+        '        alias /opt/salimvand/uploads/;',
+        '        expires 30d;',
+        '        add_header Cache-Control "public, immutable";',
+        '        try_files $uri =404;',
+        '    }',
+    ]
+if 'location = /index.html' not in raw:
+    block += [
+        '    # Always revalidate the SPA shell so a new release is picked up.',
+        '    location = /index.html {',
+        '        add_header Cache-Control "no-cache";',
+        '    }',
+    ]
+out = []
+in_cms = False
+has_api = False
+inserted = False
+for line in lines:
+    if 'server_name cms' in line:
+        in_cms = True
+    if 'location /api/' in line:
+        has_api = True
+    if in_cms and line == '}':
+        # Insert into the cms server block that actually proxies the API
+        # (certbot may add a separate HTTP->HTTPS redirect block first).
+        if has_api and not inserted:
+            out.extend(block)
+            inserted = True
+        in_cms = False
+        has_api = False
+    out.append(line)
+if inserted:
+    open(path, 'w').write(chr(10).join(out))
+    print('Patched the CMS vhost: /uploads serving and/or index.html no-cache.')
+NGINXPY
+fi
+if [[ -n "$NGINX_CONF" ]] && command -v nginx >/dev/null 2>&1; then
+  nginx -t
+  systemctl reload nginx
+fi
 install -m 0644 deploy/systemd/salimvand-api.service /etc/systemd/system/salimvand-api.service
 install -m 0644 deploy/systemd/salimvand-website.service /etc/systemd/system/salimvand-website.service
 install -m 0644 deploy/systemd/salimvand-worker.service /etc/systemd/system/salimvand-worker.service

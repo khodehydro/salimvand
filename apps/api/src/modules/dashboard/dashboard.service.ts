@@ -1,8 +1,38 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { freemem, totalmem } from 'node:os';
+import { statfs } from 'node:fs/promises';
 import { PrismaService } from '../../prisma.service';
 
 @Injectable()
 export class DashboardService {
+  /**
+   * Server resources for the dashboard health card: RAM (used vs total) and
+   * disk usage of the deployment volume. Both are JSON-safe byte counters.
+   */
+  async systemStats() {
+    const total = totalmem();
+    const free = freemem();
+    let disk: { total: number; used: number; free: number } | null = null;
+    try {
+      const stats = await statfs(process.env.DISK_ROOT ?? '/');
+      const blockSize = Number(stats.bsize) || 4096;
+      const totalBytes = Number(stats.blocks) * blockSize;
+      const freeBytes = Number(stats.bavail) * blockSize;
+      disk = { total: totalBytes, used: totalBytes - freeBytes, free: freeBytes };
+    } catch {
+      disk = null; // non-POSIX or restricted environments
+    }
+    return {
+      ok: true,
+      data: {
+        memory: { total, used: total - free, free },
+        disk,
+        uptimeSeconds: Math.round(process.uptime()),
+        nodeVersion: process.version,
+      },
+    };
+  }
+
   constructor(private readonly prisma: PrismaService) {}
   async audit(page = 1, pageSize = 50, entityType?: string) {
     const safePage = Math.max(1, page);
@@ -169,33 +199,47 @@ export class DashboardService {
   }
 
   async summary() {
-    const [products, inventoryItems, lowStockItems, stockComposition, recentTransactions] =
-      await Promise.all([
-        this.prisma.product.count({ where: { deletedAt: null, status: 'active' } }),
-        this.prisma.inventoryItem.count({ where: { isActive: true } }),
-        this.prisma.inventoryItem.findMany({
-          where: { isActive: true },
-          orderBy: { quantity: 'asc' },
-          take: 20,
-          select: {
-            id: true,
-            quantity: true,
-            minStock: true,
-            product: { select: { name: true, code: true } },
-            brand: { select: { name: true } },
-            location: { select: { code: true, name: true } },
-          },
-        }),
-        this.prisma.inventoryItem.findMany({
-          where: { isActive: true, quantity: { gt: 0 } },
-          select: { quantity: true, brand: { select: { name: true } } },
-        }),
-        this.prisma.inventoryTransaction.findMany({
-          orderBy: { createdAt: 'desc' },
-          take: 8,
-          include: { item: { include: { product: true, brand: true } } },
-        }),
-      ]);
+    const [
+      products,
+      inventoryItems,
+      lowStockItems,
+      stockComposition,
+      categoryComposition,
+      recentTransactions,
+    ] = await Promise.all([
+      this.prisma.product.count({ where: { deletedAt: null, status: 'active' } }),
+      this.prisma.inventoryItem.count({ where: { isActive: true } }),
+      this.prisma.inventoryItem.findMany({
+        where: { isActive: true },
+        orderBy: { quantity: 'asc' },
+        take: 20,
+        select: {
+          id: true,
+          quantity: true,
+          minStock: true,
+          product: { select: { name: true, code: true } },
+          brand: { select: { name: true } },
+          location: { select: { code: true, name: true, parent: { select: { name: true } } } },
+        },
+      }),
+      this.prisma.inventoryItem.findMany({
+        where: { isActive: true, quantity: { gt: 0 } },
+        select: { quantity: true, brand: { select: { name: true } } },
+      }),
+      // Dashboard donut is grouped by product category (per the design doc).
+      this.prisma.inventoryItem.findMany({
+        where: { isActive: true, quantity: { gt: 0 } },
+        select: {
+          quantity: true,
+          product: { select: { category: { select: { name: true } } } },
+        },
+      }),
+      this.prisma.inventoryTransaction.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: 8,
+        include: { item: { include: { product: true, brand: true } } },
+      }),
+    ]);
     const lowStock = lowStockItems.filter((item) => item.quantity <= (item.minStock ?? 0));
     return {
       ok: true,
@@ -205,6 +249,7 @@ export class DashboardService {
         lowStock: lowStock.length,
         lowStockItems: lowStock,
         stockComposition,
+        categoryComposition,
         recentTransactions,
       },
     };

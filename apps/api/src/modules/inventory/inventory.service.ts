@@ -37,7 +37,17 @@ export class InventoryService {
           : {}),
       },
       orderBy: { id: 'desc' },
-      include: { product: true, brand: true, location: true },
+      include: {
+        brand: true,
+        // parent = the warehouse (انبار) of the shelf — the panel always
+        // shows placement as «انبار · قفسه».
+        location: { include: { parent: true } },
+        // Primary image first so the panel's grouped stock list can show a
+        // thumbnail without pulling every image of every product.
+        product: {
+          include: { images: { orderBy: [{ isPrimary: 'desc' }, { sort: 'asc' }], take: 1 } },
+        },
+      },
     });
     const filtered =
       filters.status === 'out'
@@ -46,6 +56,70 @@ export class InventoryService {
           ? items.filter((item) => item.quantity <= (item.minStock ?? 0))
           : items;
     return { ok: true, data: filtered };
+  }
+
+  /** Label-ready rows for the panel's product-label studio (برچسب محصولات):
+   * one flat DTO per inventory item — product name, SKU (product code), brand,
+   * category chip, compatible vehicles string and the real scannable barcode. */
+  async labelItems(q?: string) {
+    const query = q?.trim();
+    const items = await this.prisma.inventoryItem.findMany({
+      where: {
+        isActive: true,
+        product: { deletedAt: null },
+        ...(query
+          ? {
+              OR: [
+                { barcode: { contains: query } },
+                { product: { name: { contains: query, mode: 'insensitive' } } },
+                { product: { code: { contains: query, mode: 'insensitive' } } },
+              ],
+            }
+          : {}),
+      },
+      orderBy: [{ product: { name: 'asc' } }],
+      take: 200,
+      include: {
+        brand: true,
+        product: {
+          include: {
+            category: true,
+            compatibilities: { include: { model: { include: { make: true } } } },
+          },
+        },
+      },
+    });
+    return {
+      ok: true,
+      data: items.map((item) => {
+        const seen = new Set<string>();
+        const vehicles: string[] = [];
+        for (const entry of item.product.compatibilities) {
+          const label = entry.model.name;
+          if (seen.has(label)) continue;
+          seen.add(label);
+          vehicles.push(label);
+        }
+        // The label meta row ellipsizes, but keep the payload small anyway.
+        const vehicleText =
+          vehicles.length > 4
+            ? `${vehicles.slice(0, 4).join(' · ')} و ${vehicles.length - 4} مورد دیگر`
+            : vehicles.join(' · ');
+        return {
+          id: item.id,
+          // Lets the products list deep-link into the label studio by
+          // product (#/labels?product=…) even before any item is picked.
+          productId: item.product.id,
+          barcode: item.barcode,
+          name: item.product.name,
+          sku: item.product.code,
+          brand: item.brand.name,
+          category: item.product.category.name,
+          vehicles: vehicleText,
+          quantity: item.quantity,
+        };
+      }),
+    };
   }
 
   async create(input: {
@@ -66,6 +140,18 @@ export class InventoryService {
     });
     if (!product) throw new NotFoundException('محصول پیدا نشد');
     const barcode = input.barcode?.trim() || createEan13(`${Date.now()}`);
+    // Readable 400s instead of an opaque unique-constraint 500 — these are
+    // the two duplicates an operator actually hits from the product form.
+    const barcodeTaken = await this.prisma.inventoryItem.findFirst({
+      where: { barcode },
+      select: { id: true },
+    });
+    if (barcodeTaken) throw new BadRequestException('این بارکد قبلاً برای قلم دیگری ثبت شده است');
+    const brandDuplicate = await this.prisma.inventoryItem.findFirst({
+      where: { productId: input.productId, brandId: input.brandId },
+      select: { id: true },
+    });
+    if (brandDuplicate) throw new BadRequestException('این برند قبلاً برای همین محصول ثبت شده است');
     const initialQuantity = input.initialQuantity ?? 0;
     if (!Number.isInteger(initialQuantity) || initialQuantity < 0)
       throw new BadRequestException('موجودی اولیه باید عدد صحیح و غیرمنفی باشد');
@@ -133,7 +219,7 @@ export class InventoryService {
     const items = await this.prisma.inventoryItem.findMany({
       where: { isActive: true },
       orderBy: { quantity: 'asc' },
-      include: { product: true, brand: true, location: true },
+      include: { product: true, brand: true, location: { include: { parent: true } } },
     });
     return {
       ok: true,
@@ -147,7 +233,7 @@ export class InventoryService {
   async byBarcode(barcode: string) {
     const item = await this.prisma.inventoryItem.findUnique({
       where: { barcode },
-      include: { product: true, brand: true, location: true },
+      include: { product: true, brand: true, location: { include: { parent: true } } },
     });
     if (!item) throw new NotFoundException('بارکد پیدا نشد');
     return { ok: true, data: item };
@@ -187,7 +273,7 @@ export class InventoryService {
           isActive: data.isActive !== undefined ? data.isActive : undefined,
           notes: data.notes !== undefined ? data.notes : undefined,
         },
-        include: { product: true, brand: true, location: true },
+        include: { product: true, brand: true, location: { include: { parent: true } } },
       });
 
       if (userId) {

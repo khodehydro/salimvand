@@ -1,5 +1,6 @@
 import { PrismaClient, UserRole } from '@prisma/client';
 import argon2 from 'argon2';
+import { createEan13 } from '@salimvand/shared';
 
 const prisma = new PrismaClient();
 
@@ -18,6 +19,7 @@ async function main() {
   const brands = await seedBrands();
   const makes = await seedVehicles();
   const locations = await seedLocations();
+  await seedSettings();
 
   // name | categoryKey | brand | qty | min | price(rial) | shelfPrefix
   const items: Array<[string, string, string, number, number, number, string]> = [
@@ -88,14 +90,14 @@ async function main() {
     update: {
       lastValue: Math.max(
         1,
-        perCategory.values().reduce((a, b) => a + b, 0),
+        [...perCategory.values()].reduce((a, b) => a + b, 0),
       ),
     },
     create: {
       key: 'product',
       lastValue: Math.max(
         1,
-        perCategory.values().reduce((a, b) => a + b, 0),
+        [...perCategory.values()].reduce((a, b) => a + b, 0),
       ),
     },
   });
@@ -120,6 +122,53 @@ async function main() {
       'Seeded references and catalog data; SEED_ADMIN_PASSWORD was not set, so no admin was created.',
     );
   }
+}
+
+/**
+ * Default store settings so the admin panel starts with the same values the
+ * public site renders (phones, address, hours, map, social links, SMS
+ * templates). Existing values are never overwritten — operators own them.
+ */
+async function seedSettings() {
+  const defaults: Array<{ key: string; value: unknown }> = [
+    {
+      key: 'store.profile',
+      value: {
+        name: 'فروشگاه سلیم وند',
+        phones: '۰۴۱-۳۲۳۴۵۶۷۸, ۰۹۱۴۱۲۳۴۵۶۷',
+        address: 'میاندوآب، خیابان امام، بازار قطعات خودرو، پلاک ۱۲',
+        open: '09:00',
+        close: '20:00',
+        mapUrl: '',
+        mapCode: '',
+        instagram: '',
+      },
+    },
+    { key: 'store.trust_video', value: '' },
+    {
+      key: 'sms.templates',
+      value: {
+        invoice: '{customer_name} عزیز، فاکتور {invoice_number} شما صادر شد. مشاهده: {link}',
+        paid: 'پرداخت فاکتور {invoice_number} ثبت شد. مبلغ: {amount} ریال. سپاس از خرید شما.',
+        autoSend: true,
+      },
+    },
+    { key: 'integrations.telegram', value: { link: '' } },
+    { key: 'integrations.bale', value: { link: '' } },
+    // Messaging credentials are managed from the panel (پیامک و کانال‌ها ←
+    // پیکربندی); the empty shape here only makes the settings row visible.
+    { key: 'integrations.messaging', value: {} },
+    { key: 'inventory.default_min_stock', value: 3 },
+    { key: 'backup.schedule', value: { enabled: true } },
+  ];
+  for (const entry of defaults) {
+    await prisma.setting.upsert({
+      where: { key: entry.key },
+      update: {},
+      create: { key: entry.key, value: entry.value as never },
+    });
+  }
+  console.log('Seeded default store settings (existing values kept).');
 }
 
 function catPrefix(catKey: string): string {
@@ -210,15 +259,6 @@ function matchModel(productName: string, makes: Record<string, { model: string; 
     if (productName.includes(keyword) || productName.includes(entry.model)) return entry;
   }
   return all[0];
-}
-
-function createEan13(seed: string): string {
-  const digits = seed.replace(/\D/g, '').padStart(9, '0').slice(-9);
-  const base = `626${digits}`;
-  const sum = base
-    .split('')
-    .reduce((total, digit, index) => total + Number(digit) * (index % 2 === 0 ? 1 : 3), 0);
-  return `${base}${(10 - (sum % 10)) % 10}`;
 }
 
 function createSlug(value: string): string {

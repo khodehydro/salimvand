@@ -1,24 +1,34 @@
+import { AparatVideo } from '../../AparatVideo';
+import { NavigationButton } from '../../NavigationButton';
+import { ProductGallery } from '../../ProductGallery';
 import { PublicSubHeader } from '../../PublicSubHeader';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { getStoreInfo, telHref } from '../../store-info';
+import { formatPersianNumber, formatRial } from '@salimvand/shared';
+import { getStoreInfo, primaryPhone, telHref } from '../../store-info';
 
 const apiUrl = process.env.API_URL ?? 'https://api.salimvand.ir/api/v1';
-const contactPhone = process.env.PUBLIC_CONTACT_PHONE ?? '';
+type Spec = { key?: string; label?: string; value?: string };
 type Product = {
   name: string;
   slug: string;
   code: string;
   description?: string;
+  partNumber?: string | null;
+  specs?: Spec[] | Record<string, unknown> | null;
+  aparatVideoId?: string | null;
   seoTitle?: string;
   seoDescription?: string;
   availability: string;
+  /** Cheapest active brand price (rial, as a string) or null while hidden. */
+  price?: string | null;
   brands: Array<{ name: string; inStock: boolean }>;
   images?: Array<{ path: string; thumbnailPath?: string; alt?: string }>;
   compatibilities?: Array<{
     model: { name: string; make: { name: string } };
     trim?: { name: string } | null;
   }>;
+  category?: { name: string; slug?: string };
 };
 
 // The product payload comes from operator-controlled DB JSON, so its nested arrays
@@ -26,6 +36,36 @@ type Product = {
 function asArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : [];
 }
+
+/** The specs column is a jsonb the operator fills from the panel; be liberal. */
+function normalizeSpecs(specs: unknown): Array<{ label: string; value: string }> {
+  if (Array.isArray(specs)) {
+    return specs
+      .map((entry) => {
+        const row = entry as Spec;
+        const label = String(row?.label ?? row?.key ?? '').trim();
+        const value = String(row?.value ?? '').trim();
+        return label && value ? { label, value } : null;
+      })
+      .filter((entry): entry is { label: string; value: string } => entry !== null);
+  }
+  if (specs && typeof specs === 'object') {
+    return Object.entries(specs as Record<string, unknown>)
+      .map(([label, value]) => ({ label, value: String(value ?? '').trim() }))
+      .filter((entry) => entry.value);
+  }
+  return [];
+}
+
+// The public product page shows only two states — «موجود» / «ناموجود» —
+// low stock renders as plain «موجود».
+const availabilityLabels: Record<string, string> = {
+  in_stock: 'موجود در انبار',
+  low_stock: 'موجود در انبار',
+  coming_soon: 'ناموجود',
+  discontinued: 'ناموجود',
+  out_of_stock: 'ناموجود',
+};
 
 async function getProduct(slug: string): Promise<Product | null> {
   try {
@@ -73,6 +113,8 @@ export async function generateMetadata({
 export default async function ProductPage({ params }: { params: Promise<{ slug: string }> }) {
   const [product, info] = await Promise.all([getProduct((await params).slug), getStoreInfo()]);
   if (!product) notFound();
+  const specs = normalizeSpecs(product.specs);
+  const compatibilities = product.compatibilities ?? [];
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'Product',
@@ -101,8 +143,10 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
       },
     ],
   };
-  const isAvailable = product.availability === 'in_stock';
-  const compatibleModels = product.compatibilities?.slice(0, 2) ?? [];
+  const statusLabel = availabilityLabels[product.availability] ?? 'استعلام موجودی';
+  // low_stock shares the in_stock styling so the page shows a clean binary state.
+  const displayAvailability =
+    product.availability === 'low_stock' ? 'in_stock' : product.availability;
   return (
     <main className="shell">
       <script
@@ -113,81 +157,136 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumb) }}
       />
-      <PublicSubHeader context="آذین خودرو · میاندوآب" />
+      <PublicSubHeader context="آذین خودرو · میاندوآب" showContact={false} />
       <article className="product-page">
-        <nav className="breadcrumb">
+        <nav className="breadcrumb" aria-label="مسیر صفحه">
           <a href="/">خانه</a>
           <span>←</span>
           <a href="/#catalog">کاتالوگ</a>
+          {product.category?.slug && (
+            <>
+              <span>←</span>
+              <a href={`/category/${product.category.slug}`}>{product.category.name}</a>
+            </>
+          )}
           <span>←</span>
           <span>{product.name}</span>
         </nav>
         <div className="product-layout">
-          <div className="product-gallery">
-            {product.images?.length ? (
-              product.images.map((image) => (
-                <img
-                  key={image.path}
-                  src={image.path}
-                  srcSet={
-                    image.thumbnailPath
-                      ? `${image.thumbnailPath} 400w, ${image.path} 900w`
-                      : undefined
-                  }
-                  sizes="(max-width: 700px) 100vw, 720px"
-                  alt={image.alt ?? product.name}
-                />
-              ))
+          <div>
+            {product.images && product.images.length > 0 ? (
+              <ProductGallery images={product.images} productName={product.name} />
             ) : (
               <div className="image-placeholder">تصویر محصول</div>
             )}
+            {/* Design call: the product video lives in the media column,
+                right under the gallery — install/review footage beside the
+                product images, away from the purchase CTA flow. */}
+            {product.aparatVideoId && (
+              <AparatVideo videoId={product.aparatVideoId} title={`ویدئو: ${product.name}`} />
+            )}
           </div>
           <div className="product-main">
-            <p className="eyebrow">کاتالوگ قطعات خودرو</p>
+            <p className="eyebrow">{product.category?.name ?? 'کاتالوگ قطعات خودرو'}</p>
             <h1>{product.name}</h1>
-            <p className="code">کد محصول: {product.code}</p>
-            <p>
+            <p className="code">
+              کد محصول: {product.code}
+              {product.partNumber ? ` · شماره فنی: ${product.partNumber}` : ''}
+            </p>
+            <p className="product-description">
               {product.description ??
                 `برای استعلام ${product.name} با فروشگاه آذین خودرو سلیم وند تماس بگیرید.`}
             </p>
-            <div className={`status ${isAvailable ? 'in_stock' : 'out_of_stock'}`}>
+            <div className={`status ${displayAvailability}`}>
               <span className="status-dot" />
-              {isAvailable ? 'موجود در فروشگاه' : 'استعلام موجودی'}
+              {statusLabel}
             </div>
-            {compatibleModels.length === 0 && (
-              <p className="compatibility">
-                مناسب{' '}
-                {compatibleModels.map((m) => `${m.model.make.name} ${m.model.name}`).join(' · ') ||
-                  'خودروهای داخلی'}
-              </p>
+            {compatibilities.length > 0 && (
+              <div className="compat-block">
+                <small>خودروهای سازگار</small>
+                <div className="compat-chips">
+                  {compatibilities.map((entry, index) => (
+                    <span key={`${entry.model.make.name}-${entry.model.name}-${index}`}>
+                      {entry.model.make.name} {entry.model.name}
+                      {entry.trim ? ` · ${entry.trim.name}` : ''}
+                    </span>
+                  ))}
+                </div>
+              </div>
             )}
-            <div className="brands-list">
-              {product.brands.map((brand) => (
-                <span key={brand.name} className={brand.inStock ? 'brand-in' : 'brand-out'}>
-                  {brand.inStock ? '✓' : '×'} {brand.name}
-                </span>
-              ))}
-            </div>
-            <div className="product-cta">
-              <a className="button button-primary button-lg" href={telHref(info)}>
-                تماس برای استعلام قیمت
+            {product.brands.length > 0 && (
+              <div className="brands-block">
+                <small>برندهای این قطعه ({formatPersianNumber(product.brands.length)} برند)</small>
+                <div className="brands-list">
+                  {product.brands.map((brand) => (
+                    <span key={brand.name} className={brand.inStock ? 'brand-in' : 'brand-out'}>
+                      {brand.inStock ? '✓' : '×'} {brand.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {specs.length > 0 && (
+              <div className="specs-block">
+                <small>مشخصات فنی</small>
+                <dl>
+                  {specs.map((spec) => (
+                    <div key={spec.label}>
+                      <dt>{spec.label}</dt>
+                      <dd>{spec.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            )}
+            {product.price != null && (
+              <div className="product-price">
+                <small>قیمت</small>
+                <b>{formatRial(Number(product.price))}</b>
+                {(product.brands?.length ?? 0) > 1 && <span>ارزان‌ترین برند موجود</span>}
+              </div>
+            )}
+            <div className="product-contact">
+              <a className="product-phone" href={telHref(info)}>
+                <small>
+                  {product.price != null ? 'تماس و ثبت سفارش' : 'تماس برای استعلام قیمت'}
+                </small>
+                <b dir="ltr">{primaryPhone(info) || 'شماره تماس ثبت نشده است'}</b>
               </a>
-              <a className="button button-outline" href={info.telegram} rel="noreferrer">
-                تلگرام
-              </a>
-              <a className="button button-bale" href={info.bale} rel="noreferrer">
-                بله
-              </a>
+              <div className="product-messengers">
+                {/^https?:\/\/.+/.test(info.telegram) && (
+                  <a className="button button-telegram" href={info.telegram} rel="noreferrer">
+                    تلگرام
+                  </a>
+                )}
+                {/^https?:\/\/.+/.test(info.bale) && (
+                  <a className="button button-bale" href={info.bale} rel="noreferrer">
+                    بله
+                  </a>
+                )}
+              </div>
             </div>
             <p className="price-note-inline">
-              قیمت‌ها روزانه تغییر می‌کنند؛ مبلغ نهایی هنگام صدور فاکتور قطعی می‌شود.
+              {product.price != null
+                ? 'قیمت روز انبار است؛ مبلغ نهایی هنگام صدور فاکتور قطعی می‌شود.'
+                : 'قیمت‌ها روزانه تغییر می‌کنند؛ مبلغ نهایی هنگام صدور فاکتور قطعی می‌شود.'}
             </p>
           </div>
         </div>
       </article>
-      <a className="mobile-contact-bar" href={telHref(info)}>
+      {/* has-nav stacks the bar above the quick-navigation buttons when the
+          store coordinates are configured in the admin settings. */}
+      <a
+        className={
+          info.nav.lat != null && info.nav.lng != null
+            ? 'mobile-contact-bar has-nav'
+            : 'mobile-contact-bar'
+        }
+        href={telHref(info)}
+      >
         تماس سریع <span>برای استعلام قطعه</span> ←
       </a>
+      <NavigationButton lat={info.nav.lat} lng={info.nav.lng} />
     </main>
   );
 }

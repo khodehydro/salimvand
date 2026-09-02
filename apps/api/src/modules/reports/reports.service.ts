@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service';
+import { calculateCustomerDebt } from '../customers/customers.service';
 
 function parseReportDate(
   value: string | undefined,
@@ -44,6 +45,7 @@ export class ReportsService {
         paidAmount: true,
         paymentStatus: true,
         items: { select: { productName: true, quantity: true, lineTotal: true } },
+        returns: { select: { refundAmount: true } },
       },
     })) as Array<{
       id: string;
@@ -53,6 +55,7 @@ export class ReportsService {
       paidAmount: bigint;
       paymentStatus: string;
       items: Array<{ productName: string; quantity: number; lineTotal: bigint }>;
+      returns: Array<{ refundAmount: bigint }>;
     }>;
     const products = new Map<string, { name: string; quantity: number; revenue: bigint }>();
     for (const invoice of invoices)
@@ -73,7 +76,7 @@ export class ReportsService {
           invoiceCount: invoices.length,
           revenue: invoices.reduce((sum, row) => sum + row.total, 0n),
           paid: invoices.reduce((sum, row) => sum + row.paidAmount, 0n),
-          outstanding: invoices.reduce((sum, row) => sum + row.total - row.paidAmount, 0n),
+          outstanding: calculateCustomerDebt(invoices),
         },
         products: [...products.values()],
         invoices,
@@ -230,7 +233,10 @@ export class ReportsService {
     const rows = await this.prisma.customer.findMany({
       where: { isActive: true },
       include: {
-        invoices: { where: { status: 'issued' }, select: { total: true, paidAmount: true } },
+        invoices: {
+          where: { status: 'issued' },
+          select: { total: true, paidAmount: true, returns: { select: { refundAmount: true } } },
+        },
       },
       orderBy: { createdAt: 'desc' },
       take: 500,
@@ -241,10 +247,7 @@ export class ReportsService {
       mobile: customer.mobile,
       invoiceCount: customer.invoices.length,
       purchased: customer.invoices.reduce((sum, invoice) => sum + invoice.total, 0n),
-      debt: customer.invoices.reduce(
-        (sum, invoice) => sum + invoice.total - invoice.paidAmount,
-        0n,
-      ),
+      debt: calculateCustomerDebt(customer.invoices),
     }));
     return {
       ok: true,

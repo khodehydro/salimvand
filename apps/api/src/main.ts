@@ -1,15 +1,17 @@
 import 'reflect-metadata';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser = require('cookie-parser');
 import helmet from 'helmet';
+import { dirname, join } from 'node:path';
 import { ApiExceptionFilter } from './common/http/api-exception.filter';
 import { AppModule } from './app.module';
 import { corsOrigins, validateRuntimeConfig } from './common/config/runtime-config';
 
 async function bootstrap() {
   validateRuntimeConfig();
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
   app
     .getHttpAdapter()
     .getInstance()
@@ -17,8 +19,21 @@ async function bootstrap() {
       typeof value === 'bigint' ? value.toString() : value,
     );
   app.setGlobalPrefix('api/v1');
+  // Uploaded files (product images + site logo/favicon) are public content:
+  // the storefront serves them from /uploads via Nginx and the CMS needs the
+  // same path, so the API exposes the uploads root under /uploads as well.
+  const uploadDir = process.env.UPLOAD_DIR ?? join(process.cwd(), 'uploads', 'products');
+  app.useStaticAssets(dirname(uploadDir), {
+    prefix: '/uploads',
+    maxAge: '30d',
+    immutable: true,
+    index: false,
+    redirect: false,
+  });
   app.use(cookieParser());
-  app.use(helmet());
+  // Uploaded images are public assets that may be referenced from the CMS and
+  // the storefront; allow them to load cross-origin (API domain direct links).
+  app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
   app.useGlobalFilters(new ApiExceptionFilter());
   app.enableCors({ origin: corsOrigins(process.env.CORS_ORIGINS), credentials: true });
   app.useGlobalPipes(

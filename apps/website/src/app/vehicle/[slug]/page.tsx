@@ -1,3 +1,5 @@
+import { ProductCard } from '../../ProductCard';
+import { getStoreInfo, telHref } from '../../store-info';
 import { PublicSubHeader } from '../../PublicSubHeader';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
@@ -9,6 +11,12 @@ type Product = {
   name: string;
   code: string;
   availability: string;
+  aparatVideoId?: string | null;
+  brands?: Array<{ name: string; inStock: boolean }>;
+  compatibilities?: Array<{
+    model: { name: string; make: { name: string } };
+    trim?: { name: string } | null;
+  }>;
   images: Array<{ path: string; thumbnailPath?: string; alt?: string }>;
   category: { name: string };
 };
@@ -61,6 +69,7 @@ export async function generateMetadata({
 
 export default async function VehiclePage({ params }: { params: Promise<{ slug: string }> }) {
   const data = await getVehicle((await params).slug);
+  const info = await getStoreInfo();
   if (!data) notFound();
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -103,29 +112,12 @@ export default async function VehiclePage({ params }: { params: Promise<{ slug: 
         {data.products.length ? (
           <div className="product-grid">
             {data.products.map((product) => (
-              <a className="product-card" href={`/product/${product.slug}`} key={product.slug}>
-                {product.images[0] ? (
-                  <img
-                    src={product.images[0].thumbnailPath ?? product.images[0].path}
-                    srcSet={
-                      product.images[0].thumbnailPath
-                        ? `${product.images[0].thumbnailPath} 400w, ${product.images[0].path} 900w`
-                        : undefined
-                    }
-                    sizes="(max-width: 620px) 50vw, (max-width: 900px) 33vw, 25vw"
-                    alt={product.images[0].alt ?? product.name}
-                    loading="lazy"
-                  />
-                ) : (
-                  <div className="image-placeholder">قطعه خودرو</div>
-                )}
-                <small>{product.category.name}</small>
-                <h2>{product.name}</h2>
-                <code>{product.code}</code>
-                <b className="available">
-                  {product.availability === 'in_stock' ? 'موجود' : 'استعلام موجودی'}
-                </b>
-              </a>
+              <ProductCard
+                key={product.slug}
+                product={product}
+                heading="h2"
+                contact={{ tel: telHref(info), telegram: info.telegram, bale: info.bale }}
+              />
             ))}
           </div>
         ) : (

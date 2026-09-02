@@ -1,7 +1,28 @@
 import { Controller, Get, ServiceUnavailableException } from '@nestjs/common';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { APP_NAME, API_PREFIX } from '@salimvand/shared';
 import { NotificationsService } from './modules/notifications/notifications.service';
 import { PrismaService } from './prisma.service';
+
+/** Release stamp written by scripts/deploy.sh (version.json beside the app).
+ * Read once per process — the API restarts on every deploy, so it stays in
+ * sync with what is actually running. */
+let releaseCache: { commit: string; builtAt: string } | null | undefined;
+
+async function readRelease(): Promise<{ commit: string; builtAt: string } | null> {
+  if (releaseCache !== undefined) return releaseCache;
+  try {
+    const file = join(process.env.APP_DIR ?? process.cwd(), 'version.json');
+    releaseCache = JSON.parse(await readFile(file, 'utf-8')) as {
+      commit: string;
+      builtAt: string;
+    };
+  } catch {
+    releaseCache = null;
+  }
+  return releaseCache;
+}
 
 @Controller()
 export class SystemController {
@@ -11,10 +32,18 @@ export class SystemController {
   ) {}
 
   @Get('health')
-  health() {
+  async health() {
+    const release = await readRelease();
     return {
       ok: true,
-      data: { service: 'api', name: APP_NAME, prefix: API_PREFIX, database: 'configured' },
+      data: {
+        service: 'api',
+        name: APP_NAME,
+        prefix: API_PREFIX,
+        database: 'configured',
+        release: release?.commit?.slice(0, 7) ?? 'dev',
+        builtAt: release?.builtAt ?? null,
+      },
     };
   }
 

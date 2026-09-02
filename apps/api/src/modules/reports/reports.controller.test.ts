@@ -11,7 +11,11 @@ describe('ReportsController', () => {
     const response = responseMock();
     const controller = new ReportsController({ exportSales } as never);
 
-    const result = await controller.exportSales('2026-08-01', '2026-08-29', response as never);
+    const result = (await controller.exportSales(
+      '2026-08-01',
+      '2026-08-29',
+      response as never,
+    )) as unknown as string;
 
     expect(exportSales).toHaveBeenCalledWith('2026-08-01', '2026-08-29');
     expect(response.setHeader).toHaveBeenCalledWith('Content-Type', 'text/csv; charset=utf-8');

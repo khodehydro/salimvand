@@ -14,10 +14,29 @@ describe('customer payment accounting', () => {
   it('does not produce a negative debt when invoices are fully settled', () => {
     expect(calculateCustomerDebt([{ total: 1000n, paidAmount: 1000n }])).toBe(0n);
   });
+  it('stops counting returned items as debt', () => {
+    // 50k debt + a 50k return → debt 0 (the «عملیات فاکتور و پرداخت» scenario).
+    expect(
+      calculateCustomerDebt([
+        { total: 100_000n, paidAmount: 50_000n, returns: [{ refundAmount: 50_000n }] },
+      ]),
+    ).toBe(0n);
+    expect(
+      calculateCustomerDebt([
+        { total: 100_000n, paidAmount: 0n, returns: [{ refundAmount: 30_000n }] },
+      ]),
+    ).toBe(70_000n);
+    // no returns field at all (older payloads) keeps working
+    expect(calculateCustomerDebt([{ total: 1000n, paidAmount: 200n }])).toBe(800n);
+  });
   it('allocates a customer payment across oldest invoice balances', async () => {
     const invoiceUpdate = vi.fn(async () => ({}));
     const paymentCreate = vi.fn(async () => ({}));
-    const receiptCreate = vi.fn(async () => ({ id: 'receipt-1', amount: 1200n }));
+    const receiptCreate = vi.fn(async () => ({
+      id: 'receipt-1',
+      amount: 1200n,
+      paidAt: new Date('2026-09-01T10:00:00Z'),
+    }));
     const tx = {
       customer: {
         findFirst: vi.fn(async () => ({
@@ -42,7 +61,11 @@ describe('customer payment accounting', () => {
       { amount: '1200', method: 'cash' },
       'user-1',
     );
-    expect(result.data.remainingDebt).toBe(300n);
+    expect(result.data.remainingDebt).toBe('300');
+    // Regression guard for the 500 the panel hit: the response body must be
+    // serializable WITHOUT the express bigint `json replacer`.
+    expect(() => JSON.stringify(result)).not.toThrow();
+    expect(JSON.parse(JSON.stringify(result)).data.amount).toBe('1200');
     expect(invoiceUpdate).toHaveBeenCalledTimes(2);
     expect(invoiceUpdate).toHaveBeenNthCalledWith(
       1,

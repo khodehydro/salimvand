@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { formatPersianNumber } from '@salimvand/shared';
+import { FaNumberInput } from '../components/FaNumberInput';
 import { api } from '../lib/api';
 
 type Category = {
@@ -194,10 +195,10 @@ export function ReferencesPage() {
             </label>
             <label>
               ترتیب
-              <input
-                type="number"
+              <FaNumberInput
+                group={false}
                 value={category.sort}
-                onChange={(event) => setCategory({ ...category, sort: event.target.value })}
+                onChange={(plain) => setCategory({ ...category, sort: plain })}
               />
             </label>
             <button>ثبت دسته‌بندی</button>
@@ -214,7 +215,8 @@ export function ReferencesPage() {
                 <span>
                   <strong>{item.name}</strong>
                   <small>
-                    <code>{item.code}</code> · {item._count?.products ?? 0} محصول
+                    <code>{item.code}</code> · {formatPersianNumber(item._count?.products ?? 0)}{' '}
+                    محصول
                   </small>
                 </span>
                 <span className="row-actions">
