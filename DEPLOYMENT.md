@@ -69,6 +69,8 @@ bash scripts/check-production.sh
   su - postgres -c "psql -qc \"ALTER ROLE parts_store WITH PASSWORD '<رمز داخل DATABASE_URL>'\""
   ```
 
+- اشارهٔ `DATABASE_URL` به یک دیتابیس **اشتباه یا خالی**: اگر سرویس بالا باشد ولی همهٔ کوئری‌ها ۵۰۰/۴۰۴ شوند، تعداد جدول‌ها را در هر دو دیتابیس مقایسه کنید (`psql -Atc "SELECT datname FROM pg_database WHERE datistemplate=false"` و سپس `SELECT count(*) FROM information_schema.tables` برای هر کدام). مقادیر مرجع پروداکشن در `apps/api/prisma/.env` هم موجود است.
+
 - ناهماهنگی روش هش رمز: اگر `password_encryption` روی `md5` باشد ولی `pg_hba.conf` روش `scram-sha-256` بخواهد، **هر** رمزی رد می‌شود. اصلاح:
 
   ```bash

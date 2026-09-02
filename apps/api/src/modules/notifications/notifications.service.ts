@@ -2,6 +2,7 @@ import { Injectable, OnModuleDestroy, Optional } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service';
 import { Job, Queue, Worker } from 'bullmq';
 import IORedis from 'ioredis';
+import { resolveMessagingEnv, type MessagingSettingsReader } from './messaging-config';
 
 export type NotificationJob = {
   type: 'invoice.issued' | 'invoice.paid' | 'low-stock';
@@ -180,6 +181,18 @@ export class NotificationsService implements OnModuleDestroy {
     }
   }
 
+  /**
+   * Effective credentials for the messaging adapters: values saved from the
+   * admin panel (settings table) take precedence, `.env` fills the gaps. The
+   * worker process resolves this per job, so panel changes apply without a
+   * restart and without touching the server.
+   */
+  private messagingEnv(): Promise<NodeJS.ProcessEnv> {
+    return resolveMessagingEnv(
+      this.prisma?.setting as unknown as MessagingSettingsReader | undefined,
+    );
+  }
+
   async enqueue(payload: NotificationJob) {
     // Notifications are strictly best-effort: a down or degraded Redis must
     // never bubble up and fail the business operation (invoice issue, payment
@@ -200,7 +213,8 @@ export class NotificationsService implements OnModuleDestroy {
   }
 
   async enqueueTest(channel: Channel, message: string, mobile?: string) {
-    if (!integrationConfigured(channel)) throw new Error('این provider پیکربندی نشده است');
+    const env = await this.messagingEnv();
+    if (!integrationConfigured(channel, env)) throw new Error('این provider پیکربندی نشده است');
     if (channel === 'sms' && !mobile) throw new Error('شماره موبایل برای تست SMS الزامی است');
     return this.enqueue({ type: 'low-stock', testChannel: channel, mobile, message });
   }
@@ -215,15 +229,16 @@ export class NotificationsService implements OnModuleDestroy {
   }
 
   async health() {
+    const env = await this.messagingEnv();
     const counts = await this.counts();
     return {
       channels: {
         sms: {
-          configured: integrationConfigured('sms'),
-          provider: integrationConfigured('sms') ? SMS_PROVIDER_NAME : null,
+          configured: integrationConfigured('sms', env),
+          provider: integrationConfigured('sms', env) ? SMS_PROVIDER_NAME : null,
         },
-        telegram: { configured: integrationConfigured('telegram'), provider: 'telegram' },
-        bale: { configured: integrationConfigured('bale'), provider: 'bale' },
+        telegram: { configured: integrationConfigured('telegram', env), provider: 'telegram' },
+        bale: { configured: integrationConfigured('bale', env), provider: 'bale' },
       },
       queue: counts,
     };
@@ -274,16 +289,18 @@ export class NotificationsService implements OnModuleDestroy {
     message: string,
     status: 'sent' | 'failed',
     error?: string,
+    chatId?: string,
   ) {
     if (!this.prisma?.telegramLog?.create) return;
-    const chatId =
+    const resolvedChatId =
+      chatId ??
       (channel === 'telegram' ? process.env.TELEGRAM_CHAT_ID : process.env.BALE_CHAT_ID) ??
       'unknown';
     await this.prisma.telegramLog
       .create({
         data: {
           channel,
-          chatId: chatId.slice(0, 60),
+          chatId: resolvedChatId.slice(0, 60),
           message: message.slice(0, 2000),
           status,
           error: error?.slice(0, 500) ?? null,
@@ -393,23 +410,27 @@ export class NotificationsService implements OnModuleDestroy {
   }
 
   private async process(job: Job<NotificationJob>) {
+    // Credentials are resolved per job: panel-configured values (settings
+    // table) take precedence and .env fills the gaps, so the worker picks up
+    // changes made in the admin panel without a restart.
+    const env = await this.messagingEnv();
     // Each adapter fails the job on provider errors so BullMQ can retry it.
     let delivered = false;
-    for (const channel of notificationChannels(job.data)) {
+    for (const channel of notificationChannels(job.data, env)) {
       if (channel === 'sms') {
         // sms.ir «ارسال گروهی» with a single recipient: the invoice SMS
         // carries a dynamic link, so the line-number bulk endpoint is used
         // (the Verify endpoint only accepts ≤25-char template parameters).
         // Failing the job lets BullMQ retry with backoff; sms.ir 401/429 get
         // a Persian reason so the failed list in the panel is readable.
-        const response = await fetch(smsIrSendUrl(), {
+        const response = await fetch(smsIrSendUrl(env), {
           method: 'POST',
           headers: {
             'content-type': 'application/json',
             accept: 'application/json',
-            'x-api-key': process.env.SMS_API_KEY!,
+            'x-api-key': env.SMS_API_KEY!,
           },
-          body: JSON.stringify(smsIrPayload(job.data.mobile!, job.data.message)),
+          body: JSON.stringify(smsIrPayload(job.data.mobile!, job.data.message, env)),
         });
         const body = (await response.json().catch(() => null)) as SmsIrResponse | null;
         if (!response.ok || body?.status !== 1) {
@@ -421,9 +442,8 @@ export class NotificationsService implements OnModuleDestroy {
         delivered = true;
         continue;
       }
-      const chatId =
-        channel === 'telegram' ? process.env.TELEGRAM_CHAT_ID! : process.env.BALE_CHAT_ID!;
-      const response = await fetch(integrationUrl(channel), {
+      const chatId = channel === 'telegram' ? env.TELEGRAM_CHAT_ID! : env.BALE_CHAT_ID!;
+      const response = await fetch(integrationUrl(channel, env), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -433,10 +453,16 @@ export class NotificationsService implements OnModuleDestroy {
         }),
       });
       if (!response.ok) {
-        await this.logChannel(channel, job.data.message, 'failed', `provider ${response.status}`);
+        await this.logChannel(
+          channel,
+          job.data.message,
+          'failed',
+          `provider ${response.status}`,
+          chatId,
+        );
         throw new Error(`${channel} provider returned ${response.status}`);
       }
-      await this.logChannel(channel, job.data.message, 'sent');
+      await this.logChannel(channel, job.data.message, 'sent', undefined, chatId);
       delivered = true;
     }
     if (!delivered) console.info(`[notification:${job.data.type}] dry-run`);

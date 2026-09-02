@@ -155,6 +155,9 @@ async function seedSettings() {
     },
     { key: 'integrations.telegram', value: { link: '' } },
     { key: 'integrations.bale', value: { link: '' } },
+    // Messaging credentials are managed from the panel (پیامک و کانال‌ها ←
+    // پیکربندی); the empty shape here only makes the settings row visible.
+    { key: 'integrations.messaging', value: {} },
     { key: 'inventory.default_min_stock', value: 3 },
     { key: 'backup.schedule', value: { enabled: true } },
   ];

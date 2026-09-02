@@ -65,4 +65,67 @@ describe('SettingsService', () => {
     if (previous === undefined) delete process.env.BACKUP_STATUS_FILE;
     else process.env.BACKUP_STATUS_FILE = previous;
   });
+
+  it('masks messaging secrets when listing settings', async () => {
+    const prisma = {
+      setting: {
+        findMany: vi.fn(async () => [
+          {
+            key: 'integrations.messaging',
+            value: { sms: { apiKey: 'super-secret-key-1234', lineNumber: '300051' } },
+          },
+          { key: 'store.trust_video', value: 'video.mp4' },
+        ]),
+      },
+    };
+    const result = await new SettingsService(prisma as never).list();
+    expect(result.data['integrations.messaging']).toEqual({
+      sms: { apiKey: '••••1234', lineNumber: '300051' },
+      telegram: { botToken: '', chatId: undefined },
+      bale: { botToken: '', chatId: undefined },
+    });
+    expect(result.data['store.trust_video']).toBe('video.mp4');
+  });
+
+  it('preserves stored messaging secrets on a masked round-trip and audits masked values', async () => {
+    const upsert = vi.fn(
+      async ({ where, update }: { where: { key: string }; update: unknown }) => ({
+        key: where.key,
+        ...(update as object),
+      }),
+    );
+    const auditCreate = vi.fn(async (_input: { data?: unknown }) => ({}));
+    const tx = {
+      setting: { upsert, findMany: vi.fn(async () => []) },
+      auditLog: { create: auditCreate },
+    };
+    const prisma = {
+      setting: {
+        findMany: vi.fn(async () => [
+          {
+            key: 'integrations.messaging',
+            value: { sms: { apiKey: 'stored-secret-9999', lineNumber: '300051' } },
+          },
+        ]),
+      },
+      $transaction: vi.fn(async (callback: (client: typeof tx) => Promise<unknown>) =>
+        callback(tx),
+      ),
+    };
+    await new SettingsService(prisma as never).update(
+      { 'integrations.messaging': { sms: { apiKey: '••••9999', lineNumber: '300052' } } },
+      'manager-1',
+    );
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({
+          value: expect.objectContaining({
+            sms: { apiKey: 'stored-secret-9999', lineNumber: '300052' },
+          }),
+        }),
+      }),
+    );
+    const auditData = auditCreate.mock.calls[0][0].data as { after: Record<string, unknown> };
+    expect(JSON.stringify(auditData.after)).not.toContain('stored-secret-9999');
+  });
 });

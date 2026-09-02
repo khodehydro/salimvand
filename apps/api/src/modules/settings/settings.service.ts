@@ -5,6 +5,11 @@ import { join } from 'node:path';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
 import { writeAudit } from '../../common/audit/audit-log';
+import {
+  MESSAGING_SETTINGS_KEY,
+  maskMessagingSecrets,
+  mergeMessagingSecrets,
+} from '../notifications/messaging-config';
 
 const allowedKeys = new Set([
   'store.profile',
@@ -13,9 +18,19 @@ const allowedKeys = new Set([
   'sms.templates',
   'integrations.telegram',
   'integrations.bale',
+  MESSAGING_SETTINGS_KEY,
   'inventory.default_min_stock',
   'backup.schedule',
 ]);
+
+/** Keeps raw messaging secrets out of responses and the audit trail. */
+function sanitizeSettingsPayload(values: Record<string, unknown>): Record<string, unknown> {
+  if (!(MESSAGING_SETTINGS_KEY in values)) return values;
+  return {
+    ...values,
+    [MESSAGING_SETTINGS_KEY]: maskMessagingSecrets(values[MESSAGING_SETTINGS_KEY]),
+  };
+}
 
 @Injectable()
 export class SettingsService {
@@ -23,7 +38,15 @@ export class SettingsService {
 
   async list() {
     const rows = await this.prisma.setting.findMany({ orderBy: { key: 'asc' } });
-    return { ok: true, data: Object.fromEntries(rows.map((row) => [row.key, row.value])) };
+    return {
+      ok: true,
+      data: Object.fromEntries(
+        rows.map((row) => [
+          row.key,
+          row.key === MESSAGING_SETTINGS_KEY ? maskMessagingSecrets(row.value) : row.value,
+        ]),
+      ),
+    };
   }
 
   async backupStatus() {
@@ -146,8 +169,18 @@ export class SettingsService {
     const before = await this.prisma.setting.findMany({
       where: { key: { in: entries.map(([key]) => key) } },
     });
+    // Masked secrets round-trip through the panel unchanged; merge them with
+    // the stored values so a plain «save» never wipes a credential.
+    const merged: Record<string, unknown> = { ...values };
+    if (MESSAGING_SETTINGS_KEY in merged) {
+      const existing = before.find((row) => row.key === MESSAGING_SETTINGS_KEY)?.value;
+      merged[MESSAGING_SETTINGS_KEY] = mergeMessagingSecrets(
+        merged[MESSAGING_SETTINGS_KEY],
+        existing,
+      );
+    }
     const result = await this.prisma.$transaction(async (tx) => {
-      for (const [key, value] of entries) {
+      for (const [key, value] of Object.entries(merged)) {
         await tx.setting.upsert({
           where: { key },
           update: { value: value as Prisma.InputJsonValue, updatedById: userId },
@@ -159,11 +192,21 @@ export class SettingsService {
         ip,
         action: 'update',
         entityType: 'settings',
-        after: values,
-        before: Object.fromEntries(before.map((row) => [row.key, row.value])),
+        after: sanitizeSettingsPayload(merged),
+        before: sanitizeSettingsPayload(
+          Object.fromEntries(before.map((row) => [row.key, row.value])),
+        ),
       });
-      return tx.setting.findMany({ where: { key: { in: entries.map(([key]) => key) } } });
+      return tx.setting.findMany({ where: { key: { in: Object.keys(merged) } } });
     });
-    return { ok: true, data: Object.fromEntries(result.map((row) => [row.key, row.value])) };
+    return {
+      ok: true,
+      data: Object.fromEntries(
+        result.map((row) => [
+          row.key,
+          row.key === MESSAGING_SETTINGS_KEY ? maskMessagingSecrets(row.value) : row.value,
+        ]),
+      ),
+    };
   }
 }
