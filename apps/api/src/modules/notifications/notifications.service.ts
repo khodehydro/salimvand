@@ -12,13 +12,49 @@ export type NotificationJob = {
 };
 type Channel = 'sms' | 'telegram' | 'bale';
 
+export const SMS_PROVIDER_NAME = 'sms.ir';
+export const SMS_IR_BASE_URL = 'https://api.sms.ir';
+
 export function integrationConfigured(
   channel: Channel,
   env: NodeJS.ProcessEnv = process.env,
 ): boolean {
-  if (channel === 'sms') return Boolean(env.SMS_PROVIDER && env.SMS_API_KEY && env.SMS_API_URL);
+  // sms.ir bulk send: the panel API key (X-API-KEY) plus the store's
+  // subscription line number. Without both, SMS stays disabled and the
+  // invoice queue simply runs its other channels (telegram/bale) or dry-runs.
+  if (channel === 'sms') return Boolean(env.SMS_API_KEY && env.SMS_LINE_NUMBER);
   if (channel === 'telegram') return Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID);
   return Boolean(env.BALE_BOT_TOKEN && env.BALE_CHAT_ID);
+}
+
+/** POST target for one invoice SMS: the sms.ir «ارسال گروهی» endpoint. */
+export function smsIrSendUrl(env: NodeJS.ProcessEnv = process.env): string {
+  return `${env.SMS_IR_BASE_URL ?? SMS_IR_BASE_URL}/v1/send/bulk`;
+}
+
+/** Body of a single-recipient sms.ir bulk send (docs §ارسال گروهی). */
+export function smsIrPayload(
+  mobile: string,
+  message: string,
+  env: NodeJS.ProcessEnv = process.env,
+): { lineNumber: number; messageText: string; mobiles: string[] } {
+  return {
+    lineNumber: Number(env.SMS_LINE_NUMBER),
+    messageText: message,
+    mobiles: [mobile],
+  };
+}
+
+/** Uniform sms.ir response: `{ status, message, data }` — status 1 is success. */
+export type SmsIrResponse = { status?: number; message?: string };
+
+/** Human-readable failure text for the queue's failed list and sms_logs. */
+export function smsIrFailure(response: Response, body: SmsIrResponse | null): string {
+  if (response.status === 401) return 'sms.ir: کلید API نامعتبر است (401)';
+  if (response.status === 429) return 'sms.ir: تعداد درخواست زیاد است (429)';
+  const detail = body?.message?.trim();
+  if (detail) return `sms.ir: ${detail}`;
+  return `sms.ir: HTTP ${response.status}`;
 }
 
 export function integrationUrl(
@@ -184,7 +220,7 @@ export class NotificationsService implements OnModuleDestroy {
       channels: {
         sms: {
           configured: integrationConfigured('sms'),
-          provider: process.env.SMS_PROVIDER ?? null,
+          provider: integrationConfigured('sms') ? SMS_PROVIDER_NAME : null,
         },
         telegram: { configured: integrationConfigured('telegram'), provider: 'telegram' },
         bale: { configured: integrationConfigured('bale'), provider: 'bale' },
@@ -223,7 +259,7 @@ export class NotificationsService implements OnModuleDestroy {
           template: job.type,
           message: job.message.slice(0, 1000),
           status,
-          provider: process.env.SMS_PROVIDER ?? null,
+          provider: SMS_PROVIDER_NAME,
           error: error?.slice(0, 500) ?? null,
           refType: job.invoiceId ? 'invoice' : null,
           refId: job.invoiceId ?? null,
@@ -361,21 +397,25 @@ export class NotificationsService implements OnModuleDestroy {
     let delivered = false;
     for (const channel of notificationChannels(job.data)) {
       if (channel === 'sms') {
-        const response = await fetch(process.env.SMS_API_URL!, {
+        // sms.ir «ارسال گروهی» with a single recipient: the invoice SMS
+        // carries a dynamic link, so the line-number bulk endpoint is used
+        // (the Verify endpoint only accepts ≤25-char template parameters).
+        // Failing the job lets BullMQ retry with backoff; sms.ir 401/429 get
+        // a Persian reason so the failed list in the panel is readable.
+        const response = await fetch(smsIrSendUrl(), {
           method: 'POST',
           headers: {
             'content-type': 'application/json',
-            authorization: `Bearer ${process.env.SMS_API_KEY!}`,
+            accept: 'application/json',
+            'x-api-key': process.env.SMS_API_KEY!,
           },
-          body: JSON.stringify({
-            to: job.data.mobile,
-            message: job.data.message,
-            provider: process.env.SMS_PROVIDER,
-          }),
+          body: JSON.stringify(smsIrPayload(job.data.mobile!, job.data.message)),
         });
-        if (!response.ok) {
-          await this.logSms(job.data, 'failed', `provider ${response.status}`);
-          throw new Error(`SMS provider returned ${response.status}`);
+        const body = (await response.json().catch(() => null)) as SmsIrResponse | null;
+        if (!response.ok || body?.status !== 1) {
+          const reason = smsIrFailure(response, body);
+          await this.logSms(job.data, 'failed', reason);
+          throw new Error(reason);
         }
         await this.logSms(job.data, 'sent');
         delivered = true;

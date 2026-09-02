@@ -115,7 +115,9 @@ export function MessagingPage() {
               <small>
                 {state.provider
                   ? `provider: ${state.provider}`
-                  : 'متغیرهای Environment تنظیم نشده است'}
+                  : key === 'sms'
+                    ? 'SMS_API_KEY و SMS_LINE_NUMBER در ‎.env تنظیم نشده است'
+                    : 'متغیرهای Environment تنظیم نشده است'}
               </small>
             </article>
           ))

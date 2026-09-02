@@ -13,21 +13,26 @@ pnpm prisma generate
 
 ## ۲) متغیرهای Environment (`/var/www/parts-store/shared/.env`)
 
-| متغیر                             | کاربرد                                                                                                                                                                     | نمونه                                        |
-| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
-| `SMS_PROVIDER`                    | نام provider (kavenegar / melipayamak / …)                                                                                                                                 | `kavenegar`                                  |
-| `SMS_API_KEY`                     | کلید API پیامک                                                                                                                                                             | `xxxx`                                       |
-| `SMS_API_URL`                     | نشانی endpoint ارسال                                                                                                                                                       | `https://api.kavenegar.com/v1/.../send.json` |
-| `TELEGRAM_BOT_TOKEN`              | توکن ربات تلگرام                                                                                                                                                           | `123456:ABC`                                 |
-| `TELEGRAM_CHAT_ID`                | chat/کانال مقصد اعلان‌ها                                                                                                                                                   | `-1001234567890`                             |
-| `BALE_BOT_TOKEN` / `BALE_CHAT_ID` | معادل بله                                                                                                                                                                  | —                                            |
-| `TELEGRAM_WEBHOOK_SECRET`         | رمز مشترک webhook (خودتان تولید کنید)                                                                                                                                      | `openssl rand -hex 24`                       |
-| `PUBLIC_SITE_URL`                 | دامنهٔ سایت عمومی برای لینک فاکتور                                                                                                                                         | `https://selimvand.ir`                       |
-| `REDIS_URL`                       | صف BullMQ                                                                                                                                                                  | `redis://127.0.0.1:6379`                     |
-| ~~`ENABLE_QUEUE_WORKER`~~         | **در `.env` نگذارید** — واحد `salimvand-worker.service` خودش `Environment=ENABLE_QUEUE_WORKER=true` دارد و اگر در `.env` باشد API و Website هم worker اضافه راه می‌اندازند | —                                            |
+| متغیر                             | کاربرد                                                                                                                                                                     | نمونه                    |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| `SMS_API_KEY`                     | کلید API از پنل sms.ir (تنظیمات → کلید API)                                                                                                                                | `xxxx`                   |
+| `SMS_LINE_NUMBER`                 | شمارهٔ خط ارسال از پنل sms.ir (برای متد «ارسال گروهی»)                                                                                                                     | `30004505000017`         |
+| `TELEGRAM_BOT_TOKEN`              | توکن ربات تلگرام                                                                                                                                                           | `123456:ABC`             |
+| `TELEGRAM_CHAT_ID`                | chat/کانال مقصد اعلان‌ها                                                                                                                                                   | `-1001234567890`         |
+| `BALE_BOT_TOKEN` / `BALE_CHAT_ID` | معادل بله                                                                                                                                                                  | —                        |
+| `TELEGRAM_WEBHOOK_SECRET`         | رمز مشترک webhook (خودتان تولید کنید)                                                                                                                                      | `openssl rand -hex 24`   |
+| `PUBLIC_SITE_URL`                 | دامنهٔ سایت عمومی برای لینک فاکتور                                                                                                                                         | `https://selimvand.ir`   |
+| `REDIS_URL`                       | صف BullMQ                                                                                                                                                                  | `redis://127.0.0.1:6379` |
+| ~~`ENABLE_QUEUE_WORKER`~~         | **در `.env` نگذارید** — واحد `salimvand-worker.service` خودش `Environment=ENABLE_QUEUE_WORKER=true` دارد و اگر در `.env` باشد API و Website هم worker اضافه راه می‌اندازند | —                        |
 
-فایل باید `chmod 600` و مالک آن کاربر سرویس باشد. بدون `SMS_PROVIDER`/`SMS_API_KEY`/`SMS_API_URL`
+فایل باید `chmod 600` و مالک آن کاربر سرویس باشد. بدون `SMS_API_KEY`/`SMS_LINE_NUMBER`
 هیچ پیامکی ارسال نمی‌شود و کارت سلامت در پنل «پیکربندی نشده» نشان می‌دهد (رفتار عمدی).
+
+ارسال پیامک از طریق **sms.ir** و متد `POST /v1/send/bulk` (ارسال گروهی تک‌گیرنده) انجام می‌شود؛
+احراز هویت با هدر `X-API-KEY` و پاسخ موفق `status: 1` است. خطاهای پنل (مثل کلید نامعتبر ۴۰۱ یا
+محدودیت ارسال ۴۲۹) با پیام فارسی در لیست «ناموفق‌ها» و جدول `sms_logs` ثبت و تا ۵ بار با
+backoff نمایی دوباره تلاش می‌شوند. قالب پیام فاکتور از تنظیمات پنل خوانده می‌شود و این
+placeholderها را دارد: `{invoice_number}`, `{amount}`, `{link}`, `{store}`.
 
 ```bash
 sudo systemctl restart salimvand-api
