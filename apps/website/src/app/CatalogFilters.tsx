@@ -16,8 +16,13 @@ type Vehicle = {
  * «فقط موجود» navigates immediately — no «اعمال فیلتر» button. The free-text
  * search submits on Enter. Navigation goes through the Next.js router with
  * `scroll: false` so the visitor's scroll position is preserved instead of
- * jumping to the top of the page. Picking a new make resets the model/trim
- * selects so stale ids are never sent.
+ * jumping to the top of the page.
+ *
+ * Public visitors get search + مدل خودرو + دسته‌بندی + فقط موجود. The make
+ * («برند خودرو») and trim («تیپ / موتور») selects are deliberately NOT shown
+ * to regular users (they stay available in the admin panel); old links that
+ * still carry vehicleMakeId/vehicleTrimId keep working — the params scope
+ * the model list and filter results, and «پاک کردن فیلترها» clears them.
  */
 export function CatalogFilters({
   filters,
@@ -28,25 +33,12 @@ export function CatalogFilters({
 }) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
-  const modelRef = useRef<HTMLSelectElement>(null);
-  const trimRef = useRef<HTMLSelectElement>(null);
 
   const makeId = params.vehicleMakeId ?? '';
   const modelId = params.vehicleModelId ?? '';
   const scopedMakes = makeId
     ? filters.vehicles.filter((make) => make.id === makeId)
     : filters.vehicles;
-  const selectedModel = scopedMakes.flatMap((make) => make.models).find((m) => m.id === modelId);
-  const scopedTrims: Array<{ id: string; label: string }> = selectedModel
-    ? (selectedModel.trims ?? []).map((trim) => ({ id: trim.id, label: trim.name }))
-    : scopedMakes.flatMap((make) =>
-        make.models.flatMap((model) =>
-          (model.trims ?? []).map((trim) => ({
-            id: trim.id,
-            label: `${make.name} · ${model.name} · ${trim.name}`,
-          })),
-        ),
-      );
 
   const apply = () => {
     const form = formRef.current;
@@ -70,23 +62,7 @@ export function CatalogFilters({
         <span>⌕</span>
         <input name="q" defaultValue={params.q} placeholder="نام قطعه یا شماره فنی..." />
       </label>
-      <select
-        name="vehicleMakeId"
-        defaultValue={makeId}
-        onChange={(event) => {
-          if (modelRef.current) modelRef.current.value = '';
-          if (trimRef.current) trimRef.current.value = '';
-          apply();
-        }}
-      >
-        <option value="">برند خودرو</option>
-        {filters.vehicles.map((make) => (
-          <option key={make.id} value={make.id}>
-            {make.name}
-          </option>
-        ))}
-      </select>
-      <select ref={modelRef} name="vehicleModelId" defaultValue={modelId} onChange={apply}>
+      <select name="vehicleModelId" defaultValue={modelId} onChange={apply}>
         <option value="">مدل خودرو</option>
         {scopedMakes.flatMap((make) =>
           make.models.map((model) => (
@@ -95,19 +71,6 @@ export function CatalogFilters({
             </option>
           )),
         )}
-      </select>
-      <select
-        ref={trimRef}
-        name="vehicleTrimId"
-        defaultValue={params.vehicleTrimId ?? ''}
-        onChange={apply}
-      >
-        <option value="">تیپ / موتور</option>
-        {scopedTrims.map((trim) => (
-          <option key={trim.id} value={trim.id}>
-            {trim.label}
-          </option>
-        ))}
       </select>
       <select name="categoryId" defaultValue={params.categoryId ?? ''} onChange={apply}>
         <option value="">دسته‌بندی</option>
