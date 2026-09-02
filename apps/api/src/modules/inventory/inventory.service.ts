@@ -39,7 +39,9 @@ export class InventoryService {
       orderBy: { id: 'desc' },
       include: {
         brand: true,
-        location: true,
+        // parent = the warehouse (انبار) of the shelf — the panel always
+        // shows placement as «انبار · قفسه».
+        location: { include: { parent: true } },
         // Primary image first so the panel's grouped stock list can show a
         // thumbnail without pulling every image of every product.
         product: {
@@ -217,7 +219,7 @@ export class InventoryService {
     const items = await this.prisma.inventoryItem.findMany({
       where: { isActive: true },
       orderBy: { quantity: 'asc' },
-      include: { product: true, brand: true, location: true },
+      include: { product: true, brand: true, location: { include: { parent: true } } },
     });
     return {
       ok: true,
@@ -231,7 +233,7 @@ export class InventoryService {
   async byBarcode(barcode: string) {
     const item = await this.prisma.inventoryItem.findUnique({
       where: { barcode },
-      include: { product: true, brand: true, location: true },
+      include: { product: true, brand: true, location: { include: { parent: true } } },
     });
     if (!item) throw new NotFoundException('بارکد پیدا نشد');
     return { ok: true, data: item };
@@ -271,7 +273,7 @@ export class InventoryService {
           isActive: data.isActive !== undefined ? data.isActive : undefined,
           notes: data.notes !== undefined ? data.notes : undefined,
         },
-        include: { product: true, brand: true, location: true },
+        include: { product: true, brand: true, location: { include: { parent: true } } },
       });
 
       if (userId) {

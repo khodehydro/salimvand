@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { formatPersianNumber } from '@salimvand/shared';
+import { locationChip } from '../lib/location-label';
 import { api } from '../lib/api';
 import { DonutChart } from '@salimvand/ui';
 import {
@@ -31,7 +32,7 @@ type Summary = {
     minStock: number | null;
     product: { name: string; code: string };
     brand: { name: string };
-    location?: { code: string; name: string } | null;
+    location?: { code: string; name: string; parent?: { name: string } | null } | null;
   }>;
   stockComposition: StockRow[];
   categoryComposition: Array<{
@@ -473,7 +474,7 @@ export function DashboardPage({
                         <b>{row.product.name}</b>
                         <small>
                           {row.brand.name}
-                          {row.location ? ` · قفسهٔ ${row.location.code}` : ''}
+                          {row.location ? ` · ${locationChip(row.location)}` : ''}
                         </small>
                         <i className={`stockbar ${barClass}`}>
                           <i style={{ width: `${Math.round(ratio * 100)}%` }} />

@@ -219,7 +219,7 @@ export class DashboardService {
           minStock: true,
           product: { select: { name: true, code: true } },
           brand: { select: { name: true } },
-          location: { select: { code: true, name: true } },
+          location: { select: { code: true, name: true, parent: { select: { name: true } } } },
         },
       }),
       this.prisma.inventoryItem.findMany({

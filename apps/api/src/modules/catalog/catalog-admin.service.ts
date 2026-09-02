@@ -14,7 +14,7 @@ export class CatalogAdminService {
       orderBy: { createdAt: 'desc' },
       include: {
         category: true,
-        inventoryItems: { include: { brand: true, location: true } },
+        inventoryItems: { include: { brand: true, location: { include: { parent: true } } } },
         // Primary image first so the panel list can show a thumbnail without
         // pulling every image of every product.
         images: { orderBy: [{ isPrimary: 'desc' }, { sort: 'asc' }], take: 1 },
@@ -30,7 +30,7 @@ export class CatalogAdminService {
         category: true,
         images: true,
         compatibilities: { include: { model: { include: { make: true } }, trim: true } },
-        inventoryItems: { include: { brand: true, location: true } },
+        inventoryItems: { include: { brand: true, location: { include: { parent: true } } } },
       },
     });
     if (!product) throw new NotFoundException('محصول پیدا نشد');

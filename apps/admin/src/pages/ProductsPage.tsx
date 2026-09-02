@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { createEan13 } from '@salimvand/shared';
 import { FaNumberInput } from '../components/FaNumberInput';
+import { locationChip, locationLabel } from '../lib/location-label';
 import { api } from '../lib/api';
 import { hashForPage } from '../lib/admin-route';
 import { publicSiteUrl } from '../lib/public-site';
@@ -68,7 +69,13 @@ type ProductDetail = {
 };
 type Category = { id: string; name: string };
 type Brand = { id: string; name: string };
-type Location = { id: string; code: string; name: string; type: string };
+type Location = {
+  id: string;
+  code: string;
+  name: string;
+  type: string;
+  parent?: { name: string } | null;
+};
 type VehicleMake = {
   id: string;
   name: string;
@@ -262,9 +269,12 @@ export function ProductsPage() {
               {product.inventoryItems?.length ? (
                 product.inventoryItems.map((entry) => (
                   <div className="plc-brand" key={entry.id}>
-                    <span className="brand-name" title={entry.location?.code ?? undefined}>
+                    <span
+                      className="brand-name"
+                      title={entry.location ? locationChip(entry.location) : undefined}
+                    >
                       {entry.brand.name}
-                      {entry.location?.code ? <small> · {entry.location.code}</small> : null}
+                      {entry.location ? <small> · {locationChip(entry.location)}</small> : null}
                     </span>
                     <StockStepper
                       itemId={entry.id}
@@ -978,7 +988,7 @@ function ProductEditor({
                             <option value="">بدون قفسه</option>
                             {locations.map((location) => (
                               <option value={location.id} key={location.id}>
-                                {location.code} — {location.name}
+                                {locationLabel(location)}
                               </option>
                             ))}
                           </select>
@@ -1067,7 +1077,7 @@ function ProductEditor({
                     <option value="">بدون قفسه</option>
                     {locations.map((location) => (
                       <option value={location.id} key={location.id}>
-                        {location.code} — {location.name}
+                        {locationLabel(location)}
                       </option>
                     ))}
                   </select>

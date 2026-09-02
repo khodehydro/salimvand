@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { createEan13 } from '@salimvand/shared';
 import { FaNumberInput } from './FaNumberInput';
+import { locationLabel } from '../lib/location-label';
 import { api } from '../lib/api';
 import { MediaImage } from './MediaImage';
 
@@ -13,7 +14,7 @@ import { MediaImage } from './MediaImage';
  * the list» flow.
  */
 type Option = { id: string; name: string };
-type Location = { id: string; name: string; code: string };
+type Location = { id: string; name: string; code: string; parent?: { name: string } | null };
 type VehicleMake = {
   id: string;
   name: string;
@@ -370,7 +371,7 @@ export function ProductCreateModal({
                     <option value="">بدون قفسه</option>
                     {locations.map((location) => (
                       <option value={location.id} key={location.id}>
-                        {location.code} — {location.name}
+                        {locationLabel(location)}
                       </option>
                     ))}
                   </select>

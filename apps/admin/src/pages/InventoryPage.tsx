@@ -7,6 +7,7 @@ import { ProductCreateModal } from '../components/ProductCreateModal';
 import { BarcodeSvg } from '../components/BarcodeSvg';
 import { formatPersianNumber, formatRial } from '@salimvand/shared';
 import { FaNumberInput } from '../components/FaNumberInput';
+import { locationChip, locationLabel } from '../lib/location-label';
 
 const BarcodeScanner = lazy(() =>
   import('../components/BarcodeScanner').then((module) => ({ default: module.BarcodeScanner })),
@@ -20,10 +21,19 @@ type Item = {
   minStock?: number | null;
   product?: { id: string; name: string; images?: Array<{ path: string }> };
   brand?: { name: string };
-  location?: { id: string; name: string; code: string };
+  location?: { id: string; name: string; code: string; parent?: { name: string } | null };
 };
 type Option = { id: string; name: string };
-type Location = { id: string; name: string; code: string; type: string };
+type Location = {
+  id: string;
+  name: string;
+  code: string;
+  type: string;
+  parentId?: string | null;
+  parent?: { id: string; name: string } | null;
+  children?: Array<Location & { _count?: { items: number } }>;
+  _count?: { items: number };
+};
 type VehicleMake = {
   id: string;
   name: string;
@@ -34,7 +44,7 @@ type Transaction = { id: string; type: string; quantityChange: number; quantityA
 const tabs = [
   { id: 'register', label: 'ثبت محصول', hint: 'انبار + کاتالوگ + سایت، همه در یک پنجره' },
   { id: 'stock', label: 'لیست انبار', hint: 'جست‌وجوی لحظه‌ای، بارکدخوان و اصلاح سریع موجودی' },
-  { id: 'shelves', label: 'قفسه‌ها', hint: 'ایجاد و مشاهدهٔ محل‌های انبار' },
+  { id: 'shelves', label: 'قفسه‌ها', hint: 'انبارها و گروه‌بندی قفسه‌ها — ایجاد، ویرایش و حذف' },
 ] as const;
 type Tab = (typeof tabs)[number]['id'];
 
@@ -72,7 +82,13 @@ export function InventoryPage() {
   const [transferLocation, setTransferLocation] = useState('');
   const [receiveQty, setReceiveQty] = useState('');
   const [busy, setBusy] = useState(false);
-  const [locationForm, setLocationForm] = useState({ name: '', code: '', type: 'shelf' });
+  // Shelves tab: warehouses (groups) and shelves are managed separately —
+  // a location with no parent and type warehouse is a group; anything else
+  // is a shelf placed inside one (or «بدون انبار» until it is assigned).
+  const [warehouseForm, setWarehouseForm] = useState({ name: '', code: '' });
+  const [editingWarehouse, setEditingWarehouse] = useState<Location | null>(null);
+  const [shelfForm, setShelfForm] = useState({ name: '', code: '', parentId: '' });
+  const [editingShelf, setEditingShelf] = useState<Location | null>(null);
   const [locationError, setLocationError] = useState('');
   const skipFirstSearch = useRef(true);
 
@@ -204,18 +220,105 @@ export function InventoryPage() {
     }
   };
 
-  const createLocation = async () => {
-    if (!locationForm.name || !locationForm.code) {
-      setLocationError('نام و کد محل الزامی است');
-      return;
-    }
+  const warehouses = locations.filter(
+    (location) => !location.parentId && location.type === 'warehouse',
+  );
+  const shelves = locations.filter(
+    (location) => location.parentId || location.type !== 'warehouse',
+  );
+  const shelvesOf = (parentId: string | null) =>
+    shelves.filter((location) => (location.parentId ?? null) === parentId);
+  const startWarehouseEdit = (warehouse: Location) => {
+    setEditingWarehouse(warehouse);
+    setLocationError('');
+    setWarehouseForm({ name: warehouse.name, code: warehouse.code });
+  };
+  const saveWarehouse = async () => {
+    if (!warehouseForm.name.trim() || !warehouseForm.code.trim())
+      return setLocationError('نام و کد انبار الزامی است');
     setLocationError('');
     setBusy(true);
     try {
-      await api('/locations', { method: 'POST', body: JSON.stringify(locationForm) });
-      setMessage('محل انبار ایجاد شد');
-      setLocationForm({ name: '', code: '', type: 'shelf' });
+      if (editingWarehouse) {
+        await api(`/locations/${editingWarehouse.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ name: warehouseForm.name, code: warehouseForm.code }),
+        });
+        setMessage('انبار ویرایش شد');
+      } else {
+        await api('/locations', {
+          method: 'POST',
+          body: JSON.stringify({ ...warehouseForm, type: 'warehouse' }),
+        });
+        setMessage('انبار ایجاد شد');
+      }
+      setWarehouseForm({ name: '', code: '' });
+      setEditingWarehouse(null);
       await loadLocations();
+    } catch (e) {
+      setMessage((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const startShelfEdit = (shelf: Location) => {
+    setEditingShelf(shelf);
+    setLocationError('');
+    setShelfForm({ name: shelf.name, code: shelf.code, parentId: shelf.parentId ?? '' });
+  };
+  const saveShelf = async () => {
+    if (!shelfForm.name.trim() || !shelfForm.code.trim())
+      return setLocationError('نام و کد قفسه الزامی است');
+    setLocationError('');
+    setBusy(true);
+    try {
+      if (editingShelf) {
+        await api(`/locations/${editingShelf.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            name: shelfForm.name,
+            code: shelfForm.code,
+            parentId: shelfForm.parentId || null,
+          }),
+        });
+        setMessage('قفسه ویرایش شد');
+      } else {
+        await api('/locations', {
+          method: 'POST',
+          body: JSON.stringify({ ...shelfForm, type: 'shelf' }),
+        });
+        setMessage('قفسه ایجاد شد');
+      }
+      setShelfForm({ name: '', code: '', parentId: '' });
+      setEditingShelf(null);
+      await loadLocations();
+    } catch (e) {
+      setMessage((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const removeLocation = async (location: Location) => {
+    const items = location._count?.items ?? 0;
+    const isWarehouse = !location.parentId && location.type === 'warehouse';
+    const question = isWarehouse
+      ? `انبار «${location.name}» حذف شود؟`
+      : items > 0
+        ? `قفسهٔ «${location.name}» حذف شود؟ ${formatPersianNumber(items)} قلم کالا بدون قفسه می‌شوند — موجودی آن‌ها حذف نمی‌شود.`
+        : `قفسهٔ «${location.name}» حذف شود؟`;
+    if (!window.confirm(question)) return;
+    setBusy(true);
+    try {
+      const result = await api<{ data: { detachedItems: number } }>(`/locations/${location.id}`, {
+        method: 'DELETE',
+      });
+      setMessage(
+        result.data.detachedItems > 0
+          ? `محل حذف شد؛ ${formatPersianNumber(result.data.detachedItems)} قلم بدون قفسه شدند`
+          : 'محل حذف شد',
+      );
+      await loadLocations();
+      await load();
     } catch (e) {
       setMessage((e as Error).message);
     } finally {
@@ -383,9 +486,7 @@ export function InventoryPage() {
                           onSaved={() => void load()}
                         />
                         <span className="inv-shelf">
-                          {item.location
-                            ? `${item.location.code} · ${item.location.name}`
-                            : 'بدون قفسه'}
+                          {item.location ? locationChip(item.location) : 'بدون قفسه'}
                         </span>
                         <div className="inv-actions">
                           <button className="row-action" onClick={() => void openDetail(item)}>
@@ -408,49 +509,159 @@ export function InventoryPage() {
 
       {tab === 'shelves' && (
         <div className="shelves-tab">
-          <div className="adjust-box">
-            <h2>ایجاد محل انبار</h2>
-            <input
-              value={locationForm.name}
-              onChange={(e) => setLocationForm({ ...locationForm, name: e.target.value })}
-              placeholder="نام محل"
-            />
-            <input
-              value={locationForm.code}
-              onChange={(e) => setLocationForm({ ...locationForm, code: e.target.value })}
-              placeholder="کد مثل A-03"
-              dir="ltr"
-            />
-            <select
-              value={locationForm.type}
-              onChange={(e) => setLocationForm({ ...locationForm, type: e.target.value })}
-            >
-              <option value="warehouse">انبار</option>
-              <option value="aisle">راهرو</option>
-              <option value="shelf">قفسه</option>
-              <option value="level">طبقه</option>
-              <option value="box">باکس</option>
-            </select>
-            {locationError && <small className="field-error">{locationError}</small>}
-            <button
-              className="button-primary"
-              disabled={busy}
-              onClick={() => void createLocation()}
-            >
-              {busy ? 'در حال ثبت…' : 'ایجاد محل'}
-            </button>
-          </div>
-          <div className="inventory-list">
-            {locations.map((location) => (
-              <div className="inventory-row" key={location.id}>
-                <div className="inv-info">
-                  <b>{location.name}</b>
-                  <small dir="ltr">{location.code}</small>
+          {/* Warehouses — the grouping level (انبار اصلی، فروشگاه، …) */}
+          <div className="shelves-box">
+            <h2>{editingWarehouse ? `ویرایش انبار «${editingWarehouse.name}»` : 'انبارها'}</h2>
+            <p className="muted">
+              هر انبار یک گروه برای قفسه‌هاست — انبار اصلی، فروشگاه، انبار دوم و… به دلخواه.
+            </p>
+            <div className="shelves-form">
+              <input
+                value={warehouseForm.name}
+                onChange={(e) => setWarehouseForm({ ...warehouseForm, name: e.target.value })}
+                placeholder="نام انبار (مثلاً انبار اصلی)"
+              />
+              <input
+                value={warehouseForm.code}
+                onChange={(e) => setWarehouseForm({ ...warehouseForm, code: e.target.value })}
+                placeholder="کد مثل W-01"
+                dir="ltr"
+              />
+              <button
+                className="button-primary"
+                disabled={busy}
+                onClick={() => void saveWarehouse()}
+              >
+                {editingWarehouse ? 'ذخیرهٔ ویرایش' : 'افزودن انبار'}
+              </button>
+              {editingWarehouse && (
+                <button
+                  className="outline"
+                  onClick={() => {
+                    setEditingWarehouse(null);
+                    setWarehouseForm({ name: '', code: '' });
+                  }}
+                >
+                  انصراف
+                </button>
+              )}
+            </div>
+            <div className="inventory-list">
+              {warehouses.map((warehouse) => (
+                <div className="inventory-row" key={warehouse.id}>
+                  <div className="inv-info">
+                    <b>{warehouse.name}</b>
+                    <small dir="ltr">{warehouse.code}</small>
+                  </div>
+                  <span className="chip">
+                    {formatPersianNumber(warehouse.children?.length ?? 0)} قفسه ·{' '}
+                    {formatPersianNumber(
+                      (warehouse.children ?? []).reduce(
+                        (sum, child) => sum + (child._count?.items ?? 0),
+                        warehouse._count?.items ?? 0,
+                      ),
+                    )}{' '}
+                    قلم
+                  </span>
+                  <div className="inv-actions">
+                    <button className="row-action" onClick={() => startWarehouseEdit(warehouse)}>
+                      ویرایش
+                    </button>
+                    <button
+                      className="row-action danger-text"
+                      disabled={busy}
+                      onClick={() => void removeLocation(warehouse)}
+                    >
+                      حذف
+                    </button>
+                  </div>
                 </div>
-                <span className="chip">{locationTypeLabels[location.type] ?? location.type}</span>
-              </div>
-            ))}
-            {!locations.length && <p className="muted">هنوز محلی ثبت نشده است.</p>}
+              ))}
+              {!warehouses.length && <p className="muted">هنوز انباری ثبت نشده است.</p>}
+            </div>
+          </div>
+
+          {/* Shelves — placed inside a warehouse (or «بدون انبار») */}
+          <div className="shelves-box">
+            <h2>{editingShelf ? `ویرایش قفسهٔ «${editingShelf.name}»` : 'قفسه‌ها'}</h2>
+            <div className="shelves-form">
+              <input
+                value={shelfForm.name}
+                onChange={(e) => setShelfForm({ ...shelfForm, name: e.target.value })}
+                placeholder="نام قفسه (مثلاً قفسه جلو)"
+              />
+              <input
+                value={shelfForm.code}
+                onChange={(e) => setShelfForm({ ...shelfForm, code: e.target.value })}
+                placeholder="کد مثل A-03"
+                dir="ltr"
+              />
+              <select
+                value={shelfForm.parentId}
+                onChange={(e) => setShelfForm({ ...shelfForm, parentId: e.target.value })}
+              >
+                <option value="">بدون انبار</option>
+                {warehouses.map((warehouse) => (
+                  <option key={warehouse.id} value={warehouse.id}>
+                    {warehouse.name}
+                  </option>
+                ))}
+              </select>
+              <button className="button-primary" disabled={busy} onClick={() => void saveShelf()}>
+                {editingShelf ? 'ذخیرهٔ ویرایش' : 'افزودن قفسه'}
+              </button>
+              {editingShelf && (
+                <button
+                  className="outline"
+                  onClick={() => {
+                    setEditingShelf(null);
+                    setShelfForm({ name: '', code: '', parentId: '' });
+                  }}
+                >
+                  انصراف
+                </button>
+              )}
+            </div>
+            {locationError && <small className="field-error">{locationError}</small>}
+            {[
+              ...warehouses.map((warehouse) => ({ id: warehouse.id, name: warehouse.name })),
+              { id: '', name: 'بدون انبار' },
+            ].map((bucket) => {
+              const rows = shelvesOf(bucket.id || null);
+              if (!rows.length) return null;
+              return (
+                <div className="shelf-group" key={bucket.id || 'none'}>
+                  <h3>{bucket.name}</h3>
+                  <div className="inventory-list">
+                    {rows.map((shelf) => (
+                      <div className="inventory-row" key={shelf.id}>
+                        <div className="inv-info">
+                          <b>{shelf.name}</b>
+                          <small dir="ltr">{shelf.code}</small>
+                        </div>
+                        <span className="chip">{locationTypeLabels[shelf.type] ?? shelf.type}</span>
+                        <span className="muted">
+                          {formatPersianNumber(shelf._count?.items ?? 0)} قلم
+                        </span>
+                        <div className="inv-actions">
+                          <button className="row-action" onClick={() => startShelfEdit(shelf)}>
+                            ویرایش
+                          </button>
+                          <button
+                            className="row-action danger-text"
+                            disabled={busy}
+                            onClick={() => void removeLocation(shelf)}
+                          >
+                            حذف
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+            {!shelves.length && <p className="muted">هنوز قفسه‌ای ثبت نشده است.</p>}
           </div>
         </div>
       )}
@@ -491,6 +702,10 @@ export function InventoryPage() {
                 <dd>{detail.brand?.name ?? '—'}</dd>
               </div>
               <div>
+                <dt>محل نگهداری</dt>
+                <dd>{detail.location ? locationLabel(detail.location) : 'بدون قفسه'}</dd>
+              </div>
+              <div>
                 <dt>موجودی فعلی</dt>
                 <dd>{formatPersianNumber(detail.quantity)}</dd>
               </div>
@@ -526,7 +741,7 @@ export function InventoryPage() {
                   <option value="">بدون قفسه</option>
                   {locations.map((location) => (
                     <option key={location.id} value={location.id}>
-                      {location.code} · {location.name}
+                      {locationLabel(location)}
                     </option>
                   ))}
                 </select>
