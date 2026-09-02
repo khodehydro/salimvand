@@ -49,7 +49,34 @@ cd /opt/salimvand
 bash scripts/check-production.sh
 ```
 
-این بررسی باید پیام `Production checks passed.` را نمایش دهد و فعال‌بودن API، Website، Worker، Nginx، Fail2ban و Bind داخلی API را کنترل می‌کند.
+این بررسی باید پیام `Production checks passed.` را نمایش دهد و فعال‌بودن API، Website، Worker، Nginx، Fail2ban و Bind داخلی API را کنترل می‌کند؛ علاوه بر آن اعتبار `DATABASE_URL` و `REDIS_URL` داخل `.env` را مستقیماً در برابر PostgreSQL و Redis می‌سنجد تا خرابی رمزها قبل از هر چیز گزارش شود.
+
+## عیب‌یابی: خطای «ارتباط با سرور برقرار نشد» در پنل
+
+این پیام یعنی بک‌اند (سرویس `salimvand-api`) پاسخ نمی‌دهد؛ خود پنل استاتیک است و از Nginx سرو می‌شود، پس صفحهٔ ورود باز می‌ماند ولی لاگین شکست می‌خورد. مسیر تشخیص:
+
+```bash
+systemctl status salimvand-api --no-pager
+journalctl -u salimvand-api -n 50 --no-pager
+bash scripts/check-production.sh
+```
+
+علل رایج:
+
+- تغییر رمز دیتابیس یا Redis بدون به‌روزرسانی `.env` (یا برعکس). رمز سمت دیتابیس را با `.env` هماهنگ کنید:
+
+  ```bash
+  su - postgres -c "psql -qc \"ALTER ROLE parts_store WITH PASSWORD '<رمز داخل DATABASE_URL>'\""
+  ```
+
+- ناهماهنگی روش هش رمز: اگر `password_encryption` روی `md5` باشد ولی `pg_hba.conf` روش `scram-sha-256` بخواهد، **هر** رمزی رد می‌شود. اصلاح:
+
+  ```bash
+  su - postgres -c "psql -qc \"ALTER SYSTEM SET password_encryption='scram-sha-256';\" -qc 'SELECT pg_reload_conf();'"
+  su - postgres -c "psql -qc \"ALTER ROLE parts_store WITH PASSWORD '<رمز>'\""
+  ```
+
+- اگر `.env` کلاً خراب شده باشد، بازاستقرار از گیت با `scripts/deploy.sh` کد را به حالت سالم برمی‌گرداند؛ کلیدهای ضروری `.env` در `.env.example` و `scripts/verify-production-config.sh` فهرست شده‌اند.
 
 ## Backup و بازبینی
 
