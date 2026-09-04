@@ -9,7 +9,7 @@ import { DesignSystemRoute } from './DesignSystemRoute';
 import { Component, useEffect, useState, type ReactNode } from 'react';
 import { APP_NAME, type UserRole } from '@salimvand/shared';
 import { MediaPage } from './pages/MediaPage';
-import { api } from './lib/api';
+import { api, downloadFile } from './lib/api';
 import { LoginPage } from './pages/LoginPage';
 import { ProductsPage } from './pages/ProductsPage';
 import { InventoryPage } from './pages/InventoryPage';
@@ -305,6 +305,9 @@ function App() {
   const dashboardAccess = dashboardCapabilities(role);
   const invoiceAccess = invoiceCapabilities(role);
   const customerAccess = customerCapabilities(role);
+  const exportLabel = page === 'reports' ? 'خروجی گزارش' : page === 'inventory' ? 'خروجی انبار' : 'خروجی';
+  const exportPath = page === 'reports' ? '/reports/sales/export' : '/reports/inventory/export';
+  const exportFile = page === 'reports' ? 'salimvand-sales.csv' : 'salimvand-inventory.csv';
   const navigate = (next: Page, params?: Record<string, string>) => {
     window.location.hash = hashForPage(next, params);
     setPage(next);
@@ -361,6 +364,19 @@ function App() {
             <span>مدیریت</span>
             <b>{pageTitles[page]}</b>
           </div>
+          {(page === 'dashboard' || page === 'reports' || page === 'inventory') && (
+            <button
+              className="topbar-export"
+              onClick={() => void downloadFile(exportPath, exportFile).catch((error: Error) => console.error(error))}
+            >
+              خروجی <span>{exportLabel}</span>
+            </button>
+          )}
+          {invoiceAccess.canCreate && (
+            <button className="topbar-new-invoice" onClick={() => navigate('invoices')}>
+              ＋ فاکتور جدید
+            </button>
+          )}
           <button className="global-search" onClick={() => setPaletteOpen(true)}>
             ⌕ <span>جست‌وجوی سریع</span>
             <kbd>Ctrl K</kbd>
