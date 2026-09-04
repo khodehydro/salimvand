@@ -50,8 +50,8 @@ type VehicleMake = {
 type Transaction = { id: string; type: string; quantityChange: number; quantityAfter: number };
 
 const tabs = [
-  { id: 'register', label: 'ثبت محصول', hint: 'انبار + کاتالوگ + سایت، همه در یک پنجره' },
   { id: 'stock', label: 'لیست انبار', hint: 'جست‌وجوی لحظه‌ای، بارکدخوان و اصلاح سریع موجودی' },
+  { id: 'register', label: 'ثبت محصول', hint: 'انبار + کاتالوگ + سایت، همه در یک پنجره' },
   { id: 'shelves', label: 'قفسه‌ها', hint: 'انبارها و گروه‌بندی قفسه‌ها — ایجاد، ویرایش و حذف' },
 ] as const;
 type Tab = (typeof tabs)[number]['id'];
