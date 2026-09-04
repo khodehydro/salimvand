@@ -5360,6 +5360,31 @@ button.btn-primary-lg:hover:not(:disabled) {
   }
 }
 
+/* The shared Sheet renders an <aside> too; keep the sidebar dimensions from
+   leaking into it. This prevents the inventory item card from opening as a
+   clipped half-width panel. */
+.admin .sv-sheet {
+  width: min(420px, 92vw);
+  flex: 0 1 auto;
+  padding: 0;
+  background: var(--sv-surface);
+  color: var(--sv-text);
+  border-inline-start: 1px solid var(--sv-border);
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  position: relative;
+  overflow: hidden;
+}
+.admin .sv-sheet__body {
+  min-height: 0;
+  padding: var(--sv-space-4, 16px);
+  overflow: auto;
+}
+.admin .sv-sheet__foot {
+  flex: none;
+}
+
 /* SVG navigation icons from the documented admin shell. */
 .nav-icon {
   display: inline-grid;
