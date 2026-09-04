@@ -5385,6 +5385,15 @@ button.btn-primary-lg:hover:not(:disabled) {
   flex: none;
 }
 
+@media (max-width: 700px) {
+  .admin .sv-sheet {
+    width: 100%;
+  }
+  .admin .sheet-meta {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* SVG navigation icons from the documented admin shell. */
 .nav-icon {
   display: inline-grid;
