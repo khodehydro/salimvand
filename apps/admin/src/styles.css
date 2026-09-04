@@ -6374,3 +6374,35 @@ button.btn-primary-lg:hover:not(:disabled) {
   .inventory-flat-row > div:last-child { border-bottom: 0; }
   .inventory-flat-row > .inventory-actions-cell { grid-column: auto; }
 }
+
+/* Inventory item card is a centered modal, not a side drawer. The modal owns
+   the scroll area so the page never gets a second horizontal/vertical scroll. */
+.admin .sv-modal.is-lg {
+  width: min(760px, calc(100vw - 32px));
+  max-height: min(760px, calc(100vh - 32px));
+}
+.admin .sv-modal__body {
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+}
+.admin .sv-modal__body .inventory-detail-body {
+  min-width: 0;
+  overflow: visible;
+}
+.admin .sv-modal footer {
+  flex-wrap: wrap;
+}
+@media (max-width: 700px) {
+  .admin .sv-modal.is-lg {
+    width: calc(100vw - 20px);
+    max-height: calc(100vh - 20px);
+    border-radius: 14px;
+  }
+  .admin .sv-modal footer .sheet-footer-actions {
+    width: 100%;
+  }
+  .admin .sv-modal footer .sheet-footer-actions button {
+    flex: 1;
+  }
+}

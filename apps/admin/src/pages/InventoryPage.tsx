@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { hashForPage } from '../lib/admin-route';
 import { api, downloadFile } from '../lib/api';
-import { Sheet } from '@salimvand/ui';
+import { Modal } from '@salimvand/ui';
 import { StockStepper } from '../components/StockStepper';
 import { ProductCreateModal } from '../components/ProductCreateModal';
 import { BarcodeSvg } from '../components/BarcodeSvg';
@@ -716,8 +716,9 @@ export function InventoryPage() {
       )}
 
 
-      <Sheet
+      <Modal
         open={Boolean(detail)}
+        size="lg"
         title={detail ? `کارت قلم — ${detail.product?.name ?? ''}` : ''}
         onClose={() => setDetail(null)}
         footer={
@@ -821,7 +822,7 @@ export function InventoryPage() {
             )}
           </div>
         )}
-      </Sheet>
+      </Modal>
     </section>
   );
 }
