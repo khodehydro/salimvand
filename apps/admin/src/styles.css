@@ -5359,3 +5359,23 @@ button.btn-primary-lg:hover:not(:disabled) {
     grid-template-columns: 1fr auto;
   }
 }
+
+/* SVG navigation icons from the documented admin shell. */
+.nav-icon {
+  display: inline-grid;
+  place-items: center;
+}
+.nav-svg {
+  width: 17px;
+  height: 17px;
+  flex: none;
+  stroke: currentColor;
+}
+.mobile-nav-icon {
+  display: inline-grid;
+  place-items: center;
+}
+.mobile-nav-icon .nav-svg {
+  width: 18px;
+  height: 18px;
+}

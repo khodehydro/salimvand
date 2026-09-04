@@ -35,23 +35,62 @@ import {
 import 'vazirmatn/Vazirmatn-font-face.css';
 import './styles.css';
 
-type NavItem = { id: Page; label: string; icon: string };
+type NavIconName =
+  | 'dashboard'
+  | 'invoice'
+  | 'customers'
+  | 'inventory'
+  | 'labels'
+  | 'products'
+  | 'purchases'
+  | 'suppliers'
+  | 'media'
+  | 'references'
+  | 'reports'
+  | 'messaging'
+  | 'users'
+  | 'audit'
+  | 'settings';
+type NavItem = { id: Page; label: string; icon: NavIconName };
+
+/** Small inline icons keep the shell visually consistent with the SVG-based
+ * reference UI and avoid platform-dependent emoji glyphs in the sidebar. */
+function NavIcon({ name }: { name: NavIconName }) {
+  const paths: Record<NavIconName, ReactNode> = {
+    dashboard: <><rect x="4" y="4" width="6" height="6" rx="1" /><rect x="14" y="4" width="6" height="6" rx="1" /><rect x="4" y="14" width="6" height="6" rx="1" /><rect x="14" y="14" width="6" height="6" rx="1" /></>,
+    invoice: <><path d="M6 3h9l3 3v15H6z" /><path d="M15 3v4h4M9 12h6M9 16h6" /></>,
+    customers: <><circle cx="9" cy="8" r="3" /><path d="M3 20v-1a6 6 0 0 1 12 0v1M16 5.5a3 3 0 0 1 0 5.5M18 15a4 4 0 0 1 3 4v1" /></>,
+    inventory: <><path d="m4 8 8-4 8 4-8 4zM4 8v8l8 4 8-4V8M12 12v8" /></>,
+    labels: <><path d="M4 5a2 2 0 0 1 2-2h7l7 7-9 9-7-7z" /><circle cx="8" cy="7" r="1" /></>,
+    products: <><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 8h8M8 12h8M8 16h5" /></>,
+    purchases: <><path d="M5 5h10a3 3 0 0 1 3 3v11M5 5v14a2 2 0 0 0 2 2h11" /><path d="M9 9h5M9 13h5" /></>,
+    suppliers: <><path d="M3 7h11v10H3zM14 10h4l3 3v4h-7" /><circle cx="7" cy="19" r="2" /><circle cx="18" cy="19" r="2" /></>,
+    media: <><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="8" cy="9" r="2" /><path d="m4 17 5-5 3 3 2-2 6 6" /></>,
+    references: <><circle cx="12" cy="12" r="8" /><path d="M4 12h16M12 4a12 12 0 0 1 0 16M12 4a12 12 0 0 0 0 16" /></>,
+    reports: <><path d="M5 20V10M12 20V4M19 20v-7" /><path d="M3 20h18" /></>,
+    messaging: <><path d="M4 5h16v11H8l-4 4z" /><path d="M8 9h8M8 12h5" /></>,
+    users: <><circle cx="12" cy="8" r="3" /><path d="M5 20a7 7 0 0 1 14 0M18 6a3 3 0 0 1 3 3" /></>,
+    audit: <><circle cx="12" cy="12" r="8" /><path d="M12 7v5l3 2" /></>,
+    settings: <><circle cx="12" cy="12" r="3" /><path d="m19 15 1 2-2 2-2-1-2 1-1 2h-2l-1-2-2-1-2 1-2-2 1-2-1-2 1-2-1-2 2-2 2 1 2-1 1-2h2l1 2 2 1 2-1 2 2-1 2 1 2z" /></>,
+  };
+  return <svg className="nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
+}
 const navItems: NavItem[] = [
-  { id: 'dashboard', label: 'داشبورد', icon: '⌂' },
-  { id: 'invoices', label: 'فروش و فاکتورها', icon: '▤' },
-  { id: 'customers', label: 'مشتریان', icon: '☏' },
-  { id: 'inventory', label: 'انبار و موجودی', icon: '⌗' },
-  { id: 'labels', label: 'برچسب محصولات', icon: '▣' },
-  { id: 'products', label: 'محصولات', icon: '▦' },
-  { id: 'purchases', label: 'خرید و تأمین', icon: '⇧' },
-  { id: 'suppliers', label: 'تأمین‌کنندگان', icon: '♧' },
-  { id: 'media', label: 'رسانه‌ها', icon: '◫' },
-  { id: 'references', label: 'برندها و خودروها', icon: '◇' },
-  { id: 'reports', label: 'گزارش‌ها', icon: '◒' },
-  { id: 'messaging', label: 'پیامک و کانال\u200cها', icon: '✉' },
-  { id: 'users', label: 'کاربران', icon: '☗' },
-  { id: 'audit', label: 'تاریخچه تغییرات', icon: '◷' },
-  { id: 'settings', label: 'تنظیمات', icon: '⚙' },
+  { id: 'dashboard', label: 'داشبورد', icon: 'dashboard' },
+  { id: 'invoices', label: 'فروش و فاکتورها', icon: 'invoice' },
+  { id: 'customers', label: 'مشتریان', icon: 'customers' },
+  { id: 'inventory', label: 'انبار و موجودی', icon: 'inventory' },
+  { id: 'labels', label: 'برچسب محصولات', icon: 'labels' },
+  { id: 'products', label: 'محصولات', icon: 'products' },
+  { id: 'purchases', label: 'خرید و تأمین', icon: 'purchases' },
+  { id: 'suppliers', label: 'تأمین‌کنندگان', icon: 'suppliers' },
+  { id: 'media', label: 'رسانه‌ها', icon: 'media' },
+  { id: 'references', label: 'برندها و خودروها', icon: 'references' },
+  { id: 'reports', label: 'گزارش‌ها', icon: 'reports' },
+  { id: 'messaging', label: 'پیامک و کانال\u200cها', icon: 'messaging' },
+  { id: 'users', label: 'کاربران', icon: 'users' },
+  { id: 'audit', label: 'تاریخچه تغییرات', icon: 'audit' },
+  { id: 'settings', label: 'تنظیمات', icon: 'settings' },
 ];
 // Grouping mirrors the documented admin shell: a short primary section,
 // the store workflow, then management/system tools. Keep the groups stable so
@@ -290,7 +329,7 @@ function App() {
                     key={item.id}
                     onClick={() => navigate(item.id)}
                   >
-                    <span className="nav-icon">{item.icon}</span>
+                    <span className="nav-icon"><NavIcon name={item.icon} /></span>
                     {item.label}
                     {item.id === 'inventory' && <i className="nav-count">!</i>}
                   </button>
@@ -396,7 +435,7 @@ function App() {
             key={item.id}
             onClick={() => navigate(item.id)}
           >
-            <span>{item.icon}</span>
+            <span className="mobile-nav-icon"><NavIcon name={item.icon} /></span>
             {item.label}
           </button>
         ))}
