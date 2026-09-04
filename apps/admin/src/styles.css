@@ -6115,3 +6115,107 @@ button.btn-primary-lg:hover:not(:disabled) {
     justify-content: flex-start;
   }
 }
+
+/* Product list rows use one grid with real columns. Keeping the four cells at
+   the row root prevents status, stock and actions from drifting underneath
+   the product name. */
+.product-list-table .product-row {
+  grid-template-columns: minmax(280px, 1.35fr) minmax(150px, .8fr) minmax(250px, 1.35fr) minmax(190px, .9fr);
+  align-items: center;
+}
+.product-list-table .product-cell {
+  min-width: 0;
+  padding: 12px 16px;
+}
+.product-main-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.product-main-cell .plc-info {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+.product-main-cell .plc-info b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.product-main-cell .plc-info small {
+  color: var(--sv-text-3);
+  font-family: ui-monospace, monospace;
+  direction: ltr;
+}
+.product-status-cell {
+  border-inline-start: 1px solid var(--sv-border);
+}
+.product-status-cell .plc-chips {
+  justify-content: flex-start;
+}
+.product-stock-cell {
+  display: grid;
+  gap: 6px;
+  border-inline-start: 1px solid var(--sv-border);
+}
+.product-stock-cell .plc-brand {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  padding: 0;
+}
+.product-stock-cell .brand-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.product-stock-cell .brand-name small {
+  color: var(--sv-text-3);
+  font-size: 10px;
+}
+.product-stock-cell .plc-total {
+  color: var(--sv-text-2);
+  font-size: 11px;
+}
+.product-actions-cell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+}
+.product-actions-cell .row-action {
+  padding: 6px 9px;
+}
+@media (max-width: 1000px) {
+  .product-list-table .product-row {
+    grid-template-columns: minmax(220px, 1.2fr) minmax(125px, .7fr) minmax(190px, 1fr);
+  }
+  .product-actions-cell {
+    grid-column: 1 / -1;
+    border-top: 1px solid var(--sv-border);
+    padding-top: 8px;
+  }
+}
+@media (max-width: 700px) {
+  .product-list-table .product-row {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .product-list-table .product-cell {
+    border-inline-start: 0;
+    border-bottom: 1px solid var(--sv-border);
+    padding: 10px 12px;
+  }
+  .product-list-table .product-cell:last-child {
+    border-bottom: 0;
+  }
+  .product-status-cell,
+  .product-stock-cell,
+  .product-actions-cell {
+    grid-column: auto;
+  }
+}

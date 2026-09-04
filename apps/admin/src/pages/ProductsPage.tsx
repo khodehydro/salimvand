@@ -232,106 +232,53 @@ export function ProductsPage() {
         <div className="product-list-head" aria-hidden="true"><span>محصول</span><span>وضعیت و دسته</span><span>برندها و موجودی</span><span>عملیات</span></div>
         {visible.map((product) => (
           <article className="product-list-card product-row" key={product.id}>
-            <div className="plc-main">
+            <div className="product-cell product-main-cell">
               <span className="product-thumb">
                 {product.images?.[0] ? (
-                  <MediaImage
-                    src={product.images[0].path}
-                    alt={product.images[0].alt ?? product.name}
-                  />
-                ) : (
-                  <span>قطعه</span>
-                )}
+                  <MediaImage src={product.images[0].path} alt={product.images[0].alt ?? product.name} />
+                ) : <span>قطعه</span>}
               </span>
               <div className="plc-info">
                 <b>{product.name}</b>
-                <small dir="ltr">
-                  {product.code}
-                  {product.partNumber ? ` · ${product.partNumber}` : ''}
-                </small>
-                <div className="plc-chips">
-                  {product.category?.name && <span className="chip">{product.category.name}</span>}
-                  <span className={product.status === 'active' ? 'chip ok' : 'chip warn'}>
-                    {product.status === 'active' ? 'فعال' : 'مخفی'}
-                  </span>
-                  {cheapestSalePrice(product) != null && (
-                    <span className="chip price">
-                      از {Number(cheapestSalePrice(product)).toLocaleString('fa-IR')} ریال
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="plc-actions">
-                <button
-                  className="row-action"
-                  onClick={() => {
-                    void refresh(product.id).then(() => setTab('basic'));
-                  }}
-                >
-                  ویرایش
-                </button>
-                <a
-                  className="row-action"
-                  href={`${publicSiteUrl}/product/${encodeURIComponent(product.slug)}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  title="نمایش این محصول در سایت عمومی"
-                >
-                  سایت
-                </a>
-                <button
-                  className="row-action"
-                  title="ساخت برچسب برای این محصول"
-                  onClick={() => {
-                    window.location.hash = hashForPage('labels', { product: product.id });
-                  }}
-                >
-                  برچسب
-                </button>
-                <button
-                  className="row-action danger-text"
-                  onClick={async () => {
-                    if (!window.confirm('محصول حذف نرم شود؟ از سایت پنهان می‌شود.')) return;
-                    try {
-                      await api(`/products/${product.id}`, { method: 'DELETE' });
-                      setMessage('محصول حذف نرم شد.');
-                      await load();
-                    } catch (error) {
-                      setMessage((error as Error).message);
-                    }
-                  }}
-                >
-                  حذف
-                </button>
+                <small dir="ltr">{product.code}{product.partNumber ? ` · ${product.partNumber}` : ''}</small>
               </div>
             </div>
-            <div className="plc-stock">
+            <div className="product-cell product-status-cell">
+              <div className="plc-chips">
+                {product.category?.name && <span className="chip">{product.category.name}</span>}
+                <span className={product.status === 'active' ? 'chip ok' : 'chip warn'}>
+                  {product.status === 'active' ? 'فعال' : 'مخفی'}
+                </span>
+                {vehicleOptions.length > 0 && product.compatibilities?.length ? (
+                  <span className="chip vehicle-chip">
+                    {product.compatibilities.length.toLocaleString('fa-IR')} خودرو
+                  </span>
+                ) : null}
+              </div>
+            </div>
+            <div className="product-cell product-stock-cell">
               {product.inventoryItems?.length ? (
                 product.inventoryItems.map((entry) => (
                   <div className="plc-brand" key={entry.id}>
-                    <span
-                      className="brand-name"
-                      title={entry.location ? locationChip(entry.location) : undefined}
-                    >
+                    <span className="brand-name" title={entry.location ? locationChip(entry.location) : undefined}>
                       {entry.brand.name}
                       {entry.location ? <small> · {locationChip(entry.location)}</small> : null}
                     </span>
-                    <StockStepper
-                      itemId={entry.id}
-                      quantity={entry.quantity}
-                      onMessage={setMessage}
-                      onSaved={() => void load()}
-                    />
+                    <StockStepper itemId={entry.id} quantity={entry.quantity} onMessage={setMessage} onSaved={() => void load()} />
                   </div>
                 ))
-              ) : (
-                <span className="muted">
-                  قلم انباری ثبت نشده — از ویرایشگر تب «قلم‌ها» اضافه کنید.
-                </span>
-              )}
-              <span className="plc-total">
-                جمع: <b>{totalStock(product).toLocaleString('fa-IR')}</b>
-              </span>
+              ) : <span className="muted">قلم انباری ثبت نشده</span>}
+              <span className="plc-total">جمع قطعات: <b>{totalStock(product).toLocaleString('fa-IR')}</b></span>
+            </div>
+            <div className="product-cell product-actions-cell">
+              <button className="row-action" onClick={() => { void refresh(product.id).then(() => setTab('basic')); }}>ویرایش</button>
+              <a className="row-action" href={`${publicSiteUrl}/product/${encodeURIComponent(product.slug)}`} target="_blank" rel="noreferrer">سایت</a>
+              <button className="row-action" title="ساخت برچسب برای این محصول" onClick={() => { window.location.hash = hashForPage('labels', { product: product.id }); }}>برچسب</button>
+              <button className="row-action danger-text" onClick={async () => {
+                if (!window.confirm('محصول حذف نرم شود؟ از سایت پنهان می‌شود.')) return;
+                try { await api(`/products/${product.id}`, { method: 'DELETE' }); setMessage('محصول حذف نرم شد.'); await load(); }
+                catch (error) { setMessage((error as Error).message); }
+              }}>حذف</button>
             </div>
           </article>
         ))}
