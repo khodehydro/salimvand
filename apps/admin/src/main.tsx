@@ -297,6 +297,11 @@ function App() {
   }, [role, page]);
   if (!authenticated) return <LoginPage onLogin={() => setAuthenticated(true)} />;
   const visibleItems = navItems.filter((item) => canAccessPage(role, item.id));
+  // Mobile follows the documented daily workflow: dashboard, inventory, sales,
+  // then customers. Desktop keeps its fuller information architecture.
+  const mobileItems = ['dashboard', 'inventory', 'invoices', 'customers']
+    .map((id) => visibleItems.find((item) => item.id === id))
+    .filter((item): item is NavItem => Boolean(item));
   const dashboardAccess = dashboardCapabilities(role);
   const invoiceAccess = invoiceCapabilities(role);
   const customerAccess = customerCapabilities(role);
@@ -429,7 +434,7 @@ function App() {
         />
       )}
       <nav className="mobile-nav">
-        {visibleItems.slice(0, 4).map((item) => (
+        {mobileItems.map((item) => (
           <button
             className={page === item.id ? 'active' : ''}
             key={item.id}
