@@ -248,7 +248,8 @@ export function ProductCreateModal({
 
         <div className="editor-body">
           {tab === 'basic' && (
-            <div className="form-grid">
+            <>
+              <div className="form-grid">
               <label>
                 نام محصول *
                 <input
@@ -375,7 +376,8 @@ export function ProductCreateModal({
                   {imageFile?.name ?? selectedImage?.path ?? imageUrl}
                 </div>
               )}
-            </div>
+              </div>
+            </>
           )}
 
           {tab === 'item' && (
