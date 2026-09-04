@@ -1,8 +1,17 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { APP_NAME } from '@salimvand/shared';
 import { getStoreInfo } from './store-info';
 import 'vazirmatn/Vazirmatn-font-face.css';
 import './styles.css';
+
+const SITE_THEME_COLOR = '#071c30';
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+  themeColor: SITE_THEME_COLOR,
+};
 
 // The favicon is operator-configurable from the admin settings; read the same
 // store meta as the pages so the browser tab icon follows the panel.
@@ -12,6 +21,11 @@ export async function generateMetadata(): Promise<Metadata> {
     metadataBase: new URL(process.env.PUBLIC_SITE_URL ?? 'https://salimvand.ir'),
     title: `${APP_NAME} | آذین خودرو`,
     description: 'فروش لوازم داخلی و قطعات خودرو در میاندوآب',
+    appleWebApp: {
+      capable: true,
+      statusBarStyle: 'black-translucent',
+      title: APP_NAME,
+    },
     icons: info.faviconUrl ? { icon: { url: info.faviconUrl } } : undefined,
   };
 }
