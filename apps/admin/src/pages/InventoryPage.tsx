@@ -234,7 +234,7 @@ export function InventoryPage() {
     try {
       await api('/inventory/receive', {
         method: 'POST',
-        body: JSON.stringify({ itemId: detail.id, quantity: qty, userId: 'panel-user' }),
+        body: JSON.stringify({ itemId: detail.id, quantity: qty, reason: 'ورود از کارت قلم' }),
       });
       setMessage('ورود کالا ثبت شد');
       await load();
@@ -399,6 +399,7 @@ export function InventoryPage() {
   };
 
   const activeTab = tabs.find((entry) => entry.id === tab) ?? tabs[0];
+  const totalPieces = items.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
     <section className="inventory-page">
@@ -411,7 +412,11 @@ export function InventoryPage() {
               : activeTab.hint}
           </p>
         </div>
-        <span className="count">{items.length} قلم</span>
+        <span className="count inventory-count">
+          <b>{formatPersianNumber(items.length)} قلم</b>
+          <i>·</i>
+          <b>{formatPersianNumber(totalPieces)} قطعه</b>
+        </span>
       </div>
 
       <nav className="settings-tabs" aria-label="بخش‌های انبار">
@@ -811,7 +816,22 @@ export function InventoryPage() {
         }
       >
         {detail && (
-          <div className="sheet-body">
+          <div className="sheet-body inventory-detail-body">
+            <div className="inventory-detail-hero">
+              <span className="detail-product-thumb">
+                {detail.product?.images?.[0]?.path ? (
+                  <img src={detail.product.images[0].path} alt="" />
+                ) : (
+                  <span>قطعه</span>
+                )}
+              </span>
+              <div>
+                <small>کارت قلم انبار</small>
+                <h4>{detail.product?.name ?? 'قلم بدون محصول'}</h4>
+                <code dir="ltr">{detail.product?.code ?? detail.barcode}</code>
+              </div>
+              <span className={`badge ${stockStatus(detail).badge}`}>{stockStatus(detail).label}</span>
+            </div>
             <dl className="sheet-meta">
               <div>
                 <dt>برند</dt>
