@@ -19,7 +19,14 @@ type Item = {
   quantity: number;
   salePrice: string;
   minStock?: number | null;
-  product?: { id: string; name: string; images?: Array<{ path: string }> };
+  product?: {
+    id: string;
+    name: string;
+    code?: string | null;
+    images?: Array<{ path: string }>;
+    category?: { name: string } | null;
+    compatibilities?: Array<{ model: { name: string; make: { name: string } } }>;
+  };
   brand?: { name: string };
   location?: { id: string; name: string; code: string; parent?: { name: string } | null };
 };
@@ -57,13 +64,34 @@ const locationTypeLabels: Record<string, string> = {
 };
 
 /** Stock rows grouped per product: «۲ قلم · ۷ قطعه» aggregates the item
- * count and the total piece count under one card. */
+ * count and the total piece count under one card. Code, category and
+ * compatible vehicles complete the product picture right inside the list. */
 type ProductGroup = {
   productId: string;
   name: string;
+  code?: string | null;
   image?: string;
+  category?: string;
+  vehicles: string[];
   items: Item[];
 };
+
+/** Semantic stock status — same colours everywhere: در دسترس = سبز،
+ * کم‌موجود = کهربایی، ناموجود = قرمز (طبق سند طراحی). */
+function stockStatus(item: Item): { label: string; badge: string; bar: string } {
+  const min = item.minStock ?? 0;
+  if (item.quantity <= 0) return { label: 'ناموجود', badge: 'b-danger', bar: '' };
+  if (min > 0 && item.quantity <= min) return { label: 'کم‌موجود', badge: 'b-warn', bar: 'mid' };
+  return { label: 'در دسترس', badge: 'b-ok', bar: 'ok' };
+}
+
+/** Fill ratio of the stockbar relative to the warning threshold. */
+function stockRatio(item: Item): number {
+  const min = item.minStock ?? 0;
+  if (item.quantity <= 0) return 0;
+  if (min <= 0) return 1;
+  return Math.min(1, item.quantity / min);
+}
 
 export function InventoryPage() {
   const [tab, setTab] = useState<Tab>('register');
@@ -132,12 +160,22 @@ export function InventoryPage() {
     const map = new Map<string, ProductGroup>();
     for (const item of items) {
       const key = item.product?.id ?? item.barcode;
-      const group = map.get(key) ?? {
-        productId: key,
-        name: item.product?.name ?? item.barcode,
-        image: item.product?.images?.[0]?.path,
-        items: [],
-      };
+      const group =
+        map.get(key) ??
+        ({
+          productId: key,
+          name: item.product?.name ?? item.barcode,
+          code: item.product?.code,
+          image: item.product?.images?.[0]?.path,
+          category: item.product?.category?.name,
+          vehicles: [],
+          items: [],
+        } satisfies ProductGroup);
+      // Deduplicated vehicle list («پژو ۲۰۶», …) from all compatibilities.
+      for (const entry of item.product?.compatibilities ?? []) {
+        const vehicle = `${entry.model.make.name} ${entry.model.name}`;
+        if (!group.vehicles.includes(vehicle)) group.vehicles.push(vehicle);
+      }
       group.items.push(item);
       map.set(key, group);
     }
@@ -332,6 +370,35 @@ export function InventoryPage() {
     window.location.hash = hashForPage('labels', { item: item.id });
   };
 
+  /** Publishes the product announcement to the Telegram/Bale channels. */
+  const publishGroup = async (group: ProductGroup) => {
+    const productId = group.items.find((item) => item.product?.id)?.product?.id;
+    if (!productId) return;
+    setMessage('در حال انتشار در کانال‌ها...');
+    try {
+      const result = await api<{
+        data: {
+          telegram: { ok: boolean; skipped?: boolean; reason?: string };
+          bale: { ok: boolean; skipped?: boolean; reason?: string };
+        };
+      }>(`/products/${productId}/publish`, { method: 'POST' });
+      const label = (name: string, channel: { ok: boolean; skipped?: boolean; reason?: string }) =>
+        channel.skipped
+          ? `${name}: پیکربندی نشده`
+          : channel.ok
+            ? `${name}: ارسال شد ✓`
+            : `${name}: خطا — ${channel.reason}`;
+      setMessage(
+        `انتشار «${group.name}» — ${label('تلگرام', result.data.telegram)} · ${label(
+          'بله',
+          result.data.bale,
+        )}`,
+      );
+    } catch (error) {
+      setMessage((error as Error).message);
+    }
+  };
+
   const activeTab = tabs.find((entry) => entry.id === tab) ?? tabs[0];
 
   return (
@@ -379,23 +446,44 @@ export function InventoryPage() {
 
       {tab === 'stock' && (
         <div className="stock-tab">
-          <div className="search-field">
-            <span className="search-icon">⌕</span>
-            <input
-              placeholder="جست‌وجوی لحظه‌ای کالا یا بارکد…"
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-            />
-            {filter && (
-              <button
-                type="button"
-                className="search-clear"
-                onClick={() => setFilter('')}
-                aria-label="پاک کردن جست‌وجو"
-              >
-                ✕
-              </button>
-            )}
+          {/* Live search: the list filters on every keystroke — no button. */}
+          <div className="stock-search">
+            <div className="search-field">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
+                <path
+                  d="m20 20-3.6-3.6"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
+              </svg>
+              <input
+                placeholder="جست‌وجوی فوری: نام کالا، کد محصول، بارکد یا برند…"
+                aria-label="جست‌وجوی فوری کالا"
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+              />
+              {filter && (
+                <button
+                  type="button"
+                  className="search-clear"
+                  onClick={() => setFilter('')}
+                  aria-label="پاک کردن جست‌وجو"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+            <p className="stock-search-meta" aria-live="polite">
+              {filter
+                ? `${formatPersianNumber(groups.length)} کالا · ${formatPersianNumber(
+                    items.length,
+                  )} قلم برای «${filter}»`
+                : `${formatPersianNumber(groups.length)} کالا · ${formatPersianNumber(
+                    items.length,
+                  )} قلم در انبار`}
+            </p>
           </div>
           <div className="list-toolbar stock-toolbar">
             <button className="row-action" onClick={() => void lowStock()}>
@@ -458,51 +546,102 @@ export function InventoryPage() {
                       )}
                     </span>
                     <div className="ig-title">
-                      <b>{group.name}</b>
+                      <div className="ig-name-row">
+                        <b>{group.name}</b>
+                        {group.code && (
+                          <code className="ig-code" dir="ltr">
+                            {group.code}
+                          </code>
+                        )}
+                      </div>
                       <div className="plc-chips">
                         <span className="chip">
                           {group.items.length.toLocaleString('fa-IR')} قلم ·{' '}
                           {totalPieces.toLocaleString('fa-IR')} قطعه
                         </span>
+                        {group.category && <span className="chip">{group.category}</span>}
+                        {group.vehicles.slice(0, 3).map((vehicle) => (
+                          <span className="chip" key={vehicle}>
+                            🚗 {vehicle}
+                          </span>
+                        ))}
+                        {group.vehicles.length > 3 && (
+                          <span className="chip">
+                            +{formatPersianNumber(group.vehicles.length - 3)} خودروی دیگر
+                          </span>
+                        )}
                         {cheapest != null && (
                           <span className="chip price">از {formatRial(cheapest)}</span>
                         )}
                       </div>
                     </div>
+                    {group.items.some((item) => item.product?.id) && (
+                      <button
+                        className="row-action ig-publish"
+                        onClick={() => void publishGroup(group)}
+                        title="انتشار عکس، کد، نام و مشخصات محصول در کانال تلگرام و بله"
+                      >
+                        📢 انتشار در شبکه‌ها
+                      </button>
+                    )}
                   </div>
                   <div className="ig-items">
-                    {group.items.map((item) => (
-                      <div className="inventory-row" key={item.id}>
-                        <div className="inv-info">
-                          <b>{item.brand?.name ?? '-'}</b>
-                          <small>
-                            <code dir="ltr">{item.barcode}</code>
-                          </small>
+                    {group.items.map((item) => {
+                      const status = stockStatus(item);
+                      return (
+                        <div className="inventory-row" key={item.id}>
+                          <div className="inv-info">
+                            <div className="inv-title-row">
+                              <b>{item.brand?.name ?? 'بدون برند'}</b>
+                              <span className={`badge ${status.badge}`}>{status.label}</span>
+                            </div>
+                            <small>
+                              <code dir="ltr">{item.barcode}</code>
+                            </small>
+                            <div className="inv-stock-line">
+                              <i className={`stockbar ${status.bar}`}>
+                                <i style={{ width: `${Math.round(stockRatio(item) * 100)}%` }} />
+                              </i>
+                              {item.minStock != null && item.minStock > 0 && (
+                                <small className="muted">
+                                  حداقل {formatPersianNumber(item.minStock)}
+                                </small>
+                              )}
+                            </div>
+                            <span className="inv-shelf">
+                              {item.location ? `📦 ${locationChip(item.location)}` : 'بدون قفسه'}
+                            </span>
+                          </div>
+                          <StockStepper
+                            itemId={item.id}
+                            quantity={item.quantity}
+                            onMessage={setMessage}
+                            onSaved={() => void load()}
+                          />
+                          <div className="inv-price">
+                            <b>{formatRial(Number(item.salePrice))}</b>
+                            <small>قیمت فروش</small>
+                          </div>
+                          <div className="inv-actions">
+                            <button className="row-action" onClick={() => void openDetail(item)}>
+                              کارت قلم
+                            </button>
+                            <button className="row-action" onClick={() => openLabelStudio(item)}>
+                              برچسب
+                            </button>
+                          </div>
                         </div>
-                        <StockStepper
-                          itemId={item.id}
-                          quantity={item.quantity}
-                          onMessage={setMessage}
-                          onSaved={() => void load()}
-                        />
-                        <span className="inv-shelf">
-                          {item.location ? locationChip(item.location) : 'بدون قفسه'}
-                        </span>
-                        <div className="inv-actions">
-                          <button className="row-action" onClick={() => void openDetail(item)}>
-                            کارت قلم
-                          </button>
-                          <button className="row-action" onClick={() => openLabelStudio(item)}>
-                            برچسب
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               );
             })}
-            {!groups.length && <p className="muted">قلمی یافت نشد.</p>}
+            {!groups.length && (
+              <p className="muted">
+                {filter ? `کالایی مطابق «${filter}» پیدا نشد.` : 'قلمی یافت نشد.'}
+              </p>
+            )}
           </div>
         </div>
       )}

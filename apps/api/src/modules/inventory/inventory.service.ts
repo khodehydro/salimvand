@@ -27,11 +27,15 @@ export class InventoryService {
         isActive: true,
         ...(filters.brandId ? { brandId: filters.brandId } : {}),
         ...(filters.locationId ? { locationId: filters.locationId } : {}),
+        // Live panel search matches barcode, product name, product code and
+        // brand name — one input, no button to press.
         ...(q
           ? {
               OR: [
                 { barcode: { contains: q } },
                 { product: { name: { contains: q, mode: 'insensitive' } } },
+                { product: { code: { contains: q, mode: 'insensitive' } } },
+                { brand: { name: { contains: q, mode: 'insensitive' } } },
               ],
             }
           : {}),
@@ -43,9 +47,14 @@ export class InventoryService {
         // shows placement as «انبار · قفسه».
         location: { include: { parent: true } },
         // Primary image first so the panel's grouped stock list can show a
-        // thumbnail without pulling every image of every product.
+        // thumbnail without pulling every image of every product; category
+        // and compatibilities feed the richer list chips.
         product: {
-          include: { images: { orderBy: [{ isPrimary: 'desc' }, { sort: 'asc' }], take: 1 } },
+          include: {
+            images: { orderBy: [{ isPrimary: 'desc' }, { sort: 'asc' }], take: 1 },
+            category: true,
+            compatibilities: { include: { model: { include: { make: true } } } },
+          },
         },
       },
     });
@@ -219,7 +228,19 @@ export class InventoryService {
     const items = await this.prisma.inventoryItem.findMany({
       where: { isActive: true },
       orderBy: { quantity: 'asc' },
-      include: { product: true, brand: true, location: { include: { parent: true } } },
+      // Same shape as list() so the panel can render low-stock rows with the
+      // identical rich cards.
+      include: {
+        brand: true,
+        location: { include: { parent: true } },
+        product: {
+          include: {
+            images: { orderBy: [{ isPrimary: 'desc' }, { sort: 'asc' }], take: 1 },
+            category: true,
+            compatibilities: { include: { model: { include: { make: true } } } },
+          },
+        },
+      },
     });
     return {
       ok: true,

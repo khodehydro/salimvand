@@ -169,4 +169,43 @@ describe('InventoryService', () => {
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
+
+  it('searches the live list by barcode, product name, product code and brand', async () => {
+    const findMany = vi.fn().mockResolvedValue([]);
+    const prisma = { inventoryItem: { findMany } };
+    await new InventoryService(prisma as never).list({ q: 'لنت' });
+    const args = findMany.mock.calls[0][0] as {
+      where: { OR: Array<Record<string, unknown>> };
+      include: { product: { include: Record<string, unknown> } };
+    };
+    expect(args.where.OR).toEqual([
+      { barcode: { contains: 'لنت' } },
+      { product: { name: { contains: 'لنت', mode: 'insensitive' } } },
+      { product: { code: { contains: 'لنت', mode: 'insensitive' } } },
+      { brand: { name: { contains: 'لنت', mode: 'insensitive' } } },
+    ]);
+    // The richer cards need category + compatibilities next to the image.
+    expect(Object.keys(args.include.product.include)).toEqual(
+      expect.arrayContaining(['images', 'category', 'compatibilities']),
+    );
+  });
+
+  it('lists everything without a filter clause when the search box is empty', async () => {
+    const findMany = vi.fn().mockResolvedValue([{ id: 'i1', quantity: 3, minStock: null }]);
+    const prisma = { inventoryItem: { findMany } };
+    const result = await new InventoryService(prisma as never).list({ q: '  ' });
+    const args = findMany.mock.calls[0][0] as { where: Record<string, unknown> };
+    expect(args.where).toEqual({ isActive: true });
+    expect(result.data).toHaveLength(1);
+  });
+
+  it('filters the list to out-of-stock rows with status=out', async () => {
+    const findMany = vi.fn().mockResolvedValue([
+      { id: 'ok', quantity: 5, minStock: 2 },
+      { id: 'zero', quantity: 0, minStock: null },
+    ]);
+    const prisma = { inventoryItem: { findMany } };
+    const result = await new InventoryService(prisma as never).list({ status: 'out' });
+    expect(result.data.map((item: { id: string }) => item.id)).toEqual(['zero']);
+  });
 });

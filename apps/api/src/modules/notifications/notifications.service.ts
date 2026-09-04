@@ -10,6 +10,8 @@ export type NotificationJob = {
   mobile?: string;
   message: string;
   testChannel?: Channel;
+  /** Channels that already succeeded; BullMQ retries skip them (no duplicate SMS). */
+  channelsDone?: Channel[];
 };
 type Channel = 'sms' | 'telegram' | 'bale';
 
@@ -62,9 +64,23 @@ export function integrationUrl(
   channel: Exclude<Channel, 'sms'>,
   env: NodeJS.ProcessEnv = process.env,
 ): string {
-  if (channel === 'telegram')
-    return `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`;
+  if (channel === 'telegram') {
+    // TELEGRAM_API_BASE can point at the Cloudflare Worker proxy (Telegram is
+    // filtered inside Iran); it defaults to the official API.
+    const base = (env.TELEGRAM_API_BASE ?? 'https://api.telegram.org').replace(/\/+$/, '');
+    return `${base}/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`;
+  }
   return `https://tapi.bale.ai/bot${env.BALE_BOT_TOKEN}/sendMessage`;
+}
+
+/**
+ * Headers for Telegram API calls: when TELEGRAM_PROXY_SECRET is set the
+ * Cloudflare Worker proxy only forwards requests carrying this secret.
+ */
+export function telegramApiHeaders(env: NodeJS.ProcessEnv = process.env): Record<string, string> {
+  const headers: Record<string, string> = { 'content-type': 'application/json' };
+  if (env.TELEGRAM_PROXY_SECRET) headers['x-proxy-secret'] = env.TELEGRAM_PROXY_SECRET;
+  return headers;
 }
 type NotificationName = NotificationJob['type'];
 
@@ -104,15 +120,25 @@ export function notificationChannels(
   return channels;
 }
 
-/** Replaces {placeholders} in an operator-defined SMS template; unknown keys stay untouched. */
+/**
+ * Replaces {placeholders} in an operator-defined SMS template; unknown keys stay untouched.
+ * Also normalizes line breaks so the SMS keeps its layout: literal two-character "\n"
+ * sequences typed by the operator become real newlines, CR(LF) is unified, whitespace
+ * around newlines is dropped and 2+ blank lines collapse into one.
+ */
 export function renderSmsTemplate(
   template: string | null | undefined,
   vars: Record<string, string | number>,
 ): string {
   if (!template || !template.trim()) return '';
   return template
-    .replace(/\{(\w+)\}/g, (match, key: string) => (key in vars ? String(vars[key]) : match))
+    .replace(/\\n/g, '\n')
+    .replace(/\r\n?/g, '\n')
     .replace(/[ \t]{2,}/g, ' ')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n[ \t]+/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/\{(\w+)\}/g, (match, key: string) => (key in vars ? String(vars[key]) : match))
     .trim();
 }
 
@@ -122,19 +148,22 @@ export function buildInvoiceMessage(
   total: string,
   paid = false,
   template?: string | null,
+  customerName?: string | null,
 ): string {
   const siteUrl = (process.env.PUBLIC_SITE_URL ?? 'https://salimvand.ir').replace(/\/$/, '');
   const link = `${siteUrl}/i/${shortCode}`;
+  const name = customerName?.trim();
+  const greeting = name ? `${name} عزیز` : 'مشتری گرامی';
   const rendered = renderSmsTemplate(template, {
+    customer_name: greeting,
     invoice_number: number,
     amount: total,
     link,
     store: 'سلیم‌وند',
   });
   if (rendered) return rendered;
-  return paid
-    ? `پرداخت فاکتور ${number} ثبت شد. مبلغ پرداختی: ${total} ریال\n${link}`
-    : `فاکتور ${number} صادر شد. مبلغ: ${total} ریال\nمشاهده و دانلود: ${link}`;
+  if (paid) return `پرداخت فاکتور ${number} ثبت شد. مبلغ پرداختی: ${total} ریال\n${link}`;
+  return `${greeting}\n\nفاکتور شماره ${number} شما صادر شد\n\nمشاهده:\n${link}\n\nبا تشکر از خرید شما\nفروشگاه سلیم وند`;
 }
 
 /** Parses a Telegram/Bale bot message into a command and its argument. */
@@ -409,29 +438,52 @@ export class NotificationsService implements OnModuleDestroy {
     return 'دستورهای موجود: /stock /low /sales /invoice <کد> /help';
   }
 
+  /** Hard cap for provider HTTP calls; anything slower is treated as a failure. */
+  private static readonly providerTimeoutMs = 15_000;
+
   private async process(job: Job<NotificationJob>) {
     // Credentials are resolved per job: panel-configured values (settings
     // table) take precedence and .env fills the gaps, so the worker picks up
     // changes made in the admin panel without a restart.
     const env = await this.messagingEnv();
-    // Each adapter fails the job on provider errors so BullMQ can retry it.
+    // Channels that already succeeded on an earlier attempt are stored on the
+    // job data, so BullMQ retries re-run only the failed channels instead of
+    // re-sending the same SMS twice. Provider calls carry a hard timeout: a
+    // hanging endpoint (e.g. a filtered bot API) must never occupy a worker
+    // slot indefinitely and stall the whole queue.
+    const done = new Set<Channel>(job.data.channelsDone ?? []);
     let delivered = false;
     for (const channel of notificationChannels(job.data, env)) {
+      if (done.has(channel)) {
+        delivered = true;
+        continue;
+      }
       if (channel === 'sms') {
         // sms.ir «ارسال گروهی» with a single recipient: the invoice SMS
         // carries a dynamic link, so the line-number bulk endpoint is used
         // (the Verify endpoint only accepts ≤25-char template parameters).
         // Failing the job lets BullMQ retry with backoff; sms.ir 401/429 get
         // a Persian reason so the failed list in the panel is readable.
-        const response = await fetch(smsIrSendUrl(env), {
-          method: 'POST',
-          headers: {
-            'content-type': 'application/json',
-            accept: 'application/json',
-            'x-api-key': env.SMS_API_KEY!,
-          },
-          body: JSON.stringify(smsIrPayload(job.data.mobile!, job.data.message, env)),
-        });
+        let response: Response;
+        try {
+          response = await fetch(smsIrSendUrl(env), {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              accept: 'application/json',
+              'x-api-key': env.SMS_API_KEY!,
+            },
+            body: JSON.stringify(smsIrPayload(job.data.mobile!, job.data.message, env)),
+            signal: AbortSignal.timeout(NotificationsService.providerTimeoutMs),
+          });
+        } catch (error) {
+          const reason =
+            (error as Error)?.name === 'TimeoutError'
+              ? 'sms.ir: پاسخی به‌موقع نرسید (تایم‌اوت)'
+              : `sms.ir: خطای اتصال (${(error as Error)?.message ?? 'نامشخص'})`;
+          await this.logSms(job.data, 'failed', reason);
+          throw new Error(reason);
+        }
         const body = (await response.json().catch(() => null)) as SmsIrResponse | null;
         if (!response.ok || body?.status !== 1) {
           const reason = smsIrFailure(response, body);
@@ -439,31 +491,51 @@ export class NotificationsService implements OnModuleDestroy {
           throw new Error(reason);
         }
         await this.logSms(job.data, 'sent');
-        delivered = true;
-        continue;
+      } else {
+        const chatId = channel === 'telegram' ? env.TELEGRAM_CHAT_ID! : env.BALE_CHAT_ID!;
+        let response: Response;
+        try {
+          response = await fetch(integrationUrl(channel, env), {
+            method: 'POST',
+            headers:
+              channel === 'telegram'
+                ? telegramApiHeaders(env)
+                : { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: chatId,
+              text: job.data.message,
+              disable_web_page_preview: true,
+            }),
+            signal: AbortSignal.timeout(NotificationsService.providerTimeoutMs),
+          });
+        } catch (error) {
+          const reason =
+            (error as Error)?.name === 'TimeoutError'
+              ? `${channel}: پاسخی به‌موقع نرسید (تایم‌اوت)`
+              : `${channel}: خطای اتصال (${(error as Error)?.message ?? 'نامشخص'})`;
+          await this.logChannel(channel, job.data.message, 'failed', reason, chatId);
+          // The SMS already reached the customer: bot notifications are
+          // best-effort and must not trigger a retry (which would re-run the
+          // whole job against a filtered/slow bot API).
+          if (done.has('sms')) continue;
+          throw new Error(reason);
+        }
+        if (!response.ok) {
+          await this.logChannel(
+            channel,
+            job.data.message,
+            'failed',
+            `provider ${response.status}`,
+            chatId,
+          );
+          if (done.has('sms')) continue;
+          throw new Error(`${channel} provider returned ${response.status}`);
+        }
+        await this.logChannel(channel, job.data.message, 'sent', undefined, chatId);
       }
-      const chatId = channel === 'telegram' ? env.TELEGRAM_CHAT_ID! : env.BALE_CHAT_ID!;
-      const response = await fetch(integrationUrl(channel, env), {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: chatId,
-          text: job.data.message,
-          disable_web_page_preview: true,
-        }),
-      });
-      if (!response.ok) {
-        await this.logChannel(
-          channel,
-          job.data.message,
-          'failed',
-          `provider ${response.status}`,
-          chatId,
-        );
-        throw new Error(`${channel} provider returned ${response.status}`);
-      }
-      await this.logChannel(channel, job.data.message, 'sent', undefined, chatId);
+      done.add(channel);
       delivered = true;
+      await job.updateData?.({ ...job.data, channelsDone: [...done] });
     }
     if (!delivered) console.info(`[notification:${job.data.type}] dry-run`);
   }

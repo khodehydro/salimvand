@@ -43,7 +43,7 @@ type Tab = (typeof tabs)[number]['id'];
 
 type MessagingConfig = {
   sms?: { apiKey?: string; lineNumber?: string };
-  telegram?: { botToken?: string; chatId?: string };
+  telegram?: { botToken?: string; chatId?: string; apiBase?: string; proxySecret?: string };
   bale?: { botToken?: string; chatId?: string };
 };
 type MessagingDraft = {
@@ -51,6 +51,8 @@ type MessagingDraft = {
   smsLineNumber: string;
   telegramBotToken: string;
   telegramChatId: string;
+  telegramApiBase: string;
+  telegramProxySecret: string;
   baleBotToken: string;
   baleChatId: string;
 };
@@ -59,6 +61,8 @@ const emptyDraft: MessagingDraft = {
   smsLineNumber: '',
   telegramBotToken: '',
   telegramChatId: '',
+  telegramApiBase: '',
+  telegramProxySecret: '',
   baleBotToken: '',
   baleChatId: '',
 };
@@ -90,6 +94,8 @@ export function MessagingPage() {
           smsLineNumber: config.sms?.lineNumber ?? '',
           telegramBotToken: '',
           telegramChatId: config.telegram?.chatId ?? '',
+          telegramApiBase: config.telegram?.apiBase ?? '',
+          telegramProxySecret: '',
           baleBotToken: '',
           baleChatId: config.bale?.chatId ?? '',
         });
@@ -106,13 +112,18 @@ export function MessagingPage() {
     try {
       const payload: MessagingConfig = {
         sms: { lineNumber: draft.smsLineNumber.trim() || undefined },
-        telegram: { chatId: draft.telegramChatId.trim() || undefined },
+        telegram: {
+          chatId: draft.telegramChatId.trim() || undefined,
+          apiBase: draft.telegramApiBase.trim() || undefined,
+        },
         bale: { chatId: draft.baleChatId.trim() || undefined },
       };
       // Secrets are only sent when the operator typed a fresh value; an empty
       // field keeps the stored credential (the server merges masked values).
       if (draft.smsApiKey.trim()) payload.sms!.apiKey = draft.smsApiKey.trim();
       if (draft.telegramBotToken.trim()) payload.telegram!.botToken = draft.telegramBotToken.trim();
+      if (draft.telegramProxySecret.trim())
+        payload.telegram!.proxySecret = draft.telegramProxySecret.trim();
       if (draft.baleBotToken.trim()) payload.bale!.botToken = draft.baleBotToken.trim();
       await api('/settings', {
         method: 'PUT',
@@ -282,6 +293,27 @@ export function MessagingPage() {
                 value={draft.telegramChatId}
                 placeholder="مثال: -1001234567890"
                 onChange={(event) => updateDraft('telegramChatId', event.target.value)}
+              />
+            </label>
+            <label>
+              آدرس تلگرام — وورکر کلادفلر (برای انتشار در کانال)
+              <input
+                dir="ltr"
+                value={draft.telegramApiBase}
+                placeholder={
+                  messaging.telegram?.apiBase || 'https://salimvand-telegram-proxy….workers.dev'
+                }
+                onChange={(event) => updateDraft('telegramApiBase', event.target.value)}
+              />
+            </label>
+            <label>
+              رمز پروکسی وورکر (باید با رمز خود وورکر یکی باشد)
+              <input
+                dir="ltr"
+                type="password"
+                value={draft.telegramProxySecret}
+                placeholder={messaging.telegram?.proxySecret || 'رمز مشترک'}
+                onChange={(event) => updateDraft('telegramProxySecret', event.target.value)}
               />
             </label>
           </fieldset>
