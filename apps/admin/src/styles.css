@@ -3446,6 +3446,79 @@ body,
   color: var(--sv-text-2);
 }
 
+/* Inventory filter row follows the reference: one search field, quick pills
+   and scanner in the same surface instead of stacked search boxes. */
+.inventory-filter-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px;
+  margin-bottom: 14px;
+  background: var(--sv-surface);
+  border: 1px solid var(--sv-border);
+  border-radius: 12px;
+}
+.inventory-search-field {
+  flex: 1 1 320px;
+  width: auto;
+  min-width: 220px;
+  border-color: var(--sv-border);
+  background: var(--sv-surface-2);
+}
+.inventory-search-field input {
+  padding: 9px 0;
+  font-size: 12.5px;
+}
+.inventory-quick-filters {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.inventory-quick-filters .filter-pill {
+  padding: 6px 11px;
+  border-radius: 999px;
+  background: var(--sv-surface-3);
+  border: 1px solid transparent;
+  color: var(--sv-text-2);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+.inventory-quick-filters .filter-pill:hover,
+.inventory-quick-filters .filter-pill.active {
+  background: var(--sv-brand-50);
+  border-color: var(--sv-brand-200);
+  color: var(--sv-link);
+}
+.theme-dark .inventory-quick-filters .filter-pill:hover,
+.theme-dark .inventory-quick-filters .filter-pill.active {
+  background: var(--sv-surface-3);
+  border-color: var(--sv-border-2);
+  color: var(--sv-brand-300);
+}
+.inventory-filter-toolbar .scanner {
+  margin-inline-start: auto;
+}
+.inventory-filter-toolbar .scanner #barcode-reader {
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+.inventory-filter-toolbar .scanner button {
+  padding: 7px 10px;
+  font-size: 11.5px;
+}
+.inventory-filter-toolbar .stock-search-meta {
+  flex: 0 0 100%;
+  padding: 0 4px 2px;
+  font-size: 11px;
+}
+.scanner-inline-loading {
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 /* ============================================================
    Inventory stock list grouped per product: thumbnail, name,
    product code, category/vehicle chips, aggregate counts and
@@ -3634,6 +3707,21 @@ body,
    rules so the cascade order stays correct). */
 @media (max-width: 700px) {
   .search-field {
+    width: 100%;
+  }
+  .inventory-filter-toolbar {
+    align-items: stretch;
+  }
+  .inventory-search-field {
+    flex-basis: 100%;
+  }
+  .inventory-quick-filters {
+    flex: 1;
+  }
+  .inventory-filter-toolbar .scanner {
+    margin-inline-start: 0;
+  }
+  .inventory-filter-toolbar .scanner button {
     width: 100%;
   }
   .ig-head {

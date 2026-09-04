@@ -101,7 +101,6 @@ export function InventoryPage() {
   const [brands, setBrands] = useState<Option[]>([]);
   const [vehicles, setVehicles] = useState<VehicleMake[]>([]);
   const [filter, setFilter] = useState('');
-  const [scanCode, setScanCode] = useState('');
   const [message, setMessage] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   // Detail sheet for one inventory item: ledger, transfer and bulk receive.
@@ -446,90 +445,44 @@ export function InventoryPage() {
 
       {tab === 'stock' && (
         <div className="stock-tab">
-          {/* Live search: the list filters on every keystroke — no button. */}
-          <div className="stock-search">
-            <div className="search-field">
+          {/* One compact filter toolbar, matching the documented inventory screen. */}
+          <div className="inventory-filter-toolbar">
+            <div className="search-field inventory-search-field">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
-                <path
-                  d="m20 20-3.6-3.6"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
+                <path d="m20 20-3.6-3.6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
               </svg>
               <input
-                placeholder="جست‌وجوی فوری: نام کالا، کد محصول، بارکد یا برند…"
-                aria-label="جست‌وجوی فوری کالا"
+                placeholder="نام قطعه، کد محصول، بارکد یا برند…"
+                aria-label="جست‌وجوی کالا در انبار"
                 value={filter}
                 onChange={(e) => setFilter(e.target.value)}
               />
               {filter && (
-                <button
-                  type="button"
-                  className="search-clear"
-                  onClick={() => setFilter('')}
-                  aria-label="پاک کردن جست‌وجو"
-                >
+                <button type="button" className="search-clear" onClick={() => setFilter('')} aria-label="پاک کردن جست‌وجو">
                   ✕
                 </button>
               )}
             </div>
-            <p className="stock-search-meta" aria-live="polite">
-              {filter
-                ? `${formatPersianNumber(groups.length)} کالا · ${formatPersianNumber(
-                    items.length,
-                  )} قلم برای «${filter}»`
-                : `${formatPersianNumber(groups.length)} کالا · ${formatPersianNumber(
-                    items.length,
-                  )} قلم در انبار`}
-            </p>
-          </div>
-          <div className="list-toolbar stock-toolbar">
-            <button className="row-action" onClick={() => void lowStock()}>
-              فقط کم‌موجودی
-            </button>
-            <button
-              className="row-action"
-              onClick={() => {
-                setFilter('');
-                void load('');
-              }}
-            >
-              همه اقلام
-            </button>
-            <button
-              className="row-action"
-              onClick={() =>
-                void downloadFile('/reports/inventory/export', 'salimvand-inventory.csv').catch(
-                  (e: Error) => setMessage(e.message),
-                )
-              }
-            >
-              خروجی CSV
-            </button>
-          </div>
-          <div className="barcode-bar">
-            <input
-              value={scanCode}
-              onChange={(e) => setScanCode(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') void lookupBarcode(scanCode);
-              }}
-              placeholder="بارکدخوان یا ورود دستی بارکد، سپس Enter"
-              dir="ltr"
-            />
-            <button onClick={() => void lookupBarcode(scanCode)}>جستجو با بارکد</button>
-            <Suspense fallback={<span className="muted">در حال آماده‌سازی اسکنر…</span>}>
+            <div className="inventory-quick-filters" aria-label="فیلترهای سریع">
+              <button className="filter-pill active" onClick={() => { setFilter(''); void load(''); }}>همه اقلام</button>
+              <button className="filter-pill" onClick={() => void lowStock()}>کم‌موجود</button>
+              <button className="filter-pill" onClick={() => void downloadFile('/reports/inventory/export', 'salimvand-inventory.csv').catch((e: Error) => setMessage(e.message))}>خروجی CSV</button>
+            </div>
+            <Suspense fallback={<span className="muted scanner-inline-loading">آماده‌سازی اسکنر…</span>}>
               <BarcodeScanner
                 onCode={(code) => {
-                  setScanCode(code);
+                  setFilter(code);
                   void lookupBarcode(code);
                 }}
               />
             </Suspense>
+            <p className="stock-search-meta" aria-live="polite">
+              {filter
+                ? `${formatPersianNumber(groups.length)} کالا · ${formatPersianNumber(items.length)} قلم برای «${filter}»`
+                : `${formatPersianNumber(groups.length)} کالا · ${formatPersianNumber(items.length)} قلم در انبار`}
+            </p>
           </div>
-
           <div className="inventory-list">
             {groups.map((group) => {
               const totalPieces = group.items.reduce((sum, item) => sum + item.quantity, 0);
