@@ -3716,6 +3716,41 @@ body,
   color: var(--sv-primary);
 }
 
+/* Cross-page toolbar rhythm: the reference uses one compact surface for
+   filters/actions instead of unrelated floating controls. */
+.admin .report-filters,
+.admin .media-toolbar,
+.admin .list-toolbar {
+  background: var(--sv-surface);
+  border: 1px solid var(--sv-border);
+  border-radius: 12px;
+  padding: 8px;
+  margin: 12px 0 16px;
+  gap: 8px;
+}
+.admin .report-filters {
+  align-items: end;
+}
+.admin .report-filters input,
+.admin .report-filters button,
+.admin .media-toolbar .search-field,
+.admin .list-toolbar .table-filter {
+  min-height: 38px;
+}
+.admin .report-filters button {
+  border-radius: var(--sv-radius-button);
+}
+.admin .media-toolbar {
+  margin-top: 16px;
+}
+.admin .media-toolbar .search-field {
+  background: var(--sv-surface-2);
+}
+.admin .settings-tabs {
+  margin-top: 12px;
+  margin-bottom: 16px;
+}
+
 /* Mobile refinements for the blocks above (kept after their base
    rules so the cascade order stays correct). */
 @media (max-width: 700px) {
