@@ -505,106 +505,53 @@ export function InventoryPage() {
                 : `${formatPersianNumber(groups.length)} کالا · ${formatPersianNumber(items.length)} قلم در انبار`}
             </p>
           </div>
-          <div className="inventory-table-head" aria-hidden="true">
-            <span>برند و کد</span><span>وضعیت و موجودی</span><span>قفسه و قیمت</span><span>عملیات</span>
+          <div className="inventory-table-head inventory-list-head" aria-hidden="true">
+            <span>محصول</span><span>برند و کد</span><span>وضعیت و موجودی</span><span>قفسه و قیمت</span><span>عملیات</span>
           </div>
-          <div className="inventory-list">
-            {groups.map((group) => {
-              const totalPieces = group.items.reduce((sum, item) => sum + item.quantity, 0);
-              const prices = group.items.map((item) => Number(item.salePrice)).filter(Boolean);
-              const cheapest = prices.length ? Math.min(...prices) : null;
+          <div className="inventory-list inventory-flat-list">
+            {items.map((item) => {
+              const status = stockStatus(item);
+              const product = item.product;
               return (
-                <div className="inventory-group" key={group.productId}>
-                  <div className="ig-head">
+                <article className="inventory-flat-row" key={item.id}>
+                  <div className="inventory-product-cell">
                     <span className="product-thumb">
-                      {group.image ? (
-                        <img src={group.image} alt={group.name} loading="lazy" />
-                      ) : (
-                        <span>قطعه</span>
-                      )}
+                      {product?.images?.[0]?.path ? <img src={product.images[0].path} alt={product.name} loading="lazy" /> : <span>قطعه</span>}
                     </span>
-                    <div className="ig-title">
-                      <div className="ig-name-row">
-                        <b>{group.name}</b>
-                        {group.code && (
-                          <code className="ig-code" dir="ltr">
-                            {group.code}
-                          </code>
-                        )}
-                      </div>
-                      <div className="plc-chips">
-                        <span className="chip">
-                          {group.items.length.toLocaleString('fa-IR')} قلم ·{' '}
-                          {totalPieces.toLocaleString('fa-IR')} قطعه
-                        </span>
-                        {group.category && <span className="chip">{group.category}</span>}
-                        {group.vehicles.slice(0, 3).map((vehicle) => (
-                          <span className="chip" key={vehicle}>
-                            🚗 {vehicle}
-                          </span>
-                        ))}
-                        {group.vehicles.length > 3 && (
-                          <span className="chip">
-                            +{formatPersianNumber(group.vehicles.length - 3)} خودروی دیگر
-                          </span>
-                        )}
-                        {cheapest != null && (
-                          <span className="chip price">از {formatRial(cheapest)}</span>
-                        )}
-                      </div>
+                    <div className="inventory-product-info">
+                      <b>{product?.name ?? item.barcode}</b>
+                      <small dir="ltr">{product?.code ?? 'بدون کد محصول'}</small>
+                      {product?.category?.name && <span className="chip">{product.category.name}</span>}
                     </div>
-                    {group.items.some((item) => item.product?.id) && (
-                      <button
-                        className="row-action ig-publish"
-                        onClick={() => void publishGroup(group)}
-                        title="انتشار عکس، کد، نام و مشخصات محصول در کانال تلگرام و بله"
-                      >
-                        📢 انتشار در شبکه‌ها
-                      </button>
-                    )}
                   </div>
-                  <div className="ig-items">
-                    {group.items.map((item) => {
-                      const status = stockStatus(item);
-                      return (
-                        <div className="inventory-row" key={item.id}>
-                          <div className="inv-info inv-brand-cell">
-                            <b>{item.brand?.name ?? 'بدون برند'}</b>
-                            <small><code dir="ltr">{item.barcode}</code></small>
-                          </div>
-                          <div className="inv-status-cell">
-                            <span className={`badge ${status.badge}`}>{status.label}</span>
-                            <div className="inv-stock-line">
-                              <i className={`stockbar ${status.bar}`}>
-                                <i style={{ width: `${Math.round(stockRatio(item) * 100)}%` }} />
-                              </i>
-                              <b>{formatPersianNumber(item.quantity)} قطعه</b>
-                            </div>
-                            {item.minStock != null && item.minStock > 0 && <small className="muted">حداقل {formatPersianNumber(item.minStock)}</small>}
-                            <StockStepper itemId={item.id} quantity={item.quantity} onMessage={setMessage} onSaved={() => void load()} />
-                          </div>
-                          <div className="inv-location-cell">
-                            <span className="inv-shelf" title={item.location ? locationLabel(item.location) : 'بدون قفسه'}>
-                              {item.location ? `📦 ${locationLabel(item.location)}` : 'بدون قفسه'}
-                            </span>
-                            <div className="inv-price"><b>{formatRial(Number(item.salePrice))}</b><small>قیمت فروش</small></div>
-                          </div>
-                          <div className="inv-actions">
-                            <button className="row-action" onClick={() => void openDetail(item)}>کارت قلم</button>
-                            <button className="row-action" onClick={() => openLabelStudio(item)}>برچسب</button>
-                          </div>
-                        </div>
-                      );
-                    })}
+                  <div className="inventory-brand-cell">
+                    <b>{item.brand?.name ?? 'بدون برند'}</b>
+                    <code dir="ltr">{item.barcode}</code>
                   </div>
-                </div>
+                  <div className="inventory-stock-cell">
+                    <div className="inventory-stock-status">
+                      <span className={`badge ${status.badge}`}>{status.label}</span>
+                      <b>{formatPersianNumber(item.quantity)} قطعه</b>
+                    </div>
+                    <div className="inv-stock-line">
+                      <i className={`stockbar ${status.bar}`}><i style={{ width: `${Math.round(stockRatio(item) * 100)}%` }} /></i>
+                      {item.minStock != null && item.minStock > 0 && <small className="muted">حداقل {formatPersianNumber(item.minStock)}</small>}
+                    </div>
+                    <StockStepper itemId={item.id} quantity={item.quantity} onMessage={setMessage} onSaved={() => void load()} />
+                  </div>
+                  <div className="inventory-location-cell">
+                    <span className="inv-shelf" title={item.location ? locationLabel(item.location) : 'بدون قفسه'}>{item.location ? `📦 ${locationLabel(item.location)}` : 'بدون قفسه'}</span>
+                    <div className="inventory-price"><b>{formatRial(Number(item.salePrice))}</b><small>قیمت فروش</small></div>
+                  </div>
+                  <div className="inventory-actions-cell">
+                    <button className="row-action" onClick={() => void openDetail(item)}>کارت قلم</button>
+                    <button className="row-action" onClick={() => openLabelStudio(item)}>برچسب</button>
+                    {product?.id && <button className="row-action" onClick={() => void publishGroup({ productId: product.id, name: product.name, code: product.code, image: product.images?.[0]?.path, category: product.category?.name, vehicles: [], items: [item] })}>انتشار</button>}
+                  </div>
+                </article>
               );
             })}
-            {!groups.length && (
-              <p className="muted">
-                {filter ? `کالایی مطابق «${filter}» پیدا نشد.` : 'قلمی یافت نشد.'}
-              </p>
-            )}
+            {!items.length && <p className="muted">{filter ? `قلمی مطابق «${filter}» پیدا نشد.` : 'قلمی یافت نشد.'}</p>}
           </div>
         </div>
       )}
