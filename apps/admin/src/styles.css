@@ -251,6 +251,19 @@ button.danger:hover:not(:disabled) {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.admin main > section {
+  padding: 20px;
+}
+.admin main > section > .page-title h1,
+.admin main > section > .page-title h2 {
+  margin: 0;
+}
+.admin main > section > .page-title .muted {
+  margin: 4px 0 0;
 }
 .count {
   background: var(--sv-brand-100);
