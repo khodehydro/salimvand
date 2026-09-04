@@ -4,6 +4,7 @@ import { FaNumberInput } from './FaNumberInput';
 import { locationLabel } from '../lib/location-label';
 import { api } from '../lib/api';
 import { MediaImage } from './MediaImage';
+import { MediaPicker, type PickerItem } from './MediaPicker';
 
 /**
  * Unified product registration window: catalog entry, inventory item and
@@ -57,6 +58,7 @@ export function ProductCreateModal({
   brands,
   locations,
   vehicles,
+  inline = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -65,6 +67,7 @@ export function ProductCreateModal({
   brands: Option[];
   locations: Location[];
   vehicles: VehicleMake[];
+  inline?: boolean;
 }) {
   const [tab, setTab] = useState<Tab>('basic');
   const [basic, setBasic] = useState(emptyBasic);
@@ -74,6 +77,10 @@ export function ProductCreateModal({
   const [pickTrim, setPickTrim] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [selectedImage, setSelectedImage] = useState<PickerItem | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const models = useMemo(
     () => vehicles.flatMap((make) => make.models.map((model) => ({ ...model, make: make.name }))),
@@ -95,6 +102,10 @@ export function ProductCreateModal({
     setPickModel('');
     setPickTrim('');
     setError('');
+    setImageUrl('');
+    setImageFile(null);
+    setSelectedImage(null);
+    setPickerOpen(false);
   };
 
   const submit = async () => {
@@ -131,6 +142,23 @@ export function ProductCreateModal({
         }),
       });
       const productId = created.data.id;
+      stage = 'تصویر محصول';
+      if (imageUrl.trim()) {
+        await api(`/media/products/${productId}/url`, {
+          method: 'POST',
+          body: JSON.stringify({ url: imageUrl.trim(), alt: basic.name }),
+        });
+      } else if (imageFile) {
+        const form = new FormData();
+        form.append('file', imageFile);
+        form.append('alt', basic.name);
+        await api(`/media/products/${productId}/upload`, { method: 'POST', body: form });
+      } else if (selectedImage) {
+        await api(`/media/products/${productId}/select`, {
+          method: 'POST',
+          body: JSON.stringify({ imageId: selectedImage.id, alt: basic.name }),
+        });
+      }
       stage = 'قلم انبار';
       // 2) Inventory item — brand, prices and the opening stock, all optional
       //    but filled in the same window so the flow is not split.
@@ -182,11 +210,15 @@ export function ProductCreateModal({
   };
 
   return (
-    <div className="modal-backdrop" role="presentation" onClick={onClose}>
+    <div
+      className={inline ? 'product-create-inline' : 'modal-backdrop'}
+      role={inline ? undefined : 'presentation'}
+      onClick={inline ? undefined : onClose}
+    >
       <div
-        className="editor product-create-modal"
+        className={inline ? 'product-create-inline-editor' : 'editor product-create-modal'}
         role="dialog"
-        aria-modal="true"
+        aria-modal={inline ? undefined : true}
         aria-label="ثبت محصول جدید"
         onClick={(event) => event.stopPropagation()}
       >
@@ -301,6 +333,48 @@ export function ProductCreateModal({
                   placeholder="لنت، ترمز، پژو ۲۰۶"
                 />
               </label>
+            </div>
+            <div className="create-image-panel">
+              <div className="create-image-heading">
+                <b>تصویر محصول</b>
+                <small>اختیاری · لینک، آپلود یا انتخاب از رسانه‌ها</small>
+              </div>
+              <div className="create-image-actions">
+                <label className="create-image-url">
+                  لینک تصویر
+                  <input
+                    dir="ltr"
+                    value={imageUrl}
+                    onChange={(event) => {
+                      setImageUrl(event.target.value);
+                      setImageFile(null);
+                      setSelectedImage(null);
+                    }}
+                    placeholder="https://example.com/product.jpg"
+                  />
+                </label>
+                <label className="create-image-upload">
+                  آپلود تصویر
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={(event) => {
+                      setImageFile(event.target.files?.[0] ?? null);
+                      setImageUrl('');
+                      setSelectedImage(null);
+                    }}
+                  />
+                </label>
+                <button type="button" className="outline" onClick={() => setPickerOpen(true)}>
+                  انتخاب از رسانه‌ها
+                </button>
+              </div>
+              {(imageFile || selectedImage || imageUrl) && (
+                <div className="create-image-selected">
+                  <span>✓</span>
+                  {imageFile?.name ?? selectedImage?.path ?? imageUrl}
+                </div>
+              )}
             </div>
           )}
 
@@ -481,6 +555,16 @@ export function ProductCreateModal({
           </button>
         </div>
       </div>
+      <MediaPicker
+        open={pickerOpen}
+        title="انتخاب تصویر محصول از رسانه‌ها"
+        onClose={() => setPickerOpen(false)}
+        onSelect={(image) => {
+          setSelectedImage(image);
+          setImageFile(null);
+          setImageUrl('');
+        }}
+      />
     </div>
   );
 }

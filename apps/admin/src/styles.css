@@ -5609,3 +5609,117 @@ button.btn-primary-lg:hover:not(:disabled) {
     height: 48px;
   }
 }
+
+/* Inline product registration: the inventory tab is the workflow surface,
+   not a modal launch point. Keep the save bar visible at the bottom. */
+.product-create-inline {
+  width: 100%;
+}
+.product-create-inline-editor {
+  display: flex;
+  flex-direction: column;
+  min-height: 560px;
+  background: var(--sv-surface);
+  border: 1px solid var(--sv-border);
+  border-radius: var(--sv-radius-card);
+  box-shadow: var(--sv-shadow-1);
+  overflow: hidden;
+}
+.product-create-inline-editor .editor-head {
+  padding: 16px 18px 4px;
+}
+.product-create-inline-editor .modal-hint {
+  margin-inline: 18px;
+}
+.product-create-inline-editor .tabs {
+  margin-inline: 18px;
+}
+.product-create-inline-editor .editor-body {
+  min-height: 0;
+  padding: 18px;
+}
+.product-create-inline-editor .editor-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  justify-content: space-between;
+  margin-top: auto;
+  padding: 12px 18px;
+  border-top: 1px solid var(--sv-border);
+  background: var(--sv-surface-2);
+}
+.create-image-panel {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 14px;
+  background: var(--sv-surface-2);
+  border: 1px solid var(--sv-border);
+  border-radius: 12px;
+}
+.create-image-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.create-image-heading small {
+  color: var(--sv-text-3);
+  font-size: 11px;
+}
+.create-image-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(180px, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+.create-image-actions label {
+  display: grid;
+  gap: 6px;
+  color: var(--sv-text-2);
+  font-size: 12px;
+}
+.create-image-actions input[type='text'],
+.create-image-actions input:not([type]) {
+  min-width: 0;
+}
+.create-image-upload input {
+  width: 100%;
+  min-height: 40px;
+  padding: 7px;
+  border: 1px solid var(--sv-border-2);
+  border-radius: var(--sv-radius-button);
+  background: var(--sv-surface);
+  color: var(--sv-text);
+  font: 11px Vazirmatn;
+}
+.create-image-selected {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 7px 9px;
+  color: var(--sv-ok);
+  background: var(--sv-ok-soft);
+  border-radius: 8px;
+  font-size: 11px;
+  direction: ltr;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.create-image-selected span {
+  direction: rtl;
+  font-weight: 700;
+}
+@media (max-width: 760px) {
+  .create-image-actions {
+    grid-template-columns: 1fr;
+  }
+  .product-create-inline-editor .editor-footer {
+    flex-direction: column-reverse;
+  }
+  .product-create-inline-editor .editor-footer button {
+    width: 100%;
+  }
+}

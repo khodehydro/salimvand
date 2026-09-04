@@ -95,7 +95,7 @@ function stockRatio(item: Item): number {
 }
 
 export function InventoryPage() {
-  const [tab, setTab] = useState<Tab>('register');
+  const [tab, setTab] = useState<Tab>('stock');
   const [items, setItems] = useState<Item[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [categories, setCategories] = useState<Option[]>([]);
@@ -103,7 +103,6 @@ export function InventoryPage() {
   const [vehicles, setVehicles] = useState<VehicleMake[]>([]);
   const [filter, setFilter] = useState('');
   const [message, setMessage] = useState('');
-  const [createOpen, setCreateOpen] = useState(false);
   // Detail sheet for one inventory item: ledger, transfer and bulk receive.
   const [detail, setDetail] = useState<Item | null>(null);
   const [history, setHistory] = useState<Transaction[]>([]);
@@ -437,19 +436,19 @@ export function InventoryPage() {
       {message && <div className="notice">{message}</div>}
 
       {tab === 'register' && (
-        <div className="register-tab">
-          <div className="register-card">
-            <b>ثبت محصول جدید</b>
-            <p className="muted">
-              یک پنجره، همهٔ قابلیت‌ها: مشخصات و سئو، قلم انبار با برند و بارکد و قیمت، موجودی
-              اولیه، قفسه و خودروهای سازگار. با یک بار ذخیره، محصول هم‌زمان در انبار، در کاتالوگ و
-              روی سایت ثبت می‌شود — دیگر نیازی نیست اول در جایی ثبت کنید و بعد از لیست ادامه دهید.
-            </p>
-            <button className="button-primary" onClick={() => setCreateOpen(true)}>
-              + ثبت محصول جدید
-            </button>
-          </div>
-        </div>
+        <ProductCreateModal
+          open
+          inline
+          onClose={() => setTab('stock')}
+          onCreated={(msg) => {
+            setMessage(msg);
+            void load();
+          }}
+          categories={categories}
+          brands={brands}
+          locations={locations}
+          vehicles={vehicles}
+        />
       )}
 
       {tab === 'stock' && (
@@ -787,18 +786,6 @@ export function InventoryPage() {
         </div>
       )}
 
-      <ProductCreateModal
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        onCreated={(msg) => {
-          setMessage(msg);
-          void load();
-        }}
-        categories={categories}
-        brands={brands}
-        locations={locations}
-        vehicles={vehicles}
-      />
 
       <Sheet
         open={Boolean(detail)}
