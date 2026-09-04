@@ -30,7 +30,12 @@ describe('messaging config', () => {
   it('masks secrets but keeps non-secret fields readable', () => {
     const masked = maskMessagingSecrets({
       sms: { apiKey: 'super-secret-key-1234', lineNumber: '300051' },
-      telegram: { botToken: '123:ABC', chatId: '-1001' },
+      telegram: {
+        botToken: '123:ABC',
+        chatId: '-1001',
+        apiBase: 'https://proxy.workers.dev',
+        proxySecret: 'proxy-secret-5678',
+      },
       bale: {},
     });
     expect(masked.sms?.apiKey).toBe(`${SECRET_MASK_PREFIX}1234`);
@@ -38,6 +43,8 @@ describe('messaging config', () => {
     expect(masked.sms?.lineNumber).toBe('300051');
     expect(masked.telegram?.botToken).toBe(`${SECRET_MASK_PREFIX}:ABC`);
     expect(masked.telegram?.chatId).toBe('-1001');
+    expect(masked.telegram?.apiBase).toBe('https://proxy.workers.dev');
+    expect(masked.telegram?.proxySecret).toBe(`${SECRET_MASK_PREFIX}5678`);
     expect(masked.bale?.botToken).toBe('');
     expect(maskMessagingSecrets(null).sms?.apiKey).toBe('');
   });
@@ -45,17 +52,29 @@ describe('messaging config', () => {
   it('keeps stored secrets when the panel round-trips masked values', () => {
     const existing = {
       sms: { apiKey: 'stored-secret-9999', lineNumber: '300051' },
-      telegram: { botToken: 'stored-token-AAAA', chatId: '-1001' },
+      telegram: {
+        botToken: 'stored-token-AAAA',
+        chatId: '-1001',
+        apiBase: 'https://proxy.workers.dev',
+        proxySecret: 'stored-proxy-BBBB',
+      },
     };
     const incoming = {
       sms: { apiKey: `${SECRET_MASK_PREFIX}9999`, lineNumber: '300052' },
-      telegram: { botToken: `${SECRET_MASK_PREFIX}AAAA`, chatId: '-1001' },
+      telegram: {
+        botToken: `${SECRET_MASK_PREFIX}AAAA`,
+        chatId: '-1001',
+        apiBase: 'https://proxy2.workers.dev',
+        proxySecret: `${SECRET_MASK_PREFIX}BBBB`,
+      },
       bale: {},
     };
     const merged = mergeMessagingSecrets(incoming, existing);
     expect(merged.sms?.apiKey).toBe('stored-secret-9999');
     expect(merged.sms?.lineNumber).toBe('300052');
     expect(merged.telegram?.botToken).toBe('stored-token-AAAA');
+    expect(merged.telegram?.apiBase).toBe('https://proxy2.workers.dev');
+    expect(merged.telegram?.proxySecret).toBe('stored-proxy-BBBB');
   });
 
   it('replaces secrets only when a fresh value arrives', () => {
@@ -75,7 +94,11 @@ describe('messaging config', () => {
           ? {
               value: {
                 sms: { apiKey: 'panel-key', lineNumber: '300051' },
-                telegram: { botToken: 'panel-token' },
+                telegram: {
+                  botToken: 'panel-token',
+                  apiBase: 'https://proxy.workers.dev',
+                  proxySecret: 'panel-proxy-secret',
+                },
               },
             }
           : null,
@@ -83,11 +106,14 @@ describe('messaging config', () => {
     const env = await resolveMessagingEnv(settings, {
       SMS_API_KEY: 'env-key',
       BALE_BOT_TOKEN: 'env-bale',
+      TELEGRAM_API_BASE: 'https://api.telegram.org',
       UNRELATED: 'keep',
     });
     expect(env.SMS_API_KEY).toBe('panel-key');
     expect(env.SMS_LINE_NUMBER).toBe('300051');
     expect(env.TELEGRAM_BOT_TOKEN).toBe('panel-token');
+    expect(env.TELEGRAM_API_BASE).toBe('https://proxy.workers.dev');
+    expect(env.TELEGRAM_PROXY_SECRET).toBe('panel-proxy-secret');
     expect(env.BALE_BOT_TOKEN).toBe('env-bale');
     expect(env.UNRELATED).toBe('keep');
   });

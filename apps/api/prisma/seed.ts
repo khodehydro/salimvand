@@ -148,8 +148,8 @@ async function seedSettings() {
     {
       key: 'sms.templates',
       value: {
-        invoice: '{customer_name} عزیز، فاکتور {invoice_number} شما صادر شد. مشاهده: {link}',
-        paid: 'پرداخت فاکتور {invoice_number} ثبت شد. مبلغ: {amount} ریال. سپاس از خرید شما.',
+        invoice:
+          '{customer_name}\n\nفاکتور شماره {invoice_number} شما صادر شد\n\nمشاهده:\n{link}\n\nبا تشکر از خرید شما\nفروشگاه سلیم وند',
         autoSend: true,
       },
     },

@@ -764,28 +764,21 @@ export function SettingsPage() {
                       'sms.templates': { ...current['sms.templates'], invoice: e.target.value },
                     }))
                   }
-                  placeholder="{نام}، فاکتور {شماره}: {لینک}"
-                  rows={3}
-                />
-              </label>
-              <label>
-                قالب پیامک پرداخت
-                <textarea
-                  rows={3}
-                  value={settings['sms.templates']?.paid ?? ''}
-                  onChange={(e) =>
-                    setSettings((current) => ({
-                      ...current,
-                      'sms.templates': { ...current['sms.templates'], paid: e.target.value },
-                    }))
+                  placeholder={
+                    '{customer_name}\n\nفاکتور شماره {invoice_number} شما صادر شد\n\nمشاهده:\n{link}\n\nبا تشکر از خرید شما'
                   }
-                  placeholder="پرداخت فاکتور {invoice_number} ثبت شد. مبلغ: {amount} ریال"
+                  rows={4}
                 />
               </label>
               <p className="settings-help">
                 متغیرهای قابل استفاده: <code dir="ltr">{'{customer_name}'}</code>{' '}
                 <code dir="ltr">{'{invoice_number}'}</code> <code dir="ltr">{'{amount}'}</code>{' '}
-                <code dir="ltr">{'{link}'}</code>
+                <code dir="ltr">{'{link}'}</code> <code dir="ltr">{'{store}'}</code>. متغیر{' '}
+                <code dir="ltr">{'{customer_name}'}</code> به شکل «نام + عزیز» جایگذاری می‌شود و اگر
+                نام مشتری ثبت نشده باشد، «مشتری گرامی» قرار می‌گیرد. برای جدا کردن خطوط، بین آن‌ها
+                اینتر بزنید (خط خالی هم مجاز است). قالب خالی باشد، متن پیش‌فرض ارسال می‌شود. پیامک
+                فقط هنگام صدور فاکتور و ارسال مجدد (یادآوری بدهی) فرستاده می‌شود؛ با ثبت پرداخت،
+                پیامکی ارسال نمی‌شود.
               </p>
               <label className="switch-row">
                 <input

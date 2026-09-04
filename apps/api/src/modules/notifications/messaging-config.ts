@@ -11,7 +11,7 @@ export const SECRET_MASK_PREFIX = '••••';
 
 export type MessagingConfig = {
   sms?: { apiKey?: string; lineNumber?: string };
-  telegram?: { botToken?: string; chatId?: string };
+  telegram?: { botToken?: string; chatId?: string; apiBase?: string; proxySecret?: string };
   bale?: { botToken?: string; chatId?: string };
 };
 
@@ -32,7 +32,12 @@ export function asMessagingConfig(value: unknown): MessagingConfig {
   const bale = pick(raw.bale);
   return {
     sms: { apiKey: asString(sms.apiKey), lineNumber: asString(sms.lineNumber) },
-    telegram: { botToken: asString(telegram.botToken), chatId: asString(telegram.chatId) },
+    telegram: {
+      botToken: asString(telegram.botToken),
+      chatId: asString(telegram.chatId),
+      apiBase: asString(telegram.apiBase),
+      proxySecret: asString(telegram.proxySecret),
+    },
     bale: { botToken: asString(bale.botToken), chatId: asString(bale.chatId) },
   };
 }
@@ -43,7 +48,12 @@ export function maskMessagingSecrets(value: unknown): MessagingConfig {
   const mask = (secret?: string) => (secret ? `${SECRET_MASK_PREFIX}${secret.slice(-4)}` : '');
   return {
     sms: { apiKey: mask(config.sms?.apiKey), lineNumber: config.sms?.lineNumber },
-    telegram: { botToken: mask(config.telegram?.botToken), chatId: config.telegram?.chatId },
+    telegram: {
+      botToken: mask(config.telegram?.botToken),
+      chatId: config.telegram?.chatId,
+      apiBase: config.telegram?.apiBase,
+      proxySecret: mask(config.telegram?.proxySecret),
+    },
     bale: { botToken: mask(config.bale?.botToken), chatId: config.bale?.chatId },
   };
 }
@@ -66,6 +76,8 @@ export function mergeMessagingSecrets(incoming: unknown, existing: unknown): Mes
     telegram: {
       botToken: secret(next.telegram?.botToken, current.telegram?.botToken),
       chatId: next.telegram?.chatId ?? current.telegram?.chatId,
+      apiBase: next.telegram?.apiBase ?? current.telegram?.apiBase,
+      proxySecret: secret(next.telegram?.proxySecret, current.telegram?.proxySecret),
     },
     bale: {
       botToken: secret(next.bale?.botToken, current.bale?.botToken),
@@ -96,6 +108,10 @@ export async function resolveMessagingEnv(
     if (config.sms?.lineNumber) env.SMS_LINE_NUMBER = config.sms.lineNumber;
     if (config.telegram?.botToken) env.TELEGRAM_BOT_TOKEN = config.telegram.botToken;
     if (config.telegram?.chatId) env.TELEGRAM_CHAT_ID = config.telegram.chatId;
+    // Channel publishing routes Telegram through the Cloudflare Worker proxy
+    // (api.telegram.org is filtered in Iran); both values are panel-managed.
+    if (config.telegram?.apiBase) env.TELEGRAM_API_BASE = config.telegram.apiBase;
+    if (config.telegram?.proxySecret) env.TELEGRAM_PROXY_SECRET = config.telegram.proxySecret;
     if (config.bale?.botToken) env.BALE_BOT_TOKEN = config.bale.botToken;
     if (config.bale?.chatId) env.BALE_CHAT_ID = config.bale.chatId;
   } catch {

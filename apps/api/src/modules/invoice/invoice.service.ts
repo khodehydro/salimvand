@@ -224,6 +224,7 @@ export class InvoiceService {
           totals.total.toString(),
           false,
           await this.smsTemplate('invoice'),
+          input.customerName?.trim(),
         ),
       });
     return {
@@ -724,15 +725,8 @@ export class InvoiceService {
       });
       return { ok: true, data: updated };
     });
-    // The receipt SMS is best-effort and intentionally queued AFTER the
-    // transaction: a degraded Redis must never fail the payment itself.
-    if (this.notifications && result.data.customerMobile)
-      await this.notifications.enqueue({
-        type: 'invoice.paid',
-        invoiceId: id,
-        mobile: result.data.customerMobile,
-        message: `پرداخت فاکتور ${result.data.number} ثبت شد. مبلغ: ${paidAmount.toString()} ریال`,
-      });
+    // Business rule: registering a payment must NOT send an SMS. Invoice SMS
+    // goes out only on issue and on manual resend (debt reminder).
     return result;
   }
 
@@ -935,7 +929,14 @@ export class InvoiceService {
   async resendSms(id: string, userId: string, mobileOverride?: string, ip?: string) {
     const invoice = await this.prisma.invoice.findUnique({
       where: { id },
-      select: { id: true, number: true, status: true, total: true, customerMobile: true },
+      select: {
+        id: true,
+        number: true,
+        status: true,
+        total: true,
+        customerMobile: true,
+        customerName: true,
+      },
     });
     if (!invoice) throw new NotFoundException('فاکتور پیدا نشد');
     if (invoice.status === 'voided')
@@ -977,6 +978,7 @@ export class InvoiceService {
         invoice.total.toString(),
         false,
         await this.smsTemplate('invoice'),
+        invoice.customerName,
       ),
     });
     return {

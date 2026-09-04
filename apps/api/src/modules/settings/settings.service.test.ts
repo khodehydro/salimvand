@@ -81,7 +81,7 @@ describe('SettingsService', () => {
     const result = await new SettingsService(prisma as never).list();
     expect(result.data['integrations.messaging']).toEqual({
       sms: { apiKey: '••••1234', lineNumber: '300051' },
-      telegram: { botToken: '', chatId: undefined },
+      telegram: { botToken: '', chatId: undefined, apiBase: undefined, proxySecret: '' },
       bale: { botToken: '', chatId: undefined },
     });
     expect(result.data['store.trust_video']).toBe('video.mp4');

@@ -27,6 +27,14 @@ describe('SMS templates', () => {
     expect(renderSmsTemplate(null, { a: 1 })).toBe('');
   });
 
+  it('keeps real newlines, converts literal \\n and caps blank lines', () => {
+    expect(renderSmsTemplate('a\nb\n\nc', {})).toBe('a\nb\n\nc');
+    expect(renderSmsTemplate('a\\nb\\n\\nc', {})).toBe('a\nb\n\nc');
+    expect(renderSmsTemplate('a\r\nb\rc', {})).toBe('a\nb\nc');
+    expect(renderSmsTemplate('a\n\n\n\nb', {})).toBe('a\n\nb');
+    expect(renderSmsTemplate('a  \n  b', {})).toBe('a\nb');
+  });
+
   it('uses the operator template when one is configured and falls back otherwise', () => {
     const siteUrl = (process.env.PUBLIC_SITE_URL ?? 'https://salimvand.ir').replace(/\/$/, '');
     const withTemplate = buildInvoiceMessage(
@@ -37,8 +45,37 @@ describe('SMS templates', () => {
       'فاکتور {invoice_number}: {amount} ریال — {link}',
     );
     expect(withTemplate).toBe(`فاکتور INV-0002: 5000 ریال — ${siteUrl}/i/c0de`);
-    expect(buildInvoiceMessage('INV-0002', 'c0de', '5000', false)).toContain('مشاهده و دانلود');
+    const fallback = buildInvoiceMessage('INV-0002', 'c0de', '5000', false);
+    expect(fallback).toContain('مشتری گرامی');
+    expect(fallback).toContain('فاکتور شماره INV-0002 شما صادر شد');
+    expect(fallback).toContain(`مشاهده:\n${siteUrl}/i/c0de`);
+    expect(fallback).toContain('با تشکر از خرید شما');
+    expect(fallback).toContain('فروشگاه سلیم وند');
     expect(buildInvoiceMessage('INV-0002', 'c0de', '5000', true)).toContain('پرداخت فاکتور');
+  });
+
+  it('renders the customer name greeting and falls back to a generic one', () => {
+    const named = buildInvoiceMessage(
+      'INV-0003',
+      'c0de',
+      '5000',
+      false,
+      '{customer_name}\n\nفاکتور {invoice_number} شما صادر شد',
+      'حمید',
+    );
+    expect(named).toBe('حمید عزیز\n\nفاکتور INV-0003 شما صادر شد');
+    const anonymous = buildInvoiceMessage(
+      'INV-0003',
+      'c0de',
+      '5000',
+      false,
+      '{customer_name}\n\nفاکتور {invoice_number} شما صادر شد',
+      '  ',
+    );
+    expect(anonymous).toBe(`مشتری گرامی\n\nفاکتور INV-0003 شما صادر شد`);
+    expect(buildInvoiceMessage('INV-0003', 'c0de', '5000', false, undefined, 'حمید')).toContain(
+      'حمید عزیز',
+    );
   });
 });
 
@@ -232,6 +269,61 @@ describe('sms.ir adapter', () => {
       ).rejects.toThrow('کلید API نامعتبر');
       expect(logs).toHaveLength(1);
       expect(logs[0].data.status).toBe('failed');
+    } finally {
+      global.fetch = originalFetch;
+      restore();
+    }
+  });
+
+  it('fails with a readable reason when the provider call times out', async () => {
+    const restore = withEnv({ SMS_API_KEY: 'panel-key', SMS_LINE_NUMBER: '30004505000017' });
+    const originalFetch = global.fetch;
+    const logs: Array<{ data: { status: string; error: string | null } }> = [];
+    const prisma = {
+      smsLog: {
+        create: async (args: { data: { status: string; error: string | null } }) => {
+          logs.push(args);
+          return {};
+        },
+      },
+    };
+    global.fetch = (async () => {
+      throw new DOMException('The operation was aborted due to timeout', 'TimeoutError');
+    }) as typeof fetch;
+    try {
+      const service = serviceWith(prisma);
+      await expect(
+        (service as unknown as { process(job: unknown): Promise<void> }).process(job),
+      ).rejects.toThrow('تایم‌اوت');
+      expect(logs).toHaveLength(1);
+      expect(logs[0].data.status).toBe('failed');
+    } finally {
+      global.fetch = originalFetch;
+      restore();
+    }
+  });
+
+  it('skips channels already delivered on a retried job', async () => {
+    const restore = withEnv({ SMS_API_KEY: 'panel-key', SMS_LINE_NUMBER: '30004505000017' });
+    const originalFetch = global.fetch;
+    const calls: string[] = [];
+    global.fetch = (async (url: string | URL) => {
+      calls.push(String(url));
+      return new Response(JSON.stringify({ status: 1 }), { status: 200 });
+    }) as typeof fetch;
+    try {
+      const service = serviceWith({});
+      const retried = {
+        data: {
+          type: 'invoice.issued',
+          invoiceId: 'inv-1',
+          mobile: '09121234567',
+          message: 'فاکتور INV-1',
+          channelsDone: ['sms'],
+        },
+      } as never;
+      await (service as unknown as { process(job: unknown): Promise<void> }).process(retried);
+      expect(calls).toHaveLength(0);
     } finally {
       global.fetch = originalFetch;
       restore();

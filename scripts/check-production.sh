@@ -30,7 +30,29 @@ if [[ -n "${DATABASE_URL:-}" ]] && command -v psql >/dev/null 2>&1; then
   }
 fi
 if [[ -n "${REDIS_URL:-}" ]] && command -v redis-cli >/dev/null 2>&1; then
-  [[ "$(redis-cli -u "${REDIS_URL}" --no-auth-warning ping 2>/dev/null || true)" == 'PONG' ]] || {
+  # redis-cli's URI parser mishandles "redis://:pass@host" (it sends an empty
+  # username and the server answers WRONGPASS), so parse REDIS_URL ourselves
+  # and authenticate with -a — the same single-password AUTH the app's client
+  # (ioredis) performs.
+  redis_creds="${REDIS_URL#*://}"
+  redis_userinfo=''
+  if [[ "$redis_creds" == *@* ]]; then
+    redis_userinfo="${redis_creds%%@*}"
+    redis_creds="${redis_creds#*@}"
+  fi
+  redis_hostport="${redis_creds%%/*}"
+  redis_host="${redis_hostport%%:*}"
+  redis_port=6379
+  [[ "$redis_hostport" == *:* ]] && redis_port="${redis_hostport##*:}"
+  redis_pass=''
+  if [[ -n "$redis_userinfo" ]]; then
+    redis_pass="${redis_userinfo##*:}"
+    [[ "$redis_userinfo" == *:* ]] || redis_pass="$redis_userinfo"
+  fi
+  [[ "$(
+    redis-cli -h "$redis_host" -p "$redis_port" ${redis_pass:+-a "$redis_pass"} --no-auth-warning \
+      ping 2>/dev/null || true
+  )" == 'PONG' ]] || {
     echo 'Redis rejected REDIS_URL credentials (check requirepass against REDIS_URL).' >&2
     exit 1
   }
