@@ -7,7 +7,7 @@ import { ProductCreateModal } from '../components/ProductCreateModal';
 import { BarcodeSvg } from '../components/BarcodeSvg';
 import { formatPersianNumber, formatRial } from '@salimvand/shared';
 import { FaNumberInput } from '../components/FaNumberInput';
-import { locationChip, locationLabel } from '../lib/location-label';
+import { locationLabel } from '../lib/location-label';
 
 const BarcodeScanner = lazy(() =>
   import('../components/BarcodeScanner').then((module) => ({ default: module.BarcodeScanner })),
@@ -582,8 +582,11 @@ export function InventoryPage() {
                                 </small>
                               )}
                             </div>
-                            <span className="inv-shelf">
-                              {item.location ? `📦 ${locationChip(item.location)}` : 'بدون قفسه'}
+                            <span
+                              className="inv-shelf"
+                              title={item.location ? locationLabel(item.location) : 'بدون قفسه'}
+                            >
+                              {item.location ? `📦 ${locationLabel(item.location)}` : 'بدون قفسه'}
                             </span>
                           </div>
                           <StockStepper

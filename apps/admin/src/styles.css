@@ -3211,8 +3211,17 @@ body,
   font-size: 11px;
 }
 .inv-shelf {
+  display: block;
+  max-width: 190px;
+  overflow: hidden;
   color: var(--sv-text-2);
-  font-size: 12px;
+  font-size: 11.5px;
+  line-height: 1.8;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.inv-shelf::first-letter {
+  color: var(--sv-link);
 }
 .inv-actions {
   display: flex;
