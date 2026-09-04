@@ -18,6 +18,7 @@ type Item = {
   barcode: string;
   quantity: number;
   salePrice: string;
+  purchasePrice?: string;
   minStock?: number | null;
   product?: {
     id: string;
@@ -403,8 +404,12 @@ export function InventoryPage() {
     <section className="inventory-page">
       <div className="page-title">
         <div>
-          <h1>انبار و موجودی</h1>
-          <p className="muted">{activeTab.hint}</p>
+          <h1>{tab === 'stock' ? 'اقلام موجودی و اصلاح' : 'انبار و موجودی'}</h1>
+          <p className="muted">
+            {tab === 'stock'
+              ? 'لیست قلم‌های موجودی (محصول × برند) با قفسه و آستانه؛ ویرایش با دلیل اجباری و تاریخچه تراکنش‌ها.'
+              : activeTab.hint}
+          </p>
         </div>
         <span className="count">{items.length} قلم</span>
       </div>
@@ -445,6 +450,20 @@ export function InventoryPage() {
       {tab === 'stock' && (
         <div className="stock-tab">
           {/* One compact filter toolbar, matching the documented inventory screen. */}
+          <div className="inventory-kpis" aria-label="خلاصه موجودی">
+            <article className="inventory-kpi">
+              <span className="kpi-icon">▱</span>
+              <div><small>اقلام فعال</small><strong>{formatPersianNumber(items.length)}</strong><em>در {formatPersianNumber(groups.length)} محصول</em></div>
+            </article>
+            <article className="inventory-kpi">
+              <span className="kpi-icon">▣</span>
+              <div><small>ارزش انبار (خرید)</small><strong>{formatRial(items.reduce((sum, item) => sum + item.quantity * Number(item.purchasePrice ?? item.salePrice), 0))}</strong><em>بر پایه قیمت خرید</em></div>
+            </article>
+            <article className="inventory-kpi inventory-kpi-alert">
+              <span className="kpi-icon">△</span>
+              <div><small>زیر آستانه</small><strong>{formatPersianNumber(items.filter((item) => item.quantity > 0 && item.minStock != null && item.quantity <= item.minStock).length)}</strong><em>نیاز به سفارش</em></div>
+            </article>
+          </div>
           <div className="inventory-filter-toolbar">
             <div className="search-field inventory-search-field">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -481,6 +500,9 @@ export function InventoryPage() {
                 ? `${formatPersianNumber(groups.length)} کالا · ${formatPersianNumber(items.length)} قلم برای «${filter}»`
                 : `${formatPersianNumber(groups.length)} کالا · ${formatPersianNumber(items.length)} قلم در انبار`}
             </p>
+          </div>
+          <div className="inventory-table-head" aria-hidden="true">
+            <span>محصول</span><span>برند</span><span>موجودی</span><span>آستانه</span><span>قفسه</span><span>قیمت</span><span>عملیات</span>
           </div>
           <div className="inventory-list">
             {groups.map((group) => {
