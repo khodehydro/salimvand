@@ -324,9 +324,19 @@ function App() {
             <small>ERP فروشگاه</small>
           </span>
         </div>
+        <button
+          type="button"
+          className="sidebar-close"
+          onClick={() => setMobileOpen(false)}
+          aria-label="بستن منوی کناری"
+        >
+          × بستن منو
+        </button>
         <nav>
           {navGroups.map((group) => {
-            const groupItems = visibleItems.filter((item) => group.ids.includes(item.id));
+            const groupItems = group.ids
+              .map((id) => visibleItems.find((item) => item.id === id))
+              .filter((item): item is NavItem => Boolean(item));
             if (!groupItems.length) return null;
             return (
               <div className="nav-group" key={group.label}>
@@ -384,9 +394,12 @@ function App() {
           <button className="theme-button" onClick={() => setDark(!dark)} aria-label="تغییر پوسته">
             {dark ? '☀' : '☾'}
           </button>
-          <span className="notification">
-            ♧<i />
-          </span>
+          <button className="notification" type="button" aria-label="اعلان‌ها" title="اعلان‌ها">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" />
+            </svg>
+            <i />
+          </button>
           <div className="user-chip">
             <span className="avatar">{role === 'super_admin' ? 'م' : 'ک'}</span>
             <span>
