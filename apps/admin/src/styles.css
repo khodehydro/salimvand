@@ -5961,3 +5961,34 @@ button.btn-primary-lg:hover:not(:disabled) {
     min-height: 34px;
   }
 }
+
+/* Sidebar branch alignment: child items sit under their parent label and
+   remain right-aligned in both desktop and mobile RTL layouts. */
+.admin aside nav button:not(.nav-group-toggle) {
+  text-align: right;
+  justify-content: flex-start;
+}
+.admin .nav-group-toggle {
+  text-align: right;
+}
+.admin .nav-group-toggle > small {
+  text-align: right;
+}
+.admin .nav-count {
+  min-width: 22px;
+  width: auto;
+  height: 20px;
+  padding: 1px 5px;
+  margin-inline-start: auto;
+  margin-inline-end: 0;
+  display: inline-grid;
+  place-items: center;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+@media (max-width: 700px) {
+  .admin aside.open nav button:not(.nav-group-toggle) {
+    text-align: right;
+    justify-content: flex-start;
+  }
+}

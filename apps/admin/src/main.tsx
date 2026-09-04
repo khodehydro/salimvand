@@ -261,9 +261,16 @@ function App() {
   // anyone can verify the last deploy actually landed (source of many
   // "I fixed it but the panel looks the same" reports).
   const [release, setRelease] = useState('');
+  const [navCounts, setNavCounts] = useState<Record<string, number>>({});
   useEffect(() => {
     api<{ data?: { release?: string } }>('/health')
       .then((result) => setRelease(result.data?.release ?? ''))
+      .catch(() => undefined);
+    api<{ data?: { products?: number; inventoryItems?: number } }>('/dashboard/summary')
+      .then((result) => {
+        const data = result.data ?? {};
+        setNavCounts({ products: data.products ?? 0, inventory: data.inventoryItems ?? 0 });
+      })
       .catch(() => undefined);
   }, []);
   useEffect(() => {
@@ -368,7 +375,9 @@ function App() {
                   >
                     <span className="nav-icon"><NavIcon name={item.icon} /></span>
                     {item.label}
-                    {item.id === 'inventory' && <i className="nav-count">!</i>}
+                    {(item.id === 'products' || item.id === 'inventory') && navCounts[item.id] != null && (
+                      <i className="nav-count">{navCounts[item.id].toLocaleString('fa-IR')}</i>
+                    )}
                   </button>
                 ))}
               </div>
