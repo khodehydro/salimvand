@@ -18,6 +18,7 @@ type ProductRow = {
   deletedAt?: string | null;
   partNumber?: string | null;
   category?: { name: string };
+  compatibilities?: Array<{ model: { name: string; make: { name: string } } }>;
   images?: Array<{ path: string; alt?: string | null; isPrimary: boolean }>;
   inventoryItems?: Array<{
     id: string;
@@ -110,6 +111,7 @@ export function ProductsPage() {
   const [filter, setFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [brandFilter, setBrandFilter] = useState('');
+  const [vehicleFilter, setVehicleFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [message, setMessage] = useState('');
   const [draft, setDraft] = useState<ProductDetail | null>(null);
@@ -162,8 +164,22 @@ export function ProductsPage() {
     const statusMatch = !statusFilter || product.status === statusFilter;
     const brandMatch =
       !brandFilter || product.inventoryItems?.some((entry) => entry.brand.name === brandFilter);
-    return queryMatch && categoryMatch && statusMatch && brandMatch;
+    const vehicleMatch =
+      !vehicleFilter ||
+      product.compatibilities?.some(
+        (entry) => `${entry.model.make.name} ${entry.model.name}` === vehicleFilter,
+      );
+    return queryMatch && categoryMatch && statusMatch && brandMatch && vehicleMatch;
   });
+
+  const vehicleOptions = [
+    ...new Set(
+      products.flatMap(
+        (product) =>
+          product.compatibilities?.map((entry) => `${entry.model.make.name} ${entry.model.name}`) ?? [],
+      ),
+    ),
+  ];
 
   return (
     <section className="products-page">
@@ -196,13 +212,17 @@ export function ProductsPage() {
           <option value="">همه برندها</option>
           {brands.map((brand) => <option key={brand.id} value={brand.name}>{brand.name}</option>)}
         </select>
+        <select value={vehicleFilter} onChange={(event) => setVehicleFilter(event.target.value)} aria-label="فیلتر خودرو">
+          <option value="">همه خودروها</option>
+          {vehicleOptions.map((vehicle) => <option key={vehicle} value={vehicle}>{vehicle}</option>)}
+        </select>
         <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} aria-label="فیلتر وضعیت">
           <option value="">همه وضعیت‌ها</option>
           <option value="active">فعال</option>
           <option value="hidden">مخفی</option>
         </select>
-        {(filter || categoryFilter || brandFilter || statusFilter) && (
-          <button className="outline product-clear-filters" onClick={() => { setFilter(''); setCategoryFilter(''); setBrandFilter(''); setStatusFilter(''); }}>پاک کردن فیلترها</button>
+        {(filter || categoryFilter || brandFilter || vehicleFilter || statusFilter) && (
+          <button className="outline product-clear-filters" onClick={() => { setFilter(''); setCategoryFilter(''); setBrandFilter(''); setVehicleFilter(''); setStatusFilter(''); }}>پاک کردن فیلترها</button>
         )}
       </div>
 

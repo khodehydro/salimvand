@@ -18,6 +18,7 @@ export class CatalogAdminService {
         // Primary image first so the panel list can show a thumbnail without
         // pulling every image of every product.
         images: { orderBy: [{ isPrimary: 'desc' }, { sort: 'asc' }], take: 1 },
+        compatibilities: { include: { model: { include: { make: true } } } },
       },
     });
     return { ok: true, data: products };
