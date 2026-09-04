@@ -108,6 +108,9 @@ export function ProductsPage() {
   const [locations, setLocations] = useState<Location[]>([]);
   const [vehicles, setVehicles] = useState<VehicleMake[]>([]);
   const [filter, setFilter] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [brandFilter, setBrandFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
   const [message, setMessage] = useState('');
   const [draft, setDraft] = useState<ProductDetail | null>(null);
   const [tab, setTab] = useState<Tab>('basic');
@@ -151,9 +154,16 @@ export function ProductsPage() {
       .catch(() => undefined);
   }, []);
 
-  const visible = products.filter((product) =>
-    `${product.name} ${product.code} ${product.partNumber ?? ''}`.includes(filter.trim()),
-  );
+  const visible = products.filter((product) => {
+    const queryMatch = `${product.name} ${product.code} ${product.partNumber ?? ''}`
+      .toLocaleLowerCase('fa')
+      .includes(filter.trim().toLocaleLowerCase('fa'));
+    const categoryMatch = !categoryFilter || product.category?.name === categoryFilter;
+    const statusMatch = !statusFilter || product.status === statusFilter;
+    const brandMatch =
+      !brandFilter || product.inventoryItems?.some((entry) => entry.brand.name === brandFilter);
+    return queryMatch && categoryMatch && statusMatch && brandMatch;
+  });
 
   return (
     <section className="products-page">
@@ -168,30 +178,40 @@ export function ProductsPage() {
         <span className="count">{products.length} محصول</span>
       </div>
 
-      <div className="search-field">
-        <span className="search-icon">⌕</span>
-        <input
-          placeholder="جست‌وجوی لحظه‌ای نام، کد یا شماره فنی…"
-          value={filter}
-          onChange={(event) => setFilter(event.target.value)}
-        />
-        {filter && (
-          <button
-            type="button"
-            className="search-clear"
-            onClick={() => setFilter('')}
-            aria-label="پاک کردن جست‌وجو"
-          >
-            ✕
-          </button>
+      <div className="product-filter-toolbar">
+        <div className="search-field product-search-field">
+          <span className="search-icon">⌕</span>
+          <input
+            placeholder="جست‌وجوی نام، کد یا شماره فنی…"
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+          />
+          {filter && <button type="button" className="search-clear" onClick={() => setFilter('')} aria-label="پاک کردن جست‌وجو">✕</button>}
+        </div>
+        <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} aria-label="فیلتر دسته‌بندی">
+          <option value="">همه دسته‌ها</option>
+          {[...new Set(products.map((product) => product.category?.name).filter(Boolean))].map((category) => <option key={category} value={category}>{category}</option>)}
+        </select>
+        <select value={brandFilter} onChange={(event) => setBrandFilter(event.target.value)} aria-label="فیلتر برند">
+          <option value="">همه برندها</option>
+          {brands.map((brand) => <option key={brand.id} value={brand.name}>{brand.name}</option>)}
+        </select>
+        <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} aria-label="فیلتر وضعیت">
+          <option value="">همه وضعیت‌ها</option>
+          <option value="active">فعال</option>
+          <option value="hidden">مخفی</option>
+        </select>
+        {(filter || categoryFilter || brandFilter || statusFilter) && (
+          <button className="outline product-clear-filters" onClick={() => { setFilter(''); setCategoryFilter(''); setBrandFilter(''); setStatusFilter(''); }}>پاک کردن فیلترها</button>
         )}
       </div>
 
       {message && <div className="notice">{message}</div>}
 
-      <div className="product-list">
+      <div className="product-list product-list-table">
+        <div className="product-list-head" aria-hidden="true"><span>محصول</span><span>وضعیت و دسته</span><span>برندها و موجودی</span><span>عملیات</span></div>
         {visible.map((product) => (
-          <article className="product-list-card" key={product.id}>
+          <article className="product-list-card product-row" key={product.id}>
             <div className="plc-main">
               <span className="product-thumb">
                 {product.images?.[0] ? (

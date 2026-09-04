@@ -5992,3 +5992,126 @@ button.btn-primary-lg:hover:not(:disabled) {
     justify-content: flex-start;
   }
 }
+
+/* Products page: one filter surface + one continuous list, like the public
+   catalog, instead of one floating card per product. */
+.product-filter-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px;
+  margin-bottom: 14px;
+  background: var(--sv-surface);
+  border: 1px solid var(--sv-border);
+  border-radius: 12px;
+}
+.product-search-field {
+  flex: 1 1 320px;
+  width: auto;
+  min-width: 220px;
+  background: var(--sv-surface-2);
+}
+.product-filter-toolbar > select {
+  min-height: 40px;
+  min-width: 130px;
+  padding: 0 10px;
+  border: 1px solid var(--sv-border);
+  border-radius: var(--sv-radius-button);
+  background: var(--sv-surface-2);
+  color: var(--sv-text);
+  font: 12px Vazirmatn;
+}
+.product-clear-filters {
+  min-height: 40px;
+  white-space: nowrap;
+}
+.product-list-table {
+  display: block;
+  overflow: hidden;
+  background: var(--sv-surface);
+  border: 1px solid var(--sv-border);
+  border-radius: var(--sv-radius-card);
+}
+.product-list-head {
+  display: grid;
+  grid-template-columns: minmax(240px, 1.4fr) minmax(130px, .8fr) minmax(260px, 1.4fr) minmax(170px, .8fr);
+  gap: 14px;
+  padding: 10px 16px;
+  background: var(--sv-surface-2);
+  border-bottom: 1px solid var(--sv-border);
+  color: var(--sv-text-3);
+  font-size: 11px;
+  font-weight: 600;
+}
+.product-list-table .product-row {
+  display: grid;
+  gap: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  border-bottom: 1px solid var(--sv-border);
+  box-shadow: none;
+}
+.product-list-table .product-row:last-of-type {
+  border-bottom: 0;
+}
+.product-list-table .plc-main,
+.product-list-table .plc-stock {
+  padding: 12px 16px;
+}
+.product-list-table .plc-main {
+  grid-template-columns: 52px minmax(200px, 1.4fr) minmax(170px, .8fr) minmax(160px, .8fr);
+  align-items: center;
+  gap: 14px;
+}
+.product-list-table .plc-actions {
+  justify-content: flex-start;
+}
+.product-list-table .plc-stock {
+  display: flex;
+  align-items: center;
+  gap: 8px 14px;
+  padding-top: 0;
+  background: var(--sv-surface-2);
+  border-top: 1px solid var(--sv-border);
+}
+.product-list-table .plc-brand {
+  padding: 0;
+}
+@media (max-width: 900px) {
+  .product-list-head {
+    display: none;
+  }
+  .product-list-table .plc-main {
+    grid-template-columns: 52px 1fr auto;
+  }
+  .product-list-table .plc-info .plc-chips {
+    display: flex;
+  }
+  .product-list-table .plc-stock {
+    flex-wrap: wrap;
+    padding: 8px 16px;
+  }
+}
+@media (max-width: 700px) {
+  .product-filter-toolbar {
+    align-items: stretch;
+  }
+  .product-search-field {
+    flex-basis: 100%;
+  }
+  .product-filter-toolbar > select,
+  .product-clear-filters {
+    flex: 1 1 calc(50% - 8px);
+    min-width: 0;
+  }
+  .product-list-table .plc-main {
+    grid-template-columns: 44px 1fr;
+    gap: 10px;
+  }
+  .product-list-table .plc-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+}
