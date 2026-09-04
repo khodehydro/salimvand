@@ -252,6 +252,11 @@ function App() {
   const [page, setPage] = useState<Page>(() => pageFromHash(window.location.hash));
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
+    اصلی: true,
+    فروشگاه: true,
+    مدیریت: false,
+  });
   // Running release, exposed by the API on /health — shown in the sidebar so
   // anyone can verify the last deploy actually landed (source of many
   // "I fixed it but the panel looks the same" reports).
@@ -323,25 +328,39 @@ function App() {
             <strong>سلیم‌وند</strong>
             <small>ERP فروشگاه</small>
           </span>
+          <button
+            type="button"
+            className="sidebar-close"
+            onClick={() => setMobileOpen(false)}
+            aria-label="بستن منوی کناری"
+          >
+            ×
+          </button>
         </div>
-        <button
-          type="button"
-          className="sidebar-close"
-          onClick={() => setMobileOpen(false)}
-          aria-label="بستن منوی کناری"
-        >
-          × بستن منو
-        </button>
         <nav>
           {navGroups.map((group) => {
             const groupItems = group.ids
               .map((id) => visibleItems.find((item) => item.id === id))
               .filter((item): item is NavItem => Boolean(item));
             if (!groupItems.length) return null;
+            const expanded = expandedGroups[group.label] ?? true;
             return (
-              <div className="nav-group" key={group.label}>
-                <small>{group.label}</small>
-                {groupItems.map((item) => (
+              <div className={`nav-group ${expanded ? 'expanded' : 'collapsed'}`} key={group.label}>
+                <button
+                  type="button"
+                  className="nav-group-toggle"
+                  aria-expanded={expanded}
+                  onClick={() =>
+                    setExpandedGroups((current) => ({
+                      ...current,
+                      [group.label]: !expanded,
+                    }))
+                  }
+                >
+                  <small>{group.label}</small>
+                  <span aria-hidden="true">⌄</span>
+                </button>
+                {expanded && groupItems.map((item) => (
                   <button
                     className={page === item.id ? 'active' : ''}
                     key={item.id}

@@ -5873,3 +5873,91 @@ button.btn-primary-lg:hover:not(:disabled) {
     font-size: 10px;
   }
 }
+
+/* Accordion sidebar groups: category labels are vertical branch headers,
+   never horizontal tabs. */
+.admin aside nav {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.admin .nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+}
+.admin .nav-group-toggle {
+  width: 100%;
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--sv-text-3);
+  font: 600 10px Vazirmatn;
+  cursor: pointer;
+}
+.admin .nav-group-toggle:hover {
+  background: var(--sv-surface-3);
+  color: var(--sv-text);
+}
+.admin .nav-group-toggle > span {
+  font-size: 15px;
+  line-height: 1;
+  transition: transform .15s ease;
+}
+.admin .nav-group.collapsed .nav-group-toggle > span {
+  transform: rotate(90deg);
+}
+.admin aside:not(.open) .nav-group-toggle:hover {
+  color: var(--sv-brand-200);
+}
+.admin .nav-group > button:not(.nav-group-toggle) {
+  width: calc(100% - 6px);
+  margin-inline-start: 6px;
+  min-height: 38px;
+  padding: 8px 10px;
+  border-inline-start: 2px solid transparent;
+  border-radius: 8px;
+}
+.admin .nav-group > button:not(.nav-group-toggle).active {
+  border-inline-start-color: var(--sv-brand-400);
+}
+.sidebar-close {
+  display: none;
+}
+@media (max-width: 700px) {
+  .admin aside.open .aside-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .admin aside.open .sidebar-close {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    flex: none;
+    margin-inline-start: auto;
+    margin-bottom: 0;
+    padding: 0;
+    border: 1px solid var(--sv-border);
+    border-radius: 9px;
+    background: var(--sv-surface-2);
+    color: var(--sv-text-2);
+    font-size: 22px;
+    line-height: 1;
+  }
+  .admin aside.open .sidebar-close:hover {
+    background: var(--sv-surface-3);
+    color: var(--sv-text);
+  }
+  .admin aside.open .nav-group-toggle {
+    min-height: 34px;
+  }
+}
