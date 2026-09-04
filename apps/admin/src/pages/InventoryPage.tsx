@@ -189,7 +189,6 @@ export function InventoryPage() {
       );
       setDetail(result.data);
       setMessage(`قلم ${result.data.product?.name ?? ''} پیدا شد`);
-      setScanCode('');
     } catch (e) {
       setMessage((e as Error).message);
     }
