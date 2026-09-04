@@ -6286,3 +6286,38 @@ button.btn-primary-lg:hover:not(:disabled) {
   .inv-status-cell, .inv-location-cell { grid-column: 1 / -1; }
   .inv-actions { grid-column: 1 / -1; }
 }
+
+/* Inventory alignment v2: the group header owns the product column; every
+   inventory item below it uses the same four semantic columns. */
+.inventory-table-head {
+  grid-template-columns: minmax(150px, 1fr) minmax(220px, 1.3fr) minmax(170px, 1fr) minmax(150px, .9fr);
+}
+.ig-items .inventory-row {
+  grid-template-columns: minmax(150px, 1fr) minmax(220px, 1.3fr) minmax(170px, 1fr) minmax(150px, .9fr);
+  align-items: center;
+}
+.ig-items .inv-status-cell {
+  align-items: start;
+}
+.ig-items .inv-status-cell .stock-stepper {
+  margin-top: 2px;
+}
+.ig-items .inv-location-cell {
+  min-width: 0;
+}
+.ig-items .inv-actions {
+  min-width: 0;
+  align-items: center;
+}
+@media (max-width: 900px) {
+  .inventory-table-head { display: none; }
+  .ig-items .inventory-row {
+    grid-template-columns: minmax(140px, 1fr) minmax(190px, 1fr) minmax(140px, .9fr) minmax(130px, .8fr);
+  }
+}
+@media (max-width: 620px) {
+  .ig-items .inventory-row { grid-template-columns: 1fr 1fr; }
+  .ig-items .inv-status-cell,
+  .ig-items .inv-location-cell,
+  .ig-items .inv-actions { grid-column: auto; }
+}

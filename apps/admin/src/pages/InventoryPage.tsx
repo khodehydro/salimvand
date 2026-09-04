@@ -506,7 +506,7 @@ export function InventoryPage() {
             </p>
           </div>
           <div className="inventory-table-head" aria-hidden="true">
-            <span>محصول</span><span>برند و کد</span><span>وضعیت و موجودی</span><span>قفسه و قیمت</span><span>عملیات</span>
+            <span>برند و کد</span><span>وضعیت و موجودی</span><span>قفسه و قیمت</span><span>عملیات</span>
           </div>
           <div className="inventory-list">
             {groups.map((group) => {
@@ -581,6 +581,7 @@ export function InventoryPage() {
                               <b>{formatPersianNumber(item.quantity)} قطعه</b>
                             </div>
                             {item.minStock != null && item.minStock > 0 && <small className="muted">حداقل {formatPersianNumber(item.minStock)}</small>}
+                            <StockStepper itemId={item.id} quantity={item.quantity} onMessage={setMessage} onSaved={() => void load()} />
                           </div>
                           <div className="inv-location-cell">
                             <span className="inv-shelf" title={item.location ? locationLabel(item.location) : 'بدون قفسه'}>
@@ -588,7 +589,6 @@ export function InventoryPage() {
                             </span>
                             <div className="inv-price"><b>{formatRial(Number(item.salePrice))}</b><small>قیمت فروش</small></div>
                           </div>
-                          <StockStepper itemId={item.id} quantity={item.quantity} onMessage={setMessage} onSaved={() => void load()} />
                           <div className="inv-actions">
                             <button className="row-action" onClick={() => void openDetail(item)}>کارت قلم</button>
                             <button className="row-action" onClick={() => openLabelStudio(item)}>برچسب</button>
