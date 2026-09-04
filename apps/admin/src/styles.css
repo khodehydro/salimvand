@@ -6218,7 +6218,7 @@ button.btn-primary-lg:hover:not(:disabled) {
   .product-actions-cell {
     grid-column: auto;
   }
-
+}
 
 /* Inventory list: one continuous table container, with the product group
    acting as a section row and each brand item aligned to the same columns. */
@@ -6285,5 +6285,4 @@ button.btn-primary-lg:hover:not(:disabled) {
   .ig-items .inventory-row > .stock-stepper { grid-column: 2; grid-row: 1; justify-self: end; }
   .inv-status-cell, .inv-location-cell { grid-column: 1 / -1; }
   .inv-actions { grid-column: 1 / -1; }
->>>>>>> a997f42 (style(admin): redesign inventory stock list columns)
 }

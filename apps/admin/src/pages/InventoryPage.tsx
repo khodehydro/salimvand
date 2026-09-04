@@ -506,7 +506,7 @@ export function InventoryPage() {
             </p>
           </div>
           <div className="inventory-table-head" aria-hidden="true">
-            <span>محصول</span><span>برند</span><span>موجودی</span><span>آستانه</span><span>قفسه</span><span>قیمت</span><span>عملیات</span>
+            <span>محصول</span><span>برند و کد</span><span>وضعیت و موجودی</span><span>قفسه و قیمت</span><span>عملیات</span>
           </div>
           <div className="inventory-list">
             {groups.map((group) => {
@@ -584,7 +584,6 @@ export function InventoryPage() {
                           </div>
                           <div className="inv-location-cell">
                             <span className="inv-shelf" title={item.location ? locationLabel(item.location) : 'بدون قفسه'}>
->>>>>>> a997f42 (style(admin): redesign inventory stock list columns)
                               {item.location ? `📦 ${locationLabel(item.location)}` : 'بدون قفسه'}
                             </span>
                             <div className="inv-price"><b>{formatRial(Number(item.salePrice))}</b><small>قیمت فروش</small></div>
