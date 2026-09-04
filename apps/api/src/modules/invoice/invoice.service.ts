@@ -5,11 +5,7 @@ import {
   NotFoundException,
   Optional,
 } from '@nestjs/common';
-import {
-  NotificationsService,
-  buildInvoiceMessage,
-  integrationConfigured,
-} from '../notifications/notifications.service';
+import { NotificationsService, buildInvoiceMessage } from '../notifications/notifications.service';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
 import { writeAudit } from '../../common/audit/audit-log';
@@ -210,10 +206,10 @@ export class InvoiceService {
       }
       return created;
     });
-    if (
-      this.notifications &&
-      (input.customerMobile || integrationConfigured('telegram') || integrationConfigured('bale'))
-    )
+    // Invoice delivery is private: only queue the customer's SMS. Telegram
+    // and Bale are channel/broadcast providers and must never receive invoice
+    // links as a side effect of issuing an invoice.
+    if (this.notifications && input.customerMobile)
       await this.notifications.enqueue({
         type: 'invoice.issued',
         invoiceId: invoice.id,

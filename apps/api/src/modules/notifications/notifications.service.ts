@@ -23,8 +23,7 @@ export function integrationConfigured(
   env: NodeJS.ProcessEnv = process.env,
 ): boolean {
   // sms.ir bulk send: the panel API key (X-API-KEY) plus the store's
-  // subscription line number. Without both, SMS stays disabled and the
-  // invoice queue simply runs its other channels (telegram/bale) or dry-runs.
+  // subscription line number. Without both, SMS stays disabled.
   if (channel === 'sms') return Boolean(env.SMS_API_KEY && env.SMS_LINE_NUMBER);
   if (channel === 'telegram') return Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID);
   return Boolean(env.BALE_BOT_TOKEN && env.BALE_CHAT_ID);
@@ -107,12 +106,19 @@ export function notificationChannels(
   env: NodeJS.ProcessEnv = process.env,
 ): Channel[] {
   const channels: Channel[] = [];
+  const isInvoiceNotification = job.type === 'invoice.issued' || job.type === 'invoice.paid';
+
+  // Invoice links are private customer notifications: they must go only to
+  // the customer's mobile number. Telegram/Bale are reserved for explicit
+  // channel notifications such as low-stock alerts and test messages.
   if (
     job.mobile &&
     (!job.testChannel || job.testChannel === 'sms') &&
     integrationConfigured('sms', env)
   )
     channels.push('sms');
+  if (isInvoiceNotification) return channels;
+
   for (const channel of ['telegram', 'bale'] as const) {
     if ((!job.testChannel || job.testChannel === channel) && integrationConfigured(channel, env))
       channels.push(channel);

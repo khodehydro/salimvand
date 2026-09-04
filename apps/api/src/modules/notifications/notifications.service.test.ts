@@ -118,7 +118,7 @@ describe('notification messages', () => {
     expect(events).toEqual(['queue', 'redis']);
   });
 
-  it('selects all configured channels for a normal invoice notification', () => {
+  it('sends an invoice notification only to the customer SMS', () => {
     const env = {
       SMS_API_KEY: 'sms',
       SMS_LINE_NUMBER: '30004505000017',
@@ -129,7 +129,16 @@ describe('notification messages', () => {
     };
     expect(
       notificationChannels({ type: 'invoice.issued', mobile: '09120000000', message: 'test' }, env),
-    ).toEqual(['sms', 'telegram', 'bale']);
+    ).toEqual(['sms']);
+  });
+  it('does not send an invoice to channels when the customer has no mobile', () => {
+    const env = {
+      TELEGRAM_BOT_TOKEN: 'telegram',
+      TELEGRAM_CHAT_ID: 'chat',
+      BALE_BOT_TOKEN: 'bale',
+      BALE_CHAT_ID: 'bale-chat',
+    };
+    expect(notificationChannels({ type: 'invoice.issued', message: 'test' }, env)).toEqual([]);
   });
   it('restricts test notifications to the requested provider', () => {
     const env = {
