@@ -6218,4 +6218,72 @@ button.btn-primary-lg:hover:not(:disabled) {
   .product-actions-cell {
     grid-column: auto;
   }
+
+
+/* Inventory list: one continuous table container, with the product group
+   acting as a section row and each brand item aligned to the same columns. */
+.inventory-list {
+  gap: 0;
+  border: 1px solid var(--sv-border);
+  border-radius: 0 0 14px 14px;
+  overflow: hidden;
+  background: var(--sv-surface);
+}
+.inventory-group {
+  border: 0;
+  border-radius: 0;
+  border-bottom: 1px solid var(--sv-border);
+  background: var(--sv-surface);
+}
+.inventory-group:last-child { border-bottom: 0; }
+.ig-head {
+  display: grid;
+  grid-template-columns: minmax(280px, 1.8fr) 1fr auto;
+  gap: 16px;
+  padding: 12px 16px;
+  background: var(--sv-surface-2);
+}
+.ig-title .plc-chips { margin-top: 2px; }
+.ig-publish { justify-self: start; }
+.ig-items .inventory-row {
+  grid-template-columns: minmax(150px, 1fr) minmax(220px, 1.25fr) minmax(160px, .9fr) auto minmax(150px, .9fr);
+  gap: 14px;
+  min-height: 68px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--sv-border);
+}
+.inv-brand-cell { align-content: center; }
+.inv-brand-cell small { direction: ltr; }
+.inv-status-cell {
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+}
+.inv-status-cell .inv-stock-line { margin-top: 0; }
+.inv-status-cell .inv-stock-line b { white-space: nowrap; font-size: 11px; color: var(--sv-text-2); }
+.inv-status-cell .stockbar { width: 90px; }
+.inv-location-cell {
+  display: grid;
+  gap: 3px;
+  justify-items: start;
+}
+.inv-location-cell .inv-price { justify-items: start; }
+.inv-actions { justify-content: flex-start; flex-wrap: wrap; }
+@media (max-width: 900px) {
+  .inventory-table-head { display: none; }
+  .ig-items .inventory-row {
+    grid-template-columns: minmax(140px, 1fr) minmax(170px, 1fr) minmax(130px, .8fr) auto;
+  }
+  .ig-items .inventory-row > .stock-stepper { grid-column: 4; grid-row: 1; }
+  .ig-items .inventory-row > .inv-actions { grid-column: 1 / -1; border-top: 1px solid var(--sv-border); padding-top: 8px; }
+}
+@media (max-width: 620px) {
+  .inventory-list { border-radius: 0 0 12px 12px; }
+  .ig-head { grid-template-columns: 1fr; gap: 8px; }
+  .ig-publish { justify-self: start; }
+  .ig-items .inventory-row { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .ig-items .inventory-row > .stock-stepper { grid-column: 2; grid-row: 1; justify-self: end; }
+  .inv-status-cell, .inv-location-cell { grid-column: 1 / -1; }
+  .inv-actions { grid-column: 1 / -1; }
+>>>>>>> a997f42 (style(admin): redesign inventory stock list columns)
 }

@@ -568,48 +568,31 @@ export function InventoryPage() {
                       const status = stockStatus(item);
                       return (
                         <div className="inventory-row" key={item.id}>
-                          <div className="inv-info">
-                            <div className="inv-title-row">
-                              <b>{item.brand?.name ?? 'بدون برند'}</b>
-                              <span className={`badge ${status.badge}`}>{status.label}</span>
-                            </div>
-                            <small>
-                              <code dir="ltr">{item.barcode}</code>
-                            </small>
+                          <div className="inv-info inv-brand-cell">
+                            <b>{item.brand?.name ?? 'بدون برند'}</b>
+                            <small><code dir="ltr">{item.barcode}</code></small>
+                          </div>
+                          <div className="inv-status-cell">
+                            <span className={`badge ${status.badge}`}>{status.label}</span>
                             <div className="inv-stock-line">
                               <i className={`stockbar ${status.bar}`}>
                                 <i style={{ width: `${Math.round(stockRatio(item) * 100)}%` }} />
                               </i>
-                              {item.minStock != null && item.minStock > 0 && (
-                                <small className="muted">
-                                  حداقل {formatPersianNumber(item.minStock)}
-                                </small>
-                              )}
+                              <b>{formatPersianNumber(item.quantity)} قطعه</b>
                             </div>
-                            <span
-                              className="inv-shelf"
-                              title={item.location ? locationLabel(item.location) : 'بدون قفسه'}
-                            >
+                            {item.minStock != null && item.minStock > 0 && <small className="muted">حداقل {formatPersianNumber(item.minStock)}</small>}
+                          </div>
+                          <div className="inv-location-cell">
+                            <span className="inv-shelf" title={item.location ? locationLabel(item.location) : 'بدون قفسه'}>
+>>>>>>> a997f42 (style(admin): redesign inventory stock list columns)
                               {item.location ? `📦 ${locationLabel(item.location)}` : 'بدون قفسه'}
                             </span>
+                            <div className="inv-price"><b>{formatRial(Number(item.salePrice))}</b><small>قیمت فروش</small></div>
                           </div>
-                          <StockStepper
-                            itemId={item.id}
-                            quantity={item.quantity}
-                            onMessage={setMessage}
-                            onSaved={() => void load()}
-                          />
-                          <div className="inv-price">
-                            <b>{formatRial(Number(item.salePrice))}</b>
-                            <small>قیمت فروش</small>
-                          </div>
+                          <StockStepper itemId={item.id} quantity={item.quantity} onMessage={setMessage} onSaved={() => void load()} />
                           <div className="inv-actions">
-                            <button className="row-action" onClick={() => void openDetail(item)}>
-                              کارت قلم
-                            </button>
-                            <button className="row-action" onClick={() => openLabelStudio(item)}>
-                              برچسب
-                            </button>
+                            <button className="row-action" onClick={() => void openDetail(item)}>کارت قلم</button>
+                            <button className="row-action" onClick={() => openLabelStudio(item)}>برچسب</button>
                           </div>
                         </div>
                       );
