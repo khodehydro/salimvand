@@ -53,15 +53,27 @@ const navItems: NavItem[] = [
   { id: 'audit', label: 'تاریخچه تغییرات', icon: '◷' },
   { id: 'settings', label: 'تنظیمات', icon: '⚙' },
 ];
-/** Sidebar sections: related pages sit together under a quiet label instead
- * of one long flat list, and the daily workflow (sales → stock) comes first. */
+// Grouping mirrors the documented admin shell: a short primary section,
+// the store workflow, then management/system tools. Keep the groups stable so
+// the sidebar, mobile navigation and command palette use the same information
+// architecture as the UI reference.
 const navGroups: Array<{ label: string; ids: Page[] }> = [
-  { label: 'کار روزانه', ids: ['dashboard', 'invoices', 'customers'] },
+  { label: 'اصلی', ids: ['dashboard'] },
   {
-    label: 'انبار و کاتالوگ',
-    ids: ['inventory', 'labels', 'products', 'purchases', 'suppliers', 'media', 'references'],
+    label: 'فروشگاه',
+    ids: [
+      'products',
+      'inventory',
+      'labels',
+      'invoices',
+      'customers',
+      'purchases',
+      'suppliers',
+      'media',
+      'references',
+    ],
   },
-  { label: 'مدیریت', ids: ['reports', 'messaging', 'users', 'audit', 'settings'] },
+  { label: 'مدیریت', ids: ['reports', 'messaging', 'settings', 'users', 'audit'] },
 ];
 const pageTitles: Record<Page, string> = {
   dashboard: 'داشبورد',

@@ -691,10 +691,27 @@ body,
   color: var(--sv-text);
 }
 .admin aside {
+  width: 222px;
+  flex: 0 0 222px;
+  padding: 12px 10px;
   background: var(--sv-brand-900);
   color: var(--sv-on-navy);
   display: flex;
   flex-direction: column;
+  gap: 2px;
+  position: relative;
+  overflow: hidden;
+}
+/* The reference keeps the dark skin quiet: surfaces, borders and text change
+ * through tokens while the sidebar remains structurally identical. */
+.theme-dark aside {
+  background: var(--sv-surface);
+  border-inline-end: 1px solid var(--sv-border);
+}
+.theme-dark .admin aside nav button:hover,
+.theme-dark .admin aside nav button.active {
+  background: var(--sv-surface-3);
+  color: var(--sv-text);
 }
 .aside-brand {
   display: flex;
@@ -785,11 +802,16 @@ body,
   margin-left: 6px;
 }
 .admin-topbar {
+  height: 56px;
+  padding: 0 18px !important;
+  position: sticky;
+  top: 0;
+  z-index: 20;
   background: var(--sv-surface) !important;
   color: var(--sv-text);
   border-color: var(--sv-border) !important;
   align-items: center !important;
-  gap: 16px !important;
+  gap: 12px !important;
 }
 .topbar-title {
   display: grid;
@@ -1004,7 +1026,7 @@ body,
   border: 1px solid var(--sv-border);
   border-radius: 12px;
   background: var(--sv-surface);
-  box-shadow: 0 -6px 18px #04121f14;
+  box-shadow: 0 -6px 18px var(--sv-shadow-soft);
   z-index: 4;
 }
 .settings-save-bar span {
@@ -2668,7 +2690,7 @@ body,
   place-items: center;
   height: 62px;
   border-radius: 10px;
-  background: var(--sv-surface, #fff);
+  background: var(--sv-surface);
   border: 1px dashed var(--sv-border, var(--border));
 }
 .asset-preview img {
@@ -2721,9 +2743,9 @@ body,
   justify-self: start;
 }
 .settings-help.map-warn {
-  color: #b9770b;
-  background: #fdf0d9;
-  border: 1px solid #f3ddab;
+  color: var(--sv-warn);
+  background: var(--sv-warn-soft);
+  border: 1px solid var(--sv-border-2);
   border-radius: 10px;
   padding: 8px 10px;
   line-height: 1.9;
@@ -2886,8 +2908,8 @@ body,
   position: absolute;
   top: 12px;
   inset-inline-end: 12px;
-  background: #1f6fbe;
-  color: #fff;
+  background: var(--sv-link);
+  color: var(--sv-on-brand);
   border-radius: 99px;
   padding: 3px 8px;
   font-size: 10px;
@@ -2923,8 +2945,8 @@ body,
 
 /* Site-asset badge sits on the opposite corner of the primary badge. */
 .media-primary.media-site {
-  background: #1f6fbe;
-  color: #fff;
+  background: var(--sv-link);
+  color: var(--sv-on-brand);
   inset-inline-start: auto;
   inset-inline-end: 8px;
 }
@@ -4219,7 +4241,7 @@ body,
   height: 38px;
   border-radius: 11px;
   background: var(--sv-brand-800);
-  color: #fff;
+  color: var(--sv-on-brand);
   display: grid;
   place-items: center;
   font-size: 12px;
@@ -5072,9 +5094,9 @@ button.btn-primary-lg:hover:not(:disabled) {
   color: var(--sv-primary-2, var(--sv-primary));
 }
 .lbl-zoom-btn.on {
-  background: var(--sv-primary, #0d2b4b);
-  border-color: var(--sv-primary, #0d2b4b);
-  color: #fff;
+  background: var(--sv-primary);
+  border-color: var(--sv-primary);
+  color: var(--sv-on-brand);
 }
 /* صحنهٔ پیش‌نمایش: کاغذ شطرنجی مثل قالب داکیومنت */
 .lbl-stage {
