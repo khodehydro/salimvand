@@ -102,6 +102,12 @@ export function InventoryPage() {
   const [brands, setBrands] = useState<Option[]>([]);
   const [vehicles, setVehicles] = useState<VehicleMake[]>([]);
   const [filter, setFilter] = useState('');
+  const [bulkBrand, setBulkBrand] = useState('');
+  const [bulkCategory, setBulkCategory] = useState('');
+  const [bulkSalePercent, setBulkSalePercent] = useState('');
+  const [bulkPurchasePercent, setBulkPurchasePercent] = useState('');
+  const [bulkRoundTo, setBulkRoundTo] = useState('1000');
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [message, setMessage] = useState('');
   // Detail sheet for one inventory item: ledger, transfer and bulk receive.
   const [detail, setDetail] = useState<Item | null>(null);
@@ -506,6 +512,24 @@ export function InventoryPage() {
                 : `${formatPersianNumber(groups.length)} کالا · ${formatPersianNumber(items.length)} قلم در انبار`}
             </p>
           </div>
+          <div className="bulk-price-toolbar">
+            <b>مدیریت گروهی قیمت</b>
+            <select value={bulkBrand} onChange={(event) => setBulkBrand(event.target.value)}><option value="">همه برندها</option>{brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}</select>
+            <select value={bulkCategory} onChange={(event) => setBulkCategory(event.target.value)}><option value="">همه دسته‌ها</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select>
+            <input dir="ltr" inputMode="decimal" placeholder="٪ فروش" value={bulkSalePercent} onChange={(event) => setBulkSalePercent(event.target.value)} />
+            <input dir="ltr" inputMode="decimal" placeholder="٪ خرید" value={bulkPurchasePercent} onChange={(event) => setBulkPurchasePercent(event.target.value)} />
+            <input dir="ltr" inputMode="numeric" placeholder="گرد کردن" value={bulkRoundTo} onChange={(event) => setBulkRoundTo(event.target.value)} />
+            <button className="outline" disabled={bulkBusy} onClick={async () => {
+              if (!bulkBrand && !bulkCategory) return setMessage('برای تغییر گروهی، برند یا دسته را انتخاب کنید.');
+              setBulkBusy(true);
+              try {
+                const result = await api<{ data: { updated: number } }>('/inventory/bulk-prices', { method: 'POST', body: JSON.stringify({ brandId: bulkBrand || undefined, categoryId: bulkCategory || undefined, salePercent: Number(bulkSalePercent || 0), purchasePercent: Number(bulkPurchasePercent || 0), roundTo: Number(bulkRoundTo || 0) }) });
+                setMessage(`${result.data.updated.toLocaleString('fa-IR')} قلم بروزرسانی شد.`);
+                await load();
+              } catch (error) { setMessage((error as Error).message); }
+              finally { setBulkBusy(false); }
+            }}>{bulkBusy ? 'در حال بروزرسانی…' : 'اعمال تغییر قیمت'}</button>
+          </div>
           <div className="inventory-table-head inventory-list-head" aria-hidden="true">
             <span>محصول</span><span>برند و کد</span><span>وضعیت و موجودی</span><span>قفسه و قیمت</span><span>عملیات</span>
           </div>
@@ -513,6 +537,10 @@ export function InventoryPage() {
             {items.map((item) => {
               const status = stockStatus(item);
               const product = item.product;
+              const purchasePrice = Number(item.purchasePrice ?? 0);
+              const salePrice = Number(item.salePrice ?? 0);
+              const grossProfit = salePrice > 0 && purchasePrice > 0 ? salePrice - purchasePrice : null;
+              const margin = grossProfit !== null && purchasePrice > 0 ? (grossProfit / purchasePrice) * 100 : null;
               return (
                 <article className="inventory-flat-row" key={item.id}>
                   <div className="inventory-product-cell">
@@ -542,7 +570,11 @@ export function InventoryPage() {
                   </div>
                   <div className="inventory-location-cell">
                     <span className="inv-shelf" title={item.location ? locationLabel(item.location) : 'بدون قفسه'}>{item.location ? `📦 ${locationLabel(item.location)}` : 'بدون قفسه'}</span>
-                    <div className="inventory-price"><b>{formatRial(Number(item.salePrice))}</b><small>قیمت فروش</small></div>
+                    <div className="inventory-price">
+                      <b>{salePrice > 0 ? formatRial(salePrice) : '—'}</b><small>قیمت فروش</small>
+                    </div>
+                    {purchasePrice > 0 && <small className="inventory-purchase-price">خرید: {formatRial(purchasePrice)}</small>}
+                    {grossProfit !== null && <span className={`inventory-margin ${grossProfit < 0 ? 'negative' : ''}`}>{grossProfit < 0 ? 'ضرر' : 'سود'}: {formatRial(grossProfit)}{margin !== null ? ` · ${margin.toFixed(1)}٪` : ''}</span>}
                   </div>
                   <div className="inventory-actions-cell">
                     <button className="row-action" onClick={() => void openDetail(item)}>کارت قلم</button>
@@ -765,7 +797,15 @@ export function InventoryPage() {
               </div>
               <div>
                 <dt>قیمت فروش</dt>
-                <dd>{formatRial(Number(detail.salePrice))}</dd>
+                <dd>{Number(detail.salePrice) > 0 ? formatRial(Number(detail.salePrice)) : 'ثبت نشده'}</dd>
+              </div>
+              <div>
+                <dt>قیمت خرید</dt>
+                <dd>{Number(detail.purchasePrice ?? 0) > 0 ? formatRial(Number(detail.purchasePrice)) : 'ثبت نشده'}</dd>
+              </div>
+              <div>
+                <dt>سود ناخالص</dt>
+                <dd>{Number(detail.salePrice) > 0 && Number(detail.purchasePrice ?? 0) > 0 ? formatRial(Number(detail.salePrice) - Number(detail.purchasePrice)) : 'قابل محاسبه نیست'}</dd>
               </div>
               <div>
                 <dt>آستانهٔ هشدار</dt>

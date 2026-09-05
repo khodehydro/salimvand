@@ -30,6 +30,15 @@ export class InventoryController {
   @Get('labels') @Roles('warehouse', 'accountant') labels(@Query('q') q?: string) {
     return this.inventory.labelItems(q);
   }
+  @Post('bulk-prices') @Roles('manager', 'warehouse') bulkPrices(@Body() body: Record<string, unknown>) {
+    return this.inventory.bulkUpdatePrices({
+      brandId: typeof body.brandId === 'string' ? body.brandId : undefined,
+      categoryId: typeof body.categoryId === 'string' ? body.categoryId : undefined,
+      salePercent: Number(body.salePercent ?? 0),
+      purchasePercent: Number(body.purchasePercent ?? 0),
+      roundTo: Number(body.roundTo ?? 0),
+    });
+  }
   @Post('items') create(
     @Body() body: CreateInventoryItemDto,
     @Req() request: AuthenticatedRequest,

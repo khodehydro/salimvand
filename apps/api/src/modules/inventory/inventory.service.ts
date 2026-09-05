@@ -195,6 +195,36 @@ export class InventoryService {
     return { ok: true, data: result };
   }
 
+  async bulkUpdatePrices(input: {
+    brandId?: string;
+    categoryId?: string;
+    salePercent?: number;
+    purchasePercent?: number;
+    roundTo?: number;
+  }) {
+    const salePercent = Number(input.salePercent ?? 0);
+    const purchasePercent = Number(input.purchasePercent ?? 0);
+    const roundTo = Math.max(0, Number(input.roundTo ?? 0));
+    if (!input.brandId && !input.categoryId) throw new BadRequestException('برند یا دسته‌بندی را انتخاب کنید');
+    if (!salePercent && !purchasePercent) throw new BadRequestException('درصد تغییر قیمت را وارد کنید');
+    const items = await this.prisma.inventoryItem.findMany({
+      where: { isActive: true, ...(input.brandId ? { brandId: input.brandId } : {}), ...(input.categoryId ? { product: { categoryId: input.categoryId } } : {}) },
+      select: { id: true, purchasePrice: true, salePrice: true },
+    });
+    for (const item of items) {
+      const apply = (value: bigint, percent: number) => {
+        if (!percent) return value;
+        const next = Number(value) * (1 + percent / 100);
+        return BigInt(roundTo > 0 ? Math.round(next / roundTo) * roundTo : Math.round(next));
+      };
+      await this.prisma.inventoryItem.update({ where: { id: item.id }, data: {
+        purchasePrice: apply(item.purchasePrice, purchasePercent),
+        salePrice: apply(item.salePrice, salePercent),
+      }});
+    }
+    return { ok: true, data: { updated: items.length } };
+  }
+
   async adjust(input: StockMutation) {
     return this.mutate(input, 'adjustment');
   }

@@ -114,10 +114,6 @@ export function ProductCreateModal({
       setTab('basic');
       return setError('نام محصول و دسته‌بندی در تب «مشخصات و سئو» الزامی است.');
     }
-    if (item.brandId && (!item.salePrice || !item.purchasePrice)) {
-      setTab('item');
-      return setError('برند را که انتخاب می‌کنید، قیمت خرید و فروش (ریال) هم لازم است.');
-    }
     setBusy(true);
     // Which step failed, if any — the error message tells the operator what
     // was already saved so they do not register the product twice.
@@ -407,14 +403,14 @@ export function ProductCreateModal({
                   />
                 </label>
                 <label>
-                  قیمت فروش (ریال) *
+                  قیمت فروش (ریال) — اختیاری
                   <FaNumberInput
                     value={item.salePrice}
                     onChange={(plain) => setItem({ ...item, salePrice: plain })}
                   />
                 </label>
                 <label>
-                  قیمت خرید (ریال) *
+                  قیمت خرید (ریال) — اختیاری
                   <FaNumberInput
                     value={item.purchasePrice}
                     onChange={(plain) => setItem({ ...item, purchasePrice: plain })}
