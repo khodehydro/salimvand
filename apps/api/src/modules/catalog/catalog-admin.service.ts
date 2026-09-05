@@ -53,7 +53,7 @@ export class CatalogAdminService {
       where: { id, deletedAt: null },
       include: {
         category: true,
-        images: true,
+        images: { orderBy: [{ isPrimary: 'desc' }, { sort: 'asc' }] },
         compatibilities: { include: { model: { include: { make: true } }, trim: true } },
         inventoryItems: { include: { brand: true, location: { include: { parent: true } } } },
       },

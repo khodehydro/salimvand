@@ -6707,3 +6707,25 @@ button.btn-primary-lg:hover:not(:disabled) {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.create-image-url { flex: 1 1 100%; }
+.create-image-url textarea {
+  width: 100%;
+  min-height: 76px;
+  resize: vertical;
+  padding: 11px 13px;
+  border: 1px solid var(--sv-border-2);
+  border-radius: 10px;
+  background: var(--sv-surface-2);
+  color: var(--sv-text);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.8;
+  direction: ltr;
+  transition: border-color .18s ease, box-shadow .18s ease;
+}
+.create-image-url textarea:focus { outline: 0; border-color: var(--sv-primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--sv-primary) 15%, transparent); }
+.create-image-preview figcaption { display: flex; align-items: center; justify-content: space-between; gap: 5px; }
+.create-image-preview figcaption button { border: 0; padding: 0 4px; color: var(--sv-danger); background: transparent; cursor: pointer; font-size: 16px; line-height: 1; }
+.image-item[draggable='true']::before { content: '⋮⋮'; position: absolute; z-index: 1; margin: 7px; padding: 2px 5px; border-radius: 5px; background: rgba(255,255,255,.9); color: var(--sv-text-2); font-size: 14px; }
+.image-item[draggable='true'] { position: relative; }

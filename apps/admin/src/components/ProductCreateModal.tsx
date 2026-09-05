@@ -82,6 +82,8 @@ export function ProductCreateModal({
   const [imageUrl, setImageUrl] = useState('');
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [selectedImages, setSelectedImages] = useState<PickerItem[]>([]);
+  const imageUrlList = imageUrl.split(/[\n,]/).map((value) => value.trim()).filter(Boolean);
+  const removeImageUrl = (url: string) => setImageUrl(imageUrlList.filter((value) => value !== url).join('\n'));
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const models = useMemo(
@@ -367,19 +369,19 @@ export function ProductCreateModal({
                   {imageFiles.map((file) => (
                     <figure className="create-image-preview" key={`${file.name}-${file.lastModified}`}>
                       <img src={URL.createObjectURL(file)} alt={file.name} />
-                      <figcaption>{file.name}</figcaption>
+                      <figcaption>{file.name}<button type="button" onClick={() => setImageFiles((current) => current.filter((entry) => entry !== file))} aria-label="حذف تصویر">×</button></figcaption>
                     </figure>
                   ))}
                   {selectedImages.map((image) => (
                     <figure className="create-image-preview" key={image.id}>
                       <img src={image.path} alt={image.alt ?? basic.name} />
-                      <figcaption>{image.alt ?? 'رسانه انتخاب‌شده'}</figcaption>
+                      <figcaption>{image.alt ?? 'رسانه انتخاب‌شده'}<button type="button" onClick={() => setSelectedImages((current) => current.filter((entry) => entry.id !== image.id))} aria-label="حذف تصویر">×</button></figcaption>
                     </figure>
                   ))}
                   {imageUrl.split(/[\n,]/).map((url) => url.trim()).filter((url) => /^https:\/\//i.test(url)).map((url) => (
                     <figure className="create-image-preview" key={url}>
                       <img src={url} alt={basic.name} />
-                      <figcaption>تصویر لینک‌شده</figcaption>
+                      <figcaption>تصویر لینک‌شده<button type="button" onClick={() => removeImageUrl(url)} aria-label="حذف تصویر">×</button></figcaption>
                     </figure>
                   ))}
                 </div>
