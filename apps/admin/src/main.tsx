@@ -52,6 +52,13 @@ type NavIconName =
   | 'audit'
   | 'settings';
 type NavItem = { id: Page; label: string; icon: NavIconName };
+type NotificationItem = {
+  id: string;
+  type: string;
+  mobile: string | null;
+  failedReason: string;
+  attemptsMade: number;
+};
 
 /** Small inline icons keep the shell visually consistent with the SVG-based
  * reference UI and avoid platform-dependent emoji glyphs in the sidebar. */
@@ -251,6 +258,8 @@ function App() {
   const [role, setRole] = useState<UserRole | ''>('');
   const [page, setPage] = useState<Page>(() => pageFromHash(window.location.hash));
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [notificationOpen, setNotificationOpen] = useState(false);
+  const [notificationItems, setNotificationItems] = useState<NotificationItem[]>([]);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
     اصلی: true,
@@ -282,6 +291,12 @@ function App() {
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
+  useEffect(() => {
+    if (!notificationOpen) return;
+    void api<{ data: NotificationItem[] }>('/notifications/failed?limit=5')
+      .then((result) => setNotificationItems(result.data ?? []))
+      .catch(() => setNotificationItems([]));
+  }, [notificationOpen]);
   useEffect(() => {
     const listener = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
@@ -422,12 +437,29 @@ function App() {
           <button className="theme-button" onClick={() => setDark(!dark)} aria-label="تغییر پوسته">
             {dark ? '☀' : '☾'}
           </button>
-          <button className="notification" type="button" aria-label="اعلان‌ها" title="اعلان‌ها">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" />
-            </svg>
-            <i />
-          </button>
+          <div className="notification-menu">
+            <button className="notification" type="button" aria-label="اعلان‌ها" title="اعلان‌ها" aria-expanded={notificationOpen} onClick={() => setNotificationOpen((open) => !open)}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" />
+              </svg>
+              {notificationItems.length > 0 && <i />}
+            </button>
+            {notificationOpen && (
+              <div className="notification-popover" role="dialog" aria-label="اعلان‌ها">
+                <div className="notification-popover-head">
+                  <b>اعلان‌ها</b>
+                  <small>{notificationItems.length ? `${notificationItems.length} خطای اخیر` : 'وضعیت سیستم'}</small>
+                </div>
+                {notificationItems.length ? notificationItems.map((item) => (
+                  <button className="notification-item" key={item.id} onClick={() => navigate('messaging')}>
+                    <span className="notification-item-icon">!</span>
+                    <span><b>ارسال اعلان ناموفق</b><small>{item.failedReason}</small></span>
+                  </button>
+                )) : <p className="notification-empty">اعلان جدیدی وجود ندارد.</p>}
+                <button className="notification-all" onClick={() => navigate('messaging')}>مشاهده صف و خطاهای پیام‌رسانی</button>
+              </div>
+            )}
+          </div>
           <div className="user-chip">
             <span className="avatar">{role === 'super_admin' ? 'م' : 'ک'}</span>
             <span>

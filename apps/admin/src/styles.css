@@ -6406,3 +6406,88 @@ button.btn-primary-lg:hover:not(:disabled) {
     flex: 1;
   }
 }
+
+/* Topbar notification popover */
+.admin-topbar .notification-menu {
+  position: relative;
+  flex: 0 0 auto;
+}
+.notification-popover {
+  position: absolute;
+  z-index: 80;
+  top: calc(100% + 10px);
+  inset-inline-end: 0;
+  width: min(360px, calc(100vw - 32px));
+  overflow: hidden;
+  background: var(--sv-surface);
+  border: 1px solid var(--sv-border);
+  border-radius: 14px;
+  box-shadow: var(--sv-shadow-modal, 0 18px 45px rgba(4, 18, 31, .18));
+}
+.notification-popover-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--sv-surface-2);
+  border-bottom: 1px solid var(--sv-border);
+}
+.notification-popover-head small,
+.notification-item small {
+  color: var(--sv-text-3);
+  font-size: 11px;
+}
+.notification-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 16px;
+  border: 0;
+  border-bottom: 1px solid var(--sv-border);
+  background: transparent;
+  color: var(--sv-text);
+  text-align: start;
+  cursor: pointer;
+}
+.notification-item:hover { background: var(--sv-surface-2); }
+.notification-item > span:last-child { display: grid; gap: 3px; min-width: 0; }
+.notification-item small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 280px; }
+.notification-item-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--sv-danger-soft);
+  color: var(--sv-danger);
+  font-weight: 800;
+}
+.notification-empty {
+  margin: 0;
+  padding: 22px 16px;
+  color: var(--sv-text-2);
+  font-size: 12px;
+  text-align: center;
+}
+.notification-all {
+  width: 100%;
+  padding: 11px 16px;
+  border: 0;
+  background: transparent;
+  color: var(--sv-link);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.notification-all:hover { background: var(--sv-surface-2); }
+@media (max-width: 700px) {
+  .notification-popover {
+    position: fixed;
+    top: 66px;
+    inset-inline: 10px;
+    width: auto;
+  }
+}
