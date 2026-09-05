@@ -50,6 +50,30 @@ export function createSlug(value: string): string {
     .replace(/^-|-$/g, '');
 }
 
+/** Generates contiguous one-word, two-word, three-word … search phrases.
+ * This keeps Persian product search useful without asking the operator to
+ * maintain a second keyword list by hand. */
+export function buildProductKeywords(name: string, extraPhrases: string[] = []): string[] {
+  const phrases = [name, ...extraPhrases]
+    .map((value) => String(value ?? '').replace(/[،,؛;|/]+/g, ' ').replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+  const result: string[] = [];
+  const seen = new Set<string>();
+  for (const phrase of phrases) {
+    const words = phrase.split(' ');
+    for (let size = 1; size <= words.length; size += 1)
+      for (let start = 0; start + size <= words.length; start += 1) {
+        const keyword = words.slice(start, start + size).join(' ').trim();
+        if (keyword && !seen.has(keyword)) {
+          seen.add(keyword);
+          result.push(keyword);
+        }
+      }
+  }
+  for (const keyword of ['سلیم وند', 'میاندوآب']) if (!seen.has(keyword)) result.push(keyword);
+  return result;
+}
+
 export function buildProductSeo(product: {
   name: string;
   categoryName?: string;
@@ -62,7 +86,7 @@ export function buildProductSeo(product: {
     slug: product.slug ?? createSlug(`${product.name}${vehicles ? ` ${vehicles}` : ''}`),
     seoTitle: `${product.name}${context} | فروشگاه سلیم وند میاندوآب`,
     seoDescription: `معرفی و استعلام ${product.name}${context} از فروشگاه آذین خودرو سلیم وند در میاندوآب، آذربایجان غربی.`,
-    seoKeywords: [product.name, ...(product.vehicleNames ?? []), 'سلیم وند', 'میاندوآب'],
+    seoKeywords: buildProductKeywords(product.name, product.vehicleNames ?? []),
   };
 }
 

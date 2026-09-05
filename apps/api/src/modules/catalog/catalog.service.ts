@@ -50,6 +50,9 @@ export class CatalogService {
             OR: [
               { name: { contains: query.q, mode: 'insensitive' } },
               { partNumber: { contains: query.q, mode: 'insensitive' } },
+              { seoKeywords: { has: query.q.trim() } },
+              { inventoryItems: { some: { barcode: { contains: query.q, mode: 'insensitive' }, isActive: true } } },
+              { inventoryItems: { some: { brand: { name: { contains: query.q, mode: 'insensitive' } }, isActive: true } } },
             ],
           }
         : {}),
@@ -222,7 +225,9 @@ export class CatalogService {
       },
       select: { key: true, value: true },
     });
-    const values = Object.fromEntries(rows.map((row) => [row.key, row.value]));
+    const values = Object.fromEntries(
+      rows.map((row: { key: string; value: unknown }) => [row.key, row.value]),
+    );
     return {
       ok: true,
       data: {

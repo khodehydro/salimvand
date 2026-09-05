@@ -17,6 +17,7 @@ type ProductRow = {
   status: string;
   deletedAt?: string | null;
   partNumber?: string | null;
+  seoKeywords?: string[];
   category?: { name: string };
   compatibilities?: Array<{ model: { name: string; make: { name: string } } }>;
   images?: Array<{ path: string; alt?: string | null; isPrimary: boolean }>;
@@ -157,9 +158,12 @@ export function ProductsPage() {
   }, []);
 
   const visible = products.filter((product) => {
-    const queryMatch = `${product.name} ${product.code} ${product.partNumber ?? ''}`
+    const normalizedFilter = filter.trim().toLocaleLowerCase('fa');
+    const queryMatch = `${product.name} ${product.code} ${product.partNumber ?? ''} ${(product.seoKeywords ?? []).join(' ')} ${
+      product.compatibilities?.map((entry) => `${entry.model.make.name} ${entry.model.name}`).join(' ') ?? ''
+    }`
       .toLocaleLowerCase('fa')
-      .includes(filter.trim().toLocaleLowerCase('fa'));
+      .includes(normalizedFilter);
     const categoryMatch = !categoryFilter || product.category?.name === categoryFilter;
     const statusMatch = !statusFilter || product.status === statusFilter;
     const brandMatch =
@@ -418,10 +422,6 @@ function ProductEditor({
         priceDisplay: basic.priceDisplay,
         seoTitle: basic.seoTitle || null,
         seoDescription: basic.seoDescription || null,
-        seoKeywords: basic.seoKeywords
-          .split(/[،,]/)
-          .map((entry) => entry.trim())
-          .filter(Boolean),
       },
       'مشخصات و سئو ذخیره شد',
     );
@@ -704,9 +704,11 @@ function ProductEditor({
                 کلیدواژه‌ها
                 <input
                   value={basic.seoKeywords}
-                  onChange={(event) => setBasic({ ...basic, seoKeywords: event.target.value })}
-                  placeholder="لنت، ترموز، پژو ۲۰۶"
+                  readOnly
+                  title="کلیدواژه‌ها خودکار از نام محصول و خودروهای سازگار ساخته می‌شوند"
+                  placeholder="پس از ذخیره خودکار تولید می‌شود"
                 />
+                <small className="field-hint">تک‌واژه‌ها و ترکیب‌های دوکلمه‌ای، سه‌کلمه‌ای و بیشتر به‌صورت خودکار ساخته می‌شوند.</small>
               </label>
             </form>
           )}
