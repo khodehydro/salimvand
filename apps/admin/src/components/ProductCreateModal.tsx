@@ -71,7 +71,9 @@ export function ProductCreateModal({
 }) {
   const [tab, setTab] = useState<Tab>('basic');
   const [basic, setBasic] = useState(emptyBasic);
-  const [item, setItem] = useState(emptyItem);
+  const [items, setItems] = useState([emptyItem]);
+  const updateItem = (index: number, patch: Partial<typeof emptyItem>) =>
+    setItems((current) => current.map((entry, i) => (i === index ? { ...entry, ...patch } : entry)));
   const [compat, setCompat] = useState<Array<{ modelId: string; trimId: string }>>([]);
   const [pickModel, setPickModel] = useState('');
   const [pickTrim, setPickTrim] = useState('');
@@ -97,7 +99,7 @@ export function ProductCreateModal({
   const reset = () => {
     setTab('basic');
     setBasic(emptyBasic);
-    setItem({ ...emptyItem, barcode: '' });
+    setItems([{ ...emptyItem, barcode: '' }]);
     setCompat([]);
     setPickModel('');
     setPickTrim('');
@@ -158,13 +160,14 @@ export function ProductCreateModal({
       stage = 'قلم انبار';
       // 2) Inventory item — brand, prices and the opening stock, all optional
       //    but filled in the same window so the flow is not split.
-      if (item.brandId) {
+      const filledItems = items.filter((entry) => entry.brandId);
+      for (const [index, item] of filledItems.entries()) {
         await api('/inventory/items', {
           method: 'POST',
           body: JSON.stringify({
             productId,
             brandId: item.brandId,
-            barcode: item.barcode || createEan13(`${Date.now()}`.slice(-9)),
+            barcode: item.barcode || createEan13(`${Date.now()}${index}`.slice(-9)),
             purchasePrice: Number(item.purchasePrice) || 0,
             salePrice: Number(item.salePrice) || 0,
             minStock: item.minStock ? Number(item.minStock) : undefined,
@@ -187,14 +190,14 @@ export function ProductCreateModal({
         });
       }
       onCreated(
-        `محصول «${created.data.name}» ثبت شد${item.brandId ? ' — قلم انبار و بارکد ایجاد گردید' : ''} و روی سایت نمایش داده می‌شود.`,
+        `محصول «${created.data.name}» ثبت شد${items.some((entry) => entry.brandId) ? ` — ${items.filter((entry) => entry.brandId).length} قلم انبار ایجاد گردید` : ''} و روی سایت نمایش داده می‌شود.`,
       );
       reset();
       onClose();
     } catch (e) {
       const base = (e as Error).message;
       setError(
-        stage === 'قلم انبار' && item.brandId
+        stage === 'قلم انبار' && items.some((entry) => entry.brandId)
           ? `محصول ثبت شد اما ثبت ${stage} ناموفق بود: ${base} — پنجره را نبندید و دوباره ذخیره نکنید؛ محصول را از لیست ویرایش کنید.`
           : stage !== 'قلم انبار' && compat.length
             ? `محصول و قلم انبار ثبت شد اما ثبت ${stage} ناموفق بود: ${base} — از ویرایشگر محصول کامل کنید.`
@@ -378,83 +381,30 @@ export function ProductCreateModal({
 
           {tab === 'item' && (
             <div>
-              <div className="form-grid">
-                <label>
-                  برند قطعه
-                  <select
-                    value={item.brandId}
-                    onChange={(event) => setItem({ ...item, brandId: event.target.value })}
-                  >
-                    <option value="">بدون قلم انبار (بعداً از ویرایشگر اضافه کنید)</option>
-                    {brands.map((brand) => (
-                      <option value={brand.id} key={brand.id}>
-                        {brand.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  بارکد EAN-13
-                  <input
-                    dir="ltr"
-                    value={item.barcode}
-                    onChange={(event) => setItem({ ...item, barcode: event.target.value })}
-                    placeholder="خالی = تولید خودکار"
-                  />
-                </label>
-                <label>
-                  قیمت فروش (ریال) — اختیاری
-                  <FaNumberInput
-                    value={item.salePrice}
-                    onChange={(plain) => setItem({ ...item, salePrice: plain })}
-                  />
-                </label>
-                <label>
-                  قیمت خرید (ریال) — اختیاری
-                  <FaNumberInput
-                    value={item.purchasePrice}
-                    onChange={(plain) => setItem({ ...item, purchasePrice: plain })}
-                  />
-                </label>
-                <label>
-                  موجودی اولیه
-                  <FaNumberInput
-                    group={false}
-                    value={item.initialQuantity}
-                    onChange={(plain) => setItem({ ...item, initialQuantity: plain })}
-                    placeholder="۰"
-                  />
-                </label>
-                <label>
-                  آستانهٔ هشدار
-                  <FaNumberInput
-                    group={false}
-                    value={item.minStock}
-                    onChange={(plain) => setItem({ ...item, minStock: plain })}
-                    placeholder="مثلاً ۳"
-                  />
-                </label>
-                <label>
-                  قفسه
-                  <select
-                    value={item.locationId}
-                    onChange={(event) => setItem({ ...item, locationId: event.target.value })}
-                  >
-                    <option value="">بدون قفسه</option>
-                    {locations.map((location) => (
-                      <option value={location.id} key={location.id}>
-                        {locationLabel(location)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              <p className="muted">
-                قیمت خرید فقط داخلی است و هرگز در سایت یا فاکتور مشتری نمایش داده نمی‌شود.
-              </p>
+              <p className="muted">یک محصول را بسازید و برای هر برند، قفسه، بارکد و قیمت مستقل ثبت کنید.</p>
+              {items.map((item, index) => (
+                <div className="create-inventory-item" key={index}>
+                  <div className="create-inventory-item-heading">
+                    <b>قلم {index + 1}</b>
+                    {items.length > 1 && <button type="button" className="row-action danger-text" onClick={() => setItems((current) => current.filter((_, i) => i !== index))}>حذف</button>}
+                  </div>
+                  <div className="form-grid">
+                    <label>برند قطعه<select value={item.brandId} onChange={(event) => updateItem(index, { brandId: event.target.value })}>
+                      <option value="">بدون قلم انبار</option>{brands.map((brand) => <option value={brand.id} key={brand.id}>{brand.name}</option>)}
+                    </select></label>
+                    <label>بارکد EAN-13<input dir="ltr" value={item.barcode} onChange={(event) => updateItem(index, { barcode: event.target.value })} placeholder="خالی = تولید خودکار" /></label>
+                    <label>قیمت فروش (ریال) — اختیاری<FaNumberInput value={item.salePrice} onChange={(plain) => updateItem(index, { salePrice: plain })} /></label>
+                    <label>قیمت خرید (ریال) — اختیاری<FaNumberInput value={item.purchasePrice} onChange={(plain) => updateItem(index, { purchasePrice: plain })} /></label>
+                    <label>موجودی اولیه<FaNumberInput group={false} value={item.initialQuantity} onChange={(plain) => updateItem(index, { initialQuantity: plain })} placeholder="۰" /></label>
+                    <label>آستانهٔ هشدار<FaNumberInput group={false} value={item.minStock} onChange={(plain) => updateItem(index, { minStock: plain })} placeholder="مثلاً ۳" /></label>
+                    <label>قفسه<select value={item.locationId} onChange={(event) => updateItem(index, { locationId: event.target.value })}><option value="">بدون قفسه</option>{locations.map((location) => <option value={location.id} key={location.id}>{locationLabel(location)}</option>)}</select></label>
+                  </div>
+                </div>
+              ))}
+              <button type="button" className="outline" onClick={() => setItems((current) => [...current, { ...emptyItem }])}>＋ افزودن برند دیگر</button>
+              <p className="muted">قیمت خرید فقط داخلی است و هرگز در سایت یا فاکتور مشتری نمایش داده نمی‌شود.</p>
             </div>
           )}
-
           {tab === 'vehicles' && (
             <div>
               <div className="invoice-product-picker">

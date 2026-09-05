@@ -6601,3 +6601,6 @@ button.btn-primary-lg:hover:not(:disabled) {
 
 .customer-products { display: grid; gap: 6px; margin: 8px 0 18px; }
 .customer-products > span { padding: 8px 10px; border: 1px solid var(--sv-border); border-radius: 8px; font-size: 12px; }
+
+.create-inventory-item { margin: 10px 0; padding: 12px; border: 1px solid var(--sv-border); border-radius: 10px; }
+.create-inventory-item-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
