@@ -211,7 +211,7 @@ export function ProductCreateModal({
       onClick={inline ? undefined : onClose}
     >
       <div
-        className={inline ? 'product-create-inline-editor' : 'editor product-create-modal'}
+        className={inline ? 'product-create-inline-editor product-create-one-page' : 'editor product-create-modal product-create-one-page'}
         role="dialog"
         aria-modal={inline ? undefined : true}
         aria-label="ثبت محصول جدید"
@@ -227,23 +227,18 @@ export function ProductCreateModal({
           ثبت در انبار = ثبت در کاتالوگ = نمایش در سایت. هر سه بخش را در همین پنجره پر کنید و یک بار
           ذخیره کنید.
         </p>
-        <div className="tabs" role="tablist">
-          {tabs.map((entry) => (
-            <button
-              key={entry.id}
-              role="tab"
-              aria-selected={tab === entry.id}
-              className={tab === entry.id ? 'tab active' : 'tab'}
-              onClick={() => setTab(entry.id)}
-            >
-              {entry.label}
-            </button>
-          ))}
+        <div className="create-flow-summary">
+          <span className="create-step active"><b>۱</b> اطلاعات محصول</span>
+          <span className="create-step"><b>۲</b> تصاویر و رسانه</span>
+          <span className="create-step"><b>۳</b> برندها و انبار</span>
+          <span className="create-step"><b>۴</b> خودروهای سازگار</span>
         </div>
 
         <div className="editor-body">
-          {tab === 'basic' && (
+          {true && (
             <>
+              <section className="create-form-section">
+                <div className="create-section-heading"><span className="create-section-icon">۱</span><div><h3>اطلاعات اصلی محصول</h3><p>نام، دسته‌بندی و مشخصات پایه را وارد کنید.</p></div></div>
               <div className="form-grid">
               <label>
                 نام محصول *
@@ -374,11 +369,14 @@ export function ProductCreateModal({
                 </div>
               )}
               </div>
+              </section>
             </>
           )}
 
-          {tab === 'item' && (
-            <div>
+          {true && (
+            <section className="create-form-section">
+              <div className="create-section-heading"><span className="create-section-icon">۲</span><div><h3>برندها و اطلاعات انبار</h3><p>برای هر برند، قیمت، بارکد، قفسه و موجودی مستقل ثبت کنید.</p></div></div>
+              <div>
               <p className="muted">یک محصول را بسازید و برای هر برند، قفسه، بارکد و قیمت مستقل ثبت کنید.</p>
               {items.map((item, index) => (
                 <div className="create-inventory-item" key={index}>
@@ -401,10 +399,13 @@ export function ProductCreateModal({
               ))}
               <button type="button" className="outline" onClick={() => setItems((current) => [...current, { ...emptyItem }])}>＋ افزودن برند دیگر</button>
               <p className="muted">قیمت خرید فقط داخلی است و هرگز در سایت یا فاکتور مشتری نمایش داده نمی‌شود.</p>
-            </div>
+              </div>
+            </section>
           )}
-          {tab === 'vehicles' && (
-            <div>
+          {true && (
+            <section className="create-form-section">
+              <div className="create-section-heading"><span className="create-section-icon">۳</span><div><h3>خودروهای سازگار</h3><p>محصول را برای جست‌وجوی دقیق‌تر به خودروهای سازگار متصل کنید.</p></div></div>
+              <div>
               <div className="invoice-product-picker">
                 <select
                   aria-label="مدل خودرو"
@@ -482,7 +483,8 @@ export function ProductCreateModal({
                   </p>
                 )}
               </div>
-            </div>
+              </div>
+            </section>
           )}
         </div>
 
