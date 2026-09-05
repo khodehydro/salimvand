@@ -237,6 +237,7 @@ describe('sms.ir adapter', () => {
         lineNumber: 30004505000017,
         messageText: 'فاکتور INV-1',
         mobiles: ['09121234567'],
+        sendDateTime: null,
       });
       expect(logs).toHaveLength(1);
       expect(logs[0].data).toMatchObject({ status: 'sent', provider: 'sms.ir' });

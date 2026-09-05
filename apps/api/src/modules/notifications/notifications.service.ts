@@ -45,11 +45,14 @@ export function smsIrPayload(
   mobile: string,
   message: string,
   env: NodeJS.ProcessEnv = process.env,
-): { lineNumber: number; messageText: string; mobiles: string[] } {
+): { lineNumber: number; messageText: string; mobiles: string[]; sendDateTime: null } {
   return {
     lineNumber: Number(env.SMS_LINE_NUMBER),
     messageText: message,
     mobiles: [mobile],
+    // Explicitly request immediate delivery. sms.ir documents null as the
+    // non-scheduled/immediate mode; omitting it leaves behavior to defaults.
+    sendDateTime: null,
   };
 }
 
@@ -237,7 +240,10 @@ export class NotificationsService implements OnModuleDestroy {
       this.worker = new Worker<NotificationJob>(
         'salimvand-notifications',
         async (job) => this.process(job),
-        { connection: this.connection, concurrency: 4 },
+        // Keep invoice SMS responsive even when a channel provider is slow.
+        // Bale/Telegram calls can take several seconds, so avoid letting a
+        // small worker pool serialize customer notifications behind them.
+        { connection: this.connection, concurrency: 10 },
       );
     }
   }
@@ -262,7 +268,12 @@ export class NotificationsService implements OnModuleDestroy {
       return await this.queue.add(
         payload.type as NotificationName,
         payload,
-        notificationJobOptions,
+        {
+          ...notificationJobOptions,
+          // Invoice messages jump ahead of low-stock/broadcast jobs. BullMQ
+          // uses a lower number as a higher priority.
+          priority: payload.type === 'invoice.issued' || payload.type === 'invoice.paid' ? 1 : 10,
+        },
       );
     } catch (error) {
       console.error(

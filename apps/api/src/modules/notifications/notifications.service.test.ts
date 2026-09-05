@@ -48,6 +48,7 @@ describe('notification messages', () => {
       lineNumber: 30004505000017,
       messageText: 'فاکتور INV-1',
       mobiles: ['09121234567'],
+      sendDateTime: null,
     });
   });
   it('builds a payment notification with the same short URL', () => {
