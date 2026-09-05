@@ -938,6 +938,7 @@ export class InvoiceService {
         total: true,
         customerMobile: true,
         customerName: true,
+        items: { select: { productName: true, quantity: true } },
       },
     });
     if (!invoice) throw new NotFoundException('فاکتور پیدا نشد');

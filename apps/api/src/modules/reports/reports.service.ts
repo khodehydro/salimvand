@@ -105,7 +105,15 @@ export class ReportsService {
     };
     return [
       'محصول,کد,برند,بارکد,موجودی,حداقل,قیمت فروش,قفسه',
-      ...items.map((item) =>
+      ...items.map((item: {
+        product: { name: string; code: string | null };
+        brand: { name: string };
+        barcode: string;
+        quantity: number;
+        minStock: number | null;
+        salePrice: bigint;
+        location: { code: string; name: string } | null;
+      }) =>
         [
           item.product.name,
           item.product.code,
@@ -170,7 +178,7 @@ export class ReportsService {
     }
     const header = sheet.getRow(1);
     header.font = { bold: true };
-    header.alignment = { horizontal: 'right', vertical: 'center', wrapText: true };
+    header.alignment = { vertical: 'middle', wrapText: true };
     header.height = 42;
     sheet.columns.forEach((column: { width?: number }) => { column.width = 18; });
     sheet.getColumn(1).width = 32;
