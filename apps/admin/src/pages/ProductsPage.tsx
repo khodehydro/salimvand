@@ -446,6 +446,14 @@ function ProductEditor({
     );
   };
 
+  const reorderImages = async (imageIds: string[]) => {
+    try {
+      await api(`/media/products/${product.id}/reorder`, { method: 'PATCH', body: JSON.stringify({ imageIds }) });
+      notify('ترتیب تصاویر ذخیره شد');
+      onRefresh();
+    } catch (error) { notify((error as Error).message); }
+  };
+
   const upload = async () => {
     if (!mediaFile) return notify('ابتدا یک فایل انتخاب کنید');
     setBusy(true);
@@ -734,9 +742,27 @@ function ProductEditor({
 
           {tab === 'images' && (
             <div>
+              <p className="media-reorder-hint">برای تغییر ترتیب، تصویر را بگیرید و روی تصویر مقصد رها کنید. تصویر اصلی در سایت و پیش‌نمایش لینک نمایش داده می‌شود.</p>
               <div className="image-grid">
                 {(product.images ?? []).map((image) => (
-                  <div className="image-item" key={image.id}>
+                  <div
+                    className="image-item"
+                    key={image.id}
+                    draggable
+                    onDragStart={(event) => event.dataTransfer.setData('text/plain', image.id)}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      const draggedId = event.dataTransfer.getData('text/plain');
+                      const current = [...(product.images ?? [])];
+                      const from = current.findIndex((entry) => entry.id === draggedId);
+                      const to = current.findIndex((entry) => entry.id === image.id);
+                      if (from < 0 || to < 0 || from === to) return;
+                      const [moved] = current.splice(from, 1);
+                      current.splice(to, 0, moved);
+                      void reorderImages(current.map((entry) => entry.id));
+                    }}
+                  >
                     <MediaImage src={image.path} alt={image.alt ?? product.name} />
                     <small>{image.isPrimary ? 'تصویر اصلی' : (image.alt ?? 'بدون Alt')}</small>
                     <button

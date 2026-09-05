@@ -6661,3 +6661,7 @@ button.btn-primary-lg:hover:not(:disabled) {
   .bulk-price-toolbar b { width: 100%; margin: 0 0 2px; }
   .bulk-price-toolbar select, .bulk-price-toolbar input, .bulk-price-toolbar button { flex: 1 1 120px; min-width: 0; max-width: none; }
 }
+
+.media-reorder-hint { margin: 0 0 10px; color: var(--sv-text-2); font-size: 11px; }
+.image-item[draggable='true'] { cursor: grab; }
+.image-item[draggable='true']:active { cursor: grabbing; opacity: .7; }

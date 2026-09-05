@@ -175,6 +175,16 @@ export class MediaService {
     };
   }
 
+  async reorder(productId: string, imageIds: string[]) {
+    await this.ensureProduct(productId);
+    const images = await this.prisma.productImage.findMany({ where: { productId }, select: { id: true } });
+    const valid = new Set(images.map((image: { id: string }) => image.id));
+    if (imageIds.length !== images.length || imageIds.some((id) => !valid.has(id)) || new Set(imageIds).size !== imageIds.length)
+      throw new BadRequestException('ترتیب تصاویر نامعتبر است');
+    await this.prisma.$transaction(imageIds.map((id, sort) => this.prisma.productImage.update({ where: { id }, data: { sort } })));
+    return { ok: true, data: { imageIds } };
+  }
+
   async makePrimary(productId: string, imageId: string) {
     await this.ensureProduct(productId);
     return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
