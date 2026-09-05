@@ -80,8 +80,8 @@ export function ProductCreateModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [imageUrl, setImageUrl] = useState('');
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [selectedImage, setSelectedImage] = useState<PickerItem | null>(null);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [selectedImages, setSelectedImages] = useState<PickerItem[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const models = useMemo(
@@ -105,8 +105,8 @@ export function ProductCreateModal({
     setPickTrim('');
     setError('');
     setImageUrl('');
-    setImageFile(null);
-    setSelectedImage(null);
+    setImageFiles([]);
+    setSelectedImages([]);
     setPickerOpen(false);
   };
 
@@ -141,21 +141,17 @@ export function ProductCreateModal({
       });
       const productId = created.data.id;
       stage = 'تصویر محصول';
-      if (imageUrl.trim()) {
-        await api(`/media/products/${productId}/url`, {
-          method: 'POST',
-          body: JSON.stringify({ url: imageUrl.trim(), alt: basic.name }),
-        });
-      } else if (imageFile) {
+      for (const url of imageUrl.split(/[\n,]/).map((value) => value.trim()).filter(Boolean)) {
+        await api(`/media/products/${productId}/url`, { method: 'POST', body: JSON.stringify({ url, alt: basic.name }) });
+      }
+      for (const file of imageFiles) {
         const form = new FormData();
-        form.append('file', imageFile);
+        form.append('file', file);
         form.append('alt', basic.name);
         await api(`/media/products/${productId}/upload`, { method: 'POST', body: form });
-      } else if (selectedImage) {
-        await api(`/media/products/${productId}/select`, {
-          method: 'POST',
-          body: JSON.stringify({ imageId: selectedImage.id, alt: basic.name }),
-        });
+      }
+      for (const image of selectedImages) {
+        await api(`/media/products/${productId}/select`, { method: 'POST', body: JSON.stringify({ imageId: image.id, alt: image.alt ?? basic.name }) });
       }
       stage = 'قلم انبار';
       // 2) Inventory item — brand, prices and the opening stock, all optional
@@ -342,26 +338,28 @@ export function ProductCreateModal({
               <div className="create-image-actions">
                 <label className="create-image-url">
                   لینک تصویر
-                  <input
+                  <textarea
                     dir="ltr"
                     value={imageUrl}
                     onChange={(event) => {
                       setImageUrl(event.target.value);
-                      setImageFile(null);
-                      setSelectedImage(null);
+                      setImageFiles([]);
+                      setSelectedImages([]);
                     }}
-                    placeholder="https://example.com/product.jpg"
+                    placeholder="هر لینک در یک خط"
+                    rows={2}
                   />
                 </label>
                 <label className="create-image-upload">
                   آپلود تصویر
                   <input
                     type="file"
+                    multiple
                     accept="image/jpeg,image/png,image/webp"
                     onChange={(event) => {
-                      setImageFile(event.target.files?.[0] ?? null);
+                      setImageFiles(Array.from(event.target.files ?? []));
                       setImageUrl('');
-                      setSelectedImage(null);
+                      setSelectedImages([]);
                     }}
                   />
                 </label>
@@ -369,10 +367,10 @@ export function ProductCreateModal({
                   انتخاب از رسانه‌ها
                 </button>
               </div>
-              {(imageFile || selectedImage || imageUrl) && (
+              {(imageFiles.length > 0 || selectedImages.length > 0 || imageUrl) && (
                 <div className="create-image-selected">
                   <span>✓</span>
-                  {imageFile?.name ?? selectedImage?.path ?? imageUrl}
+                  {imageFiles.map((file) => file.name).concat(selectedImages.map((image) => image.path), imageUrl ? [imageUrl] : []).join(' · ')}
                 </div>
               )}
               </div>
@@ -508,8 +506,8 @@ export function ProductCreateModal({
         title="انتخاب تصویر محصول از رسانه‌ها"
         onClose={() => setPickerOpen(false)}
         onSelect={(image) => {
-          setSelectedImage(image);
-          setImageFile(null);
+          setSelectedImages((current) => current.some((entry) => entry.id === image.id) ? current : [...current, image]);
+          setImageFiles([]);
           setImageUrl('');
         }}
       />
