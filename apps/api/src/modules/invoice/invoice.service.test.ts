@@ -677,7 +677,7 @@ describe('InvoiceService.list and panel link/pdf actions', () => {
     );
     expect(serialized).not.toContain('publicTokenHash');
     expect(serialized).not.toContain('publicShortCodeHash');
-    expect(result.data[0].items[0].inventoryItem.brand.name).toBe('ایساکو');
+    expect(result.data[0].items[0].inventoryItem.brand?.name).toBe('ایساکو');
   });
 
   it('rotates the public link for panel viewing with an audit trail', async () => {

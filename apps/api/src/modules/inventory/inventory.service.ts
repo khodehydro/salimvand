@@ -122,7 +122,7 @@ export class InventoryService {
           barcode: item.barcode,
           name: item.product.name,
           sku: item.product.code,
-          brand: item.brand.name,
+          brand: item.brand?.name ?? 'بدون برند',
           category: item.product.category.name,
           vehicles: vehicleText,
           quantity: item.quantity,

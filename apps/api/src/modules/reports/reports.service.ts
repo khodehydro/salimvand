@@ -107,7 +107,7 @@ export class ReportsService {
       'محصول,کد,برند,بارکد,موجودی,حداقل,قیمت فروش,قفسه',
       ...items.map((item: {
         product: { name: string; code: string | null };
-        brand: { name: string };
+        brand?: { name: string } | null;
         barcode: string;
         quantity: number;
         minStock: number | null;
@@ -117,7 +117,7 @@ export class ReportsService {
         [
           item.product.name,
           item.product.code,
-          item.brand.name,
+          item.brand?.name ?? 'بدون برند',
           item.barcode,
           item.quantity,
           item.minStock ?? '',
@@ -364,7 +364,7 @@ export class ReportsService {
     >();
     for (const invoice of invoices)
       for (const item of invoice.items) {
-        const brand = item.inventoryItem.brand.name;
+        const brand = item.inventoryItem.brand?.name ?? 'بدون برند';
         const row = byBrand.get(brand) ?? { brand, quantity: 0, revenue: 0n, cost: 0n, profit: 0n };
         const quantity = BigInt(item.quantity);
         row.quantity += item.quantity;

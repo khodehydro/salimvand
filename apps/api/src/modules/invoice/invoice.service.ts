@@ -352,10 +352,10 @@ export class InvoiceService {
             quantity: number;
             unitPrice: bigint;
             lineTotal: bigint;
-            inventoryItem: { brand: { name: string } };
+            inventoryItem: { brand?: { name: string } | null };
           }) => ({
             productName: item.productName,
-            brand: item.inventoryItem.brand.name,
+            brand: item.inventoryItem.brand?.name ?? 'بدون برند',
             quantity: item.quantity,
             returnedQuantity: returnedPerLine.get(item.id) ?? 0,
             unitPrice: item.unitPrice,
@@ -1214,7 +1214,7 @@ export class InvoiceService {
       issuedAt: invoice.issuedAt,
       items: invoice.items.map((item) => ({
         productName: item.productName,
-        brand: item.inventoryItem.brand.name,
+        brand: item.inventoryItem.brand?.name ?? 'بدون برند',
         quantity: item.quantity,
         unitPrice: item.unitPrice,
         lineTotal: item.lineTotal,
