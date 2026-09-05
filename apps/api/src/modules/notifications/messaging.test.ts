@@ -64,6 +64,7 @@ describe('SMS templates', () => {
       'حمید',
     );
     expect(named).toBe('حمید عزیز\n\nفاکتور INV-0003 شما صادر شد');
+    expect(buildInvoiceMessage('INV-0003', 'c0de', '5000', false, '{customer_name} عزیز', 'حمید')).toBe('حمید عزیز');
     const anonymous = buildInvoiceMessage(
       'INV-0003',
       'c0de',

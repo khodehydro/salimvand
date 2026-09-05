@@ -196,7 +196,10 @@ export function buildInvoiceMessage(
     link,
     store: 'سلیم‌وند',
   });
-  if (rendered) return rendered;
+  // Operators often write «{customer_name} عزیز» in the template while
+  // customer_name already carries the polite suffix. Collapse that accidental
+  // duplication without changing the rest of the custom SMS text.
+  if (rendered) return rendered.replace(/عزیز(?:\s+عزیز)+/g, 'عزیز');
   if (paid) return `پرداخت فاکتور ${number} ثبت شد. مبلغ پرداختی: ${total} ریال\n${link}`;
   return `${greeting}\n\nفاکتور شماره ${number} شما صادر شد\n\nمشاهده:\n${link}\n\nبا تشکر از خرید شما\nفروشگاه سلیم وند`;
 }
