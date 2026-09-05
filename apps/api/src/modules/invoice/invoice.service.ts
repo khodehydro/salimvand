@@ -222,6 +222,12 @@ export class InvoiceService {
           await this.smsTemplate('invoice'),
           input.customerName?.trim(),
         ),
+        invoicePreview: {
+          number: invoice.number,
+          shortCode: publicShortCode.code,
+          total: totals.total.toString(),
+          items: lines.map((line) => ({ name: line.productName, quantity: line.quantity })),
+        },
       });
     return {
       ok: true,
@@ -976,6 +982,15 @@ export class InvoiceService {
         await this.smsTemplate('invoice'),
         invoice.customerName,
       ),
+      invoicePreview: {
+        number: invoice.number,
+        shortCode: shortCode.code,
+        total: invoice.total.toString(),
+        items: (invoice.items as Array<{ productName: string; quantity: number }>).map((item) => ({
+          name: item.productName,
+          quantity: item.quantity,
+        })),
+      },
     });
     return {
       ok: true,

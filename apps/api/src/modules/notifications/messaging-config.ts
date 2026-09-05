@@ -12,7 +12,7 @@ export const SECRET_MASK_PREFIX = '••••';
 export type MessagingConfig = {
   sms?: { apiKey?: string; lineNumber?: string };
   telegram?: { botToken?: string; chatId?: string; apiBase?: string; proxySecret?: string };
-  bale?: { botToken?: string; chatId?: string };
+  bale?: { botToken?: string; chatId?: string; botId?: string; apiAccessKey?: string };
 };
 
 function asString(value: unknown): string | undefined {
@@ -38,7 +38,12 @@ export function asMessagingConfig(value: unknown): MessagingConfig {
       apiBase: asString(telegram.apiBase),
       proxySecret: asString(telegram.proxySecret),
     },
-    bale: { botToken: asString(bale.botToken), chatId: asString(bale.chatId) },
+    bale: {
+      botToken: asString(bale.botToken),
+      chatId: asString(bale.chatId),
+      botId: asString(bale.botId),
+      apiAccessKey: asString(bale.apiAccessKey),
+    },
   };
 }
 
@@ -54,7 +59,12 @@ export function maskMessagingSecrets(value: unknown): MessagingConfig {
       apiBase: config.telegram?.apiBase,
       proxySecret: mask(config.telegram?.proxySecret),
     },
-    bale: { botToken: mask(config.bale?.botToken), chatId: config.bale?.chatId },
+    bale: {
+      botToken: mask(config.bale?.botToken),
+      chatId: config.bale?.chatId,
+      botId: config.bale?.botId,
+      apiAccessKey: mask(config.bale?.apiAccessKey),
+    },
   };
 }
 
@@ -82,6 +92,8 @@ export function mergeMessagingSecrets(incoming: unknown, existing: unknown): Mes
     bale: {
       botToken: secret(next.bale?.botToken, current.bale?.botToken),
       chatId: next.bale?.chatId ?? current.bale?.chatId,
+      botId: next.bale?.botId ?? current.bale?.botId,
+      apiAccessKey: secret(next.bale?.apiAccessKey, current.bale?.apiAccessKey),
     },
   };
 }
@@ -114,6 +126,8 @@ export async function resolveMessagingEnv(
     if (config.telegram?.proxySecret) env.TELEGRAM_PROXY_SECRET = config.telegram.proxySecret;
     if (config.bale?.botToken) env.BALE_BOT_TOKEN = config.bale.botToken;
     if (config.bale?.chatId) env.BALE_CHAT_ID = config.bale.chatId;
+    if (config.bale?.botId) env.BALE_BOT_ID = config.bale.botId;
+    if (config.bale?.apiAccessKey) env.BALE_API_ACCESS_KEY = config.bale.apiAccessKey;
   } catch {
     // The settings lookup is best-effort; `.env` remains the fallback.
   }
