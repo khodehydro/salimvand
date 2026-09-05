@@ -32,7 +32,7 @@ type Summary = {
     quantity: number;
     minStock: number | null;
     product: { name: string; code: string };
-    brand: { name: string };
+    brand?: { name: string } | null;
     location?: { code: string; name: string; parent?: { name: string } | null } | null;
   }>;
   stockComposition: StockRow[];
@@ -544,7 +544,7 @@ export function DashboardPage({
                       <span className="grow">
                         <b>{row.product.name}</b>
                         <small>
-                          {row.brand.name}
+                          {row.brand?.name ?? 'بدون برند'}
                           {row.location ? ` · ${locationChip(row.location)}` : ''}
                         </small>
                         <i className={`stockbar ${barClass}`}>
