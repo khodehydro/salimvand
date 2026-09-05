@@ -208,7 +208,11 @@ export class DashboardService {
       recentTransactions,
       unpaidInvoices,
       productsWithoutImages,
+      productsWithoutPartNumber,
+      productsWithoutVehicles,
+      productsWithoutBrand,
       inventoryWithoutLocation,
+      productsWithoutSalePrice,
       pendingPurchases,
     ] = await Promise.all([
       this.prisma.product.count({ where: { deletedAt: null, status: 'active' } }),
@@ -245,7 +249,11 @@ export class DashboardService {
       }),
       this.prisma.invoice.count({ where: { status: 'issued', paymentStatus: { in: ['unpaid', 'partial'] } } }),
       this.prisma.product.count({ where: { deletedAt: null, status: 'active', images: { none: {} } } }),
+      this.prisma.product.count({ where: { deletedAt: null, status: 'active', OR: [{ partNumber: null }, { partNumber: '' }] } }),
+      this.prisma.product.count({ where: { deletedAt: null, status: 'active', compatibilities: { none: {} } } }),
+      this.prisma.product.count({ where: { deletedAt: null, status: 'active', inventoryItems: { none: { isActive: true } } } }),
       this.prisma.inventoryItem.count({ where: { isActive: true, locationId: null } }),
+      this.prisma.inventoryItem.count({ where: { isActive: true, salePrice: 0 } }),
       this.prisma.purchaseInvoice.count({ where: { status: 'issued' } }),
     ]);
     const lowStock = lowStockItems.filter(
@@ -263,7 +271,11 @@ export class DashboardService {
         recentTransactions,
         unpaidInvoices,
         productsWithoutImages,
+        productsWithoutPartNumber,
+        productsWithoutVehicles,
+        productsWithoutBrand,
         inventoryWithoutLocation,
+        productsWithoutSalePrice,
         pendingPurchases,
       },
     };

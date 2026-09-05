@@ -42,7 +42,11 @@ type Summary = {
   }>;
   unpaidInvoices?: number;
   productsWithoutImages?: number;
+  productsWithoutPartNumber?: number;
+  productsWithoutVehicles?: number;
+  productsWithoutBrand?: number;
   inventoryWithoutLocation?: number;
+  productsWithoutSalePrice?: number;
   pendingPurchases?: number;
   recentTransactions: Array<{
     id: string;
@@ -303,6 +307,26 @@ export function DashboardPage({
               <span className="daily-work-label">{task.label}</span>
               <b>{faNum(task.count)}</b>
               <span className="daily-work-arrow">←</span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="data-quality-panel" aria-labelledby="data-quality-title">
+        <div className="daily-work-heading">
+          <div><h3 id="data-quality-title">کنترل کیفیت داده‌های محصولات</h3><p>موارد ناقص را تکمیل کنید تا جست‌وجو و نمایش سایت دقیق‌تر شود.</p></div>
+        </div>
+        <div className="data-quality-list">
+          {[
+            ['بدون تصویر', summary?.productsWithoutImages ?? 0],
+            ['بدون شماره فنی', summary?.productsWithoutPartNumber ?? 0],
+            ['بدون خودروی سازگار', summary?.productsWithoutVehicles ?? 0],
+            ['بدون برند', summary?.productsWithoutBrand ?? 0],
+            ['بدون قفسه', summary?.inventoryWithoutLocation ?? 0],
+            ['بدون قیمت فروش', summary?.productsWithoutSalePrice ?? 0],
+          ].map(([label, count]) => (
+            <button className="data-quality-item" key={label} onClick={() => onNavigate?.('products')}>
+              <span>{label}</span><b>{faNum(Number(count))}</b><i>ویرایش ←</i>
             </button>
           ))}
         </div>

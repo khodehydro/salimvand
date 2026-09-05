@@ -6571,3 +6571,30 @@ button.btn-primary-lg:hover:not(:disabled) {
   .bulk-price-toolbar input,
   .bulk-price-toolbar button { flex: 1; min-width: 0; }
 }
+
+.data-quality-panel {
+  margin: 0 0 20px;
+  padding: 18px;
+  background: var(--sv-surface);
+  border: 1px solid var(--sv-border);
+  border-radius: 14px;
+}
+.data-quality-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.data-quality-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 3px 10px;
+  padding: 11px 12px;
+  border: 1px solid var(--sv-border);
+  border-radius: 10px;
+  background: var(--sv-surface-2);
+  color: var(--sv-text);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.data-quality-item:hover { border-color: var(--sv-primary); background: var(--sv-surface); }
+.data-quality-item b { font-size: 16px; }
+.data-quality-item i { grid-column: 1 / -1; color: var(--sv-link); font-size: 10px; font-style: normal; }
+@media (max-width: 900px) { .data-quality-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .data-quality-list { grid-template-columns: 1fr; } }
