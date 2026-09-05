@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { buildProductSeo } from '@salimvand/shared';
+import { buildProductSeo, createEan13 } from '@salimvand/shared';
 import { PrismaService } from '../../prisma.service';
 import { Prisma } from '@prisma/client';
 import { writeAudit } from '../../common/audit/audit-log';
@@ -87,6 +87,26 @@ export class CatalogAdminService {
           seoKeywords: seo.seoKeywords,
         },
       });
+      // InventoryItem requires a brand for barcode, stock and shelf tracking.
+      // Keep catalog-only product creation consistent by creating one neutral
+      // inventory line when the operator did not provide a brand yet.
+      if (!Array.isArray(input.inventoryBrandIds) || input.inventoryBrandIds.length === 0) {
+        const neutralBrand = await tx.brand.upsert({
+          where: { name: 'بدون برند' },
+          update: { isActive: true },
+          create: { name: 'بدون برند', isActive: true },
+        });
+        await tx.inventoryItem.create({
+          data: {
+            productId: created.id,
+            brandId: neutralBrand.id,
+            barcode: createEan13(`${Date.now()}${created.id.replace(/-/g, '')}`.slice(-9)),
+            purchasePrice: 0n,
+            salePrice: 0n,
+            quantity: 0,
+          },
+        });
+      }
       if (userId && 'auditLog' in tx)
         await writeAudit(tx as Prisma.TransactionClient, {
           userId,

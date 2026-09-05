@@ -139,6 +139,7 @@ export function ProductCreateModal({
             .split(/[،,]/)
             .map((entry) => entry.trim())
             .filter(Boolean),
+          inventoryBrandIds: items.map((entry) => entry.brandId).filter(Boolean),
         }),
       });
       const productId = created.data.id;
