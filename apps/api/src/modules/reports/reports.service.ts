@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service';
 import { calculateCustomerDebt } from '../customers/customers.service';
+import * as ExcelJS from 'exceljs';
 
 function parseReportDate(
   value: string | undefined,
@@ -119,6 +120,66 @@ export class ReportsService {
           .join(','),
       ),
     ].join('\n');
+  }
+
+  async exportInventoryAccounting(): Promise<Buffer> {
+    const items = await this.prisma.inventoryItem.findMany({
+      where: { isActive: true },
+      select: {
+        barcode: true,
+        quantity: true,
+        minStock: true,
+        purchasePrice: true,
+        salePrice: true,
+        product: { select: { name: true, code: true } },
+        location: { select: { code: true, name: true, parent: { select: { name: true } } } },
+      },
+      orderBy: [{ product: { name: 'asc' } }, { barcode: 'asc' }],
+    });
+    const headers = [
+      'نام کالا', 'کد کالا', 'بارکد کالا', 'واحد اصلی', 'واحد فرعی',
+      'ضریب واحد فرعی اگر واحد فرعی ندارد، خالی قرار دهید', 'قیمت خرید',
+      'قیمت خرید واحد فرعی اگر واحد فرعی ندارد، خالی قرار دهید', 'قیمت فروش',
+      'قیمت فروش دوم', 'قیمت فروش واحد فرعی اگر واحد فرعی ندارد، خالی قرار دهید',
+      'قیمت فروش دوم واحد فرعی اگر واحد فرعی ندارد، خالی قرار دهید', 'موجودی واحد اصلی',
+      'موجودی واحد فرعی اگر واحد فرعی ندارد، خالی قرار دهید', 'تاریخ انقضا', 'اطلاعات بیشتر',
+      'شرح در فاکتور', 'درصد مالیات بر ارزش افزوده', 'حداقل موجودی', 'حداقل روز برای هشدار تاریخ انقضا',
+    ];
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'سلیم وند';
+    const sheet = workbook.addWorksheet('محصولات');
+    sheet.views = [{ rightToLeft: true }];
+    sheet.addRow(headers);
+    for (const item of items as Array<{
+      barcode: string;
+      quantity: number;
+      minStock: number | null;
+      purchasePrice: bigint | null;
+      salePrice: bigint;
+      product: { name: string; code: string | null };
+      location: { code: string; name: string; parent: { name: string } | null } | null;
+    }>) {
+      const location = item.location
+        ? [item.location.parent?.name, item.location.name, item.location.code].filter(Boolean).join(' / ')
+        : '';
+      sheet.addRow([
+        item.product.name, item.product.code ?? '', item.barcode, 'عدد', '', '',
+        item.purchasePrice?.toString() ?? '', '', item.salePrice.toString(), '', '', '',
+        item.quantity, '', '', location, '', '', item.minStock ?? '', '',
+      ]);
+    }
+    const header = sheet.getRow(1);
+    header.font = { bold: true };
+    header.alignment = { horizontal: 'right', vertical: 'center', wrapText: true };
+    header.height = 42;
+    sheet.columns.forEach((column: { width?: number }) => { column.width = 18; });
+    sheet.getColumn(1).width = 32;
+    sheet.getColumn(6).width = 36;
+    sheet.getColumn(8).width = 36;
+    sheet.getColumn(11).width = 36;
+    sheet.getColumn(12).width = 42;
+    sheet.getColumn(16).width = 30;
+    return Buffer.from(await workbook.xlsx.writeBuffer());
   }
 
   async inventory() {

@@ -22,6 +22,12 @@ export class ReportsController {
     response.setHeader('Content-Disposition', 'attachment; filename="salimvand-inventory.csv"');
     return response.send(`\uFEFF${csv}`);
   }
+  @Get('inventory/accounting-export') async exportInventoryAccounting(@Res() response: Response) {
+    const workbook = await this.reports.exportInventoryAccounting();
+    response.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    response.setHeader('Content-Disposition', 'attachment; filename="salimvand-products-accounting.xlsx"');
+    return response.send(workbook);
+  }
   @Get('profit') profit(@Query('from') from?: string, @Query('to') to?: string) {
     return this.reports.profit(from, to);
   }

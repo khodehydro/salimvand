@@ -490,6 +490,7 @@ export function InventoryPage() {
               <button className="filter-pill active" onClick={() => { setFilter(''); void load(''); }}>همه اقلام</button>
               <button className="filter-pill" onClick={() => void lowStock()}>کم‌موجود</button>
               <button className="filter-pill" onClick={() => void downloadFile('/reports/inventory/export', 'salimvand-inventory.csv').catch((e: Error) => setMessage(e.message))}>خروجی CSV</button>
+              <button className="filter-pill accounting-export" onClick={() => void downloadFile('/reports/inventory/accounting-export', 'salimvand-products-accounting.xlsx').catch((e: Error) => setMessage(e.message))}>خروجی حسابداری</button>
             </div>
             <Suspense fallback={<span className="muted scanner-inline-loading">آماده‌سازی اسکنر…</span>}>
               <BarcodeScanner
