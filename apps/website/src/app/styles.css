@@ -2201,3 +2201,12 @@ p {
 .product-layout .product-video-head h2 {
   font-size: 17px;
 }
+
+.product-share-box { display: flex; align-items: flex-start; gap: 10px; flex-wrap: wrap; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line, #e4e8ee); }
+.product-share-actions { display: flex; gap: 7px; flex-wrap: wrap; }
+.product-share-actions .button { border: 0; cursor: pointer; font: inherit; font-size: 12px; text-decoration: none; }
+.button-copy { background: #eef2f7; color: #26364a; }
+.button-whatsapp { background: #25d366; color: #fff; }
+.product-share-box details { font-size: 12px; }
+.product-share-box summary { cursor: pointer; padding: 8px 10px; border: 1px solid #d9e0e8; border-radius: 8px; }
+.product-share-box details img { display: block; margin-top: 8px; border: 6px solid #fff; box-shadow: 0 2px 12px #0002; }
