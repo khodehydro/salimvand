@@ -82,7 +82,9 @@ export class CatalogAdminService {
           aparatVideoId: this.optionalString(input.aparatVideoId),
           status: input.status === 'hidden' ? 'hidden' : 'active',
           priceDisplay: this.priceDisplayValue(input.priceDisplay) ?? 'inherit',
-          seoKeywords: this.stringArray(input.seoKeywords) ?? seo.seoKeywords,
+          // Search phrases are generated from the name; compatibility changes
+          // regenerate them again with make/model phrases included.
+          seoKeywords: seo.seoKeywords,
         },
       });
       if (userId && 'auditLog' in tx)
