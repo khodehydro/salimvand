@@ -26,7 +26,7 @@ type ProductRow = {
     quantity: number;
     minStock?: number | null;
     salePrice: string;
-    brand: { name: string };
+    brand?: { name: string } | null;
     location?: { code: string; name: string } | null;
   }>;
 };
@@ -65,7 +65,7 @@ type ProductDetail = {
     purchasePrice: string;
     minStock?: number | null;
     isActive: boolean;
-    brand: { id: string; name: string };
+    brand?: { id: string; name: string } | null;
     location?: { id: string; code: string; name: string } | null;
   }>;
 };
@@ -168,7 +168,7 @@ export function ProductsPage() {
     const categoryMatch = !categoryFilter || product.category?.name === categoryFilter;
     const statusMatch = !statusFilter || product.status === statusFilter;
     const brandMatch =
-      !brandFilter || product.inventoryItems?.some((entry) => entry.brand.name === brandFilter);
+      !brandFilter || product.inventoryItems?.some((entry) => (entry.brand?.name ?? 'بدون برند') === brandFilter);
     const vehicleMatch =
       !vehicleFilter ||
       product.compatibilities?.some(
@@ -284,7 +284,7 @@ export function ProductsPage() {
                 product.inventoryItems.map((entry) => (
                   <div className="plc-brand" key={entry.id}>
                     <span className="brand-name" title={entry.location ? locationChip(entry.location) : undefined}>
-                      {entry.brand.name}
+                      {entry.brand?.name ?? 'بدون برند'}
                       {entry.location ? <small> · {locationChip(entry.location)}</small> : null}
                     </span>
                     <StockStepper itemId={entry.id} quantity={entry.quantity} onMessage={setMessage} onSaved={() => void load()} />
@@ -979,7 +979,7 @@ function ProductEditor({
                   return (
                     <div className="item-edit-row" key={entry.id}>
                       <div className="ier-head">
-                        <b>{entry.brand.name}</b>
+                        <b>{entry.brand?.name ?? 'بدون برند'}</b>
                         <code dir="ltr">{entry.barcode}</code>
                         <StockStepper
                           itemId={entry.id}

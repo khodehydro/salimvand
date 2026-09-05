@@ -199,7 +199,7 @@ model Location {
 model InventoryItem {
   id           String                 @id @default(uuid()) @db.Uuid
   productId    String                 @db.Uuid
-  brandId      String                 @db.Uuid
+  brandId      String?                @db.Uuid
   barcode      String                 @unique @db.VarChar(20)
   quantity     Int                    @default(0)
   purchasePrice BigInt                @default(0)
@@ -209,7 +209,7 @@ model InventoryItem {
   notes        String?
   isActive     Boolean                @default(true)
   product      Product                @relation(fields: [productId], references: [id])
-  brand        Brand                  @relation(fields: [brandId], references: [id])
+  brand        Brand?                 @relation(fields: [brandId], references: [id])
   location     Location?              @relation(fields: [locationId], references: [id])
   transactions InventoryTransaction[]
   invoiceItems InvoiceItem[]

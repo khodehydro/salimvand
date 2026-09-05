@@ -91,15 +91,9 @@ export class CatalogAdminService {
       // Keep catalog-only product creation consistent by creating one neutral
       // inventory line when the operator did not provide a brand yet.
       if (!Array.isArray(input.inventoryBrandIds) || input.inventoryBrandIds.length === 0) {
-        const neutralBrand = await tx.brand.upsert({
-          where: { name: 'بدون برند' },
-          update: { isActive: true },
-          create: { name: 'بدون برند', isActive: true },
-        });
         await tx.inventoryItem.create({
           data: {
             productId: created.id,
-            brandId: neutralBrand.id,
             barcode: createEan13(`${Date.now()}${created.id.replace(/-/g, '')}`.slice(-9)),
             purchasePrice: 0n,
             salePrice: 0n,

@@ -9,7 +9,7 @@ type PublicProduct = {
     quantity: number;
     minStock: number | null;
     salePrice: bigint;
-    brand: { name: string };
+    brand: { name: string } | null;
   }>;
   images: Array<{ path: string; alt: string | null; isPrimary: boolean }>;
   [key: string]: unknown;
@@ -127,8 +127,8 @@ export class CatalogService {
         })),
         availability: this.availability(product.inventoryItems, product.availabilityOverride),
         price: this.publicPrice(product, showPrices),
-        brands: product.inventoryItems.map((item) => ({
-          name: item.brand.name,
+        brands: product.inventoryItems.filter((item) => item.brand).map((item) => ({
+          name: item.brand!.name,
           inStock: item.quantity > 0,
         })),
         inventoryItems: undefined,

@@ -142,8 +142,8 @@ export class InventoryService {
     initialQuantity?: number;
     userId?: string;
   }) {
-    if (!input.productId || !input.brandId)
-      throw new BadRequestException('محصول و برند الزامی است');
+    if (!input.productId)
+      throw new BadRequestException('محصول الزامی است');
     const product = await this.prisma.product.findFirst({
       where: { id: input.productId, deletedAt: null },
     });
@@ -157,7 +157,7 @@ export class InventoryService {
     });
     if (barcodeTaken) throw new BadRequestException('این بارکد قبلاً برای قلم دیگری ثبت شده است');
     const brandDuplicate = await this.prisma.inventoryItem.findFirst({
-      where: { productId: input.productId, brandId: input.brandId },
+      where: { productId: input.productId, brandId: input.brandId ?? null },
       select: { id: true },
     });
     if (brandDuplicate) throw new BadRequestException('این برند قبلاً برای همین محصول ثبت شده است');
@@ -170,7 +170,7 @@ export class InventoryService {
       const item = await tx.inventoryItem.create({
         data: {
           productId: input.productId!,
-          brandId: input.brandId!,
+          brandId: input.brandId,
           barcode,
           quantity: initialQuantity,
           purchasePrice: BigInt(input.purchasePrice ?? 0),
