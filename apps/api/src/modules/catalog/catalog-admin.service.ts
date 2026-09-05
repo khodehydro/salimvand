@@ -24,6 +24,30 @@ export class CatalogAdminService {
     return { ok: true, data: products };
   }
 
+  async regenerateKeywords() {
+    const products = await this.prisma.product.findMany({
+      where: { deletedAt: null },
+      select: {
+        id: true,
+        name: true,
+        compatibilities: { select: { model: { select: { name: true, make: { select: { name: true } } } } } },
+      },
+    });
+    let updated = 0;
+    for (const product of products) {
+      const keywords = buildProductSeo({
+        name: product.name,
+        vehicleNames: product.compatibilities.map(
+          (row: { model: { make: { name: string }; name: string } }) =>
+            `${row.model.make.name} ${row.model.name}`,
+        ),
+      }).seoKeywords;
+      await this.prisma.product.update({ where: { id: product.id }, data: { seoKeywords: keywords } });
+      updated += 1;
+    }
+    return { ok: true, data: { updated } };
+  }
+
   async get(id: string) {
     const product = await this.prisma.product.findFirst({
       where: { id, deletedAt: null },

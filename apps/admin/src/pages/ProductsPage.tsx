@@ -114,6 +114,7 @@ export function ProductsPage() {
   const [brandFilter, setBrandFilter] = useState('');
   const [vehicleFilter, setVehicleFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [keywordBusy, setKeywordBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [draft, setDraft] = useState<ProductDetail | null>(null);
   const [tab, setTab] = useState<Tab>('basic');
@@ -195,7 +196,25 @@ export function ProductsPage() {
             می‌شود.
           </p>
         </div>
-        <span className="count">{products.length} محصول</span>
+        <div className="page-title-actions">
+          <span className="count">{products.length} محصول</span>
+          <button
+            className="outline keyword-regenerate"
+            disabled={keywordBusy}
+            onClick={async () => {
+              if (!window.confirm('کلیدواژه‌های همه محصولات بازسازی شود؟')) return;
+              setKeywordBusy(true);
+              try {
+                await api('/products/seo-keywords/regenerate', { method: 'POST' });
+                setMessage('کلیدواژه‌های محصولات بازسازی شد.');
+                await load();
+              } catch (error) { setMessage((error as Error).message); }
+              finally { setKeywordBusy(false); }
+            }}
+          >
+            {keywordBusy ? 'در حال ساخت…' : 'بازسازی کلیدواژه‌ها'}
+          </button>
+        </div>
       </div>
 
       <div className="product-filter-toolbar">

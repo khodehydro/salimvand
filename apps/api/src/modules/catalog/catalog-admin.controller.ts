@@ -19,6 +19,12 @@ export class CatalogAdminController {
   @Get() list() {
     return this.catalog.list();
   }
+  @Roles('manager')
+  @Post('seo-keywords/regenerate')
+  regenerateKeywords() {
+    return this.catalog.regenerateKeywords();
+  }
+
   @Get(':id') get(@Param('id') id: string) {
     return this.catalog.get(id);
   }
