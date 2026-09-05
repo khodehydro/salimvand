@@ -363,9 +363,25 @@ export function ProductCreateModal({
                 </button>
               </div>
               {(imageFiles.length > 0 || selectedImages.length > 0 || imageUrl) && (
-                <div className="create-image-selected">
-                  <span>✓</span>
-                  {imageFiles.map((file) => file.name).concat(selectedImages.map((image) => image.path), imageUrl ? [imageUrl] : []).join(' · ')}
+                <div className="create-image-preview-grid">
+                  {imageFiles.map((file) => (
+                    <figure className="create-image-preview" key={`${file.name}-${file.lastModified}`}>
+                      <img src={URL.createObjectURL(file)} alt={file.name} />
+                      <figcaption>{file.name}</figcaption>
+                    </figure>
+                  ))}
+                  {selectedImages.map((image) => (
+                    <figure className="create-image-preview" key={image.id}>
+                      <img src={image.path} alt={image.alt ?? basic.name} />
+                      <figcaption>{image.alt ?? 'رسانه انتخاب‌شده'}</figcaption>
+                    </figure>
+                  ))}
+                  {imageUrl.split(/[\n,]/).map((url) => url.trim()).filter((url) => /^https:\/\//i.test(url)).map((url) => (
+                    <figure className="create-image-preview" key={url}>
+                      <img src={url} alt={basic.name} />
+                      <figcaption>تصویر لینک‌شده</figcaption>
+                    </figure>
+                  ))}
                 </div>
               )}
               </div>
