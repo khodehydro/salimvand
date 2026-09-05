@@ -28,7 +28,10 @@ type Customer = {
   address?: string | null;
   notes?: string | null;
   debt: string | number;
+  totalPurchase?: string | number;
+  lastPurchase?: string | null;
   invoiceCount: number;
+  smsLogs?: Array<{ id: string | number; message: string; status: string; createdAt: string }>;
   invoices?: Array<{
     id: string;
     number: string;
@@ -36,6 +39,7 @@ type Customer = {
     paidAmount: string | number;
     paymentStatus: string;
     issuedAt: string;
+    items?: Array<{ productName: string; quantity: number }>;
   }>;
 };
 const paymentLabels: Record<string, string> = {
@@ -352,6 +356,8 @@ export function CustomersPage({
             <div className="table-head customer-head">
               <span>مشتری</span>
               <span>موبایل</span>
+              <span>مجموع خرید</span>
+              <span>آخرین خرید</span>
               <span>فاکتورها</span>
               <span>بدهی</span>
               <span>وضعیت</span>
@@ -362,6 +368,8 @@ export function CustomersPage({
                   {customer.name}
                 </button>
                 <code dir="ltr">{formatPersianNumber(customer.mobile)}</code>
+                <span>{formatRial(Number(customer.totalPurchase ?? 0))}</span>
+                <span>{customer.lastPurchase ? shamsi(customer.lastPurchase) : '—'}</span>
                 <span>{formatPersianNumber(customer.invoiceCount)}</span>
                 <b className={Number(customer.debt) > 0 ? 'low-stock' : 'status-chip'}>
                   {formatRial(Number(customer.debt))}
@@ -567,6 +575,15 @@ export function CustomersPage({
               ) : (
                 <p className="muted empty-line">فاکتوری ثبت نشده است.</p>
               )}
+
+              <h3 className="list-subhead">تاریخچه پیامک‌ها</h3>
+              <div className="customer-products">{selected.smsLogs?.length ? selected.smsLogs.map((sms) => <span key={String(sms.id)}>{shamsi(sms.createdAt)} · {sms.status} · {sms.message}</span>) : <p className="muted">پیامی ثبت نشده است.</p>}</div>
+
+              <h3 className="list-subhead">کالاهای خریداری‌شده</h3>
+              <div className="customer-products">
+                {Object.entries((selected.invoices ?? []).flatMap((invoice) => invoice.items ?? []).reduce<Record<string, number>>((result, item) => { result[item.productName] = (result[item.productName] ?? 0) + item.quantity; return result; }, {})).map(([name, quantity]) => <span key={name}>{name} · {formatPersianNumber(quantity)} عدد</span>)}
+                {!selected.invoices?.some((invoice) => invoice.items?.length) && <p className="muted">کالایی ثبت نشده است.</p>}
+              </div>
 
               <h3 className="list-subhead">خودروهای مشتری</h3>
               <div className="customer-vehicles">

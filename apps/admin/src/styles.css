@@ -6598,3 +6598,6 @@ button.btn-primary-lg:hover:not(:disabled) {
 .data-quality-item i { grid-column: 1 / -1; color: var(--sv-link); font-size: 10px; font-style: normal; }
 @media (max-width: 900px) { .data-quality-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 600px) { .data-quality-list { grid-template-columns: 1fr; } }
+
+.customer-products { display: grid; gap: 6px; margin: 8px 0 18px; }
+.customer-products > span { padding: 8px 10px; border: 1px solid var(--sv-border); border-radius: 8px; font-size: 12px; }
