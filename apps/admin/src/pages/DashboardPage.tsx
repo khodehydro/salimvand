@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { formatPersianNumber } from '@salimvand/shared';
 import { locationChip } from '../lib/location-label';
 import { api } from '../lib/api';
+import type { AdminPage } from '../lib/admin-route';
 import { DonutChart } from '@salimvand/ui';
 import {
   brandComposition,
@@ -39,6 +40,10 @@ type Summary = {
     quantity: number;
     product?: { category?: { name?: string } | null } | null;
   }>;
+  unpaidInvoices?: number;
+  productsWithoutImages?: number;
+  inventoryWithoutLocation?: number;
+  pendingPurchases?: number;
   recentTransactions: Array<{
     id: string;
     type: string;
@@ -55,6 +60,7 @@ type Health = {
   channels: Record<string, { configured: boolean; provider: string | null }>;
   queue: Record<string, number>;
 };
+type FailedNotification = { id: string; failedReason: string; type: string; attemptsMade: number };
 /** GET /dashboard/system — server RAM/disk usage (managers only). */
 type SystemStats = {
   memory: { total: number; used: number; free: number };
@@ -138,7 +144,9 @@ export function DashboardPage({
   canViewDebtors = true,
   canViewHealth = true,
   canNotify = true,
+  onNavigate,
 }: {
+  onNavigate?: (page: AdminPage) => void;
   canViewSales?: boolean;
   canViewInventory?: boolean;
   canViewProfit?: boolean;
@@ -153,6 +161,7 @@ export function DashboardPage({
   const [periodDays, setPeriodDays] = useState<1 | 7 | 30 | 90>(30);
   const [debtors, setDebtors] = useState<Debtor[]>([]);
   const [health, setHealth] = useState<Health | null>(null);
+  const [failedNotifications, setFailedNotifications] = useState<FailedNotification[]>([]);
   const [system, setSystem] = useState<SystemStats | null>(null);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
@@ -168,7 +177,7 @@ export function DashboardPage({
     setLoading(true);
     setError('');
     try {
-      const [s, t, i, p, d, h, sys] = await Promise.all([
+      const [s, t, i, p, d, h, n, sys] = await Promise.all([
         api<{ data: Summary }>('/dashboard/summary'),
         canViewSales
           ? api<{ data: Trend[] }>(`/dashboard/sales-trend${query}`)
@@ -185,6 +194,9 @@ export function DashboardPage({
         canViewHealth
           ? api<{ data: Health }>('/notifications/health')
           : Promise.resolve({ data: null as Health | null }),
+        canNotify
+          ? api<{ data: FailedNotification[] }>('/notifications/failed?limit=10')
+          : Promise.resolve({ data: [] as FailedNotification[] }),
         canViewHealth
           ? api<{ data: SystemStats }>('/dashboard/system')
           : Promise.resolve({ data: null as SystemStats | null }),
@@ -195,6 +207,7 @@ export function DashboardPage({
       setProfitTrend(p.data);
       setDebtors(d.data);
       setHealth(h.data);
+      setFailedNotifications(n.data);
       setSystem(sys.data);
     } catch (e) {
       setError((e as Error).message);
@@ -260,6 +273,40 @@ export function DashboardPage({
       </div>
       {error && <div className="notice">{error}</div>}
       {loading && !summary && <div className="notice">در حال دریافت اطلاعات داشبورد...</div>}
+
+      <section className="daily-work" aria-labelledby="daily-work-title">
+        <div className="daily-work-heading">
+          <div>
+            <h3 id="daily-work-title">کارهای امروز</h3>
+            <p>مواردی که بهتر است قبل از پایان روز بررسی شوند.</p>
+          </div>
+          <span className="daily-work-count">{faNum([
+            summary?.lowStock ?? 0,
+            summary?.unpaidInvoices ?? 0,
+            failedNotifications.length,
+            summary?.productsWithoutImages ?? 0,
+            summary?.inventoryWithoutLocation ?? 0,
+            summary?.pendingPurchases ?? 0,
+          ].filter((count) => count > 0).length)} مورد</span>
+        </div>
+        <div className="daily-work-list">
+          {[
+            { label: 'اقلام زیر حداقل موجودی', count: summary?.lowStock ?? 0, page: 'inventory' as AdminPage, tone: 'warn' },
+            { label: 'فاکتور پرداخت‌نشده', count: summary?.unpaidInvoices ?? 0, page: 'invoices' as AdminPage, tone: 'danger' },
+            { label: 'ارسال پیام ناموفق', count: failedNotifications.length, page: 'messaging' as AdminPage, tone: 'danger' },
+            { label: 'محصول بدون تصویر', count: summary?.productsWithoutImages ?? 0, page: 'products' as AdminPage, tone: 'neutral' },
+            { label: 'قلم بدون قفسه', count: summary?.inventoryWithoutLocation ?? 0, page: 'inventory' as AdminPage, tone: 'neutral' },
+            { label: 'خرید نیازمند پیگیری', count: summary?.pendingPurchases ?? 0, page: 'purchases' as AdminPage, tone: 'neutral' },
+          ].map((task) => (
+            <button className={`daily-work-item ${task.tone}`} key={task.label} onClick={() => onNavigate?.(task.page)}>
+              <span className="daily-work-dot" />
+              <span className="daily-work-label">{task.label}</span>
+              <b>{faNum(task.count)}</b>
+              <span className="daily-work-arrow">←</span>
+            </button>
+          ))}
+        </div>
+      </section>
 
       <div className="kpis">
         {canViewSales ? (

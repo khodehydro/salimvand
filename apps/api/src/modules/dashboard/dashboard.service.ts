@@ -206,6 +206,10 @@ export class DashboardService {
       stockComposition,
       categoryComposition,
       recentTransactions,
+      unpaidInvoices,
+      productsWithoutImages,
+      inventoryWithoutLocation,
+      pendingPurchases,
     ] = await Promise.all([
       this.prisma.product.count({ where: { deletedAt: null, status: 'active' } }),
       this.prisma.inventoryItem.count({ where: { isActive: true } }),
@@ -239,8 +243,14 @@ export class DashboardService {
         take: 8,
         include: { item: { include: { product: true, brand: true } } },
       }),
+      this.prisma.invoice.count({ where: { status: 'issued', paymentStatus: { in: ['unpaid', 'partial'] } } }),
+      this.prisma.product.count({ where: { deletedAt: null, status: 'active', images: { none: {} } } }),
+      this.prisma.inventoryItem.count({ where: { isActive: true, locationId: null } }),
+      this.prisma.purchaseInvoice.count({ where: { status: 'issued' } }),
     ]);
-    const lowStock = lowStockItems.filter((item) => item.quantity <= (item.minStock ?? 0));
+    const lowStock = lowStockItems.filter(
+      (item: { quantity: number; minStock: number | null }) => item.quantity <= (item.minStock ?? 0),
+    );
     return {
       ok: true,
       data: {
@@ -251,6 +261,10 @@ export class DashboardService {
         stockComposition,
         categoryComposition,
         recentTransactions,
+        unpaidInvoices,
+        productsWithoutImages,
+        inventoryWithoutLocation,
+        pendingPurchases,
       },
     };
   }

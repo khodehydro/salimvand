@@ -483,7 +483,7 @@ function App() {
         </header>
         <PageErrorBoundary>
           {page === 'dashboard' ? (
-            <DashboardPage {...dashboardAccess} />
+            <DashboardPage {...dashboardAccess} onNavigate={navigate} />
           ) : page === 'products' ? (
             <ProductsPage />
           ) : page === 'invoices' ? (

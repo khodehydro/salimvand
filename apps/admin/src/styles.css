@@ -6491,3 +6491,57 @@ button.btn-primary-lg:hover:not(:disabled) {
     width: auto;
   }
 }
+
+/* Daily action center: actionable work, not another passive KPI card. */
+.daily-work {
+  margin: 0 0 20px;
+  padding: 18px;
+  background: var(--sv-surface);
+  border: 1px solid var(--sv-border);
+  border-radius: 14px;
+}
+.daily-work-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+.daily-work-heading h3 { margin: 0; font-size: 16px; }
+.daily-work-heading p { margin: 4px 0 0; color: var(--sv-text-3); font-size: 11px; }
+.daily-work-count { color: var(--sv-text-2); font-size: 11px; }
+.daily-work-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.daily-work-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid var(--sv-border);
+  border-radius: 10px;
+  background: var(--sv-surface-2);
+  color: var(--sv-text);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition: border-color .15s ease, background .15s ease, transform .15s ease;
+}
+.daily-work-item:hover { border-color: var(--sv-primary); background: var(--sv-surface); transform: translateY(-1px); }
+.daily-work-item b { font-size: 15px; }
+.daily-work-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.daily-work-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--sv-link); }
+.daily-work-item.warn .daily-work-dot { background: var(--sv-warn); }
+.daily-work-item.danger .daily-work-dot { background: var(--sv-danger); }
+.daily-work-arrow { color: var(--sv-text-3); font-size: 14px; }
+@media (max-width: 900px) {
+  .daily-work-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 600px) {
+  .daily-work { padding: 14px; }
+  .daily-work-list { grid-template-columns: 1fr; }
+}
