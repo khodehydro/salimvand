@@ -6753,3 +6753,61 @@ button.btn-primary-lg:hover:not(:disabled) {
 .login-card input:focus { border-color: var(--sv-primary); background: var(--sv-surface); box-shadow: 0 0 0 3px color-mix(in srgb, var(--sv-primary) 16%, transparent); }
 .login-card input:-webkit-autofill { -webkit-text-fill-color: var(--sv-text); box-shadow: 0 0 0 1000px var(--sv-surface-2) inset; }
 .login-link { border: 0; background: transparent; color: var(--sv-primary); cursor: pointer; font: inherit; font-size: 12px; }
+
+/* Minimal panel density and consistent sidebar controls. */
+.admin .nav-group-toggle > span {
+  width: 18px;
+  height: 18px;
+  position: relative;
+  flex: 0 0 18px;
+  font-size: 0;
+  transform: none;
+}
+.admin .nav-group-toggle > span::before {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  border-inline-end: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform .18s ease;
+}
+.admin .nav-group.collapsed .nav-group-toggle > span::before { transform: rotate(135deg); }
+.admin .nav-group-toggle:hover {
+  background: color-mix(in srgb, var(--sv-primary) 12%, var(--sv-surface));
+  color: var(--sv-primary);
+}
+.admin aside nav button:not(.nav-group-toggle):hover {
+  background: color-mix(in srgb, var(--sv-primary) 13%, var(--sv-brand-900));
+  color: var(--sv-on-brand);
+}
+.admin aside nav button:not(.nav-group-toggle).active {
+  background: color-mix(in srgb, var(--sv-primary) 18%, var(--sv-brand-900));
+  color: var(--sv-on-brand);
+  border-inline-start-color: var(--sv-primary);
+}
+.messaging-config fieldset {
+  padding: 12px 14px;
+  gap: 8px;
+  border-radius: 10px;
+}
+.messaging-config legend { font-size: 12px; }
+.messaging-config label { gap: 4px; font-size: 11px; }
+.messaging-config input,
+.messaging-config select,
+.messaging-config textarea {
+  min-height: 38px;
+  padding: 8px 10px;
+  font-size: 12px;
+  border-radius: 8px;
+}
+.messaging-config .form-grid { gap: 10px; }
+.admin section { padding: 22px 26px; }
+.admin .page-title h1 { font-size: 22px; }
+.admin .page-title p { font-size: 11px; }
+.admin .cards article,
+.admin .dashboard-cards article { padding: 16px; gap: 10px; }
+.admin .cards strong,
+.admin .dashboard-cards article strong { font-size: 24px; }
+.admin .table-head, .admin .table-row { min-height: 48px; padding-block: 9px; font-size: 12px; }
+.admin .muted { font-size: 11px; }
