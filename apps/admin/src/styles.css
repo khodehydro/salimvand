@@ -6834,3 +6834,12 @@ button.btn-primary-lg:hover:not(:disabled) {
 .wholesale-table td img { width: 52px; height: 52px; object-fit: contain; display: block; border-radius: 6px; }
 .wholesale-table .in-stock { color: var(--sv-ok); font-weight: 700; }.wholesale-table .out-stock { color: var(--sv-danger); font-weight: 700; }
 @media (max-width: 700px) { .wholesale-filters { grid-template-columns: 1fr; } .wholesale-print { width: 100%; } }
+
+/* Wholesale buyers get a focused catalog workspace with no admin chrome. */
+.wholesale-shell aside,
+.wholesale-shell .admin-topbar { display: none; }
+.wholesale-shell main { width: 100%; min-height: 100vh; }
+.wholesale-shell .wholesale-page { max-width: 1280px; margin: 0 auto; padding: 28px 34px 48px; }
+.wholesale-shell .wholesale-table tbody tr:not(.category-row):hover { background: var(--sv-surface-2); }
+.wholesale-table td[rowspan] { background: var(--sv-surface); }
+@media (max-width: 700px) { .wholesale-shell .wholesale-page { padding: 18px 12px 36px; } }

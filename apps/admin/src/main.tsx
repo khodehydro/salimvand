@@ -324,6 +324,10 @@ function App() {
         });
   }, [authenticated]);
   useEffect(() => {
+    if (role === 'wholesale' && page !== 'wholesale') {
+      navigate('wholesale');
+      return;
+    }
     if (role && !canAccessPage(role, page)) {
       window.location.hash = hashForPage('dashboard');
       setPage('dashboard');
@@ -349,7 +353,7 @@ function App() {
     setPaletteOpen(false);
   };
   return (
-    <div className={`admin ${dark ? 'theme-dark' : ''}`}>
+    <div className={`admin ${dark ? 'theme-dark' : ''} ${role === 'wholesale' ? 'wholesale-shell' : ''}`}>
       <aside className={mobileOpen ? 'open' : ''}>
         <div className="aside-brand">
           <span className="brand-mark">س</span>
