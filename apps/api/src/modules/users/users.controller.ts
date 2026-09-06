@@ -19,7 +19,7 @@ export class UsersController {
   }
   @Post() create(
     @Body()
-    body: { name?: string; username?: string; password?: string; role?: string; mobile?: string },
+    body: { name?: string; username?: string; password?: string; role?: string; mobile?: string; email?: string },
     @Req() request: AuthRequest,
   ) {
     return this.users.create(body, request.user?.id ?? '', request.ip);

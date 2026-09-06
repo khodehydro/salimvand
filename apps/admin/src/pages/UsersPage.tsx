@@ -8,6 +8,7 @@ type User = {
   username: string;
   role: string;
   mobile?: string | null;
+  email?: string | null;
   isActive: boolean;
   lastLoginAt?: string | null;
 };
@@ -36,7 +37,7 @@ const roleLabels: Record<string, string> = {
   warehouse: 'انباردار',
   accountant: 'حسابدار',
 };
-const initialForm = { name: '', username: '', password: '', role: 'seller', mobile: '' };
+const initialForm = { name: '', username: '', password: '', role: 'seller', mobile: '', email: '' };
 
 export function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
@@ -45,6 +46,7 @@ export function UsersPage() {
   const [editing, setEditing] = useState<User | null>(null);
   const [editName, setEditName] = useState('');
   const [editRole, setEditRole] = useState('');
+  const [editEmail, setEditEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
@@ -93,6 +95,7 @@ export function UsersPage() {
     setEditing(user);
     setEditName(user.name);
     setEditRole(user.role);
+    setEditEmail(user.email ?? '');
     setNewPassword('');
   };
   const saveEdit = async () => {
@@ -107,6 +110,7 @@ export function UsersPage() {
         body: JSON.stringify({
           name: editName.trim(),
           role: editRole,
+          email: editEmail,
           ...(newPassword ? { password: newPassword } : {}),
         }),
       });
@@ -187,6 +191,10 @@ export function UsersPage() {
           </select>
         </label>
         <label>
+          ایمیل بازیابی
+          <input dir="ltr" type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} placeholder="admin@example.com" />
+        </label>
+        <label>
           موبایل
           <input
             dir="ltr"
@@ -213,7 +221,7 @@ export function UsersPage() {
             <span>
               <strong>{user.name}</strong>
               <small>
-                {formatPersianNumber(user.mobile || 'بدون موبایل')} ·{' '}
+                {formatPersianNumber(user.mobile || 'بدون موبایل')} · {user.email || 'بدون ایمیل'} ·{' '}
                 {user.isActive ? 'فعال' : 'غیرفعال'}
               </small>
             </span>
@@ -261,6 +269,10 @@ export function UsersPage() {
                 </option>
               ))}
             </select>
+          </label>
+          <label>
+            ایمیل بازیابی
+            <input dir="ltr" type="email" value={editEmail} onChange={(event) => setEditEmail(event.target.value)} placeholder="admin@example.com" />
           </label>
           <label>
             رمز عبور جدید (اختیاری)

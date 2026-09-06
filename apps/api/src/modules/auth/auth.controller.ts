@@ -64,6 +64,16 @@ export class AuthController {
     };
   }
 
+  @Post('forgot-password')
+  forgotPassword(@Body() body: { email?: string }) {
+    return this.auth.requestPasswordReset(body.email ?? '');
+  }
+
+  @Post('reset-password')
+  resetPassword(@Body() body: { token?: string; password?: string }) {
+    return this.auth.resetPassword(body.token ?? '', body.password ?? '');
+  }
+
   @UseGuards(JwtAuthGuard)
   @Get('me')
   async me(@Req() request: Request) {

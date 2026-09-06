@@ -20,6 +20,7 @@ export class UsersService {
         username: true,
         role: true,
         mobile: true,
+        email: true,
         isActive: true,
         lastLoginAt: true,
         createdAt: true,
@@ -28,7 +29,7 @@ export class UsersService {
     return { ok: true, data: users };
   }
   async create(
-    input: { name?: string; username?: string; password?: string; role?: string; mobile?: string },
+    input: { name?: string; username?: string; password?: string; role?: string; mobile?: string; email?: string },
     actorId: string,
     ip?: string,
   ) {
@@ -52,8 +53,9 @@ export class UsersService {
         passwordHash: await this.auth.hashPassword(input.password),
         role: input.role as UserRole,
         mobile: input.mobile?.trim() || undefined,
+        email: input.email?.trim().toLowerCase() || undefined,
       },
-      select: { id: true, name: true, username: true, role: true, mobile: true, isActive: true },
+      select: { id: true, name: true, username: true, role: true, mobile: true, email: true, isActive: true },
     });
     await writeAudit(this.prisma, {
       userId: actorId,
@@ -67,7 +69,7 @@ export class UsersService {
   }
   async update(
     id: string,
-    input: { name?: string; role?: string; mobile?: string; password?: string; isActive?: boolean },
+    input: { name?: string; role?: string; mobile?: string; email?: string; password?: string; isActive?: boolean },
     actorId: string,
     ip?: string,
   ) {
@@ -82,6 +84,7 @@ export class UsersService {
     const data = {
       ...(input.name !== undefined ? { name: input.name.trim() } : {}),
       ...(input.mobile !== undefined ? { mobile: input.mobile.trim() || null } : {}),
+      ...(input.email !== undefined ? { email: input.email.trim().toLowerCase() || null } : {}),
       ...(input.role !== undefined ? { role: input.role as UserRole } : {}),
       ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
       ...(input.password !== undefined
@@ -99,6 +102,7 @@ export class UsersService {
         username: true,
         role: true,
         mobile: true,
+        email: true,
         isActive: true,
         lastLoginAt: true,
       },
