@@ -46,6 +46,9 @@ export class UsersService {
       throw new BadRequestException(
         'نام، نام کاربری، رمز حداقل ۱۰ کاراکتری و نقش معتبر الزامی است',
       );
+    const email = input.email?.trim().toLowerCase() || undefined;
+    if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new BadRequestException('ایمیل معتبر نیست');
+    if (email && await this.prisma.user.findFirst({ where: { email } })) throw new BadRequestException('این ایمیل قبلاً برای کاربر دیگری ثبت شده است');
     const created = await this.prisma.user.create({
       data: {
         name,
@@ -53,7 +56,7 @@ export class UsersService {
         passwordHash: await this.auth.hashPassword(input.password),
         role: input.role as UserRole,
         mobile: input.mobile?.trim() || undefined,
-        email: input.email?.trim().toLowerCase() || undefined,
+        email,
       },
       select: { id: true, name: true, username: true, role: true, mobile: true, email: true, isActive: true },
     });
@@ -81,10 +84,13 @@ export class UsersService {
       throw new BadRequestException('نقش کاربر معتبر نیست');
     if (input.password !== undefined && input.password.length < 10)
       throw new BadRequestException('رمز عبور باید حداقل ۱۰ کاراکتر باشد');
+    const email = input.email?.trim().toLowerCase();
+    if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new BadRequestException('ایمیل معتبر نیست');
+    if (email && await this.prisma.user.findFirst({ where: { email, id: { not: id } } })) throw new BadRequestException('این ایمیل قبلاً برای کاربر دیگری ثبت شده است');
     const data = {
       ...(input.name !== undefined ? { name: input.name.trim() } : {}),
       ...(input.mobile !== undefined ? { mobile: input.mobile.trim() || null } : {}),
-      ...(input.email !== undefined ? { email: input.email.trim().toLowerCase() || null } : {}),
+      ...(input.email !== undefined ? { email: email || null } : {}),
       ...(input.role !== undefined ? { role: input.role as UserRole } : {}),
       ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
       ...(input.password !== undefined

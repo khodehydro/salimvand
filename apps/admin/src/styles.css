@@ -6729,3 +6729,12 @@ button.btn-primary-lg:hover:not(:disabled) {
 .create-image-preview figcaption button { border: 0; padding: 0 4px; color: var(--sv-danger); background: transparent; cursor: pointer; font-size: 16px; line-height: 1; }
 .image-item[draggable='true']::before { content: '⋮⋮'; position: absolute; z-index: 1; margin: 7px; padding: 2px 5px; border-radius: 5px; background: rgba(255,255,255,.9); color: var(--sv-text-2); font-size: 14px; }
 .image-item[draggable='true'] { position: relative; }
+
+.user-form, .user-editor { color: var(--sv-text); }
+.user-form label, .user-editor label { color: var(--sv-text); font-size: 12px; font-weight: 600; }
+.user-form input, .user-form select, .user-editor input, .user-editor select { width: 100%; min-height: 44px; margin-top: 7px; padding: 10px 12px; border: 1px solid var(--sv-border-2); border-radius: 10px; background: var(--sv-surface-2); color: var(--sv-text); caret-color: var(--sv-primary); font: inherit; font-size: 13px; opacity: 1; outline: 0; transition: border-color .18s ease, box-shadow .18s ease, background .18s ease; }
+.user-form input::placeholder, .user-editor input::placeholder { color: var(--sv-text-3); opacity: 1; }
+.user-form input:focus, .user-form select:focus, .user-editor input:focus, .user-editor select:focus { border-color: var(--sv-primary); background: var(--sv-surface); box-shadow: 0 0 0 3px color-mix(in srgb, var(--sv-primary) 15%, transparent); }
+.user-form input:-webkit-autofill, .user-editor input:-webkit-autofill { -webkit-text-fill-color: var(--sv-text); box-shadow: 0 0 0 1000px var(--sv-surface-2) inset; }
+.user-form button, .user-editor > button { min-height: 44px; border-radius: 10px; font: inherit; font-weight: 700; }
+.user-editor { display: grid; gap: 14px; }
