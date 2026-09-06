@@ -6738,3 +6738,18 @@ button.btn-primary-lg:hover:not(:disabled) {
 .user-form input:-webkit-autofill, .user-editor input:-webkit-autofill { -webkit-text-fill-color: var(--sv-text); box-shadow: 0 0 0 1000px var(--sv-surface-2) inset; }
 .user-form button, .user-editor > button { min-height: 44px; border-radius: 10px; font: inherit; font-weight: 700; }
 .user-editor { display: grid; gap: 14px; }
+
+.login-card label { color: var(--sv-text); font-weight: 600; }
+.login-card input {
+  min-height: 46px;
+  background: var(--sv-surface-2);
+  color: var(--sv-text);
+  caret-color: var(--sv-primary);
+  outline: 0;
+  opacity: 1;
+  transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
+}
+.login-card input::placeholder { color: var(--sv-text-3); opacity: 1; }
+.login-card input:focus { border-color: var(--sv-primary); background: var(--sv-surface); box-shadow: 0 0 0 3px color-mix(in srgb, var(--sv-primary) 16%, transparent); }
+.login-card input:-webkit-autofill { -webkit-text-fill-color: var(--sv-text); box-shadow: 0 0 0 1000px var(--sv-surface-2) inset; }
+.login-link { border: 0; background: transparent; color: var(--sv-primary); cursor: pointer; font: inherit; font-size: 12px; }
