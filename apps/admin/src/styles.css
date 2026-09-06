@@ -6822,3 +6822,7 @@ button.btn-primary-lg:hover:not(:disabled) {
 .wholesale-item { display: grid; grid-template-columns: 1fr auto; gap: 3px 8px; margin-top: 9px; font-size: 11px; }
 .wholesale-item em { grid-column: 1 / -1; font-style: normal; font-size: 10px; }
 .in-stock { color: var(--sv-ok); }.out-stock { color: var(--sv-danger); }
+.wholesale-filters { display: grid; grid-template-columns: minmax(220px, 1.5fr) repeat(2, minmax(160px, .7fr)); gap: 8px; margin: 14px 0 18px; }
+.wholesale-filters input, .wholesale-filters select { min-height: 40px; padding: 8px 11px; border: 1px solid var(--sv-border-2); border-radius: 8px; background: var(--sv-surface-2); color: var(--sv-text); font: inherit; font-size: 12px; }
+.wholesale-price { display: block; margin-top: 14px; color: var(--sv-primary); font-size: 14px; }
+@media (max-width: 700px) { .wholesale-filters { grid-template-columns: 1fr; } }

@@ -9,8 +9,8 @@ export class CatalogAdminService {
   constructor(private readonly prisma: PrismaService) {}
 
   async wholesale() {
-    const products = await this.prisma.product.findMany({ where: { deletedAt: null, status: 'active' }, orderBy: { name: 'asc' }, include: { images: { orderBy: [{ isPrimary: 'desc' }, { sort: 'asc' }], take: 1 }, inventoryItems: { where: { isActive: true }, include: { brand: true } } } });
-    return { ok: true, data: products.map((product) => ({ id: product.id, name: product.name, slug: product.slug, partNumber: product.partNumber, image: product.images[0] ?? null, items: product.inventoryItems.map((item) => ({ brand: item.brand?.name ?? 'بدون برند', salePrice: item.salePrice.toString(), quantity: item.quantity })) })) };
+    const products = await this.prisma.product.findMany({ where: { deletedAt: null, status: 'active' }, orderBy: { name: 'asc' }, include: { category: { select: { id: true, name: true } }, images: { orderBy: [{ isPrimary: 'desc' }, { sort: 'asc' }], take: 1 }, compatibilities: { include: { model: { include: { make: true } } } }, inventoryItems: { where: { isActive: true }, select: { salePrice: true } } } });
+    return { ok: true, data: products.map((product) => ({ id: product.id, name: product.name, image: product.images[0] ?? null, category: product.category, vehicles: product.compatibilities.map((row) => `${row.model.make.name} ${row.model.name}`), price: product.inventoryItems.length ? product.inventoryItems.reduce((min, item) => item.salePrice < min ? item.salePrice : min, product.inventoryItems[0].salePrice).toString() : '0' })) };
   }
 
   async list() {
