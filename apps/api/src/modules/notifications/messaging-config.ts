@@ -88,6 +88,7 @@ export function mergeMessagingSecrets(incoming: unknown, existing: unknown): Mes
     telegram: {
       botToken: secret(next.telegram?.botToken, current.telegram?.botToken),
       chatId: next.telegram?.chatId ?? current.telegram?.chatId,
+      passwordRecoveryChatId: next.telegram?.passwordRecoveryChatId ?? current.telegram?.passwordRecoveryChatId,
       apiBase: next.telegram?.apiBase ?? current.telegram?.apiBase,
       proxySecret: secret(next.telegram?.proxySecret, current.telegram?.proxySecret),
     },
@@ -121,7 +122,7 @@ export async function resolveMessagingEnv(
     if (config.sms?.apiKey) env.SMS_API_KEY = config.sms.apiKey;
     if (config.sms?.lineNumber) env.SMS_LINE_NUMBER = config.sms.lineNumber;
     if (config.telegram?.botToken) env.TELEGRAM_BOT_TOKEN = config.telegram.botToken;
-    if (config.telegram?.chatId) env.TELEGRAM_CHAT_ID = config.telegram.chatId;
+    if (config.telegram?.chatId || config.telegram?.passwordRecoveryChatId) env.TELEGRAM_CHAT_ID = config.telegram.chatId ?? config.telegram.passwordRecoveryChatId;
     // Channel publishing routes Telegram through the Cloudflare Worker proxy
     // (api.telegram.org is filtered in Iran); both values are panel-managed.
     if (config.telegram?.apiBase) env.TELEGRAM_API_BASE = config.telegram.apiBase;
