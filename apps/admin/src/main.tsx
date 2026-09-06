@@ -12,6 +12,7 @@ import { MediaPage } from './pages/MediaPage';
 import { api, downloadFile } from './lib/api';
 import { LoginPage } from './pages/LoginPage';
 import { ProductsPage } from './pages/ProductsPage';
+import { WholesalePage } from './pages/WholesalePage';
 import { InventoryPage } from './pages/InventoryPage';
 import { LabelsPage } from './pages/LabelsPage';
 import { ReferencesPage } from './pages/ReferencesPage';
@@ -42,6 +43,7 @@ type NavIconName =
   | 'inventory'
   | 'labels'
   | 'products'
+  | 'wholesale'
   | 'purchases'
   | 'suppliers'
   | 'media'
@@ -70,6 +72,7 @@ function NavIcon({ name }: { name: NavIconName }) {
     inventory: <><path d="m4 8 8-4 8 4-8 4zM4 8v8l8 4 8-4V8M12 12v8" /></>,
     labels: <><path d="M4 5a2 2 0 0 1 2-2h7l7 7-9 9-7-7z" /><circle cx="8" cy="7" r="1" /></>,
     products: <><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 8h8M8 12h8M8 16h5" /></>,
+    wholesale: <><path d="M4 6h16v13H4z" /><path d="M8 6V4h8v2M8 11h8M8 15h5" /></>,
     purchases: <><path d="M5 5h10a3 3 0 0 1 3 3v11M5 5v14a2 2 0 0 0 2 2h11" /><path d="M9 9h5M9 13h5" /></>,
     suppliers: <><path d="M3 7h11v10H3zM14 10h4l3 3v4h-7" /><circle cx="7" cy="19" r="2" /><circle cx="18" cy="19" r="2" /></>,
     media: <><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="8" cy="9" r="2" /><path d="m4 17 5-5 3 3 2-2 6 6" /></>,
@@ -89,6 +92,7 @@ const navItems: NavItem[] = [
   { id: 'inventory', label: 'انبار و موجودی', icon: 'inventory' },
   { id: 'labels', label: 'برچسب محصولات', icon: 'labels' },
   { id: 'products', label: 'محصولات', icon: 'products' },
+  { id: 'wholesale', label: 'لیست محصولات (عمده)', icon: 'products' },
   { id: 'purchases', label: 'خرید و تأمین', icon: 'purchases' },
   { id: 'suppliers', label: 'تأمین‌کنندگان', icon: 'suppliers' },
   { id: 'media', label: 'رسانه‌ها', icon: 'media' },
@@ -109,6 +113,7 @@ const navGroups: Array<{ label: string; ids: Page[] }> = [
     label: 'فروشگاه',
     ids: [
       'products',
+      'wholesale',
       'inventory',
       'labels',
       'invoices',
@@ -125,6 +130,7 @@ const pageTitles: Record<Page, string> = {
   dashboard: 'داشبورد',
   messaging: 'پیامک و کانال\u200cها',
   products: 'کاتالوگ محصولات',
+  wholesale: 'لیست محصولات (عمده)',
   inventory: 'انبار و موجودی',
   labels: 'برچسب محصولات',
   invoices: 'فروش و فاکتورها',
@@ -487,6 +493,8 @@ function App() {
             <DashboardPage {...dashboardAccess} onNavigate={navigate} />
           ) : page === 'products' ? (
             <ProductsPage />
+          ) : page === 'wholesale' ? (
+            <WholesalePage />
           ) : page === 'invoices' ? (
             <InvoicesPage {...invoiceAccess} />
           ) : page === 'media' ? (

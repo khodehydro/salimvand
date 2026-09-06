@@ -4,7 +4,7 @@ export const API_PREFIX = '/api/v1';
 
 export type InventoryAvailability =
   'in_stock' | 'low_stock' | 'out_of_stock' | 'coming_soon' | 'discontinued';
-export type UserRole = 'super_admin' | 'manager' | 'seller' | 'warehouse' | 'accountant';
+export type UserRole = 'super_admin' | 'manager' | 'seller' | 'warehouse' | 'accountant' | 'wholesale';
 
 export function formatPersianNumber(value: number | string): string {
   return String(value).replace(/\d/g, (digit) => '۰۱۲۳۴۵۶۷۸۹'[Number(digit)] ?? digit);

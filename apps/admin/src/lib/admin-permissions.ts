@@ -1,11 +1,12 @@
 import type { UserRole } from '@salimvand/shared';
 import type { AdminPage } from './admin-route';
 
-const allRoles: UserRole[] = ['super_admin', 'manager', 'seller', 'warehouse', 'accountant'];
+const allRoles: UserRole[] = ['super_admin', 'manager', 'seller', 'warehouse', 'accountant', 'wholesale'];
 
 export const pageRoles: Record<AdminPage, readonly UserRole[]> = {
   dashboard: allRoles,
   products: ['super_admin', 'manager'],
+  wholesale: ['super_admin', 'manager', 'wholesale'],
   invoices: ['super_admin', 'manager', 'seller', 'accountant'],
   customers: ['super_admin', 'manager', 'seller', 'accountant'],
   inventory: ['super_admin', 'manager', 'warehouse'],

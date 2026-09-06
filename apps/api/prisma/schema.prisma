@@ -55,6 +55,7 @@ enum UserRole {
   seller
   warehouse
   accountant
+  wholesale
 }
 
 enum AuditAction {

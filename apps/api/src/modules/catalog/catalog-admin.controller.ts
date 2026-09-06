@@ -16,6 +16,9 @@ export class CatalogAdminController {
     private readonly catalog: CatalogAdminService,
     private readonly social: SocialPublisherService,
   ) {}
+  @Get('wholesale') @Roles('super_admin', 'manager', 'wholesale') wholesale() {
+    return this.catalog.wholesale();
+  }
   @Get() list() {
     return this.catalog.list();
   }

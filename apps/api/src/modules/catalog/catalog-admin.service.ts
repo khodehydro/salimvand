@@ -8,6 +8,11 @@ import { writeAudit } from '../../common/audit/audit-log';
 export class CatalogAdminService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async wholesale() {
+    const products = await this.prisma.product.findMany({ where: { deletedAt: null, status: 'active' }, orderBy: { name: 'asc' }, include: { images: { orderBy: [{ isPrimary: 'desc' }, { sort: 'asc' }], take: 1 }, inventoryItems: { where: { isActive: true }, include: { brand: true } } } });
+    return { ok: true, data: products.map((product) => ({ id: product.id, name: product.name, slug: product.slug, partNumber: product.partNumber, image: product.images[0] ?? null, items: product.inventoryItems.map((item) => ({ brand: item.brand?.name ?? 'بدون برند', salePrice: item.salePrice.toString(), quantity: item.quantity })) })) };
+  }
+
   async list() {
     const products = await this.prisma.product.findMany({
       where: { deletedAt: null },

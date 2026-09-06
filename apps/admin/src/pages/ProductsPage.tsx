@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { createEan13 } from '@salimvand/shared';
+import { createEan13, formatRial } from '@salimvand/shared';
 import { FaNumberInput } from '../components/FaNumberInput';
 import { locationChip, locationLabel } from '../lib/location-label';
 import { api } from '../lib/api';
@@ -284,7 +284,7 @@ export function ProductsPage() {
                 product.inventoryItems.map((entry) => (
                   <div className="plc-brand" key={entry.id}>
                     <span className="brand-name" title={entry.location ? locationChip(entry.location) : undefined}>
-                      {entry.brand?.name ?? 'بدون برند'}
+                      {entry.brand?.name ?? 'بدون برند'} · {formatRial(Number(entry.salePrice))}
                       {entry.location ? <small> · {locationChip(entry.location)}</small> : null}
                     </span>
                     <StockStepper itemId={entry.id} quantity={entry.quantity} onMessage={setMessage} onSaved={() => void load()} />
