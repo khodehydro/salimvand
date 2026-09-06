@@ -256,6 +256,7 @@ function App() {
   );
   const [dark, setDark] = useState(() => localStorage.getItem('salimvand.theme') === 'dark');
   const [role, setRole] = useState<UserRole | ''>('');
+  const [displayName, setDisplayName] = useState('');
   const [page, setPage] = useState<Page>(() => pageFromHash(window.location.hash));
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
@@ -309,8 +310,8 @@ function App() {
   }, []);
   useEffect(() => {
     if (authenticated)
-      void api<{ data: { role: UserRole } }>('/auth/me')
-        .then((result) => setRole(result.data.role))
+      void api<{ data: { role: UserRole; name?: string } }>('/auth/me')
+        .then((result) => { setRole(result.data.role); setDisplayName(result.data.name ?? 'کاربر پنل'); })
         .catch(() => {
           localStorage.removeItem('salimvand.accessToken');
           setAuthenticated(false);
@@ -461,9 +462,9 @@ function App() {
             )}
           </div>
           <div className="user-chip">
-            <span className="avatar">{role === 'super_admin' ? 'م' : 'ک'}</span>
+            <span className="avatar">{(displayName || 'ک').slice(0, 1)}</span>
             <span>
-              <b>{APP_NAME}</b>
+              <b>{displayName || APP_NAME}</b>
               <small>
                 {role === 'super_admin' ? 'مدیر کل' : role === 'manager' ? 'مدیر' : 'کاربر پنل'}
               </small>

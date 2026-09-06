@@ -2210,3 +2210,7 @@ p {
 .product-share-box details { font-size: 12px; }
 .product-share-box summary { cursor: pointer; padding: 8px 10px; border: 1px solid #d9e0e8; border-radius: 8px; }
 .product-share-box details img { display: block; margin-top: 8px; border: 6px solid #fff; box-shadow: 0 2px 12px #0002; }
+
+.gallery-prev { left: 10px; right: auto; }
+.gallery-next { right: 10px; left: auto; }
+@media (max-width: 700px) { .product-page { padding-bottom: 155px; } }
