@@ -3,14 +3,14 @@ import * as argon2 from 'argon2';
 import * as jwt from 'jsonwebtoken';
 import { createHash, randomBytes } from 'node:crypto';
 import { PrismaService } from '../../prisma.service';
-import { EmailService } from './email.service';
+
 import { UserRole } from '@salimvand/shared';
 
 export type AuthUser = { id: string; username: string; name: string; role: UserRole };
 
 @Injectable()
 export class AuthService {
-  constructor(private readonly prisma?: PrismaService, private readonly email?: EmailService) {}
+  constructor(private readonly prisma?: PrismaService) {}
 
   private readonly accessSecret =
     process.env.JWT_ACCESS_SECRET ?? 'development-access-secret-change-me';
@@ -45,19 +45,25 @@ export class AuthService {
     return createHash('sha256').update(token).digest('hex');
   }
 
-  async requestPasswordReset(emailAddress: string) {
-    const email = emailAddress.trim().toLowerCase();
-    if (!this.prisma || !this.email) throw new BadRequestException('سرویس ایمیل آماده نیست');
-    const user = await this.prisma.user.findFirst({ where: { email, isActive: true } });
-    // Do not reveal whether an email exists.
+  async requestPasswordReset(username: string) {
+    if (!this.prisma) throw new BadRequestException('سرویس بازیابی آماده نیست');
+    const user = await this.prisma.user.findFirst({ where: { username: username.trim(), isActive: true } });
     if (user) {
+      const setting = await this.prisma.setting.findUnique({ where: { key: 'integrations.messaging' } });
+      const config = (setting?.value ?? {}) as { telegram?: { botToken?: string; passwordRecoveryChatId?: string; apiBase?: string; proxySecret?: string } };
+      const botToken = config.telegram?.botToken || process.env.TELEGRAM_BOT_TOKEN;
+      const chatId = config.telegram?.passwordRecoveryChatId || process.env.TELEGRAM_PASSWORD_RESET_CHAT_ID;
+      if (!botToken || !chatId) throw new BadRequestException('ربات تلگرام بازیابی پیکربندی نشده است');
       const raw = randomBytes(32).toString('hex');
       await this.prisma.passwordResetToken.deleteMany({ where: { userId: user.id, usedAt: null } });
-      await this.prisma.passwordResetToken.create({ data: { userId: user.id, tokenHash: createHash('sha256').update(raw).digest('hex'), expiresAt: new Date(Date.now() + 30 * 60 * 1000) } });
-      const site = process.env.ADMIN_URL ?? process.env.PUBLIC_SITE_URL ?? 'https://salimvand.ir';
-      await this.email.sendPasswordReset(user.email!, user.name, `${site}/reset-password?token=${raw}`);
+      await this.prisma.passwordResetToken.create({ data: { userId: user.id, tokenHash: createHash('sha256').update(raw).digest('hex'), expiresAt: new Date(Date.now() + 15 * 60 * 1000) } });
+      const site = process.env.ADMIN_URL ?? 'https://cms.salimvand.ir';
+      const link = `${site}/reset-password?token=${raw}`;
+      const base = (config.telegram?.apiBase || process.env.TELEGRAM_API_BASE || 'https://api.telegram.org').replace(/\/+$/, '');
+      const response = await fetch(`${base}/bot${botToken}/sendMessage`, { method: 'POST', headers: { 'content-type': 'application/json', ...(config.telegram?.proxySecret ? { 'x-proxy-secret': config.telegram.proxySecret } : {}) }, body: JSON.stringify({ chat_id: chatId, text: `درخواست بازیابی رمز\nکاربر: ${user.username}\n\nلینک ۱۵ دقیقه معتبر است:\n${link}` }) });
+      if (!response.ok) throw new BadRequestException('ارسال پیام تلگرام ناموفق بود');
     }
-    return { ok: true, message: 'اگر ایمیل ثبت شده باشد، لینک بازیابی ارسال می‌شود.' };
+    return { ok: true, message: 'اگر کاربر معتبر باشد، لینک بازیابی برای مدیر ارسال می‌شود.' };
   }
 
   async resetPassword(token: string, password: string) {

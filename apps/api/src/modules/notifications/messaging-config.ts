@@ -11,7 +11,7 @@ export const SECRET_MASK_PREFIX = '••••';
 
 export type MessagingConfig = {
   sms?: { apiKey?: string; lineNumber?: string };
-  telegram?: { botToken?: string; chatId?: string; apiBase?: string; proxySecret?: string };
+  telegram?: { botToken?: string; chatId?: string; passwordRecoveryChatId?: string; apiBase?: string; proxySecret?: string };
   bale?: { botToken?: string; chatId?: string; botId?: string; apiAccessKey?: string };
 };
 
@@ -35,6 +35,7 @@ export function asMessagingConfig(value: unknown): MessagingConfig {
     telegram: {
       botToken: asString(telegram.botToken),
       chatId: asString(telegram.chatId),
+      passwordRecoveryChatId: asString(telegram.passwordRecoveryChatId),
       apiBase: asString(telegram.apiBase),
       proxySecret: asString(telegram.proxySecret),
     },
@@ -56,6 +57,7 @@ export function maskMessagingSecrets(value: unknown): MessagingConfig {
     telegram: {
       botToken: mask(config.telegram?.botToken),
       chatId: config.telegram?.chatId,
+      passwordRecoveryChatId: config.telegram?.passwordRecoveryChatId,
       apiBase: config.telegram?.apiBase,
       proxySecret: mask(config.telegram?.proxySecret),
     },

@@ -65,8 +65,8 @@ export class AuthController {
   }
 
   @Post('forgot-password')
-  forgotPassword(@Body() body: { email?: string }) {
-    return this.auth.requestPasswordReset(body.email ?? '');
+  forgotPassword(@Body() body: { username?: string }) {
+    return this.auth.requestPasswordReset(body.username ?? '');
   }
 
   @Post('reset-password')

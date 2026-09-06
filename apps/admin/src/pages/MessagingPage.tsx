@@ -43,7 +43,7 @@ type Tab = (typeof tabs)[number]['id'];
 
 type MessagingConfig = {
   sms?: { apiKey?: string; lineNumber?: string };
-  telegram?: { botToken?: string; chatId?: string; apiBase?: string; proxySecret?: string };
+  telegram?: { botToken?: string; chatId?: string; passwordRecoveryChatId?: string; apiBase?: string; proxySecret?: string };
   bale?: { botToken?: string; chatId?: string; botId?: string; apiAccessKey?: string };
 };
 type MessagingDraft = {
@@ -51,6 +51,7 @@ type MessagingDraft = {
   smsLineNumber: string;
   telegramBotToken: string;
   telegramChatId: string;
+  telegramPasswordRecoveryChatId: string;
   telegramApiBase: string;
   telegramProxySecret: string;
   baleBotToken: string;
@@ -63,6 +64,7 @@ const emptyDraft: MessagingDraft = {
   smsLineNumber: '',
   telegramBotToken: '',
   telegramChatId: '',
+  telegramPasswordRecoveryChatId: '',
   telegramApiBase: '',
   telegramProxySecret: '',
   baleBotToken: '',
@@ -98,6 +100,7 @@ export function MessagingPage() {
           smsLineNumber: config.sms?.lineNumber ?? '',
           telegramBotToken: '',
           telegramChatId: config.telegram?.chatId ?? '',
+          telegramPasswordRecoveryChatId: config.telegram?.passwordRecoveryChatId ?? '',
           telegramApiBase: config.telegram?.apiBase ?? '',
           telegramProxySecret: '',
           baleBotToken: '',
@@ -120,6 +123,7 @@ export function MessagingPage() {
         sms: { lineNumber: draft.smsLineNumber.trim() || undefined },
         telegram: {
           chatId: draft.telegramChatId.trim() || undefined,
+          passwordRecoveryChatId: draft.telegramPasswordRecoveryChatId.trim() || undefined,
           apiBase: draft.telegramApiBase.trim() || undefined,
         },
         bale: {
@@ -304,6 +308,11 @@ export function MessagingPage() {
                 placeholder="مثال: -1001234567890"
                 onChange={(event) => updateDraft('telegramChatId', event.target.value)}
               />
+            </label>
+            <label>
+              شناسهٔ عددی مدیر برای بازیابی رمز
+              <input dir="ltr" inputMode="numeric" value={draft.telegramPasswordRecoveryChatId} placeholder="مثال: 8686398534" onChange={(event) => updateDraft('telegramPasswordRecoveryChatId', event.target.value)} />
+              <small className="field-hint">لینک فراموشی رمز فقط به این شناسه ارسال می‌شود.</small>
             </label>
             <label>
               آدرس تلگرام — وورکر کلادفلر (برای انتشار در کانال)
