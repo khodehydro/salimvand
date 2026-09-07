@@ -213,6 +213,13 @@ export function InventoryPage() {
     }
   };
 
+  const removeItem = async () => {
+    if (!detail || !window.confirm(`قلم «${detail.product?.name ?? ''}» حذف شود؟`)) return;
+    setBusy(true);
+    try { await api(`/inventory/items/${detail.id}`, { method: 'DELETE' }); setMessage('قلم از لیست انبار حذف شد'); setDetail(null); await load(); }
+    catch (e) { setMessage((e as Error).message); } finally { setBusy(false); }
+  };
+
   const transfer = async () => {
     if (!detail || !transferLocation) return setMessage('محل مقصد را انتخاب کنید');
     setBusy(true);
@@ -761,6 +768,9 @@ export function InventoryPage() {
             </button>
             <button className="outline" disabled={busy} onClick={() => void transfer()}>
               انتقال به قفسهٔ انتخابی
+            </button>
+            <button className="outline danger-text" disabled={busy} onClick={() => void removeItem()}>
+              حذف قلم از انبار
             </button>
           </div>
         }

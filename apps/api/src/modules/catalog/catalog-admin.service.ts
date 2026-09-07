@@ -184,9 +184,13 @@ export class CatalogAdminService {
 
   async softDelete(id: string, userId?: string, ip?: string) {
     await this.ensureExists(id);
-    const product = await this.prisma.product.update({
-      where: { id },
-      data: { deletedAt: new Date(), status: 'hidden' },
+    const product = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.product.update({
+        where: { id },
+        data: { deletedAt: new Date(), status: 'hidden' },
+      });
+      await tx.inventoryItem.updateMany({ where: { productId: id }, data: { isActive: false } });
+      return updated;
     });
     if (userId)
       await this.prisma.auditLog.create({

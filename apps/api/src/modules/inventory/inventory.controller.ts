@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 type AuthenticatedRequest = Request & { user?: { id: string } };
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
@@ -44,6 +44,9 @@ export class InventoryController {
     @Req() request: AuthenticatedRequest,
   ) {
     return this.inventory.create({ ...body, userId: request.user?.id });
+  }
+  @Delete('items/:id') async removeItem(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
+    return this.inventory.removeItem(id, request.user?.id);
   }
   @Patch('items/:id') updateItem(
     @Param('id') id: string,

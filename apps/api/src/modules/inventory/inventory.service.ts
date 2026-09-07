@@ -25,6 +25,7 @@ export class InventoryService {
     const items = await this.prisma.inventoryItem.findMany({
       where: {
         isActive: true,
+        product: { deletedAt: null },
         ...(filters.brandId ? { brandId: filters.brandId } : {}),
         ...(filters.locationId ? { locationId: filters.locationId } : {}),
         // Live panel search matches barcode, product name, product code and
@@ -296,6 +297,14 @@ export class InventoryService {
       orderBy: { createdAt: 'desc' },
     });
     return { ok: true, data: rows };
+  }
+
+  async removeItem(id: string, userId?: string) {
+    const item = await this.prisma.inventoryItem.findUnique({ where: { id }, include: { product: true } });
+    if (!item) throw new NotFoundException('قلم موجودی پیدا نشد');
+    const updated = await this.prisma.inventoryItem.update({ where: { id }, data: { isActive: false } });
+    if (userId) await this.prisma.auditLog.create({ data: { userId, action: 'delete', entityType: 'inventory_item', entityId: id, after: { isActive: false, productId: item.productId } } });
+    return { ok: true, data: { id: updated.id, isActive: updated.isActive } };
   }
 
   async updateItem(
