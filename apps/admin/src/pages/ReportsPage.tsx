@@ -42,6 +42,7 @@ type SupplierReport = {
   }>;
   totalDebt: string;
 };
+type CheckReport = { id: string; checkNumber?: string | null; bank?: string | null; branch?: string | null; amount: string; dueDate: string; status: string; invoice: { number: string; customerName?: string | null } };
 type ProfitReport = {
   summary: { revenue: string; cost: string; profit: string };
   brands: Array<{ brand: string; quantity: number; revenue: string; cost: string; profit: string }>;
@@ -54,6 +55,8 @@ export function ReportsPage() {
   const [profit, setProfit] = useState<ProfitReport | null>(null);
   const [customers, setCustomers] = useState<CustomerReport | null>(null);
   const [suppliers, setSuppliers] = useState<SupplierReport | null>(null);
+  const [checks, setChecks] = useState<CheckReport[]>([]);
+  const [checkStatus, setCheckStatus] = useState('');
   const [audit, setAudit] = useState<Audit[]>([]);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
@@ -67,18 +70,20 @@ export function ReportsPage() {
     setLoading(true);
     setError('');
     try {
-      const [s, profitResult, c, p, a] = await Promise.all([
+      const [s, profitResult, c, p, a, checkResult] = await Promise.all([
         api<{ data: Sales }>(`/reports/sales${query}`),
         api<{ data: ProfitReport }>(`/reports/profit${query}`),
         api<{ data: CustomerReport }>('/reports/customers'),
         api<{ data: SupplierReport }>('/reports/purchase-debts'),
         api<{ data: Audit[] }>('/dashboard/audit?pageSize=20'),
+        api<{ data: CheckReport[] }>(`/reports/checks${query}${query ? '&' : '?'}${new URLSearchParams({ ...(checkStatus ? { status: checkStatus } : {}) }).toString()}`),
       ]);
       setSales(s.data);
       setProfit(profitResult.data);
       setCustomers(c.data);
       setSuppliers(p.data);
       setAudit(a.data);
+      setChecks(checkResult.data ?? []);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -174,6 +179,10 @@ export function ReportsPage() {
           </strong>
         </article>
       </div>
+      <section className="card checks-report-card">
+        <div className="card-h"><h2>گزارش چک‌ها</h2><select value={checkStatus} onChange={(e) => setCheckStatus(e.target.value)}><option value="">همه وضعیت‌ها</option><option value="pending">در انتظار</option><option value="cleared">وصول‌شده</option><option value="bounced">برگشتی</option><option value="cancelled">لغوشده</option></select></div>
+        <div className="report-check-table"><div className="thead"><span>فاکتور</span><span>مشتری</span><span>بانک/شماره</span><span>سررسید</span><span>مبلغ</span><span>وضعیت</span></div>{checks.map((check) => <div className="trow" key={check.id}><span>{check.invoice.number}</span><span>{check.invoice.customerName ?? 'حضوری'}</span><span>{check.bank ?? '—'} · {check.checkNumber ?? '—'}</span><span>{new Intl.DateTimeFormat('fa-IR').format(new Date(check.dueDate))}</span><b>{money(check.amount)}</b><span>{({ pending: 'در انتظار', cleared: 'وصول‌شده', bounced: 'برگشتی', cancelled: 'لغوشده' } as Record<string, string>)[check.status] ?? check.status}</span></div>)}</div>{!checks.length && <p className="muted">چکی با این فیلتر پیدا نشد.</p>}
+      </section>
       <div className="history">
         <h2>سود تفکیک‌شده بر اساس برند</h2>
         {profit?.brands

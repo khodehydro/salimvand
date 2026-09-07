@@ -190,6 +190,17 @@ export class ReportsService {
     return Buffer.from(await workbook.xlsx.writeBuffer());
   }
 
+  async checks(from?: string, to?: string, status?: string, bank?: string) {
+    const start = parseReportDate(from, 'از تاریخ');
+    const end = parseReportDate(to, 'تا تاریخ', true);
+    const rows = await this.prisma.paymentCheck.findMany({
+      where: { ...(start || end ? { dueDate: { ...(start ? { gte: start } : {}), ...(end ? { lte: end } : {}) } } : {}), ...(status && ['pending', 'cleared', 'bounced', 'cancelled'].includes(status) ? { status: status as never } : {}), ...(bank ? { bank: { contains: bank, mode: 'insensitive' } } : {}) },
+      orderBy: { dueDate: 'asc' },
+      include: { payment: { include: { invoice: { select: { number: true, customerName: true } } } } },
+    });
+    return { ok: true, data: rows.map((row) => ({ id: row.id, checkNumber: row.checkNumber, bank: row.bank, branch: row.branch, amount: row.amount.toString(), dueDate: row.dueDate, status: row.status, clearedAt: row.clearedAt, bouncedAt: row.bouncedAt, invoice: row.payment.invoice })) };
+  }
+
   async inventory() {
     const [items, transactions] = await Promise.all([
       this.prisma.inventoryItem.findMany({
