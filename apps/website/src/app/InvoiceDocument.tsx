@@ -9,6 +9,7 @@ export type PublicInvoice = {
   customerAddress?: string | null;
   storeAddress?: string | null;
   storePhone?: string | null;
+  storeLogoUrl?: string | null;
   vehicle?: string | null;
   salesPerson?: string | null;
   subtotal: string | number;
@@ -100,7 +101,7 @@ export async function InvoiceDocument({
       {/* Dark brand band — header of the document */}
       <header className="inv-band">
         <a href="/" className="inv-brand">
-          <span className="brand-mark">س</span>
+          {invoice.storeLogoUrl ? <img className="invoice-brand-logo" src={invoice.storeLogoUrl} alt="" /> : <span className="brand-mark">س</span>}
           <span>
             <b>فروشگاه سلیم وند</b>
             <small>آذین خودرو · میاندوآب</small>

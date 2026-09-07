@@ -281,6 +281,7 @@ export type LabelOptions = {
   showFoot: boolean;
   /** Store name from settings (falls back to فروشگاه سلیم‌وند). */
   storeName?: string;
+  footerText?: string;
   /** Site logo path from settings (e.g. /uploads/site/logo.webp); when
    * empty the «س» monogram mark is used instead. */
   logoUrl?: string;
@@ -323,7 +324,7 @@ export function renderLabelHTML(o: LabelOptions): string {
     o.showFoot && o.size !== '38x22'
       ? `
       <div class="lb-foot">
-        <span>اصالت و گارانتی کالا</span>
+        <span>${esc(o.footerText || 'اصالت کالا')}</span>
         <span class="lb-digits-latin">${STORE_SITE}</span>
       </div>`
       : '';

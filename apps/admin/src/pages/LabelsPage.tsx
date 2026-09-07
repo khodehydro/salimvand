@@ -47,6 +47,8 @@ export function LabelsPage() {
   /** Site identity from settings: logo + store name go on every label. */
   const [logoUrl, setLogoUrl] = useState('');
   const [storeName, setStoreName] = useState('');
+  const [labelHeader, setLabelHeader] = useState(() => localStorage.getItem('salimvand.labelHeader') || 'فروشگاه سلیم وند');
+  const [labelFooter, setLabelFooter] = useState(() => localStorage.getItem('salimvand.labelFooter') || 'اصالت کالا');
   const [filter, setFilter] = useState('');
   const [selectedId, setSelectedId] = useState('');
 
@@ -141,7 +143,8 @@ export function LabelsPage() {
     showSku,
     showMeta,
     showFoot,
-    storeName: storeName || undefined,
+    storeName: labelHeader || storeName || undefined,
+    footerText: labelFooter || undefined,
     logoUrl: logoUrl || undefined,
   };
   const currentHTML = renderLabelHTML(options);
@@ -323,6 +326,8 @@ export function LabelsPage() {
               </div>
 
               <hr className="lbl-hr" />
+              <div className="lbl-field"><label>عنوان سربرگ برچسب</label><input value={labelHeader} onChange={(e) => { setLabelHeader(e.target.value); localStorage.setItem('salimvand.labelHeader', e.target.value); }} placeholder="فروشگاه سلیم وند" /></div>
+              <div className="lbl-field"><label>متن پانویس برچسب</label><input value={labelFooter} onChange={(e) => { setLabelFooter(e.target.value); localStorage.setItem('salimvand.labelFooter', e.target.value); }} placeholder="اصالت کالا" /></div>
 
               <label className="lbl-chk">
                 <input

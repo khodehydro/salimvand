@@ -331,12 +331,13 @@ export class InvoiceService {
       );
     // Older invoices were issued before the store snapshot existed — fill
     // the store contact block from settings so the customer still sees it.
-    let storeContact: { storeAddress?: string | null; storePhone?: string | null } = {};
-    if (!publicInvoice.storeAddress || !publicInvoice.storePhone) {
+    let storeContact: { storeAddress?: string | null; storePhone?: string | null; storeLogoUrl?: string | null } = {};
+    if (!publicInvoice.storeAddress || !publicInvoice.storePhone || !publicInvoice.storeLogoUrl) {
       const profile = await this.storeProfile();
       storeContact = {
         storeAddress: publicInvoice.storeAddress || profile.address || null,
         storePhone: publicInvoice.storePhone || profile.phone || null,
+        storeLogoUrl: profile.logoUrl || null,
       };
     }
     return {

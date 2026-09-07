@@ -349,7 +349,7 @@ function App() {
   const dashboardAccess = dashboardCapabilities(role);
   const invoiceAccess = invoiceCapabilities(role);
   const customerAccess = customerCapabilities(role);
-  const exportLabel = page === 'reports' ? 'خروجی گزارش' : page === 'inventory' ? 'خروجی انبار' : 'خروجی';
+  const exportLabel = page === 'reports' ? 'گزارش' : page === 'inventory' ? 'انبار' : '';
   const exportPath = page === 'reports' ? '/reports/sales/export' : '/reports/inventory/export';
   const exportFile = page === 'reports' ? 'salimvand-sales.csv' : 'salimvand-inventory.csv';
   const navigate = (next: Page, params?: Record<string, string>) => {
@@ -439,7 +439,7 @@ function App() {
               className="topbar-export"
               onClick={() => void downloadFile(exportPath, exportFile).catch((error: Error) => console.error(error))}
             >
-              خروجی <span>{exportLabel}</span>
+              خروجی{exportLabel && <span> {exportLabel}</span>}
             </button>
           )}
           {invoiceAccess.canCreate && (
