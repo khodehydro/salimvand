@@ -67,6 +67,13 @@ export function CustomersPage({
   const [fieldErrors, setFieldErrors] = useState<{ name?: string; mobile?: string }>({});
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<Customer | null>(null);
+  const updateCheckStatus = async (checkId: string, status: string) => {
+    try {
+      await api(`/invoices/checks/${checkId}/status`, { method: 'PATCH', body: JSON.stringify({ status }) });
+      if (selected) await loadDetail(selected.id);
+      setMessage('وضعیت چک به‌روزرسانی شد');
+    } catch (error) { setMessage((error as Error).message); }
+  };
   const [paymentFor, setPaymentFor] = useState<Customer | null>(null);
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
@@ -580,7 +587,7 @@ export function CustomersPage({
 
               <h3 className="list-subhead">چک‌های مشتری</h3>
               <div className="customer-products customer-check-list">
-                {(selected.invoices ?? []).flatMap((invoice) => (invoice.payments ?? []).flatMap((payment) => (payment.checks ?? []).map((check) => ({ ...check, invoice: invoice.number })))).map((check) => <span key={`${check.invoice}-${check.checkNumber}-${check.dueDate}`}><b>فاکتور {check.invoice}</b> · {check.checkNumber || 'بدون شماره'} · {check.bank || 'بانک نامشخص'} · {formatRial(Number(check.amount))} · سررسید {shamsi(check.dueDate)} · {({ pending: 'در انتظار', cleared: 'وصول‌شده', bounced: 'برگشتی', cancelled: 'لغوشده' } as Record<string, string>)[check.status ?? 'pending'] ?? 'در انتظار'}</span>)}
+                {(selected.invoices ?? []).flatMap((invoice) => (invoice.payments ?? []).flatMap((payment) => (payment.checks ?? []).map((check) => ({ ...check, invoice: invoice.number })))).map((check) => <span key={`${check.invoice}-${check.checkNumber}-${check.dueDate}`}><b>فاکتور {check.invoice}</b> · {check.checkNumber || 'بدون شماره'} · {check.bank || 'بانک نامشخص'} · {formatRial(Number(check.amount))} · سررسید {shamsi(check.dueDate)} · <select className="check-status-select" value={check.status ?? 'pending'} onChange={(event) => void updateCheckStatus(check.id, event.target.value)}><option value="pending">در انتظار</option><option value="cleared">وصول‌شده</option><option value="bounced">برگشتی</option><option value="cancelled">لغوشده</option></select></span>)
                 {!selected.invoices?.some((invoice) => invoice.payments?.some((payment) => payment.checks?.length)) && <p className="muted">چکی برای این مشتری ثبت نشده است.</p>}
               </div>
 

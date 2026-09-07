@@ -6887,3 +6887,4 @@ button.btn-primary-lg:hover:not(:disabled) {
 .ops-today-card.success { border-top-color: var(--sv-ok); }.ops-today-card.warn { border-top-color: #d89b21; }.ops-today-card.danger { border-top-color: var(--sv-danger); }
 .ops-today-card small { color: var(--sv-text-2); font-size: 11px; }.ops-today-card strong { color: var(--sv-text); font-size: 19px; line-height: 1.5; }.ops-today-card span { color: var(--sv-text-3); font-size: 10px; }
 @media (max-width: 900px) { .ops-today-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } } @media (max-width: 520px) { .ops-today-grid { grid-template-columns: 1fr; } }
+.check-status-select { border: 1px solid var(--sv-border-2); border-radius: 6px; padding: 2px 6px; background: var(--sv-surface-2); color: var(--sv-text); font: inherit; font-size: 11px; }
