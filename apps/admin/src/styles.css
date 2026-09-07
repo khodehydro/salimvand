@@ -6889,3 +6889,21 @@ button.btn-primary-lg:hover:not(:disabled) {
 @media (max-width: 900px) { .ops-today-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } } @media (max-width: 520px) { .ops-today-grid { grid-template-columns: 1fr; } }
 .check-status-select { border: 1px solid var(--sv-border-2); border-radius: 6px; padding: 2px 6px; background: var(--sv-surface-2); color: var(--sv-text); font: inherit; font-size: 11px; }
 .checks-report-card { margin: 18px 0; }.checks-report-card .card-h { display:flex; align-items:center; justify-content:space-between; gap:10px; }.checks-report-card select { min-height:36px; padding:6px 9px; border:1px solid var(--sv-border-2); border-radius:8px; background:var(--sv-surface-2); color:var(--sv-text); font:inherit; }.report-check-table { overflow-x:auto; }.report-check-table .thead,.report-check-table .trow { min-width:760px; display:grid; grid-template-columns: .7fr 1.2fr 1.5fr 1fr 1.2fr .9fr; gap:10px; align-items:center; padding:10px 0; border-bottom:1px solid var(--sv-border); font-size:12px; }
+/* Final operational UI polish */
+.check-fields { width: 100%; margin: 14px 0; padding: 14px; gap: 10px; }
+.check-fields input, .check-fields select, .check-row input { min-height: 42px; font-size: 13px; color: var(--sv-text); background: var(--sv-surface); }
+.check-row { padding: 10px 0; gap: 9px; }
+.invoice-count-link { border: 0; background: transparent; color: var(--sv-link); font: 600 12px Vazirmatn; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.customer-row { min-height: 58px; }
+.customer-row > * { min-width: 0; }
+.customer-actions { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.customer-search input, .adjust-box.customer-search input { min-height: 42px; color: var(--sv-text); background: var(--sv-surface); border: 1px solid var(--sv-border-2); border-radius: 9px; font: 13px Vazirmatn; }
+.customer-search input::placeholder { color: var(--sv-text-3); opacity: 1; }
+.suppliers-page .customer-search input, .suppliers-page .adjust-box input { color: var(--sv-text); background: var(--sv-surface); border-color: var(--sv-border-2); min-height: 42px; font: 13px Vazirmatn; }
+.reference-workspace input, .reference-workspace select, .reference-form input, .reference-form select { color: var(--sv-text); background: var(--sv-surface); border-color: var(--sv-border-2); min-height: 42px; font: 13px Vazirmatn; }
+.reference-workspace input::placeholder, .reference-form input::placeholder { color: var(--sv-text-3); opacity: 1; }
+.vehicle-workspace { gap: 14px; }.vehicle-tree article { padding: 12px 14px; }.vehicle-model { padding: 8px 10px; }.vehicle-trim { padding: 5px 8px; }
+.lbl-stage { transform: scale(.78); transform-origin: top center; margin-bottom: -70px; }
+.reports-page .cards, section:has(.report-check-table) .dashboard-cards { gap: 10px; }.reports-page .page-title { gap: 10px; }.reports-page .page-title > button { white-space: nowrap; }
+.report-filters { gap: 8px !important; }.report-filters button { min-height: 38px; padding: 7px 12px; }
+@media (max-width: 800px) { .check-row { grid-template-columns: 1fr 1fr; }.customer-head, .customer-row { min-width: 920px; }.lbl-stage { transform: scale(.7); margin-bottom: -100px; } }

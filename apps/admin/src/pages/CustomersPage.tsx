@@ -379,7 +379,7 @@ export function CustomersPage({
                 <code dir="ltr">{formatPersianNumber(customer.mobile)}</code>
                 <span>{formatRial(Number(customer.totalPurchase ?? 0))}</span>
                 <span>{customer.lastPurchase ? shamsi(customer.lastPurchase) : '—'}</span>
-                <span>{formatPersianNumber(customer.invoiceCount)}</span>
+                <button className="invoice-count-link" onClick={() => void loadDetail(customer.id)}>{formatPersianNumber(customer.invoiceCount)} فاکتور</button>
                 <b className={Number(customer.debt) > 0 ? 'low-stock' : 'status-chip'}>
                   {formatRial(Number(customer.debt))}
                 </b>
