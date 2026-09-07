@@ -97,7 +97,7 @@ export function ReportsPage() {
     } finally {
       setLoading(false);
     }
-  }, [query]);
+  }, [query, checkStatus]);
   useEffect(() => {
     void load();
   }, [load]);
