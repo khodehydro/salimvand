@@ -263,6 +263,7 @@ function App() {
   const [dark, setDark] = useState(() => localStorage.getItem('salimvand.theme') === 'dark');
   const [role, setRole] = useState<UserRole | ''>('');
   const [displayName, setDisplayName] = useState('');
+  const [storeLogoUrl, setStoreLogoUrl] = useState('');
   const [page, setPage] = useState<Page>(() => pageFromHash(window.location.hash));
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
@@ -279,6 +280,9 @@ function App() {
   const [release, setRelease] = useState('');
   const [navCounts, setNavCounts] = useState<Record<string, number>>({});
   useEffect(() => {
+    api<{ data?: Record<string, { logoUrl?: string }> }>('/settings')
+      .then((result) => setStoreLogoUrl(result.data?.['store.profile']?.logoUrl ?? ''))
+      .catch(() => undefined);
     api<{ data?: { release?: string } }>('/health')
       .then((result) => setRelease(result.data?.release ?? ''))
       .catch(() => undefined);
@@ -356,7 +360,7 @@ function App() {
     <div className={`admin ${dark ? 'theme-dark' : ''} ${role === 'wholesale' ? 'wholesale-shell' : ''}`}>
       <aside className={mobileOpen ? 'open' : ''}>
         <div className="aside-brand">
-          <span className="brand-mark">س</span>
+          <span className="brand-mark">{storeLogoUrl ? <img src={storeLogoUrl} alt="فروشگاه سلیم‌وند" /> : 'س'}</span>
           <span>
             <strong>سلیم‌وند</strong>
             <small>ERP فروشگاه</small>

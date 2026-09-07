@@ -6843,3 +6843,13 @@ button.btn-primary-lg:hover:not(:disabled) {
 .wholesale-shell .wholesale-table tbody tr:not(.category-row):hover { background: var(--sv-surface-2); }
 .wholesale-table td[rowspan] { background: var(--sv-surface); }
 @media (max-width: 700px) { .wholesale-shell .wholesale-page { padding: 18px 12px 36px; } }
+/* Store identity assets use one predictable preview box, regardless of source ratio. */
+.brand-mark { display: inline-flex; align-items: center; justify-content: center; overflow: hidden; }
+.brand-mark img { width: 30px; height: 30px; object-fit: contain; display: block; border-radius: 6px; }
+.invoice-page-heading { display: flex; align-items: center; gap: 10px; }
+.invoice-page-heading img { width: 34px; height: 34px; object-fit: contain; border-radius: 7px; }
+.site-assets { align-items: stretch; }
+.asset-field { display: flex; flex-direction: column; min-width: 0; }
+.asset-preview, .asset-preview-sq { width: 112px; height: 112px; min-height: 112px; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; margin: 10px 0; border-radius: 12px; background: var(--sv-surface-2); border: 1px solid var(--sv-border); }
+.asset-preview img, .asset-preview-sq img { width: 100%; height: 100%; object-fit: contain; padding: 12px; }
+.asset-preview span { font-size: 28px; }

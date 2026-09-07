@@ -68,16 +68,17 @@ export class InvoiceService {
   /** Store contact block from settings (store.profile): used to default the
    * invoice snapshot so sellers never type the store address/phone per
    * invoice — settings stay the single source of truth. */
-  private async storeProfile(): Promise<{ address: string; phone: string }> {
+  private async storeProfile(): Promise<{ address: string; phone: string; logoUrl: string }> {
     try {
       const row = await this.prisma.setting.findUnique({ where: { key: 'store.profile' } });
-      const profile = (row?.value ?? {}) as { address?: unknown; phones?: unknown };
+      const profile = (row?.value ?? {}) as { address?: unknown; phones?: unknown; logoUrl?: unknown };
       return {
         address: typeof profile.address === 'string' ? profile.address.trim() : '',
         phone: typeof profile.phones === 'string' ? profile.phones.trim() : '',
+        logoUrl: typeof profile.logoUrl === 'string' ? profile.logoUrl.trim() : '',
       };
     } catch {
-      return { address: '', phone: '' };
+      return { address: '', phone: '', logoUrl: '' };
     }
   }
 
@@ -665,6 +666,7 @@ export class InvoiceService {
       data: items,
       storeAddress: profile.address,
       storePhone: profile.phone,
+      storeLogoUrl: profile.logoUrl,
     };
   }
 

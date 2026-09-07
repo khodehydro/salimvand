@@ -155,6 +155,7 @@ export function InvoicesPage({
   // Read-only store contact block from settings (issue-form hint).
   const [storeAddress, setStoreAddress] = useState('');
   const [storePhone, setStorePhone] = useState('');
+  const [storeLogoUrl, setStoreLogoUrl] = useState('');
   const [customerAddress, setCustomerAddress] = useState('');
   const [addressDraft, setAddressDraft] = useState({ store: '', phone: '', customer: '' });
   const [addressBusy, setAddressBusy] = useState(false);
@@ -249,7 +250,7 @@ export function InvoicesPage({
   useEffect(() => {
     void load();
     if (canCreate)
-      void api<{ data: StockOption[]; storeAddress?: string; storePhone?: string }>(
+      void api<{ data: StockOption[]; storeAddress?: string; storePhone?: string; storeLogoUrl?: string }>(
         '/invoices/options',
       )
         .then((result) => {
@@ -258,6 +259,7 @@ export function InvoicesPage({
           // form; the server snapshots it onto the invoice automatically.
           if (result.storeAddress) setStoreAddress(result.storeAddress);
           if (result.storePhone) setStorePhone(result.storePhone);
+          if (result.storeLogoUrl) setStoreLogoUrl(result.storeLogoUrl);
         })
         .catch((error: Error) => setMessage(error.message));
   }, [canCreate]);
@@ -599,7 +601,7 @@ export function InvoicesPage({
     <section className="invoices-page">
       <div className="page-title">
         <div>
-          <h1>فروش و فاکتورها</h1>
+          <h1 className="invoice-page-heading">{storeLogoUrl && <img src={storeLogoUrl} alt="فروشگاه سلیم‌وند" />}فروش و فاکتورها</h1>
           <p className="muted">
             {tab === 'issue'
               ? 'صدور فاکتور چندقلمی با اسکنر، مصرف اتمیک موجودی و پرداخت چندروشه'
