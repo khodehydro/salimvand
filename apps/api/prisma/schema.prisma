@@ -49,6 +49,12 @@ enum PaymentMethod {
   transfer
   credit
 }
+enum CheckStatus {
+  pending
+  cleared
+  bounced
+  cancelled
+}
 enum UserRole {
   super_admin
   manager
@@ -437,6 +443,10 @@ model PaymentCheck {
   branch      String?  @db.VarChar(120)
   amount      BigInt
   dueDate     DateTime @db.Date
+  status      CheckStatus @default(pending)
+  clearedAt   DateTime?
+  bouncedAt   DateTime?
+  notes       String?
   payment     Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
   @@index([dueDate])
   @@map("payment_checks")

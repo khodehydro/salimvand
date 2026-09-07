@@ -40,7 +40,7 @@ type Customer = {
     paymentStatus: string;
     issuedAt: string;
     items?: Array<{ productName: string; quantity: number }>;
-    payments?: Array<{ amount: string | number; method: string; checks?: Array<{ checkNumber?: string | null; bank?: string | null; amount: string | number; dueDate: string }> }>;
+    payments?: Array<{ amount: string | number; method: string; checks?: Array<{ checkNumber?: string | null; bank?: string | null; amount: string | number; dueDate: string; status?: string }> }>;
   }>;
   payments?: Array<{ amount: string | number; method: string; paidAt: string; notes?: string | null }>;
 };
@@ -580,7 +580,7 @@ export function CustomersPage({
 
               <h3 className="list-subhead">چک‌های مشتری</h3>
               <div className="customer-products customer-check-list">
-                {(selected.invoices ?? []).flatMap((invoice) => (invoice.payments ?? []).flatMap((payment) => (payment.checks ?? []).map((check) => ({ ...check, invoice: invoice.number })))).map((check) => <span key={`${check.invoice}-${check.checkNumber}-${check.dueDate}`}><b>فاکتور {check.invoice}</b> · {check.checkNumber || 'بدون شماره'} · {check.bank || 'بانک نامشخص'} · {formatRial(Number(check.amount))} · سررسید {shamsi(check.dueDate)}</span>)}
+                {(selected.invoices ?? []).flatMap((invoice) => (invoice.payments ?? []).flatMap((payment) => (payment.checks ?? []).map((check) => ({ ...check, invoice: invoice.number })))).map((check) => <span key={`${check.invoice}-${check.checkNumber}-${check.dueDate}`}><b>فاکتور {check.invoice}</b> · {check.checkNumber || 'بدون شماره'} · {check.bank || 'بانک نامشخص'} · {formatRial(Number(check.amount))} · سررسید {shamsi(check.dueDate)} · {({ pending: 'در انتظار', cleared: 'وصول‌شده', bounced: 'برگشتی', cancelled: 'لغوشده' } as Record<string, string>)[check.status ?? 'pending'] ?? 'در انتظار'}</span>)}
                 {!selected.invoices?.some((invoice) => invoice.payments?.some((payment) => payment.checks?.length)) && <p className="muted">چکی برای این مشتری ثبت نشده است.</p>}
               </div>
 

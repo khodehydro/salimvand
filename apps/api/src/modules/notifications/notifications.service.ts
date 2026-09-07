@@ -323,7 +323,7 @@ export class NotificationsService implements OnModuleDestroy {
     if (!this.prisma) return [];
     const start = new Date(); start.setHours(0, 0, 0, 0);
     const end = new Date(start); end.setDate(end.getDate() + 1);
-    return this.prisma.paymentCheck.findMany({ where: { dueDate: { gte: start, lt: end } }, orderBy: { dueDate: 'asc' }, include: { payment: { include: { invoice: { select: { number: true, customerName: true } } } } } });
+    return this.prisma.paymentCheck.findMany({ where: { status: 'pending', dueDate: { gte: start, lt: end } }, orderBy: { dueDate: 'asc' }, include: { payment: { include: { invoice: { select: { number: true, customerName: true } } } } } });
   }
 
   async failed(limit = 50) {

@@ -671,6 +671,15 @@ export class InvoiceService {
     };
   }
 
+  async updateCheckStatus(checkId: string, status: 'pending' | 'cleared' | 'bounced' | 'cancelled', notes?: string) {
+    if (!['pending', 'cleared', 'bounced', 'cancelled'].includes(status)) throw new BadRequestException('وضعیت چک معتبر نیست');
+    const check = await this.prisma.paymentCheck.findUnique({ where: { id: checkId } });
+    if (!check) throw new NotFoundException('چک پیدا نشد');
+    const now = new Date();
+    const updated = await this.prisma.paymentCheck.update({ where: { id: checkId }, data: { status, notes: notes?.trim() || undefined, clearedAt: status === 'cleared' ? now : null, bouncedAt: status === 'bounced' ? now : null } });
+    return { ok: true, data: updated };
+  }
+
   async pay(
     id: string,
     amount: string | number,
