@@ -43,7 +43,8 @@ export async function generateMetadata(): Promise<Metadata> {
 const themeBootstrap =
   "(function(){try{var t=localStorage.getItem('salimvand.theme');if(t==='dark'||t==='light'){document.documentElement.dataset.theme=t;}}catch(e){}})();";
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const info = await getStoreInfo();
   const jsonLd = {
     '@context': 'https://schema.org',
     '@graph': [
