@@ -6859,3 +6859,21 @@ button.btn-primary-lg:hover:not(:disabled) {
 .catalog-switch.on { color: var(--sv-ok); font-weight: 700; }
 .catalog-switch.on span { background: var(--sv-ok); }
 .catalog-switch.on span::after { right: 15px; }
+/* Product editor fields stay readable in both themes and on native select controls. */
+.product-editor .product-form input,
+.product-editor .product-form select,
+.product-editor .product-form textarea,
+.product-form input,
+.product-form select,
+.product-form textarea { color: var(--sv-text); background: var(--sv-surface-2); border: 1px solid var(--sv-border-2); outline: none; }
+.product-form textarea { resize: vertical; min-height: 92px; line-height: 1.8; }
+.product-form input::placeholder,
+.product-form textarea::placeholder { color: var(--sv-text-3); opacity: 1; }
+.product-form input:focus,
+.product-form select:focus,
+.product-form textarea:focus { border-color: var(--sv-link); box-shadow: 0 0 0 3px color-mix(in srgb, var(--sv-link) 14%, transparent); background: var(--sv-surface); }
+.product-form input[readonly] { color: var(--sv-text-2); background: var(--sv-surface-3); cursor: not-allowed; }
+.product-form select option { color: var(--sv-text); background: var(--sv-surface); }
+.editor-body .tabs { position: sticky; top: 0; z-index: 3; background: var(--sv-surface); padding: 8px 0; }
+.editor-body .tab { min-height: 40px; white-space: nowrap; }
+@media (max-width: 700px) { .product-form { grid-template-columns: 1fr; padding: 16px; } .editor-body .tabs { overflow-x: auto; flex-wrap: nowrap; } }

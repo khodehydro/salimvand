@@ -717,9 +717,11 @@ function ProductEditor({
               </label>
               <label>
                 توضیحات
-                <input
+                <textarea
+                  rows={4}
                   value={basic.description}
                   onChange={(event) => setBasic({ ...basic, description: event.target.value })}
+                  placeholder="توضیحات محصول را وارد کنید"
                 />
               </label>
               <label>
