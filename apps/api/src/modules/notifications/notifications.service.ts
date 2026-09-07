@@ -319,6 +319,13 @@ export class NotificationsService implements OnModuleDestroy {
     };
   }
 
+  async dueChecksToday() {
+    if (!this.prisma) return [];
+    const start = new Date(); start.setHours(0, 0, 0, 0);
+    const end = new Date(start); end.setDate(end.getDate() + 1);
+    return this.prisma.paymentCheck.findMany({ where: { dueDate: { gte: start, lt: end } }, orderBy: { dueDate: 'asc' }, include: { payment: { include: { invoice: { select: { number: true, customerName: true } } } } } });
+  }
+
   async failed(limit = 50) {
     const jobs = await this.queue.getFailed(0, normalizeFailedLimit(limit) - 1);
     return jobs.map((job) => ({

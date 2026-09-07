@@ -48,6 +48,7 @@ type Summary = {
   inventoryWithoutLocation?: number;
   productsWithoutSalePrice?: number;
   pendingPurchases?: number;
+  dueChecks?: Array<{ id: string; checkNumber?: string | null; bank?: string | null; amount: string; dueDate: string; invoice: { id: string; number: string; customerName?: string | null } }>;
   recentTransactions: Array<{
     id: string;
     type: string;
@@ -454,6 +455,10 @@ export function DashboardPage({
               <small className="muted">سهم هر دسته از کل موجودی انبار</small>
             </header>
             <DonutChart data={donutFallback} />
+          </article>
+          <article className="card check-due-card">
+            <header className="card-h"><h3>سررسید چک‌ها {summary?.dueChecks?.length ? <span className="badge b-warn">{faNum(summary.dueChecks.length)} مورد</span> : null}</h3><a className="card-more" href="#/invoices">فاکتورها ›</a></header>
+            {summary?.dueChecks?.length ? <div className="list-rows">{summary.dueChecks.map((check) => <div className="list-row" key={check.id}><span className="thumb">چک</span><span className="grow"><b>فاکتور {check.invoice.number}</b><small>{check.invoice.customerName ?? 'مشتری حضوری'} · {check.bank ?? 'بانک نامشخص'}</small></span><span className="badge b-danger">{money(check.amount)}</span></div>)}</div> : <p className="muted empty-line">چک با سررسید نزدیک وجود ندارد.</p>}
           </article>
         </div>
 

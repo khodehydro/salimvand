@@ -256,6 +256,13 @@ export class DashboardService {
       this.prisma.inventoryItem.count({ where: { isActive: true, salePrice: 0 } }),
       this.prisma.purchaseInvoice.count({ where: { status: 'issued' } }),
     ]);
+    const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
+    const dayAfterTomorrow = new Date(startOfToday); dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 3);
+    const dueChecks = await this.prisma.paymentCheck.findMany({
+      where: { dueDate: { gte: new Date(new Date(startOfToday).setDate(startOfToday.getDate() + 1)), lt: dayAfterTomorrow } },
+      orderBy: { dueDate: 'asc' },
+      include: { payment: { include: { invoice: { select: { id: true, number: true, customerName: true } } } } },
+    });
     const lowStock = lowStockItems.filter(
       (item: { quantity: number; minStock: number | null }) => item.quantity <= (item.minStock ?? 0),
     );
@@ -277,6 +284,7 @@ export class DashboardService {
         inventoryWithoutLocation,
         productsWithoutSalePrice,
         pendingPurchases,
+        dueChecks: dueChecks.map((check) => ({ id: check.id, checkNumber: check.checkNumber, bank: check.bank, amount: check.amount.toString(), dueDate: check.dueDate, invoice: check.payment.invoice })),
       },
     };
   }

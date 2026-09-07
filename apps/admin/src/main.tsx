@@ -268,6 +268,7 @@ function App() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [notificationItems, setNotificationItems] = useState<NotificationItem[]>([]);
+  const [dueChecks, setDueChecks] = useState<Array<{ id: string; amount: string; invoice: { number: string; customerName?: string | null } }>>([]);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
     اصلی: true,
@@ -304,9 +305,10 @@ function App() {
   }, []);
   useEffect(() => {
     if (!notificationOpen) return;
-    void api<{ data: NotificationItem[] }>('/notifications/failed?limit=5')
-      .then((result) => setNotificationItems(result.data ?? []))
-      .catch(() => setNotificationItems([]));
+    void Promise.all([
+      api<{ data: NotificationItem[] }>('/notifications/failed?limit=5'),
+      api<{ data: Array<{ id: string; amount: string; invoice: { number: string; customerName?: string | null } }> }>('/notifications/due-checks'),
+    ]).then(([failed, checks]) => { setNotificationItems(failed.data ?? []); setDueChecks(checks.data ?? []); }).catch(() => { setNotificationItems([]); setDueChecks([]); });
   }, [notificationOpen]);
   useEffect(() => {
     const listener = (event: KeyboardEvent) => {
@@ -465,12 +467,13 @@ function App() {
                   <b>اعلان‌ها</b>
                   <small>{notificationItems.length ? `${notificationItems.length} خطای اخیر` : 'وضعیت سیستم'}</small>
                 </div>
+                {dueChecks.map((check) => <button className="notification-item check-notification" key={check.id} onClick={() => navigate('invoices')}><span className="notification-item-icon">چک</span><span><b>سررسید چک امروز</b><small>فاکتور {check.invoice.number} · {check.amount} ریال</small></span></button>)}
                 {notificationItems.length ? notificationItems.map((item) => (
                   <button className="notification-item" key={item.id} onClick={() => navigate('messaging')}>
                     <span className="notification-item-icon">!</span>
                     <span><b>ارسال اعلان ناموفق</b><small>{item.failedReason}</small></span>
                   </button>
-                )) : <p className="notification-empty">اعلان جدیدی وجود ندارد.</p>}
+                )) : !dueChecks.length && <p className="notification-empty">اعلان جدیدی وجود ندارد.</p>}
                 <button className="notification-all" onClick={() => navigate('messaging')}>مشاهده صف و خطاهای پیام‌رسانی</button>
               </div>
             )}
