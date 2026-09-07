@@ -42,6 +42,7 @@ type SupplierReport = {
   }>;
   totalDebt: string;
 };
+type SupplierCheckReport = { id: string; checkNumber?: string | null; bank?: string | null; amount: string; dueDate: string; status: string; invoice: { number: string; supplierName: string } };
 type ReturnReport = { rows: Array<{ id: string; invoice: { number: string; customerName?: string | null }; product: string; quantity: number; refundAmount: string; reason: string; restock: boolean; createdAt: string }>; products: Array<{ name: string; quantity: number; amount: string }>; customers: Array<{ name: string; count: number; amount: string }> };
 type CheckReport = { id: string; checkNumber?: string | null; bank?: string | null; branch?: string | null; amount: string; dueDate: string; status: string; invoice: { number: string; customerName?: string | null } };
 type ProfitReport = {
@@ -58,6 +59,7 @@ export function ReportsPage() {
   const [suppliers, setSuppliers] = useState<SupplierReport | null>(null);
   const [checks, setChecks] = useState<CheckReport[]>([]);
   const [returns, setReturns] = useState<ReturnReport | null>(null);
+  const [supplierChecks, setSupplierChecks] = useState<SupplierCheckReport[]>([]);
   const [checkStatus, setCheckStatus] = useState('');
   const [audit, setAudit] = useState<Audit[]>([]);
   const [from, setFrom] = useState('');
@@ -72,7 +74,7 @@ export function ReportsPage() {
     setLoading(true);
     setError('');
     try {
-      const [s, profitResult, c, p, a, checkResult, returnResult] = await Promise.all([
+      const [s, profitResult, c, p, a, checkResult, returnResult, supplierCheckResult] = await Promise.all([
         api<{ data: Sales }>(`/reports/sales${query}`),
         api<{ data: ProfitReport }>(`/reports/profit${query}`),
         api<{ data: CustomerReport }>('/reports/customers'),
@@ -80,6 +82,7 @@ export function ReportsPage() {
         api<{ data: Audit[] }>('/dashboard/audit?pageSize=20'),
         api<{ data: CheckReport[] }>(`/reports/checks${query}${query ? '&' : '?'}${new URLSearchParams({ ...(checkStatus ? { status: checkStatus } : {}) }).toString()}`),
         api<{ data: ReturnReport }>(`/reports/returns${query}`),
+        api<{ data: SupplierCheckReport[] }>(`/reports/supplier-checks${checkStatus ? `?status=${checkStatus}` : ''}`),
       ]);
       setSales(s.data);
       setProfit(profitResult.data);
@@ -88,6 +91,7 @@ export function ReportsPage() {
       setAudit(a.data);
       setChecks(checkResult.data ?? []);
       setReturns(returnResult.data);
+      setSupplierChecks(supplierCheckResult.data ?? []);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -192,6 +196,7 @@ export function ReportsPage() {
           </strong>
         </article>
       </div>
+      <section className="card checks-report-card"><div className="card-h"><h2>چک‌های تأمین‌کنندگان</h2></div><div className="report-check-table"><div className="thead"><span>فاکتور خرید</span><span>تأمین‌کننده</span><span>بانک/شماره</span><span>سررسید</span><span>مبلغ</span><span>وضعیت</span></div>{supplierChecks.map((check) => <div className="trow" key={check.id}><span>{check.invoice.number}</span><span>{check.invoice.supplierName}</span><span>{check.bank ?? '—'} · {check.checkNumber ?? '—'}</span><span>{new Intl.DateTimeFormat('fa-IR').format(new Date(check.dueDate))}</span><b>{money(check.amount)}</b><span>{({ pending: 'در انتظار', cleared: 'وصول‌شده', bounced: 'برگشتی', cancelled: 'لغوشده' } as Record<string, string>)[check.status] ?? check.status}</span></div>)}</div>{!supplierChecks.length && <p className="muted">چک تأمین‌کننده‌ای ثبت نشده است.</p>}</section>
       <section className="card checks-report-card">
         <div className="card-h"><h2>گزارش مرجوعی کالا</h2><span className="badge b-warn">{formatPersianNumber(returns?.rows.length ?? 0)} مورد</span></div>
         <div className="report-check-table"><div className="thead"><span>فاکتور</span><span>مشتری</span><span>محصول</span><span>تعداد</span><span>مبلغ برگشت</span><span>نوع</span></div>{returns?.rows.slice(0, 100).map((row) => <div className="trow" key={row.id}><span>{row.invoice.number}</span><span>{row.invoice.customerName ?? 'حضوری'}</span><span>{row.product}</span><span>{formatPersianNumber(row.quantity)}</span><b>{money(row.refundAmount)}</b><span>{row.restock ? 'بازگشت به انبار' : 'ضایعات'}</span></div>)}</div>{!returns?.rows.length && <p className="muted">مرجوعی‌ای در این بازه ثبت نشده است.</p>}<h3 className="list-subhead">مشتریانی با بیشترین مرجوعی</h3><div className="customer-products">{(returns?.customers ?? []).slice(0, 5).map((customer) => <span key={customer.name}>{customer.name} · {formatPersianNumber(customer.count)} قلم · {money(customer.amount)}</span>)}</div></section>

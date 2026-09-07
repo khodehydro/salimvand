@@ -18,6 +18,7 @@ type Payment = {
   method: string;
   notes?: string | null;
   paidAt: string;
+  check?: { id: string; checkNumber?: string | null; bank?: string | null; amount: string | number; dueDate: string; status: string } | null;
 };
 type PurchaseItem = {
   id: string;
@@ -468,6 +469,7 @@ export function PurchasesPage({ canCreate = true }: { canCreate?: boolean }) {
                 <strong>{paymentLabels[payment.method] ?? payment.method}</strong>
                 <span>{formatRial(Number(payment.amount))}</span>
                 <small>{formatJalaliDate(payment.paidAt, 'dateTime')}</small>
+                {payment.check && <select className="check-status-select" value={payment.check.status} onChange={(event) => void api(`/purchases/checks/${payment.check!.id}/status`, { method: 'PATCH', body: JSON.stringify({ status: event.target.value }) }).then(() => openDetail(detail.id)).catch((error: Error) => setMessage(error.message))}><option value="pending">در انتظار</option><option value="cleared">وصول‌شده</option><option value="bounced">برگشتی</option><option value="cancelled">لغوشده</option></select>}
               </div>
             ))
           ) : (

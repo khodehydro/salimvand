@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
 import { RolesGuard } from '../../common/auth/roles.guard';
@@ -27,6 +27,10 @@ export class PurchaseController {
       request.ip,
     );
   }
+  @Patch('checks/:checkId/status') updateCheckStatus(@Param('checkId') checkId: string, @Body() body: { status?: 'pending' | 'cleared' | 'bounced' | 'cancelled' }) {
+    return this.purchases.updateCheckStatus(checkId, body.status ?? 'pending');
+  }
+
   @Post(':id/payments') pay(
     @Param('id') id: string,
     @Body() body: SupplierPaymentDto,

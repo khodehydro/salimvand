@@ -190,6 +190,11 @@ export class ReportsService {
     return Buffer.from(await workbook.xlsx.writeBuffer());
   }
 
+  async supplierChecks(status?: string) {
+    const rows = await this.prisma.supplierCheck.findMany({ where: status && ['pending', 'cleared', 'bounced', 'cancelled'].includes(status) ? { status: status as never } : undefined, orderBy: { dueDate: 'asc' }, include: { payment: { include: { invoice: { select: { number: true, supplierName: true } } } } } });
+    return { ok: true, data: rows.map((row) => ({ id: row.id, checkNumber: row.checkNumber, bank: row.bank, amount: row.amount.toString(), dueDate: row.dueDate, status: row.status, invoice: row.payment.invoice })) };
+  }
+
   async returns(from?: string, to?: string) {
     const start = parseReportDate(from, 'از تاریخ');
     const end = parseReportDate(to, 'تا تاریخ', true);

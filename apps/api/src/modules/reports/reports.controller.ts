@@ -13,6 +13,9 @@ export class ReportsController {
   @Get('sales') sales(@Query('from') from?: string, @Query('to') to?: string) {
     return this.reports.sales(from, to);
   }
+  @Get('supplier-checks') supplierChecks(@Query('status') status?: string) {
+    return this.reports.supplierChecks(status);
+  }
   @Get('returns') returns(@Query('from') from?: string, @Query('to') to?: string) {
     return this.reports.returns(from, to);
   }

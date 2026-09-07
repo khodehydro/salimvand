@@ -91,6 +91,14 @@ export class PurchaseService {
     });
   }
 
+  async updateCheckStatus(checkId: string, status: 'pending' | 'cleared' | 'bounced' | 'cancelled') {
+    if (!['pending', 'cleared', 'bounced', 'cancelled'].includes(status)) throw new BadRequestException('وضعیت چک معتبر نیست');
+    const check = await this.prisma.supplierCheck.findUnique({ where: { id: checkId } });
+    if (!check) throw new NotFoundException('چک تأمین‌کننده پیدا نشد');
+    const now = new Date();
+    return { ok: true, data: await this.prisma.supplierCheck.update({ where: { id: checkId }, data: { status, clearedAt: status === 'cleared' ? now : null, bouncedAt: status === 'bounced' ? now : null } }) };
+  }
+
   async get(id: string) {
     const invoice = await this.prisma.purchaseInvoice.findUnique({
       where: { id },
