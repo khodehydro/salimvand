@@ -35,6 +35,7 @@ const MM_PX = 96 / 25.4;
 const SIZE_MM: Record<LabelSize, { w: number; h: number }> = {
   '50x30': { w: 50, h: 30 },
   '60x40': { w: 60, h: 40 },
+  '40x60': { w: 40, h: 60 },
   '38x22': { w: 38, h: 22 },
 };
 
@@ -55,14 +56,14 @@ export function LabelsPage() {
   const [category, setCategory] = useState('');
   const [cars, setCars] = useState('');
 
-  const [size, setSize] = useState<LabelSize>('50x30');
+  const [size, setSize] = useState<LabelSize>('40x60');
   const [style, setStyle] = useState<LabelStyle>('brand');
   const [barcodeType, setBarcodeType] = useState<BarcodeType>('ean13');
   const [zoom, setZoom] = useState<number>(3);
   const [showSku, setShowSku] = useState(true);
-  const [showMeta, setShowMeta] = useState(true);
+  const [showMeta, setShowMeta] = useState(false);
   const [showFoot, setShowFoot] = useState(true);
-  const [count, setCount] = useState('24');
+  const [count, setCount] = useState('18');
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   // Keeps the hashchange listener fresh without re-subscribing per keystroke.
   const itemsRef = useRef<LabelItem[]>([]);

@@ -16,13 +16,14 @@ import vazirmatnRegular from 'vazirmatn/fonts/webfonts/Vazirmatn-Regular.woff2?u
 export const STORE_NAME = 'فروشگاه سلیم‌وند';
 export const STORE_SITE = 'salimvand.ir';
 
-export type LabelSize = '50x30' | '60x40' | '38x22';
+export type LabelSize = '50x30' | '60x40' | '40x60' | '38x22';
 export type LabelStyle = 'brand' | 'mono' | 'navy';
 export type BarcodeType = 'ean13' | 'code128';
 
 export const labelSizes: Array<{ id: LabelSize; label: string; hint: string }> = [
   { id: '50x30', label: '۵۰×۳۰', hint: 'پیش‌فرض — رول لیبل استاندارد قطعات' },
   { id: '60x40', label: '۶۰×۴۰', hint: 'کارتن و قطعات بزرگ (باتری، رادیاتور)' },
+  { id: '40x60', label: '۴۰×۶۰', hint: 'پیش‌فرض عمودی — مناسب لیبل قطعات' },
   { id: '38x22', label: '۳۸×۲۲', hint: 'قطعات کوچک (شمع، فیلتر، سنسور)' },
 ];
 
@@ -292,7 +293,7 @@ export function renderLabelHTML(o: LabelOptions): string {
     o.type === 'ean13'
       ? ean13Bits(o.code || '')
       : code128Bits((o.code || o.sku || '').toUpperCase());
-  const bh = o.size === '60x40' ? 34 : o.size === '38x22' ? 20 : 26;
+  const bh = o.size === '60x40' || o.size === '40x60' ? 34 : o.size === '38x22' ? 20 : 26;
   const bars = enc
     ? barcodeSVG(enc.bits, bh)
     : '<div style="font-size:2mm;color:#c8383c">شمارهٔ بارکد نامعتبر</div>';
@@ -301,7 +302,7 @@ export function renderLabelHTML(o: LabelOptions): string {
       ? enc.code.slice(0, 1) + ' ' + enc.code.slice(1, 7) + ' ' + enc.code.slice(7)
       : enc.code
     : '';
-  const bcStyle = `height:${o.size === '60x40' ? '8mm' : o.size === '38x22' ? '4.6mm' : '5.4mm'}`;
+  const bcStyle = `height:${o.size === '60x40' || o.size === '40x60' ? '8mm' : o.size === '38x22' ? '4.6mm' : '5.4mm'}`;
 
   const metaRow = o.showMeta
     ? `
