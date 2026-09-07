@@ -190,6 +190,19 @@ export class ReportsService {
     return Buffer.from(await workbook.xlsx.writeBuffer());
   }
 
+  async returns(from?: string, to?: string) {
+    const start = parseReportDate(from, 'از تاریخ');
+    const end = parseReportDate(to, 'تا تاریخ', true);
+    const rows = await this.prisma.returnRecord.findMany({
+      where: { ...(start || end ? { createdAt: { ...(start ? { gte: start } : {}), ...(end ? { lte: end } : {}) } } : {}) },
+      orderBy: { createdAt: 'desc' },
+      include: { invoice: { select: { number: true, customerName: true } }, invoiceItem: { select: { productName: true } } },
+    });
+    const products = new Map<string, { name: string; quantity: number; amount: bigint }>();
+    for (const row of rows) { const current = products.get(row.invoiceItem.productName) ?? { name: row.invoiceItem.productName, quantity: 0, amount: 0n }; current.quantity += row.quantity; current.amount += row.refundAmount; products.set(row.invoiceItem.productName, current); }
+    return { ok: true, data: { rows: rows.map((row) => ({ id: row.id, invoice: row.invoice, product: row.invoiceItem.productName, quantity: row.quantity, refundAmount: row.refundAmount.toString(), reason: row.reason, restock: row.restock, createdAt: row.createdAt })), products: [...products.values()].map((row) => ({ ...row, amount: row.amount.toString() })) } };
+  }
+
   async checks(from?: string, to?: string, status?: string, bank?: string) {
     const start = parseReportDate(from, 'از تاریخ');
     const end = parseReportDate(to, 'تا تاریخ', true);
