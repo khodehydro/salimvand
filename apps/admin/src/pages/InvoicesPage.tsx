@@ -529,6 +529,12 @@ export function InvoicesPage({
     setReturnRestock(true);
   };
 
+  const printReturnReceipt = (invoice: Invoice, item: InvoiceItemRow, quantity: number, reason: string, restock: boolean) => {
+    const win = window.open('', '_blank', 'width=800,height=700'); if (!win) return;
+    const date = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'full', timeStyle: 'short' }).format(new Date());
+    win.document.write(`<!doctype html><html dir="rtl"><head><meta charset="utf-8"><title>رسید مرجوعی ${invoice.number}</title><style>body{font-family:Vazirmatn,Tahoma,sans-serif;color:#17243b;padding:28px;max-width:760px;margin:auto}.head{display:flex;justify-content:space-between;border-bottom:3px solid #173b63;padding-bottom:14px}.brand{font-size:21px;font-weight:800;color:#173b63}h1{font-size:19px;margin:28px 0 8px}.meta{color:#64748b;font-size:11px;margin-bottom:20px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccd5df;padding:10px;text-align:right}th{background:#edf2f7}.note{margin-top:20px;padding:12px;background:#f5f8fb;border-radius:8px;font-size:12px}.sign{display:flex;justify-content:space-between;margin-top:70px;font-size:11px;color:#64748b}@media print{body{padding:0}}</style></head><body><div class="head"><span class="brand">فروشگاه سلیم وند</span><span>رسید مرجوعی کالا</span></div><h1>رسید مرجوعی فاکتور ${invoice.number}</h1><div class="meta">مشتری: ${invoice.customerName ?? 'حضوری'} · تاریخ ثبت: ${date}</div><table><thead><tr><th>محصول</th><th>تعداد</th><th>مبلغ برگشت</th><th>مقصد کالا</th></tr></thead><tbody><tr><td>${item.productName}</td><td>${quantity}</td><td>${money(Number(item.unitPrice) * quantity)}</td><td>${restock ? 'بازگشت به انبار' : 'ضایعات'}</td></tr></tbody></table><div class="note"><b>دلیل مرجوعی:</b> ${reason}</div><div class="sign"><span>امضای مشتری</span><span>امضای فروشگاه</span></div><script>window.onload=()=>setTimeout(()=>window.print(),250)</script></body></html>`); win.document.close();
+  };
+
   const submitReturn = async () => {
     if (!returnLine) return;
     const remaining = lineRemaining(returnLine.item.quantity, returnLine.item.returnedQuantity);
@@ -548,6 +554,7 @@ export function InvoicesPage({
           restock: returnRestock,
         }),
       });
+      printReturnReceipt(returnLine.invoice, returnLine.item, qty, reason, returnRestock);
       setMessage(
         `${qty} عدد «${returnLine.item.productName}» برگشت خورده شد؛ مبلغ فاکتور کم شد${
           returnRestock ? ' و قطعه به دارایی انبار برگشت' : ' (خراب — به انبار برنگشت)'
