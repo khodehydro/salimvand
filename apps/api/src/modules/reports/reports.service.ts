@@ -199,8 +199,9 @@ export class ReportsService {
       include: { invoice: { select: { number: true, customerName: true } }, invoiceItem: { select: { productName: true } } },
     });
     const products = new Map<string, { name: string; quantity: number; amount: bigint }>();
-    for (const row of rows) { const current = products.get(row.invoiceItem.productName) ?? { name: row.invoiceItem.productName, quantity: 0, amount: 0n }; current.quantity += row.quantity; current.amount += row.refundAmount; products.set(row.invoiceItem.productName, current); }
-    return { ok: true, data: { rows: rows.map((row) => ({ id: row.id, invoice: row.invoice, product: row.invoiceItem.productName, quantity: row.quantity, refundAmount: row.refundAmount.toString(), reason: row.reason, restock: row.restock, createdAt: row.createdAt })), products: [...products.values()].map((row) => ({ ...row, amount: row.amount.toString() })) } };
+    const customers = new Map<string, { name: string; count: number; amount: bigint }>();
+    for (const row of rows) { const current = products.get(row.invoiceItem.productName) ?? { name: row.invoiceItem.productName, quantity: 0, amount: 0n }; current.quantity += row.quantity; current.amount += row.refundAmount; products.set(row.invoiceItem.productName, current); const customerKey = row.invoice.customerName ?? 'حضوری'; const customer = customers.get(customerKey) ?? { name: customerKey, count: 0, amount: 0n }; customer.count += row.quantity; customer.amount += row.refundAmount; customers.set(customerKey, customer); }
+    return { ok: true, data: { rows: rows.map((row) => ({ id: row.id, invoice: row.invoice, product: row.invoiceItem.productName, quantity: row.quantity, refundAmount: row.refundAmount.toString(), reason: row.reason, restock: row.restock, createdAt: row.createdAt })), products: [...products.values()].map((row) => ({ ...row, amount: row.amount.toString() })), customers: [...customers.values()].sort((a, b) => b.amount > a.amount ? 1 : -1).map((row) => ({ ...row, amount: row.amount.toString() })) } };
   }
 
   async checks(from?: string, to?: string, status?: string, bank?: string) {
