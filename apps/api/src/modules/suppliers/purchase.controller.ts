@@ -39,6 +39,7 @@ export class PurchaseController {
       body.notes,
       request.user?.id ?? '',
       request.ip,
+      body.check,
     );
   }
 }

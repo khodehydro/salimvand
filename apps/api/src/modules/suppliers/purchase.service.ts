@@ -40,6 +40,7 @@ export class PurchaseService {
     notes: string | undefined,
     actorId: string,
     ip?: string,
+    check?: { checkNumber?: string; bank?: string; branch?: string; amount: string; dueDate: string },
   ) {
     const paymentAmount = parseMoney(amount, 'مبلغ پرداخت');
     if (paymentAmount <= 0n) throw new BadRequestException('مبلغ پرداخت باید مثبت باشد');
@@ -71,6 +72,12 @@ export class PurchaseService {
           receivedById: actorId,
         },
       });
+      if (method === 'credit') {
+        if (!check?.dueDate) throw new BadRequestException('تاریخ سررسید چک تأمین‌کننده الزامی است');
+        const checkAmount = BigInt(check.amount || String(paymentAmount));
+        if (checkAmount !== paymentAmount) throw new BadRequestException('مبلغ چک باید با مبلغ پرداختی برابر باشد');
+        await tx.supplierCheck.create({ data: { paymentId: payment.id, amount: checkAmount, dueDate: new Date(check.dueDate), checkNumber: check.checkNumber, bank: check.bank, branch: check.branch } });
+      }
       await writeAudit(tx, {
         userId: actorId,
         ip,
@@ -87,7 +94,7 @@ export class PurchaseService {
   async get(id: string) {
     const invoice = await this.prisma.purchaseInvoice.findUnique({
       where: { id },
-      include: { supplier: true, items: true, payments: { orderBy: { paidAt: 'desc' } } },
+      include: { supplier: true, items: true, payments: { orderBy: { paidAt: 'desc' }, include: { check: true } } },
     });
     if (!invoice) throw new NotFoundException('فاکتور خرید پیدا نشد');
     return {

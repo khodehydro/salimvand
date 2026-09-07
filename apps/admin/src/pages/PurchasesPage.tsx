@@ -56,6 +56,7 @@ export function PurchasesPage({ canCreate = true }: { canCreate?: boolean }) {
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('transfer');
   const [paymentNotes, setPaymentNotes] = useState('');
+  const [supplierCheck, setSupplierCheck] = useState({ checkNumber: '', bank: '', branch: '', dueDate: '', amount: '' });
   const [supplierId, setSupplierId] = useState('');
   const [itemId, setItemId] = useState('');
   const [quantity, setQuantity] = useState('1');
@@ -188,7 +189,7 @@ export function PurchasesPage({ canCreate = true }: { canCreate?: boolean }) {
     try {
       await api(`/purchases/${payFor.id}/payments`, {
         method: 'POST',
-        body: JSON.stringify({ amount: paymentAmount, method: paymentMethod, notes: paymentNotes }),
+        body: JSON.stringify({ amount: paymentAmount, method: paymentMethod, notes: paymentNotes, ...(paymentMethod === 'credit' ? { check: { ...supplierCheck, amount: supplierCheck.amount || paymentAmount } } : {}) }),
       });
       setMessage('پرداخت تأمین‌کننده ثبت شد.');
       const id = payFor.id;
@@ -409,6 +410,7 @@ export function PurchasesPage({ canCreate = true }: { canCreate?: boolean }) {
               </option>
             ))}
           </select>
+          {paymentMethod === 'credit' && <div className="check-fields"><b>جزئیات چک تأمین‌کننده</b><input placeholder="شماره چک" value={supplierCheck.checkNumber} onChange={(e) => setSupplierCheck({ ...supplierCheck, checkNumber: e.target.value })} /><input placeholder="بانک" value={supplierCheck.bank} onChange={(e) => setSupplierCheck({ ...supplierCheck, bank: e.target.value })} /><input placeholder="شعبه" value={supplierCheck.branch} onChange={(e) => setSupplierCheck({ ...supplierCheck, branch: e.target.value })} /><input type="date" value={supplierCheck.dueDate} onChange={(e) => setSupplierCheck({ ...supplierCheck, dueDate: e.target.value })} /></div>}
           <textarea
             value={paymentNotes}
             onChange={(event) => setPaymentNotes(event.target.value)}
