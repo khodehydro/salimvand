@@ -134,6 +134,7 @@ export function InvoicesPage({
   const [mobile, setMobile] = useState('');
   const [discount, setDiscount] = useState('');
   const [payments, setPayments] = useState<PaymentRow[]>([{ method: 'cash', amount: '' }]);
+  const [checkDraft, setCheckDraft] = useState({ checkNumber: '', bank: '', branch: '', dueDate: '', amount: '' });
   const [paying, setPaying] = useState<Invoice | null>(null);
   const [viewing, setViewing] = useState<Invoice | null>(null);
   // Public-link dialog: shows the short tokenized link for one invoice.
@@ -432,7 +433,7 @@ export function InvoicesPage({
         if (amount <= 0) continue;
         await api(`/invoices/${response.data.id}/pay`, {
           method: 'POST',
-          body: JSON.stringify({ amount: String(amount), method: row.method }),
+          body: JSON.stringify({ amount: String(amount), method: row.method, ...(row.method === 'credit' ? { check: { ...checkDraft, amount: checkDraft.amount || String(amount) } } : {}) }),
         });
       }
       const qr = await api<{ data: { dataUrl: string } }>(
@@ -471,7 +472,7 @@ export function InvoicesPage({
         if (amount <= 0) continue;
         await api(`/invoices/${paying.id}/pay`, {
           method: 'POST',
-          body: JSON.stringify({ amount: String(amount), method: row.method }),
+          body: JSON.stringify({ amount: String(amount), method: row.method, ...(row.method === 'credit' ? { check: { ...checkDraft, amount: checkDraft.amount || String(amount) } } : {}) }),
         });
       }
       setMessage('پرداخت ثبت و در Audit Log نوشته شد.');
@@ -1078,6 +1079,13 @@ export function InvoicesPage({
                       </div>
                     );
                   })}
+                  {payments.some((entry) => entry.method === 'credit') && <div className="check-fields">
+                    <b>جزئیات چک</b>
+                    <input placeholder="شماره چک" value={checkDraft.checkNumber} onChange={(e) => setCheckDraft({ ...checkDraft, checkNumber: e.target.value })} />
+                    <input placeholder="بانک" value={checkDraft.bank} onChange={(e) => setCheckDraft({ ...checkDraft, bank: e.target.value })} />
+                    <input placeholder="شعبه" value={checkDraft.branch} onChange={(e) => setCheckDraft({ ...checkDraft, branch: e.target.value })} />
+                    <input type="date" value={checkDraft.dueDate} onChange={(e) => setCheckDraft({ ...checkDraft, dueDate: e.target.value })} />
+                  </div>}
                   <div className="hr" />
                   <div className="pr">
                     <span className="mut">پرداخت‌شده</span>
@@ -1271,6 +1279,13 @@ export function InvoicesPage({
                     </div>
                   );
                 })}
+                  {payments.some((entry) => entry.method === 'credit') && <div className="check-fields">
+                    <b>جزئیات چک</b>
+                    <input placeholder="شماره چک" value={checkDraft.checkNumber} onChange={(e) => setCheckDraft({ ...checkDraft, checkNumber: e.target.value })} />
+                    <input placeholder="بانک" value={checkDraft.bank} onChange={(e) => setCheckDraft({ ...checkDraft, bank: e.target.value })} />
+                    <input placeholder="شعبه" value={checkDraft.branch} onChange={(e) => setCheckDraft({ ...checkDraft, branch: e.target.value })} />
+                    <input type="date" value={checkDraft.dueDate} onChange={(e) => setCheckDraft({ ...checkDraft, dueDate: e.target.value })} />
+                  </div>}
               </div>
             </div>
             <footer className="pay-modal-f">

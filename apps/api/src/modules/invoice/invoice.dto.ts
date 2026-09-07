@@ -1,6 +1,7 @@
 import { Type } from 'class-transformer';
 import {
   IsBoolean,
+  IsDateString,
   IsEnum,
   IsInt,
   IsMobilePhone,
@@ -43,9 +44,17 @@ export enum InvoicePaymentMethod {
   transfer = 'transfer',
   credit = 'credit',
 }
+export class PaymentCheckDto {
+  @IsOptional() @IsString() @MaxLength(80) checkNumber?: string;
+  @IsOptional() @IsString() @MaxLength(120) bank?: string;
+  @IsOptional() @IsString() @MaxLength(120) branch?: string;
+  @IsNumberString() amount!: string;
+  @IsDateString() dueDate!: string;
+}
 export class PayInvoiceDto {
   @IsNumberString() amount!: string;
   @IsEnum(InvoicePaymentMethod) method!: InvoicePaymentMethod;
+  @IsOptional() @ValidateNested() @Type(() => PaymentCheckDto) check?: PaymentCheckDto;
 }
 
 export class ReturnInvoiceItemDto {

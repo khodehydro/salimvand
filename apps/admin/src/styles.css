@@ -6877,3 +6877,6 @@ button.btn-primary-lg:hover:not(:disabled) {
 .editor-body .tabs { position: sticky; top: 0; z-index: 3; background: var(--sv-surface); padding: 8px 0; }
 .editor-body .tab { min-height: 40px; white-space: nowrap; }
 @media (max-width: 700px) { .product-form { grid-template-columns: 1fr; padding: 16px; } .editor-body .tabs { overflow-x: auto; flex-wrap: nowrap; } }
+.check-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 12px 0; padding: 12px; border: 1px solid var(--sv-border); border-radius: 10px; background: var(--sv-surface-2); }
+.check-fields b { grid-column: 1 / -1; }.check-fields input { min-height: 36px; padding: 7px 9px; border: 1px solid var(--sv-border-2); border-radius: 7px; background: var(--sv-surface); color: var(--sv-text); font: inherit; }
+@media (max-width: 650px) { .check-fields { grid-template-columns: 1fr; } }

@@ -675,6 +675,7 @@ export class InvoiceService {
     amount: string | number,
     method: 'cash' | 'card' | 'transfer' | 'credit',
     userId: string,
+    check?: { checkNumber?: string; bank?: string; branch?: string; amount: string; dueDate: string },
   ) {
     if (!userId || !['cash', 'card', 'transfer', 'credit'].includes(method))
       throw new BadRequestException('کاربر و روش پرداخت معتبر الزامی است');
@@ -711,7 +712,7 @@ export class InvoiceService {
       });
       // Prisma supplies the uuid client-side: no raw SQL, no dependency on
       // gen_random_uuid()/pgcrypto being available on the server database.
-      await tx.payment.create({
+      const payment = await tx.payment.create({
         data: {
           invoiceId: id,
           amount: paidAmount,
@@ -719,6 +720,12 @@ export class InvoiceService {
           receivedById: userId,
         },
       });
+      if (method === 'credit') {
+        if (!check?.dueDate) throw new BadRequestException('تاریخ سررسید چک الزامی است');
+        const checkAmount = BigInt(check.amount || String(paidAmount));
+        if (checkAmount !== paidAmount) throw new BadRequestException('مبلغ چک باید با مبلغ پرداختی برابر باشد');
+        await tx.paymentCheck.create({ data: { paymentId: payment.id, amount: checkAmount, dueDate: new Date(check.dueDate), checkNumber: check.checkNumber, bank: check.bank, branch: check.branch } });
+      }
       await writeAudit(tx, {
         userId,
         action: 'pay',
