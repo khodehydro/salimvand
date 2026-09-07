@@ -40,7 +40,9 @@ type Customer = {
     paymentStatus: string;
     issuedAt: string;
     items?: Array<{ productName: string; quantity: number }>;
+    payments?: Array<{ amount: string | number; method: string; checks?: Array<{ checkNumber?: string | null; bank?: string | null; amount: string | number; dueDate: string }> }>;
   }>;
+  payments?: Array<{ amount: string | number; method: string; paidAt: string; notes?: string | null }>;
 };
 const paymentLabels: Record<string, string> = {
   paid: 'تسویه شده',
@@ -575,6 +577,12 @@ export function CustomersPage({
               ) : (
                 <p className="muted empty-line">فاکتوری ثبت نشده است.</p>
               )}
+
+              <h3 className="list-subhead">چک‌های مشتری</h3>
+              <div className="customer-products customer-check-list">
+                {(selected.invoices ?? []).flatMap((invoice) => (invoice.payments ?? []).flatMap((payment) => (payment.checks ?? []).map((check) => ({ ...check, invoice: invoice.number })))).map((check) => <span key={`${check.invoice}-${check.checkNumber}-${check.dueDate}`}><b>فاکتور {check.invoice}</b> · {check.checkNumber || 'بدون شماره'} · {check.bank || 'بانک نامشخص'} · {formatRial(Number(check.amount))} · سررسید {shamsi(check.dueDate)}</span>)}
+                {!selected.invoices?.some((invoice) => invoice.payments?.some((payment) => payment.checks?.length)) && <p className="muted">چکی برای این مشتری ثبت نشده است.</p>}
+              </div>
 
               <h3 className="list-subhead">تاریخچه پیامک‌ها</h3>
               <div className="customer-products">{selected.smsLogs?.length ? selected.smsLogs.map((sms) => <span key={String(sms.id)}>{shamsi(sms.createdAt)} · {sms.status} · {sms.message}</span>) : <p className="muted">پیامی ثبت نشده است.</p>}</div>

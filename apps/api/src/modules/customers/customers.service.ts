@@ -67,8 +67,9 @@ export class CustomersService {
       include: {
         invoices: {
           orderBy: { issuedAt: 'desc' },
-          include: { items: true, returns: { select: { refundAmount: true } } },
+          include: { items: true, returns: { select: { refundAmount: true } }, payments: { include: { checks: true }, orderBy: { receivedAt: 'desc' } } },
         },
+        payments: { orderBy: { paidAt: 'desc' }, take: 50 },
       },
     });
     if (!customer) throw new NotFoundException('مشتری پیدا نشد');
