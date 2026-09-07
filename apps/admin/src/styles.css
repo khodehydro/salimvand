@@ -6853,3 +6853,9 @@ button.btn-primary-lg:hover:not(:disabled) {
 .asset-preview, .asset-preview-sq { width: 112px; height: 112px; min-height: 112px; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; margin: 10px 0; border-radius: 12px; background: var(--sv-surface-2); border: 1px solid var(--sv-border); }
 .asset-preview img, .asset-preview-sq img { width: 100%; height: 100%; object-fit: contain; padding: 12px; }
 .asset-preview span { font-size: 28px; }
+.catalog-switch { display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; color: var(--sv-text-2); font: inherit; font-size: 11px; cursor: pointer; padding: 2px 0; }
+.catalog-switch span { width: 28px; height: 16px; border-radius: 99px; background: #aeb8c4; position: relative; transition: .18s ease; }
+.catalog-switch span::after { content: ''; position: absolute; top: 3px; right: 3px; width: 10px; height: 10px; border-radius: 50%; background: #fff; transition: .18s ease; }
+.catalog-switch.on { color: var(--sv-ok); font-weight: 700; }
+.catalog-switch.on span { background: var(--sv-ok); }
+.catalog-switch.on span::after { right: 15px; }

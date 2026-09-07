@@ -269,9 +269,20 @@ export function ProductsPage() {
             <div className="product-cell product-status-cell">
               <div className="plc-chips">
                 {product.category?.name && <span className="chip">{product.category.name}</span>}
-                <span className={product.status === 'active' ? 'chip ok' : 'chip warn'}>
-                  {product.status === 'active' ? 'فعال' : 'مخفی'}
-                </span>
+                <button
+                  type="button"
+                  className={`catalog-switch ${product.status === 'active' ? 'on' : ''}`}
+                  role="switch"
+                  aria-checked={product.status === 'active'}
+                  title="نمایش محصول برای کاربران عمومی سایت"
+                  onClick={async () => {
+                    try {
+                      await api(`/products/${product.id}`, { method: 'PATCH', body: JSON.stringify({ status: product.status === 'active' ? 'hidden' : 'active' }) });
+                      setMessage(product.status === 'active' ? 'نمایش محصول در سایت غیرفعال شد.' : 'نمایش محصول در سایت فعال شد.');
+                      await load();
+                    } catch (error) { setMessage((error as Error).message); }
+                  }}
+                ><span /> {product.status === 'active' ? 'نمایش در سایت' : 'مخفی از سایت'}</button>
                 {vehicleOptions.length > 0 && product.compatibilities?.length ? (
                   <span className="chip vehicle-chip">
                     {product.compatibilities.length.toLocaleString('fa-IR')} خودرو
