@@ -6907,3 +6907,23 @@ button.btn-primary-lg:hover:not(:disabled) {
 .reports-page .cards, section:has(.report-check-table) .dashboard-cards { gap: 10px; }.reports-page .page-title { gap: 10px; }.reports-page .page-title > button { white-space: nowrap; }
 .report-filters { gap: 8px !important; }.report-filters button { min-height: 38px; padding: 7px 12px; }
 @media (max-width: 800px) { .check-row { grid-template-columns: 1fr 1fr; }.customer-head, .customer-row { min-width: 920px; }.lbl-stage { transform: scale(.7); margin-bottom: -100px; } }
+/* Reference data: explicit readable controls and compact vehicle hierarchy. */
+.admin .references-page .reference-card input,
+.admin .references-page .reference-card select,
+.admin .references-page .reference-card textarea,
+.admin .references-page .reference-workspace input,
+.admin .references-page .reference-workspace select {
+  appearance: none; -webkit-appearance: none; min-height: 44px; width: 100%; padding: 10px 12px;
+  color: var(--sv-text) !important; -webkit-text-fill-color: var(--sv-text);
+  background: var(--sv-surface) !important; border: 1px solid var(--sv-border-2) !important;
+  border-radius: 9px; font: 13px Vazirmatn, Tahoma, sans-serif; opacity: 1;
+}
+.admin .references-page .reference-card input::placeholder { color: var(--sv-text-2) !important; -webkit-text-fill-color: var(--sv-text-2); opacity: 1; }
+.admin .references-page .reference-card input:focus,
+.admin .references-page .reference-card select:focus { border-color: var(--sv-link) !important; box-shadow: 0 0 0 3px color-mix(in srgb, var(--sv-link) 15%, transparent); outline: none; }
+.admin .references-page .vehicle-workspace .reference-card { padding: 14px; }
+.admin .references-page .vehicle-tree { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 0; }
+.admin .references-page .vehicle-tree > article { padding: 12px; }
+.admin .references-page .vehicle-tree article header { min-height: 34px; }
+.admin .references-page .vehicle-model { padding: 8px 0; margin-top: 7px; }
+.admin .references-page .vehicle-trim { font-size: 11px !important; padding: 4px 7px !important; }
