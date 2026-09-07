@@ -424,14 +424,14 @@ model Payment {
   receivedAt  DateTime      @default(now()) @db.Timestamptz(6)
   invoice     Invoice       @relation(fields: [invoiceId], references: [id])
   receivedBy  User          @relation(fields: [receivedById], references: [id])
-  check       PaymentCheck?
+  checks      PaymentCheck[]
   @@index([invoiceId, receivedAt])
   @@map("payments")
 }
 
 model PaymentCheck {
   id          String   @id @default(uuid()) @db.Uuid
-  paymentId   String   @unique @db.Uuid
+  paymentId   String   @db.Uuid
   checkNumber String?  @db.VarChar(80)
   bank        String?  @db.VarChar(120)
   branch      String?  @db.VarChar(120)

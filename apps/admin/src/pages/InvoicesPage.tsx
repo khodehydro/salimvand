@@ -134,7 +134,7 @@ export function InvoicesPage({
   const [mobile, setMobile] = useState('');
   const [discount, setDiscount] = useState('');
   const [payments, setPayments] = useState<PaymentRow[]>([{ method: 'cash', amount: '' }]);
-  const [checkDraft, setCheckDraft] = useState({ checkNumber: '', bank: '', branch: '', dueDate: '', amount: '' });
+  const [checksDraft, setChecksDraft] = useState([{ checkNumber: '', bank: '', branch: '', dueDate: '', amount: '' }]);
   const [paying, setPaying] = useState<Invoice | null>(null);
   const [viewing, setViewing] = useState<Invoice | null>(null);
   // Public-link dialog: shows the short tokenized link for one invoice.
@@ -433,7 +433,7 @@ export function InvoicesPage({
         if (amount <= 0) continue;
         await api(`/invoices/${response.data.id}/pay`, {
           method: 'POST',
-          body: JSON.stringify({ amount: String(amount), method: row.method, ...(row.method === 'credit' ? { check: { ...checkDraft, amount: checkDraft.amount || String(amount) } } : {}) }),
+          body: JSON.stringify({ amount: String(amount), method: row.method, ...(row.method === 'credit' ? { checks: checksDraft.map((check) => ({ ...check, amount: check.amount || String(amount) })) } : {}) }),
         });
       }
       const qr = await api<{ data: { dataUrl: string } }>(
@@ -472,7 +472,7 @@ export function InvoicesPage({
         if (amount <= 0) continue;
         await api(`/invoices/${paying.id}/pay`, {
           method: 'POST',
-          body: JSON.stringify({ amount: String(amount), method: row.method, ...(row.method === 'credit' ? { check: { ...checkDraft, amount: checkDraft.amount || String(amount) } } : {}) }),
+          body: JSON.stringify({ amount: String(amount), method: row.method, ...(row.method === 'credit' ? { checks: checksDraft.map((check) => ({ ...check, amount: check.amount || String(amount) })) } : {}) }),
         });
       }
       setMessage('پرداخت ثبت و در Audit Log نوشته شد.');
@@ -1080,11 +1080,16 @@ export function InvoicesPage({
                     );
                   })}
                   {payments.some((entry) => entry.method === 'credit') && <div className="check-fields">
-                    <b>جزئیات چک</b>
-                    <input placeholder="شماره چک" value={checkDraft.checkNumber} onChange={(e) => setCheckDraft({ ...checkDraft, checkNumber: e.target.value })} />
-                    <input placeholder="بانک" value={checkDraft.bank} onChange={(e) => setCheckDraft({ ...checkDraft, bank: e.target.value })} />
-                    <input placeholder="شعبه" value={checkDraft.branch} onChange={(e) => setCheckDraft({ ...checkDraft, branch: e.target.value })} />
-                    <input type="date" value={checkDraft.dueDate} onChange={(e) => setCheckDraft({ ...checkDraft, dueDate: e.target.value })} />
+                    <b>جزئیات چک‌ها</b>
+                    {checksDraft.map((check, index) => <div className="check-row" key={index}>
+                      <strong>چک {index + 1}</strong>
+                      <input placeholder="شماره چک" value={check.checkNumber} onChange={(e) => setChecksDraft((all) => all.map((item, i) => i === index ? { ...item, checkNumber: e.target.value } : item))} />
+                      <input placeholder="بانک" value={check.bank} onChange={(e) => setChecksDraft((all) => all.map((item, i) => i === index ? { ...item, bank: e.target.value } : item))} />
+                      <input placeholder="شعبه" value={check.branch} onChange={(e) => setChecksDraft((all) => all.map((item, i) => i === index ? { ...item, branch: e.target.value } : item))} />
+                      <input type="date" value={check.dueDate} onChange={(e) => setChecksDraft((all) => all.map((item, i) => i === index ? { ...item, dueDate: e.target.value } : item))} />
+                      <FaNumberInput className="money-in" placeholder="مبلغ چک" value={check.amount} onChange={(plain) => setChecksDraft((all) => all.map((item, i) => i === index ? { ...item, amount: plain } : item))} />
+                    </div>)}
+                    <button type="button" className="outline" onClick={() => setChecksDraft((all) => [...all, { checkNumber: '', bank: '', branch: '', dueDate: '', amount: '' }])}>+ افزودن چک</button>
                   </div>}
                   <div className="hr" />
                   <div className="pr">
@@ -1280,11 +1285,11 @@ export function InvoicesPage({
                   );
                 })}
                   {payments.some((entry) => entry.method === 'credit') && <div className="check-fields">
-                    <b>جزئیات چک</b>
-                    <input placeholder="شماره چک" value={checkDraft.checkNumber} onChange={(e) => setCheckDraft({ ...checkDraft, checkNumber: e.target.value })} />
-                    <input placeholder="بانک" value={checkDraft.bank} onChange={(e) => setCheckDraft({ ...checkDraft, bank: e.target.value })} />
-                    <input placeholder="شعبه" value={checkDraft.branch} onChange={(e) => setCheckDraft({ ...checkDraft, branch: e.target.value })} />
-                    <input type="date" value={checkDraft.dueDate} onChange={(e) => setCheckDraft({ ...checkDraft, dueDate: e.target.value })} />
+                    <b>جزئیات چک‌ها</b>
+                    {checksDraft.map((check, index) => <div className="check-row" key={index}>
+                      <strong>چک {index + 1}</strong><input placeholder="شماره چک" value={check.checkNumber} onChange={(e) => setChecksDraft((all) => all.map((item, i) => i === index ? { ...item, checkNumber: e.target.value } : item))} /><input placeholder="بانک" value={check.bank} onChange={(e) => setChecksDraft((all) => all.map((item, i) => i === index ? { ...item, bank: e.target.value } : item))} /><input placeholder="شعبه" value={check.branch} onChange={(e) => setChecksDraft((all) => all.map((item, i) => i === index ? { ...item, branch: e.target.value } : item))} /><input type="date" value={check.dueDate} onChange={(e) => setChecksDraft((all) => all.map((item, i) => i === index ? { ...item, dueDate: e.target.value } : item))} /><FaNumberInput className="money-in" placeholder="مبلغ چک" value={check.amount} onChange={(plain) => setChecksDraft((all) => all.map((item, i) => i === index ? { ...item, amount: plain } : item))} />
+                    </div>)}
+                    <button type="button" className="outline" onClick={() => setChecksDraft((all) => [...all, { checkNumber: '', bank: '', branch: '', dueDate: '', amount: '' }])}>+ افزودن چک</button>
                   </div>}
               </div>
             </div>

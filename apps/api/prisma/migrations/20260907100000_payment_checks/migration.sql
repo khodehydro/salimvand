@@ -7,7 +7,6 @@ CREATE TABLE "payment_checks" (
   "amount" BIGINT NOT NULL,
   "dueDate" DATE NOT NULL,
   CONSTRAINT "payment_checks_pkey" PRIMARY KEY ("id"),
-  CONSTRAINT "payment_checks_paymentId_key" UNIQUE ("paymentId"),
   CONSTRAINT "payment_checks_paymentId_fkey" FOREIGN KEY ("paymentId") REFERENCES "payments"("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 CREATE INDEX "payment_checks_dueDate_idx" ON "payment_checks"("dueDate");

@@ -675,7 +675,7 @@ export class InvoiceService {
     amount: string | number,
     method: 'cash' | 'card' | 'transfer' | 'credit',
     userId: string,
-    check?: { checkNumber?: string; bank?: string; branch?: string; amount: string; dueDate: string },
+    checks?: Array<{ checkNumber?: string; bank?: string; branch?: string; amount: string; dueDate: string }>,
   ) {
     if (!userId || !['cash', 'card', 'transfer', 'credit'].includes(method))
       throw new BadRequestException('کاربر و روش پرداخت معتبر الزامی است');
@@ -721,10 +721,12 @@ export class InvoiceService {
         },
       });
       if (method === 'credit') {
-        if (!check?.dueDate) throw new BadRequestException('تاریخ سررسید چک الزامی است');
-        const checkAmount = BigInt(check.amount || String(paidAmount));
-        if (checkAmount !== paidAmount) throw new BadRequestException('مبلغ چک باید با مبلغ پرداختی برابر باشد');
-        await tx.paymentCheck.create({ data: { paymentId: payment.id, amount: checkAmount, dueDate: new Date(check.dueDate), checkNumber: check.checkNumber, bank: check.bank, branch: check.branch } });
+        if (!checks?.length) throw new BadRequestException('حداقل یک چک برای پرداخت چکی وارد کنید');
+        const checkRows = checks.map((check) => ({ ...check, amount: BigInt(check.amount || '0') }));
+        if (checkRows.some((check) => !check.dueDate || check.amount <= 0n)) throw new BadRequestException('تاریخ و مبلغ همهٔ چک‌ها الزامی است');
+        const checksTotal = checkRows.reduce((sum, check) => sum + check.amount, 0n);
+        if (checksTotal !== paidAmount) throw new BadRequestException('جمع مبالغ چک‌ها باید با مبلغ پرداختی برابر باشد');
+        await tx.paymentCheck.createMany({ data: checkRows.map((check) => ({ paymentId: payment.id, amount: check.amount, dueDate: new Date(check.dueDate), checkNumber: check.checkNumber, bank: check.bank, branch: check.branch })) });
       }
       await writeAudit(tx, {
         userId,

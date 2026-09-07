@@ -54,7 +54,7 @@ export class PaymentCheckDto {
 export class PayInvoiceDto {
   @IsNumberString() amount!: string;
   @IsEnum(InvoicePaymentMethod) method!: InvoicePaymentMethod;
-  @IsOptional() @ValidateNested() @Type(() => PaymentCheckDto) check?: PaymentCheckDto;
+  @IsOptional() @ValidateNested({ each: true }) @Type(() => PaymentCheckDto) checks?: PaymentCheckDto[];
 }
 
 export class ReturnInvoiceItemDto {

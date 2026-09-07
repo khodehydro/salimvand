@@ -104,7 +104,7 @@ export class InvoiceController {
   @Roles('seller', 'accountant')
   @Post(':id/pay')
   pay(@Param('id') id: string, @Body() body: PayInvoiceDto, @Req() request: AuthenticatedRequest) {
-    return this.invoices.pay(id, body.amount ?? 0, body.method ?? 'cash', request.user?.id ?? '', body.check);
+    return this.invoices.pay(id, body.amount ?? 0, body.method ?? 'cash', request.user?.id ?? '', body.checks);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

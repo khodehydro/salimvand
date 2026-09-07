@@ -6880,3 +6880,5 @@ button.btn-primary-lg:hover:not(:disabled) {
 .check-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 12px 0; padding: 12px; border: 1px solid var(--sv-border); border-radius: 10px; background: var(--sv-surface-2); }
 .check-fields b { grid-column: 1 / -1; }.check-fields input { min-height: 36px; padding: 7px 9px; border: 1px solid var(--sv-border-2); border-radius: 7px; background: var(--sv-surface); color: var(--sv-text); font: inherit; }
 @media (max-width: 650px) { .check-fields { grid-template-columns: 1fr; } }
+.check-fields { grid-template-columns: 1fr; }.check-row { display: grid; grid-template-columns: 60px repeat(5, minmax(0, 1fr)); gap: 7px; align-items: center; padding: 8px 0; border-top: 1px solid var(--sv-border); }.check-row input { min-height: 34px; padding: 6px; border: 1px solid var(--sv-border-2); border-radius: 7px; background: var(--sv-surface); color: var(--sv-text); font: inherit; }.check-row .money-in { min-width: 0; }
+@media (max-width: 800px) { .check-row { grid-template-columns: 1fr 1fr; } .check-row strong { grid-column: 1 / -1; } }
