@@ -97,6 +97,12 @@ export function ReportsPage() {
   useEffect(() => {
     void load();
   }, [load]);
+  const printReturns = () => {
+    const win = window.open('', '_blank', 'width=1000,height=800'); if (!win) return;
+    const date = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'full' }).format(new Date());
+    const rows = (returns?.rows ?? []).map((row) => `<tr><td>${row.invoice.number}</td><td>${row.invoice.customerName ?? 'حضوری'}</td><td>${row.product}</td><td>${row.quantity}</td><td>${money(row.refundAmount)}</td><td>${row.restock ? 'بازگشت به انبار' : 'ضایعات'}</td><td>${row.reason}</td></tr>`).join('');
+    win.document.write(`<html dir="rtl"><head><meta charset="utf-8"><title>گزارش مرجوعی کالا</title><style>body{font-family:Vazirmatn,Tahoma,sans-serif;padding:24px;color:#17243b}h1{font-size:20px}p{color:#64748b;font-size:11px}table{width:100%;border-collapse:collapse;font-size:11px}th,td{border:1px solid #ccd5df;padding:8px;text-align:right}th{background:#edf2f7}</style></head><body><h1>گزارش مرجوعی کالا</h1><p>تاریخ خروجی: ${date}</p><table><thead><tr><th>فاکتور</th><th>مشتری</th><th>محصول</th><th>تعداد</th><th>مبلغ برگشت</th><th>مقصد</th><th>دلیل</th></tr></thead><tbody>${rows}</tbody></table><script>window.onload=()=>window.print()</script></body></html>`); win.document.close();
+  };
   const exportSales = () =>
     void downloadFile(`/reports/sales/export${query}`, 'salimvand-sales.csv').catch((e: Error) =>
       setError(e.message),
@@ -111,6 +117,9 @@ export function ReportsPage() {
         </div>
         <button className="button-primary" onClick={exportSales}>
           خروجی CSV فروش
+        </button>
+        <button className="outline" onClick={printReturns}>
+          چاپ گزارش مرجوعی
         </button>
         <button
           className="button-primary"
