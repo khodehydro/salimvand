@@ -40,7 +40,7 @@ type Customer = {
     paymentStatus: string;
     issuedAt: string;
     items?: Array<{ productName: string; quantity: number }>;
-    payments?: Array<{ amount: string | number; method: string; checks?: Array<{ checkNumber?: string | null; bank?: string | null; amount: string | number; dueDate: string; status?: string }> }>;
+    payments?: Array<{ amount: string | number; method: string; checks?: Array<{ id: string; checkNumber?: string | null; bank?: string | null; amount: string | number; dueDate: string; status?: string }> }>;
   }>;
   payments?: Array<{ amount: string | number; method: string; paidAt: string; notes?: string | null }>;
 };
