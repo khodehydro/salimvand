@@ -6882,3 +6882,8 @@ button.btn-primary-lg:hover:not(:disabled) {
 @media (max-width: 650px) { .check-fields { grid-template-columns: 1fr; } }
 .check-fields { grid-template-columns: 1fr; }.check-row { display: grid; grid-template-columns: 60px repeat(5, minmax(0, 1fr)); gap: 7px; align-items: center; padding: 8px 0; border-top: 1px solid var(--sv-border); }.check-row input { min-height: 34px; padding: 6px; border: 1px solid var(--sv-border-2); border-radius: 7px; background: var(--sv-surface); color: var(--sv-text); font: inherit; }.check-row .money-in { min-width: 0; }
 @media (max-width: 800px) { .check-row { grid-template-columns: 1fr 1fr; } .check-row strong { grid-column: 1 / -1; } }
+.ops-today-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 14px 0; }
+.ops-today-card { min-height: 116px; padding: 16px; border: 1px solid var(--sv-border); border-radius: 14px; background: var(--sv-surface); box-shadow: 0 5px 18px rgba(25,45,70,.05); display: flex; flex-direction: column; gap: 5px; border-top: 3px solid var(--sv-link); }
+.ops-today-card.success { border-top-color: var(--sv-ok); }.ops-today-card.warn { border-top-color: #d89b21; }.ops-today-card.danger { border-top-color: var(--sv-danger); }
+.ops-today-card small { color: var(--sv-text-2); font-size: 11px; }.ops-today-card strong { color: var(--sv-text); font-size: 19px; line-height: 1.5; }.ops-today-card span { color: var(--sv-text-3); font-size: 10px; }
+@media (max-width: 900px) { .ops-today-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } } @media (max-width: 520px) { .ops-today-grid { grid-template-columns: 1fr; } }

@@ -257,6 +257,13 @@ export class DashboardService {
       this.prisma.purchaseInvoice.count({ where: { status: 'issued' } }),
     ]);
     const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
+    const startOfTomorrow = new Date(startOfToday); startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
+    const [todayInvoices, todayPayments] = await Promise.all([
+      this.prisma.invoice.findMany({ where: { status: 'issued', issuedAt: { gte: startOfToday, lt: startOfTomorrow } }, select: { total: true } }),
+      this.prisma.payment.findMany({ where: { receivedAt: { gte: startOfToday, lt: startOfTomorrow } }, select: { amount: true } }),
+    ]);
+    const todaySales = todayInvoices.reduce((sum, row) => sum + row.total, 0n);
+    const todayReceived = todayPayments.reduce((sum, row) => sum + row.amount, 0n);
     const dayAfterTomorrow = new Date(startOfToday); dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 3);
     const dueChecks = await this.prisma.paymentCheck.findMany({
       where: { dueDate: { gte: new Date(new Date(startOfToday).setDate(startOfToday.getDate() + 1)), lt: dayAfterTomorrow } },
@@ -284,6 +291,9 @@ export class DashboardService {
         inventoryWithoutLocation,
         productsWithoutSalePrice,
         pendingPurchases,
+        todaySales: todaySales.toString(),
+        todayReceived: todayReceived.toString(),
+        todayInvoiceCount: todayInvoices.length,
         dueChecks: dueChecks.map((check) => ({ id: check.id, checkNumber: check.checkNumber, bank: check.bank, amount: check.amount.toString(), dueDate: check.dueDate, invoice: check.payment.invoice })),
       },
     };

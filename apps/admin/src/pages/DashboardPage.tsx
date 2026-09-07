@@ -48,6 +48,9 @@ type Summary = {
   inventoryWithoutLocation?: number;
   productsWithoutSalePrice?: number;
   pendingPurchases?: number;
+  todaySales?: string;
+  todayReceived?: string;
+  todayInvoiceCount?: number;
   dueChecks?: Array<{ id: string; checkNumber?: string | null; bank?: string | null; amount: string; dueDate: string; invoice: { id: string; number: string; customerName?: string | null } }>;
   recentTransactions: Array<{
     id: string;
@@ -278,6 +281,13 @@ export function DashboardPage({
       </div>
       {error && <div className="notice">{error}</div>}
       {loading && !summary && <div className="notice">در حال دریافت اطلاعات داشبورد...</div>}
+
+      <section className="ops-today-grid" aria-label="خلاصهٔ عملیاتی امروز">
+        <article className="ops-today-card primary"><small>فروش امروز</small><strong>{money(summary?.todaySales ?? 0)}</strong><span>{faNum(summary?.todayInvoiceCount ?? 0)} فاکتور صادرشده</span></article>
+        <article className="ops-today-card success"><small>دریافت‌شده امروز</small><strong>{money(summary?.todayReceived ?? 0)}</strong><span>پرداخت‌های ثبت‌شده امروز</span></article>
+        <article className="ops-today-card warn"><small>فاکتورهای باز</small><strong>{faNum(summary?.unpaidInvoices ?? 0)}</strong><span>نیازمند پیگیری پرداخت</span></article>
+        <article className="ops-today-card danger"><small>چک‌های امروز</small><strong>{faNum(summary?.dueChecks?.filter((check) => new Date(check.dueDate).toDateString() === new Date().toDateString()).length ?? 0)}</strong><span>سررسید امروز</span></article>
+      </section>
 
       <section className="daily-work" aria-labelledby="daily-work-title">
         <div className="daily-work-heading">
