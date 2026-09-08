@@ -177,6 +177,14 @@ if [[ -n "$NGINX_CONF" ]] && command -v nginx >/dev/null 2>&1; then
   systemctl reload nginx
 fi
 install -m 0644 deploy/systemd/salimvand-api.service /etc/systemd/system/salimvand-api.service
+# Enforce the private API bind even when an older /opt/salimvand/.env contains
+# API_HOST=0.0.0.0. Nginx is the only public entry point in production.
+install -d /etc/systemd/system/salimvand-api.service.d
+cat > /etc/systemd/system/salimvand-api.service.d/10-production-bind.conf <<'API_BIND'
+[Service]
+Environment=API_HOST=127.0.0.1
+Environment=API_PORT=4000
+API_BIND
 install -m 0644 deploy/systemd/salimvand-website.service /etc/systemd/system/salimvand-website.service
 install -m 0644 deploy/systemd/salimvand-worker.service /etc/systemd/system/salimvand-worker.service
 systemctl daemon-reload
