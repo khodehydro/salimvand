@@ -125,6 +125,9 @@ export function ReportsPage() {
         <button className="outline" onClick={printReturns}>
           چاپ گزارش مرجوعی
         </button>
+        <button className="outline" onClick={() => void downloadFile('/reports/returns/export', 'salimvand-returns.csv').catch((e: Error) => setError(e.message))}>خروجی مرجوعی</button>
+        <button className="outline" onClick={() => void downloadFile('/reports/checks/export', 'salimvand-checks.csv').catch((e: Error) => setError(e.message))}>خروجی چک‌ها</button>
+        <button className="outline" onClick={() => void downloadFile('/reports/supplier-checks/export', 'salimvand-supplier-checks.csv').catch((e: Error) => setError(e.message))}>خروجی چک تأمین</button>
         <button
           className="button-primary"
           onClick={() =>
