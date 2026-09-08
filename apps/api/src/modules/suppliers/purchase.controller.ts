@@ -27,8 +27,8 @@ export class PurchaseController {
       request.ip,
     );
   }
-  @Patch('checks/:checkId/status') updateCheckStatus(@Param('checkId') checkId: string, @Body() body: { status?: 'pending' | 'cleared' | 'bounced' | 'cancelled' }) {
-    return this.purchases.updateCheckStatus(checkId, body.status ?? 'pending');
+  @Patch('checks/:checkId/status') updateCheckStatus(@Param('checkId') checkId: string, @Body() body: { status?: 'pending' | 'cleared' | 'bounced' | 'cancelled' }, @Req() request: AuthRequest) {
+    return this.purchases.updateCheckStatus(checkId, body.status ?? 'pending', request.user?.id, request.ip);
   }
 
   @Post(':id/payments') pay(

@@ -104,8 +104,8 @@ export class InvoiceController {
   @Roles('seller', 'accountant')
   @Patch('checks/:checkId/status')
   @Roles('seller', 'accountant')
-  updateCheckStatus(@Param('checkId') checkId: string, @Body() body: { status?: 'pending' | 'cleared' | 'bounced' | 'cancelled'; notes?: string }) {
-    return this.invoices.updateCheckStatus(checkId, body.status ?? 'pending', body.notes);
+  updateCheckStatus(@Param('checkId') checkId: string, @Body() body: { status?: 'pending' | 'cleared' | 'bounced' | 'cancelled'; notes?: string }, @Req() request: AuthenticatedRequest) {
+    return this.invoices.updateCheckStatus(checkId, body.status ?? 'pending', body.notes, request.user?.id);
   }
 
   @Post(':id/pay')

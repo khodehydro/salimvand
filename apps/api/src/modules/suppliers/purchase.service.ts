@@ -91,12 +91,14 @@ export class PurchaseService {
     });
   }
 
-  async updateCheckStatus(checkId: string, status: 'pending' | 'cleared' | 'bounced' | 'cancelled') {
+  async updateCheckStatus(checkId: string, status: 'pending' | 'cleared' | 'bounced' | 'cancelled', actorId?: string, ip?: string) {
     if (!['pending', 'cleared', 'bounced', 'cancelled'].includes(status)) throw new BadRequestException('وضعیت چک معتبر نیست');
     const check = await this.prisma.supplierCheck.findUnique({ where: { id: checkId } });
     if (!check) throw new NotFoundException('چک تأمین‌کننده پیدا نشد');
     const now = new Date();
-    return { ok: true, data: await this.prisma.supplierCheck.update({ where: { id: checkId }, data: { status, clearedAt: status === 'cleared' ? now : null, bouncedAt: status === 'bounced' ? now : null } }) };
+    const updated = await this.prisma.supplierCheck.update({ where: { id: checkId }, data: { status, clearedAt: status === 'cleared' ? now : null, bouncedAt: status === 'bounced' ? now : null } });
+    if (actorId) await writeAudit(this.prisma, { userId: actorId, ip, action: 'update', entityType: 'supplier_check', entityId: checkId, before: { status: check.status }, after: { status: updated.status, clearedAt: updated.clearedAt, bouncedAt: updated.bouncedAt } });
+    return { ok: true, data: updated };
   }
 
   async get(id: string) {
