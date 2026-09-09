@@ -11,35 +11,27 @@ STATUS_FILE="${BACKUP_STATUS_FILE:-/var/lib/salimvand/backup-status.json}"
 install -d -m 0700 "$(dirname "$STATUS_FILE")"
 stamp="$(date -u +%Y%m%dT%H%M%SZ)"
 created_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-backup_status="failed"
-backup_file=""
-encrypted=false
-write_status() {
-  local exit_code=$?
-  printf '{"status":"%s","createdAt":"%s","file":"%s","encrypted":%s,"exitCode":%s}\n' "$backup_status" "$created_at" "$(basename "$backup_file")" "$encrypted" "$exit_code" > "$STATUS_FILE"
-  chmod 0600 "$STATUS_FILE"
-  exit "$exit_code"
-}
+backup_status=failed; backup_file=""; encrypted=false; work="$(mktemp -d -p "${TMPDIR:-/tmp}" salimvand-backup.XXXXXX)"
+cleanup() { rm -rf "$work"; }
+trap cleanup EXIT
+write_status() { local exit_code=$?; printf '{"status":"%s","createdAt":"%s","file":"%s","encrypted":%s,"exitCode":%s}\n' "$backup_status" "$created_at" "$(basename "$backup_file")" "$encrypted" "$exit_code" > "$STATUS_FILE"; chmod 0600 "$STATUS_FILE"; exit "$exit_code"; }
 trap write_status EXIT
-archive="$BACKUP_DIR/postgres-$stamp.sql.gz"
-pg_dump "$DATABASE_URL" --format=plain --no-owner --no-privileges | gzip -9 > "$archive"
-chmod 0600 "$archive"
-backup_file="$archive"
-encrypted=false
+mkdir -p "$work/database" "$work/media" "$work/metadata"
+pg_dump "$DATABASE_URL" --format=plain --no-owner --no-privileges | gzip -9 > "$work/database/postgres.sql.gz"
+if [[ -d "$ROOT_DIR/uploads" ]]; then cp -a "$ROOT_DIR/uploads/." "$work/media/"; fi
+# Only non-secret release metadata is included; credentials, tokens and keys never enter the archive.
+printf '{"version":2,"createdAt":"%s","commit":"%s","database":"postgres","mediaIncluded":true}\n' "$created_at" "$(git -C "$ROOT_DIR" rev-parse HEAD 2>/dev/null || true)" > "$work/metadata/manifest.json"
+archive="$BACKUP_DIR/salimvand-full-$stamp.tar.gz"
+tar -czf "$archive" -C "$work" database media metadata
+chmod 0600 "$archive"; backup_file="$archive"
 if [[ -n "${BACKUP_ENCRYPTION_KEY:-}" ]]; then
   command -v gpg >/dev/null || { echo 'gpg is required when BACKUP_ENCRYPTION_KEY is set.' >&2; exit 1; }
-  gpg --batch --yes --symmetric --cipher-algo AES256 --passphrase "$BACKUP_ENCRYPTION_KEY" --output "$archive.gpg" "$archive"
-  shred -u "$archive"
-  backup_file="$archive.gpg"
-  encrypted=true
+  gpg --batch --yes --symmetric --cipher-algo AES256 --passphrase "$BACKUP_ENCRYPTION_KEY" --output "$archive.gpg" "$archive"; shred -u "$archive"; backup_file="$archive.gpg"; encrypted=true
 fi
-chmod 0600 "$backup_file"
 checksum="$(sha256sum "$backup_file" | awk '{print $1}')"
-manifest="$backup_file.manifest"
-printf 'version=1\ncreated_at=%s\nfile=%s\nsha256=%s\nencrypted=%s\n' "$created_at" "$(basename "$backup_file")" "$checksum" "$encrypted" > "$manifest"
-chmod 0600 "$manifest"
-backup_status="success"
+printf 'version=2\ncreated_at=%s\nfile=%s\nsha256=%s\nencrypted=%s\nformat=full-archive\n' "$created_at" "$(basename "$backup_file")" "$checksum" "$encrypted" > "$backup_file.manifest"
+chmod 0600 "$backup_file" "$backup_file.manifest"; backup_status=success
 find "$BACKUP_DIR" -type f -mtime +14 -delete
-echo "Backup created in $BACKUP_DIR"
-echo "Manifest: $manifest"
+echo "Full backup created: $backup_file"
+echo "Manifest: $backup_file.manifest"
 echo "SHA-256: $checksum"
