@@ -34,9 +34,9 @@ export class SettingsController {
   }
   @Post('backup/restore')
   @UseInterceptors(FileInterceptor('file'))
-  restoreBackup(@UploadedFile() file: { buffer: Buffer; originalname: string }) {
+  restoreBackup(@UploadedFile() file: { buffer: Buffer; originalname: string }, @Req() request: AuthRequest) {
     if (!file?.buffer) throw new BadRequestException('فایل Backup انتخاب نشده است');
-    return this.settings.restoreBackup(file);
+    return this.settings.restoreBackup(file, request.user?.id);
   }
   @Get('backup/download')
   async downloadBackup() {

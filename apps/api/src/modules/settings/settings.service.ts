@@ -220,7 +220,7 @@ export class SettingsService {
     return { ok: true, data: { id: result.id, name: result.name, webViewLink: result.webViewLink ?? `https://drive.google.com/open?id=${result.id}` } };
   }
 
-  async restoreBackup(file: { buffer: Buffer; originalname: string }) {
+  async restoreBackup(file: { buffer: Buffer; originalname: string }, requestedBy?: string) {
     if (process.env.BACKUP_RESTORE_ENABLED !== 'true') throw new BadRequestException('Restore از پنل روی این سرور فعال نشده است');
     const targetDatabase = process.env.BACKUP_RESTORE_TARGET_DATABASE_URL;
     if (!targetDatabase) throw new BadRequestException('دیتابیس مقصد Restore تنظیم نشده است');
@@ -236,6 +236,12 @@ export class SettingsService {
         child.stderr.on('data', (chunk: Buffer) => { stderr = `${stderr}${chunk.toString()}`.slice(-500); });
         child.once('error', reject); child.once('close', (code) => code === 0 ? resolve('completed') : reject(new Error(stderr || `Restore با کد ${code} متوقف شد`)));
       });
+      // A restored database may contain old sessions; revoke them all before reopening access.
+      await this.prisma.refreshToken.updateMany({ where: { revokedAt: null }, data: { revokedAt: new Date() } });
+      if (requestedBy) {
+        const restoredUser = await this.prisma.user.findUnique({ where: { id: requestedBy }, select: { id: true } }).catch(() => null);
+        if (restoredUser) await this.prisma.auditLog.create({ data: { userId: requestedBy, action: 'restore', entityType: 'backup', after: { filename: file.originalname, status: 'completed' } } });
+      }
       return { ok: true, data: { status: output } };
     } catch (error) { throw new BadRequestException(error instanceof Error ? error.message : 'Restore ناموفق بود'); }
     finally { await rm(dir, { recursive: true, force: true }); }
