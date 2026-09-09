@@ -32,6 +32,12 @@ export class SettingsController {
   uploadBackupToDrive() {
     return this.settings.uploadBackupToDrive();
   }
+  @Post('backup/restore')
+  @UseInterceptors(FileInterceptor('file'))
+  restoreBackup(@UploadedFile() file: { buffer: Buffer; originalname: string }) {
+    if (!file?.buffer) throw new BadRequestException('فایل Backup انتخاب نشده است');
+    return this.settings.restoreBackup(file);
+  }
   @Get('backup/download')
   async downloadBackup() {
     const file = await this.settings.openBackupDownload();

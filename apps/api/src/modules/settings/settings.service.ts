@@ -220,6 +220,27 @@ export class SettingsService {
     return { ok: true, data: { id: result.id, name: result.name, webViewLink: result.webViewLink ?? `https://drive.google.com/open?id=${result.id}` } };
   }
 
+  async restoreBackup(file: { buffer: Buffer; originalname: string }) {
+    if (process.env.BACKUP_RESTORE_ENABLED !== 'true') throw new BadRequestException('Restore از پنل روی این سرور فعال نشده است');
+    const targetDatabase = process.env.BACKUP_RESTORE_TARGET_DATABASE_URL;
+    if (!targetDatabase) throw new BadRequestException('دیتابیس مقصد Restore تنظیم نشده است');
+    const dir = await mkdtemp(join(tmpdir(), 'salimvand-restore-job-'));
+    const input = join(dir, file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_'));
+    try {
+      await writeFile(input, file.buffer, { mode: 0o600 });
+      const script = process.env.RESTORE_SCRIPT ?? join(process.env.APP_DIR ?? process.cwd(), 'scripts', 'restore.sh');
+      const output = await new Promise<string>((resolve, reject) => {
+        let stderr = '';
+        const child = spawn(script, [input], { cwd: process.env.APP_DIR ?? process.cwd(), env: { ...process.env, CONFIRM_RESTORE: 'RESTORE_TO_TARGET', TARGET_DATABASE_URL: targetDatabase, RESTORE_MEDIA: 'true' }, stdio: ['ignore', 'pipe', 'pipe'] });
+        child.stdout.on('data', (chunk: Buffer) => { /* do not expose database output */ void chunk; });
+        child.stderr.on('data', (chunk: Buffer) => { stderr = `${stderr}${chunk.toString()}`.slice(-500); });
+        child.once('error', reject); child.once('close', (code) => code === 0 ? resolve('completed') : reject(new Error(stderr || `Restore با کد ${code} متوقف شد`)));
+      });
+      return { ok: true, data: { status: output } };
+    } catch (error) { throw new BadRequestException(error instanceof Error ? error.message : 'Restore ناموفق بود'); }
+    finally { await rm(dir, { recursive: true, force: true }); }
+  }
+
   async openBackupDownload() {
     const status = (await this.backupStatus()).data;
     if (!status || status.status !== 'success' || !status.file)

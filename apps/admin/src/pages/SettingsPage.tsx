@@ -88,6 +88,8 @@ export function SettingsPage() {
   const [backupJobs, setBackupJobs] = useState<BackupJob[]>([]);
   const [backupRunning, setBackupRunning] = useState(false);
   const [importInspecting, setImportInspecting] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importRestoring, setImportRestoring] = useState(false);
   const [importPreview, setImportPreview] = useState<{ filename: string; sizeBytes: number; entries: number; version: number | null; mediaIncluded: boolean } | null>(null);
   const [backupStatus, setBackupStatus] = useState<{
     status: string;
@@ -232,6 +234,17 @@ export function SettingsPage() {
       setMessage('فایل Backup معتبر است؛ قبل از Restore باید Preview بررسی شود.');
     } catch (error) { setMessage((error as Error).message); }
     finally { setImportInspecting(false); }
+  };
+  const restoreImport = async () => {
+    if (!importFile || !importPreview || !window.confirm('این عملیات اطلاعات فعلی را جایگزین می‌کند. ادامه می‌دهید؟')) return;
+    setImportRestoring(true);
+    try {
+      const body = new FormData(); body.append('file', importFile);
+      await api('/settings/backup/restore', { method: 'POST', body });
+      setMessage('Restore با موفقیت انجام شد. برای امنیت، دوباره وارد پنل شوید.');
+      setImportFile(null); setImportPreview(null);
+    } catch (error) { setMessage((error as Error).message); }
+    finally { setImportRestoring(false); }
   };
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -954,9 +967,9 @@ export function SettingsPage() {
             </button>
             <label className="outline" style={{ display: 'inline-flex', cursor: 'pointer' }}>
               {importInspecting ? 'در حال بررسی فایل…' : 'واردکردن فایل پشتیبان'}
-              <input type="file" accept=".tar.gz,.gpg" hidden disabled={importInspecting} onChange={(event) => { const file = event.target.files?.[0]; if (file) void inspectImport(file); event.currentTarget.value = ''; }} />
+              <input type="file" accept=".tar.gz,.gpg" hidden disabled={importInspecting} onChange={(event) => { const file = event.target.files?.[0]; if (file) { setImportFile(file); void inspectImport(file); } event.currentTarget.value = ''; }} />
             </label>
-            {importPreview && <div className="backup-status"><b className="status-chip">Backup معتبر</b><span>{importPreview.filename}</span><small>{formatPersianNumber(importPreview.entries)} فایل · نسخهٔ {formatPersianNumber(importPreview.version ?? 0)} · {importPreview.mediaIncluded ? 'رسانه دارد' : 'بدون رسانه'}</small><p className="settings-help">Restore واقعی هنوز بدون تأیید نهایی اجرا نمی‌شود.</p></div>}
+            {importPreview && <div className="backup-status"><b className="status-chip">Backup معتبر</b><span>{importPreview.filename}</span><small>{formatPersianNumber(importPreview.entries)} فایل · نسخهٔ {formatPersianNumber(importPreview.version ?? 0)} · {importPreview.mediaIncluded ? 'رسانه دارد' : 'بدون رسانه'}</small><p className="settings-help">Restore واقعی فقط با فعال‌سازی امن روی سرور اجرا می‌شود.</p><button type="button" className="outline" disabled={importRestoring} onClick={() => void restoreImport()}>{importRestoring ? 'در حال Restore…' : 'تأیید و Restore اطلاعات'}</button></div>}
             <label className="switch-row">
               <input
                 type="checkbox"
