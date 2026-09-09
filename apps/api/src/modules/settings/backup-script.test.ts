@@ -9,6 +9,7 @@ const execute = promisify(execFile);
 
 describe('production backup script', () => {
   it('writes a verifiable manifest and ISO status document', async () => {
+    if (process.platform === 'win32') return; // Production executes this Bash script on Linux.
     const root = await mkdtemp(join(tmpdir(), 'salimvand-backup-test-'));
     const appDir = join(root, 'app');
     const backupDir = join(root, 'backups');
