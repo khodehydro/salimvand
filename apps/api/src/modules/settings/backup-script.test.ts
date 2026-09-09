@@ -37,11 +37,11 @@ describe('production backup script', () => {
     });
 
     const files = (await import('node:fs/promises')).readdir(backupDir);
-    const archive = (await files).find((file) => file.endsWith('.sql.gz'));
+    const archive = (await files).find((file) => file.endsWith('.tar.gz'));
     expect(archive).toBeTruthy();
     const manifest = await readFile(join(backupDir, `${archive}.manifest`), 'utf8');
     expect(manifest.split('\n')).toEqual(
-      expect.arrayContaining(['version=1', `file=${archive}`, 'encrypted=false']),
+      expect.arrayContaining(['version=2', `file=${archive}`, 'encrypted=false', 'format=full-archive']),
     );
     expect(manifest).not.toContain('\\n');
     await execute(resolve(process.cwd(), '../../scripts/verify-backup.sh'), [
@@ -51,8 +51,10 @@ describe('production backup script', () => {
       status: string;
       createdAt: string;
       file: string;
+      progress: number;
+      phase: string;
     };
-    expect(status).toMatchObject({ status: 'success', file: archive });
+    expect(status).toMatchObject({ status: 'success', progress: 100, phase: 'پشتیبان‌گیری کامل شد', file: archive });
     expect(Number.isNaN(Date.parse(status.createdAt))).toBe(false);
   });
 });
