@@ -186,7 +186,8 @@ export function DashboardPage({
       await api('/settings/backup/run', { method: 'PUT' });
       const timer = window.setInterval(async () => {
         try {
-          const result = await api<{ data: { status: string } | null }>('/settings/backup/status');
+          const result = await api<{ data: { status: string; progress?: number } | null }>('/settings/backup/status');
+          if (result.data?.progress) setBackupProgress(result.data.progress);
           if (result.data?.status === 'success') { window.clearInterval(timer); setBackupProgress(100); setBackupDone(true); }
           else if (result.data?.status === 'failed') { window.clearInterval(timer); setBackupError('پشتیبان‌گیری ناموفق بود'); }
           else setBackupProgress((value) => Math.min(value + 8, 92));
