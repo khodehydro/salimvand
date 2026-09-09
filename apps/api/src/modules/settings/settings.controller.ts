@@ -28,6 +28,10 @@ export class SettingsController {
     if (!file?.buffer) throw new BadRequestException('فایل Backup انتخاب نشده است');
     return this.settings.inspectBackup(file);
   }
+  @Put('backup/google-drive')
+  uploadBackupToDrive() {
+    return this.settings.uploadBackupToDrive();
+  }
   @Get('backup/download')
   async downloadBackup() {
     const file = await this.settings.openBackupDownload();

@@ -189,6 +189,29 @@ export class SettingsService {
     finally { await rm(dir, { recursive: true, force: true }); }
   }
 
+  async uploadBackupToDrive() {
+    const status = (await this.backupStatus()).data;
+    if (!status || status.status !== 'success' || !status.file) throw new BadRequestException('فایل پشتیبان آماده نیست');
+    const root = process.env.BACKUP_DIR ?? '/var/backups/salimvand';
+    const file = join(root, status.file);
+    const bytes = await readFile(file).catch(() => null);
+    if (!bytes) throw new BadRequestException('فایل پشتیبان یافت نشد');
+    const accessToken = process.env.GOOGLE_DRIVE_ACCESS_TOKEN;
+    const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+    if (!accessToken || !folderId) throw new BadRequestException('اتصال Google Drive روی سرور تنظیم نشده است');
+    const metadata = { name: status.file, parents: [folderId], description: 'Salimvand full backup' };
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+    form.append('file', new Blob([bytes], { type: 'application/octet-stream' }), status.file);
+    const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink', {
+      method: 'POST', headers: { Authorization: `Bearer ${accessToken}` }, body: form,
+    });
+    if (!response.ok) throw new BadRequestException('ارسال Backup به Google Drive ناموفق بود');
+    const result = (await response.json()) as { id?: string; name?: string; webViewLink?: string };
+    await unlink(file).catch(() => undefined); await unlink(`${file}.manifest`).catch(() => undefined);
+    return { ok: true, data: { id: result.id, name: result.name, webViewLink: result.webViewLink ?? `https://drive.google.com/open?id=${result.id}` } };
+  }
+
   async openBackupDownload() {
     const status = (await this.backupStatus()).data;
     if (!status || status.status !== 'success' || !status.file)
