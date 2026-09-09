@@ -87,6 +87,8 @@ export function SettingsPage() {
   const [testSending, setTestSending] = useState(false);
   const [backupJobs, setBackupJobs] = useState<BackupJob[]>([]);
   const [backupRunning, setBackupRunning] = useState(false);
+  const [importInspecting, setImportInspecting] = useState(false);
+  const [importPreview, setImportPreview] = useState<{ filename: string; sizeBytes: number; entries: number; version: number | null; mediaIncluded: boolean } | null>(null);
   const [backupStatus, setBackupStatus] = useState<{
     status: string;
     createdAt: string;
@@ -218,6 +220,18 @@ export function SettingsPage() {
     } finally {
       setBackupRunning(false);
     }
+  };
+  const inspectImport = async (file: File) => {
+    setImportInspecting(true);
+    setImportPreview(null);
+    try {
+      const body = new FormData();
+      body.append('file', file);
+      const result = await api<{ data: { filename: string; sizeBytes: number; entries: number; version: number | null; mediaIncluded: boolean } }>('/settings/backup/inspect', { method: 'POST', body });
+      setImportPreview(result.data);
+      setMessage('فایل Backup معتبر است؛ قبل از Restore باید Preview بررسی شود.');
+    } catch (error) { setMessage((error as Error).message); }
+    finally { setImportInspecting(false); }
   };
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -938,6 +952,11 @@ export function SettingsPage() {
             >
               {backupRunning ? 'در حال آغاز…' : 'اجرای پشتیبان‌گیری اکنون'}
             </button>
+            <label className="outline" style={{ display: 'inline-flex', cursor: 'pointer' }}>
+              {importInspecting ? 'در حال بررسی فایل…' : 'واردکردن فایل پشتیبان'}
+              <input type="file" accept=".tar.gz,.gpg" hidden disabled={importInspecting} onChange={(event) => { const file = event.target.files?.[0]; if (file) void inspectImport(file); event.currentTarget.value = ''; }} />
+            </label>
+            {importPreview && <div className="backup-status"><b className="status-chip">Backup معتبر</b><span>{importPreview.filename}</span><small>{formatPersianNumber(importPreview.entries)} فایل · نسخهٔ {formatPersianNumber(importPreview.version ?? 0)} · {importPreview.mediaIncluded ? 'رسانه دارد' : 'بدون رسانه'}</small><p className="settings-help">Restore واقعی هنوز بدون تأیید نهایی اجرا نمی‌شود.</p></div>}
             <label className="switch-row">
               <input
                 type="checkbox"
