@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Put, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Put, Req, StreamableFile, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
 import { RolesGuard } from '../../common/auth/roles.guard';
@@ -20,6 +20,15 @@ export class SettingsController {
   }
   @Get('backup/jobs') backupJobs() {
     return this.settings.backupJobs();
+  }
+  @Get('backup/download')
+  async downloadBackup() {
+    const file = await this.settings.openBackupDownload();
+    return new StreamableFile(file.stream, {
+      type: file.filename.endsWith('.gpg') ? 'application/octet-stream' : 'application/gzip',
+      disposition: `attachment; filename="${file.filename}"`,
+      length: file.size,
+    });
   }
   @Put('backup/run') runBackup(@Req() request: AuthRequest) {
     return this.settings.runBackup(request.user?.id);

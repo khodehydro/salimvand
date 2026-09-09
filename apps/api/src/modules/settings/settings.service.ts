@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
 import { spawn } from 'node:child_process';
+import { createReadStream } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Prisma } from '@prisma/client';
@@ -159,6 +160,17 @@ export class SettingsService {
         },
       });
     }
+  }
+
+  async openBackupDownload() {
+    const status = (await this.backupStatus()).data;
+    if (!status || status.status !== 'success' || !status.file)
+      throw new BadRequestException('فایل پشتیبان آمادهٔ دانلود نیست');
+    const root = process.env.BACKUP_DIR ?? '/var/backups/salimvand';
+    const file = join(root, status.file);
+    const info = await stat(file).catch(() => null);
+    if (!info?.isFile()) throw new BadRequestException('فایل پشتیبان دیگر وجود ندارد');
+    return { stream: createReadStream(file), filename: status.file, size: info.size };
   }
 
   async update(values: Record<string, unknown>, userId: string, ip?: string) {
