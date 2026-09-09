@@ -196,9 +196,17 @@ export class SettingsService {
     const file = join(root, status.file);
     const bytes = await readFile(file).catch(() => null);
     if (!bytes) throw new BadRequestException('فایل پشتیبان یافت نشد');
-    const accessToken = process.env.GOOGLE_DRIVE_ACCESS_TOKEN;
     const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
-    if (!accessToken || !folderId) throw new BadRequestException('اتصال Google Drive روی سرور تنظیم نشده است');
+    if (!folderId) throw new BadRequestException('پوشهٔ مقصد Google Drive تنظیم نشده است');
+    let accessToken = process.env.GOOGLE_DRIVE_ACCESS_TOKEN;
+    if (!accessToken && process.env.GOOGLE_DRIVE_REFRESH_TOKEN && process.env.GOOGLE_DRIVE_CLIENT_ID && process.env.GOOGLE_DRIVE_CLIENT_SECRET) {
+      const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ client_id: process.env.GOOGLE_DRIVE_CLIENT_ID, client_secret: process.env.GOOGLE_DRIVE_CLIENT_SECRET, refresh_token: process.env.GOOGLE_DRIVE_REFRESH_TOKEN, grant_type: 'refresh_token' }),
+      });
+      if (tokenResponse.ok) accessToken = (await tokenResponse.json() as { access_token?: string }).access_token;
+    }
+    if (!accessToken) throw new BadRequestException('اتصال Google Drive روی سرور تنظیم نشده است');
     const metadata = { name: status.file, parents: [folderId], description: 'Salimvand full backup' };
     const form = new FormData();
     form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
