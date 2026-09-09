@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
 import { spawn } from 'node:child_process';
 import { createReadStream } from 'node:fs';
-import { readFile, stat } from 'node:fs/promises';
+import { readFile, stat, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
@@ -170,7 +170,16 @@ export class SettingsService {
     const file = join(root, status.file);
     const info = await stat(file).catch(() => null);
     if (!info?.isFile()) throw new BadRequestException('فایل پشتیبان دیگر وجود ندارد');
-    return { stream: createReadStream(file), filename: status.file, size: info.size };
+    const stream = createReadStream(file);
+    const remove = () => {
+      void unlink(file).catch(() => undefined);
+      void unlink(`${file}.manifest`).catch(() => undefined);
+    };
+    stream.once('close', remove);
+    // Never leave a completed archive on the server when the user abandons the dialog.
+    const expiry = setTimeout(remove, 10 * 60 * 1000);
+    expiry.unref?.();
+    return { stream, filename: status.file, size: info.size };
   }
 
   async update(values: Record<string, unknown>, userId: string, ip?: string) {
