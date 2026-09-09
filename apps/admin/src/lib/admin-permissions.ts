@@ -35,6 +35,7 @@ export function dashboardCapabilities(role: UserRole | '') {
     canViewDebtors: isManager || role === 'seller' || role === 'accountant',
     canViewHealth: isManager,
     canNotify: isManager,
+    canBackup: isManager,
   };
 }
 

@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { formatPersianNumber } from '@salimvand/shared';
 import { locationChip } from '../lib/location-label';
-import { api } from '../lib/api';
+import { api, downloadFile } from '../lib/api';
 import type { AdminPage } from '../lib/admin-route';
 import { DonutChart } from '@salimvand/ui';
 import {
@@ -152,6 +152,7 @@ export function DashboardPage({
   canViewDebtors = true,
   canViewHealth = true,
   canNotify = true,
+  canBackup = false,
   onNavigate,
 }: {
   onNavigate?: (page: AdminPage) => void;
@@ -161,6 +162,7 @@ export function DashboardPage({
   canViewDebtors?: boolean;
   canViewHealth?: boolean;
   canNotify?: boolean;
+  canBackup?: boolean;
 }) {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [trend, setTrend] = useState<Trend[]>([]);
@@ -174,6 +176,24 @@ export function DashboardPage({
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [backupOpen, setBackupOpen] = useState(false);
+  const [backupProgress, setBackupProgress] = useState(0);
+  const [backupDone, setBackupDone] = useState(false);
+  const [backupError, setBackupError] = useState('');
+  const startBackup = async () => {
+    setBackupOpen(true); setBackupDone(false); setBackupError(''); setBackupProgress(5);
+    try {
+      await api('/settings/backup/run', { method: 'PUT' });
+      const timer = window.setInterval(async () => {
+        try {
+          const result = await api<{ data: { status: string } | null }>('/settings/backup/status');
+          if (result.data?.status === 'success') { window.clearInterval(timer); setBackupProgress(100); setBackupDone(true); }
+          else if (result.data?.status === 'failed') { window.clearInterval(timer); setBackupError('پشتیبان‌گیری ناموفق بود'); }
+          else setBackupProgress((value) => Math.min(value + 8, 92));
+        } catch { window.clearInterval(timer); setBackupError('دریافت وضعیت پشتیبان‌گیری ناموفق بود'); }
+      }, 1500);
+    } catch (e) { setBackupError((e as Error).message); }
+  };
   const query = useMemo(() => {
     const to = new Date();
     const from = new Date(to.getTime() - (periodDays - 1) * 86_400_000);
@@ -274,6 +294,7 @@ export function DashboardPage({
               </button>
             ))}
           </div>
+          {canBackup && <button className="btn primary" onClick={startBackup}>پشتیبان‌گیری</button>}
           <button className="icon-btn" title="به‌روزرسانی" onClick={load} disabled={loading}>
             <Ic name="refresh" />
           </button>
@@ -281,6 +302,7 @@ export function DashboardPage({
       </div>
       {error && <div className="notice">{error}</div>}
       {loading && !summary && <div className="notice">در حال دریافت اطلاعات داشبورد...</div>}
+      {backupOpen && <div className="modal-backdrop" role="dialog" aria-modal="true"><div className="modal-card"><h3>پشتیبان‌گیری کامل</h3><p>{backupError || (backupDone ? 'پشتیبان آمادهٔ دریافت است.' : 'در حال آماده‌سازی دیتابیس و فایل‌های رسانه‌ای...')}</p><div className="progress"><span style={{ width: `${backupProgress}%` }} /></div><strong>{faNum(backupProgress)}٪</strong>{backupDone && <button className="btn primary" onClick={() => void downloadFile('/settings/backup/download', 'salimvand-backup.tar.gz')}>دانلود فایل پشتیبان</button>} {(backupDone || backupError) && <button className="btn" onClick={() => setBackupOpen(false)}>بستن</button>}</div></div>}
 
       <section className="ops-today-grid" aria-label="خلاصهٔ عملیاتی امروز">
         <article className="ops-today-card primary"><small>فروش امروز</small><strong>{money(summary?.todaySales ?? 0)}</strong><span>{faNum(summary?.todayInvoiceCount ?? 0)} فاکتور صادرشده</span></article>
