@@ -1,7 +1,8 @@
 import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { createReadStream } from 'node:fs';
-import { readFile, stat, unlink } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat, unlink, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
@@ -160,6 +161,32 @@ export class SettingsService {
         },
       });
     }
+  }
+
+  async inspectBackup(file: { buffer: Buffer; originalname: string }) {
+    if (file.buffer.length > 2 * 1024 * 1024 * 1024) throw new BadRequestException('حجم فایل Backup بیش از حد مجاز است');
+    const dir = await mkdtemp(join(tmpdir(), 'salimvand-import-'));
+    const input = join(dir, file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_'));
+    try {
+      await writeFile(input, file.buffer, { mode: 0o600 });
+      let archive = input;
+      if (input.endsWith('.gpg')) {
+        if (!process.env.BACKUP_ENCRYPTION_KEY) throw new BadRequestException('کلید رمزگشایی Backup تنظیم نشده است');
+        archive = join(dir, 'backup.tar.gz');
+        await new Promise<void>((resolve, reject) => {
+          const child = spawn('gpg', ['--batch', '--quiet', '--decrypt', '--passphrase', process.env.BACKUP_ENCRYPTION_KEY!, '--output', archive, input]);
+          child.once('error', reject); child.once('close', (code) => code === 0 ? resolve() : reject(new Error('رمزگشایی Backup ناموفق بود')));
+        });
+      }
+      const listing = await new Promise<string>((resolve, reject) => execFile('tar', ['-tzf', archive], { maxBuffer: 4 * 1024 * 1024 }, (error, stdout) => error ? reject(new Error('آرشیو Backup معتبر نیست')) : resolve(stdout)));
+      const entries = listing.split('\\n').filter(Boolean);
+      if (entries.some((entry) => entry.startsWith('/') || entry.split('/').includes('..'))) throw new BadRequestException('مسیر ناامن داخل Backup شناسایی شد');
+      if (!entries.includes('database/postgres.sql.gz') || !entries.includes('metadata/manifest.json')) throw new BadRequestException('ساختار Backup کامل نیست');
+      const manifest = await new Promise<string>((resolve, reject) => execFile('tar', ['-xOf', archive, 'metadata/manifest.json'], { maxBuffer: 64 * 1024 }, (error, stdout) => error ? reject(new Error('Manifest یافت نشد')) : resolve(stdout)));
+      const metadata = JSON.parse(manifest) as { version?: number; createdAt?: string; mediaIncluded?: boolean };
+      return { ok: true, data: { valid: true, filename: file.originalname, sizeBytes: file.buffer.length, entries: entries.length, version: metadata.version ?? null, createdAt: metadata.createdAt ?? null, mediaIncluded: metadata.mediaIncluded === true } };
+    } catch (error) { if (error instanceof BadRequestException) throw error; throw new BadRequestException(error instanceof Error ? error.message : 'بررسی Backup ناموفق بود'); }
+    finally { await rm(dir, { recursive: true, force: true }); }
   }
 
   async openBackupDownload() {

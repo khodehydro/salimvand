@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Put, Req, StreamableFile, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Post, Put, Req, StreamableFile, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
 import { RolesGuard } from '../../common/auth/roles.guard';
@@ -20,6 +21,12 @@ export class SettingsController {
   }
   @Get('backup/jobs') backupJobs() {
     return this.settings.backupJobs();
+  }
+  @Post('backup/inspect')
+  @UseInterceptors(FileInterceptor('file'))
+  inspectBackup(@UploadedFile() file: { buffer: Buffer; originalname: string }) {
+    if (!file?.buffer) throw new BadRequestException('فایل Backup انتخاب نشده است');
+    return this.settings.inspectBackup(file);
   }
   @Get('backup/download')
   async downloadBackup() {
