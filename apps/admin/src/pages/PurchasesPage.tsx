@@ -60,6 +60,7 @@ export function PurchasesPage({ canCreate = true }: { canCreate?: boolean }) {
   const [supplierCheck, setSupplierCheck] = useState({ checkNumber: '', bank: '', branch: '', dueDate: '', amount: '' });
   const [supplierId, setSupplierId] = useState('');
   const [itemId, setItemId] = useState('');
+  const [itemOpen, setItemOpen] = useState(false);
   const [quantity, setQuantity] = useState('1');
   const [unitPrice, setUnitPrice] = useState('');
   const [lines, setLines] = useState<Line[]>([]);
@@ -241,25 +242,46 @@ export function PurchasesPage({ canCreate = true }: { canCreate?: boolean }) {
                 <small className="field-error">{fieldErrors.supplier}</small>
               )}
             </label>
-            <label>
-              جست‌وجوی قلم
-              <input
-                value={itemQuery}
-                onChange={(event) => setItemQuery(event.target.value)}
-                placeholder="نام، برند یا بارکد"
-              />
-            </label>
-            <label>
+            <label className="purchase-item-picker">
               قلم انبار
-              <select value={itemId} onChange={(event) => setItemId(event.target.value)}>
-                <option value="">انتخاب کالا</option>
-                {visibleItems.slice(0, 100).map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.product.name} · {item.brand.name} · موجودی{' '}
-                    {formatPersianNumber(item.quantity)}
-                  </option>
-                ))}
-              </select>
+              <div className="purchase-item-combobox">
+                <input
+                  value={itemId ? (() => { const selected = items.find((item) => item.id === itemId); return selected ? `${selected.product.name} · ${selected.brand.name}` : itemQuery; })() : itemQuery}
+                  onChange={(event) => {
+                    setItemQuery(event.target.value);
+                    setItemId('');
+                    setItemOpen(true);
+                  }}
+                  onFocus={() => setItemOpen(true)}
+                  placeholder="نام کالا، برند، کد یا بارکد را جست‌وجو کنید"
+                  role="combobox"
+                  aria-expanded={itemOpen}
+                  aria-controls="purchase-item-results"
+                />
+                {itemOpen && !itemId && itemQuery.trim() && (
+                  <div className="purchase-item-results" id="purchase-item-results" role="listbox">
+                    {visibleItems.slice(0, 30).map((item) => (
+                      <button
+                        type="button"
+                        key={item.id}
+                        role="option"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => {
+                          setItemId(item.id);
+                          setItemQuery('');
+                          setItemOpen(false);
+                        }}
+                      >
+                        <strong>{item.product.name}</strong>
+                        <span>{item.brand.name} · کد {item.product.code || item.barcode} · موجودی {formatPersianNumber(item.quantity)}</span>
+                      </button>
+                    ))}
+                    {!visibleItems.length && <p>قلمی با این عبارت پیدا نشد.</p>}
+                    {visibleItems.length > 30 && <small>برای نمایش نتایج دقیق‌تر، عبارت جست‌وجو را کامل‌تر کنید.</small>}
+                  </div>
+                )}
+              </div>
+              {itemId && <small className="purchase-selected-item">قلم انتخاب‌شده؛ برای تغییر، متن را ویرایش کنید.</small>}
               {fieldErrors.item && <small className="field-error">{fieldErrors.item}</small>}
             </label>
             <label>
