@@ -527,35 +527,66 @@ export class InvoiceService {
       });
     if (invoice.customerAddress)
       doc.text(text(`آدرس مشتری: ${invoice.customerAddress}`), { align: 'right' });
-    doc
-      .moveDown(0.8)
-      .fontSize(11)
-      .fillColor('#0d2b4b')
-      .text(text('اقلام فاکتور'), { align: 'right' });
-    doc.moveDown(0.3).fillColor('#0b1c2f').fontSize(9);
-    for (const [index, item] of invoice.items.entries())
-      doc.text(
-        text(
-          `${formatPersianNumber(index + 1)}. ${item.productName}${item.brand ? ` | برند: ${item.brand}` : ''} | تعداد: ${formatPersianNumber(item.quantity)} | فی: ${formatGroupedPersian(item.unitPrice)} ریال | جمع: ${formatGroupedPersian(item.lineTotal)} ریال`,
-        ),
-        { align: 'right' },
-      );
+    const drawTable = (title: string, headers: string[], rows: string[][], widths: number[]) => {
+      const tableX = doc.page.margins.left;
+      const tableWidth = widths.reduce((sum, width) => sum + width, 0);
+      const headerHeight = 29;
+      const rowHeight = 34;
+      const drawHeader = () => {
+        const headerY = doc.y;
+        doc.save().fillColor('#0d2b4b').rect(tableX, headerY, tableWidth, headerHeight).fill().restore();
+        let x = tableX;
+        headers.forEach((header, index) => {
+          doc.fillColor('#ffffff').fontSize(8).text(text(header), x + 5, headerY + 9, { width: widths[index] - 10, align: 'right', lineBreak: false });
+          x += widths[index];
+        });
+        doc.y = headerY + headerHeight;
+      };
+      doc.moveDown(0.7).fillColor('#0d2b4b').fontSize(11).text(text(title), { align: 'right' });
+      doc.moveDown(0.25);
+      drawHeader();
+      rows.forEach((row, rowIndex) => {
+        if (doc.y + rowHeight > doc.page.height - 80) { doc.addPage(); drawHeader(); }
+        const y = doc.y;
+        doc.save().fillColor(rowIndex % 2 === 0 ? '#f4f7fa' : '#ffffff').rect(tableX, y, tableWidth, rowHeight).fill().restore();
+        doc.strokeColor('#cbd5df').lineWidth(0.5).rect(tableX, y, tableWidth, rowHeight).stroke();
+        let x = tableX;
+        row.forEach((cell, index) => {
+          doc.strokeColor('#d6dee7').moveTo(x, y).lineTo(x, y + rowHeight).stroke();
+          doc.fillColor('#17243b').fontSize(8).text(text(cell), x + 5, y + 9, { width: widths[index] - 10, height: rowHeight - 10, align: 'right', ellipsis: true, lineBreak: false });
+          x += widths[index];
+        });
+        doc.moveTo(tableX + tableWidth, y).lineTo(tableX + tableWidth, y + rowHeight).stroke();
+        doc.y = y + rowHeight;
+      });
+    };
+
+    drawTable(
+      'اقلام فاکتور',
+      ['ردیف', 'شرح کالا', 'برند', 'تعداد', 'قیمت واحد (ریال)', 'مبلغ (ریال)'],
+      invoice.items.map((item, index) => [
+        formatPersianNumber(index + 1),
+        item.productName,
+        item.brand ?? '—',
+        formatPersianNumber(item.quantity),
+        formatGroupedPersian(item.unitPrice),
+        formatGroupedPersian(item.lineTotal),
+      ]),
+      [38, 180, 72, 55, 86, 80],
+    );
     if (invoice.returns?.length) {
-      doc
-        .moveDown(0.8)
-        .fontSize(11)
-        .fillColor('#0d2b4b')
-        .text(text('مرجوعی‌ها'), { align: 'right' })
-        .moveDown(0.2)
-        .fillColor('#0b1c2f')
-        .fontSize(9);
-      for (const record of invoice.returns)
-        doc.text(
-          text(
-            `${record.productName} | تعداد برگشتی: ${formatPersianNumber(record.quantity)} | مبلغ برگشتی: ${formatGroupedPersian(record.refundAmount)} ریال | ${record.restock ? 'به انبار برگشت' : 'خراب — بدون بازگشت به انبار'} | دلیل: ${record.reason}`,
-          ),
-          { align: 'right' },
-        );
+      drawTable(
+        'مرجوعی‌ها',
+        ['شرح کالا', 'تعداد', 'مبلغ برگشتی (ریال)', 'مقصد', 'دلیل'],
+        invoice.returns.map((record) => [
+          record.productName,
+          formatPersianNumber(record.quantity),
+          formatGroupedPersian(record.refundAmount),
+          record.restock ? 'بازگشت به انبار' : 'ضایعات',
+          record.reason,
+        ]),
+        [170, 55, 105, 90, 91],
+      );
     }
     const returnedTotal = BigInt(invoice.returnedTotal ?? 0);
     const netTotal = BigInt(invoice.total) - returnedTotal;
