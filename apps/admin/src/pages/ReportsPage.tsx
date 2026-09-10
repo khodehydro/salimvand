@@ -3,6 +3,7 @@ import { api, downloadFile } from '../lib/api';
 import { formatPersianNumber } from '@salimvand/shared';
 import { DonutChart } from '@salimvand/ui';
 import { monthlySales, profitShare } from '../lib/report-metrics';
+import { JalaliDateInput } from '../components/JalaliDateInput';
 
 const SalesChart = lazy(() =>
   import('./DashboardCharts').then((module) => ({ default: module.SalesChart })),
@@ -145,11 +146,11 @@ export function ReportsPage() {
       <div className="report-filters">
         <label>
           از تاریخ
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+          <JalaliDateInput value={from} onChange={setFrom} aria-label="تاریخ شروع شمسی" />
         </label>
         <label>
           تا تاریخ
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+          <JalaliDateInput value={to} onChange={setTo} aria-label="تاریخ پایان شمسی" />
         </label>
         <button onClick={() => void load()} disabled={loading}>
           {loading ? 'در حال بارگذاری...' : 'اعمال بازه'}

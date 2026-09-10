@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { formatJalaliDate, formatPersianNumber, formatRial } from '@salimvand/shared';
 import { FaNumberInput } from '../components/FaNumberInput';
 import { api } from '../lib/api';
+import { JalaliDateInput } from '../components/JalaliDateInput';
 
 type Supplier = { id: string; name: string };
 type Item = {
@@ -433,7 +434,7 @@ export function PurchasesPage({ canCreate = true }: { canCreate?: boolean }) {
               </option>
             ))}
           </select>
-          {paymentMethod === 'credit' && <div className="check-fields"><b>جزئیات چک تأمین‌کننده</b><input placeholder="شماره چک" value={supplierCheck.checkNumber} onChange={(e) => setSupplierCheck({ ...supplierCheck, checkNumber: e.target.value })} /><input placeholder="بانک" value={supplierCheck.bank} onChange={(e) => setSupplierCheck({ ...supplierCheck, bank: e.target.value })} /><input placeholder="شعبه" value={supplierCheck.branch} onChange={(e) => setSupplierCheck({ ...supplierCheck, branch: e.target.value })} /><input type="date" value={supplierCheck.dueDate} onChange={(e) => setSupplierCheck({ ...supplierCheck, dueDate: e.target.value })} /></div>}
+          {paymentMethod === 'credit' && <div className="check-fields"><b>جزئیات چک تأمین‌کننده</b><input placeholder="شماره چک" value={supplierCheck.checkNumber} onChange={(e) => setSupplierCheck({ ...supplierCheck, checkNumber: e.target.value })} /><input placeholder="بانک" value={supplierCheck.bank} onChange={(e) => setSupplierCheck({ ...supplierCheck, bank: e.target.value })} /><input placeholder="شعبه" value={supplierCheck.branch} onChange={(e) => setSupplierCheck({ ...supplierCheck, branch: e.target.value })} /><JalaliDateInput value={supplierCheck.dueDate} onChange={(value) => setSupplierCheck({ ...supplierCheck, dueDate: value })} /></div>}
           <textarea
             value={paymentNotes}
             onChange={(event) => setPaymentNotes(event.target.value)}

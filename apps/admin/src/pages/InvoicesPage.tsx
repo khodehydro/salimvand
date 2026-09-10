@@ -17,6 +17,7 @@ import { publicSiteUrl } from '../lib/public-site';
 import { paramsFromHash } from '../lib/admin-route';
 import { formatPersianNumber } from '@salimvand/shared';
 import { FaNumberInput } from '../components/FaNumberInput';
+import { JalaliDateInput } from '../components/JalaliDateInput';
 
 type Invoice = {
   id: string;
@@ -1093,7 +1094,7 @@ export function InvoicesPage({
                       <input placeholder="شماره چک" value={check.checkNumber} onChange={(e) => setChecksDraft((all) => all.map((item, i) => i === index ? { ...item, checkNumber: e.target.value } : item))} />
                       <input placeholder="بانک" value={check.bank} onChange={(e) => setChecksDraft((all) => all.map((item, i) => i === index ? { ...item, bank: e.target.value } : item))} />
                       <input placeholder="شعبه" value={check.branch} onChange={(e) => setChecksDraft((all) => all.map((item, i) => i === index ? { ...item, branch: e.target.value } : item))} />
-                      <input type="date" value={check.dueDate} onChange={(e) => setChecksDraft((all) => all.map((item, i) => i === index ? { ...item, dueDate: e.target.value } : item))} />
+<JalaliDateInput value={check.dueDate} onChange={(value) => setChecksDraft((all) => all.map((item, i) => i === index ? { ...item, dueDate: value } : item))} />
                       <FaNumberInput className="money-in" placeholder="مبلغ چک" value={check.amount} onChange={(plain) => setChecksDraft((all) => all.map((item, i) => i === index ? { ...item, amount: plain } : item))} />
                     </div>)}
                     <button type="button" className="outline" onClick={() => setChecksDraft((all) => [...all, { checkNumber: '', bank: '', branch: '', dueDate: '', amount: '' }])}>+ افزودن چک</button>
@@ -1294,7 +1295,7 @@ export function InvoicesPage({
                   {payments.some((entry) => entry.method === 'credit') && <div className="check-fields">
                     <b>جزئیات چک‌ها</b>
                     {checksDraft.map((check, index) => <div className="check-row" key={index}>
-                      <strong>چک {index + 1}</strong><input placeholder="شماره چک" value={check.checkNumber} onChange={(e) => setChecksDraft((all) => all.map((item, i) => i === index ? { ...item, checkNumber: e.target.value } : item))} /><input placeholder="بانک" value={check.bank} onChange={(e) => setChecksDraft((all) => all.map((item, i) => i === index ? { ...item, bank: e.target.value } : item))} /><input placeholder="شعبه" value={check.branch} onChange={(e) => setChecksDraft((all) => all.map((item, i) => i === index ? { ...item, branch: e.target.value } : item))} /><input type="date" value={check.dueDate} onChange={(e) => setChecksDraft((all) => all.map((item, i) => i === index ? { ...item, dueDate: e.target.value } : item))} /><FaNumberInput className="money-in" placeholder="مبلغ چک" value={check.amount} onChange={(plain) => setChecksDraft((all) => all.map((item, i) => i === index ? { ...item, amount: plain } : item))} />
+                      <strong>چک {index + 1}</strong><input placeholder="شماره چک" value={check.checkNumber} onChange={(e) => setChecksDraft((all) => all.map((item, i) => i === index ? { ...item, checkNumber: e.target.value } : item))} /><input placeholder="بانک" value={check.bank} onChange={(e) => setChecksDraft((all) => all.map((item, i) => i === index ? { ...item, bank: e.target.value } : item))} /><input placeholder="شعبه" value={check.branch} onChange={(e) => setChecksDraft((all) => all.map((item, i) => i === index ? { ...item, branch: e.target.value } : item))} /><JalaliDateInput value={check.dueDate} onChange={(value) => setChecksDraft((all) => all.map((item, i) => i === index ? { ...item, dueDate: value } : item))} /><FaNumberInput className="money-in" placeholder="مبلغ چک" value={check.amount} onChange={(plain) => setChecksDraft((all) => all.map((item, i) => i === index ? { ...item, amount: plain } : item))} />
                     </div>)}
                     <button type="button" className="outline" onClick={() => setChecksDraft((all) => [...all, { checkNumber: '', bank: '', branch: '', dueDate: '', amount: '' }])}>+ افزودن چک</button>
                   </div>}
