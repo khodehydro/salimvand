@@ -41,6 +41,10 @@ type Settings = {
       navCatalog?: string;
       navVideo?: string;
       navContact?: string;
+      heroHeadline?: string;
+      heroSubheadline?: string;
+      experienceYears?: string;
+      experienceLabel?: string;
     };
   };
   'store.trust_video'?: string;
@@ -70,7 +74,7 @@ const initial: Settings = {
     navLng: '',
     navApp: 'both',
     instagram: '',
-    header: { tagline: '', cta: '', navCatalog: '', navVideo: '', navContact: '' },
+    header: { tagline: '', cta: '', navCatalog: '', navVideo: '', navContact: '', heroHeadline: '', heroSubheadline: '', experienceYears: '', experienceLabel: '' },
   },
   'store.trust_video': '',
   'store.pricing': { showPrices: false },
@@ -465,6 +469,26 @@ export function SettingsPage() {
                       onChange={(e) => updateHeaderText('navVideo', e.target.value)}
                       placeholder="ویدئوی فروشگاه"
                     />
+                  </label>
+                </div>
+                <div className="two-fields">
+                  <label>
+                    تیتر اصلی هدر
+                    <input value={settings['store.profile']?.header?.heroHeadline ?? ''} onChange={(e) => updateHeaderText('heroHeadline', e.target.value)} placeholder="قطعهٔ ماشینت رو پیدا کن، بقیه‌اش با ماست" />
+                  </label>
+                  <label>
+                    توضیح زیر تیتر هدر
+                    <input value={settings['store.profile']?.header?.heroSubheadline ?? ''} onChange={(e) => updateHeaderText('heroSubheadline', e.target.value)} placeholder="کاتالوگ قطعات یدکی خودرو" />
+                  </label>
+                </div>
+                <div className="two-fields">
+                  <label>
+                    عدد سابقه
+                    <input value={settings['store.profile']?.header?.experienceYears ?? ''} onChange={(e) => updateHeaderText('experienceYears', e.target.value)} placeholder="۱۸ سال" />
+                  </label>
+                  <label>
+                    توضیح سابقه
+                    <input value={settings['store.profile']?.header?.experienceLabel ?? ''} onChange={(e) => updateHeaderText('experienceLabel', e.target.value)} placeholder="سابقهٔ تأمین قطعات یدکی" />
                   </label>
                 </div>
                 <div className="two-fields">
