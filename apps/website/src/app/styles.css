@@ -2217,3 +2217,14 @@ p {
 .invoice-brand-logo { width: 38px; height: 38px; object-fit: contain; border-radius: 8px; background: rgba(255,255,255,.12); padding: 4px; }
 .clear-filter { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 38px; padding: 8px 14px; border: 1px solid #d5dee8; border-radius: 9px; background: #fff; color: #29445d; font: 600 13px Vazirmatn, Tahoma, sans-serif; text-decoration: none; }
 .clear-filter:hover { background: #eef5fb; color: #123a61; }
+
+/* Keep catalog search and filters available while browsing on mobile too. */
+@media (max-width: 620px) {
+  .catalog-filters {
+    position: sticky;
+    top: 8px;
+    z-index: 20;
+    background: color-mix(in srgb, var(--surface) 96%, transparent);
+    box-shadow: 0 8px 25px #0b1c2f18;
+  }
+}
