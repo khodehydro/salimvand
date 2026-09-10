@@ -112,14 +112,15 @@ export function ReportsPage() {
       setError(e.message),
     );
   return (
-    <section>
-      <div className="page-title">
+    <section className="reports-page">
+      <div className="page-title reports-page-title">
         <div>
           <span className="eyebrow">تحلیل داده</span>
           <h1>گزارش‌ها</h1>
           <p className="muted">فروش، سود، مطالبات و رویدادهای حساس سیستم</p>
         </div>
-        <button className="button-primary" onClick={exportSales}>
+        <div className="report-actions" aria-label="خروجی و چاپ گزارش‌ها">
+          <button className="button-primary" onClick={exportSales}>
           خروجی CSV فروش
         </button>
         <button className="outline" onClick={printReturns}>
@@ -139,6 +140,7 @@ export function ReportsPage() {
         >
           خروجی بدهی تأمین
         </button>
+        </div>
       </div>
       <div className="report-filters">
         <label>

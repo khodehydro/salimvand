@@ -3824,6 +3824,63 @@ body,
   margin-bottom: 16px;
 }
 
+/* Reports workspace: keep the header actions together and use denser cards
+   so the page shows useful data without oversized empty surfaces. */
+.reports-page-title {
+  align-items: flex-start;
+  gap: 18px;
+}
+.reports-page-title > div:first-child { min-width: 220px; }
+.report-actions {
+  display: flex;
+  flex: 1;
+  justify-content: flex-start;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 3px;
+}
+.report-actions button {
+  min-height: 38px;
+  padding: 8px 13px;
+  border-radius: 9px;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.reports-page .report-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+  max-width: 760px;
+}
+.reports-page .report-filters label { min-width: 150px; }
+.reports-page .report-filters input { min-height: 40px; font-size: 13px; }
+.reports-page .card,
+.reports-page .checks-report-card {
+  border-radius: 12px;
+  padding: 14px;
+  margin: 14px 0;
+}
+.reports-page .card-h { margin-bottom: 10px; }
+.reports-page .card-h h2,
+.reports-page .checks-report-card h2 { font-size: 15px; }
+.reports-page .report-check-table .thead,
+.reports-page .report-check-table .trow {
+  padding: 9px 0;
+  font-size: 12px;
+}
+.reports-page .customer-products { gap: 7px; }
+@media (max-width: 900px) {
+  .reports-page-title { flex-direction: column; }
+  .report-actions { width: 100%; }
+}
+@media (max-width: 560px) {
+  .report-actions button { flex: 1 1 calc(50% - 8px); }
+  .reports-page .report-filters label { min-width: 100%; }
+  .reports-page .report-filters button { flex: 1; }
+}
+
 /* Mobile refinements for the blocks above (kept after their base
    rules so the cascade order stays correct). */
 @media (max-width: 700px) {
