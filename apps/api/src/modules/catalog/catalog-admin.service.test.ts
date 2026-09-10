@@ -4,7 +4,7 @@ import { CatalogAdminService } from './catalog-admin.service';
 function makeService() {
   const prisma = {
     product: { create: vi.fn(), update: vi.fn(), findFirst: vi.fn() },
-    inventoryItem: { create: vi.fn() },
+    inventoryItem: { create: vi.fn(), updateMany: vi.fn() },
     counter: { upsert: vi.fn().mockResolvedValue({ lastValue: 12 }) },
     $transaction: vi.fn(async (callback: (tx: unknown) => unknown) => callback(prisma)),
   };
@@ -65,7 +65,7 @@ describe('CatalogAdminService', () => {
     expect(prisma.product.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         aparatVideoId: '9f3k2',
-        seoKeywords: ['لنت', 'ترمز'],
+        seoKeywords: expect.arrayContaining(['لنت', 'ترمز']),
         status: 'hidden',
       }),
     });

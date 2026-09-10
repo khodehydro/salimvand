@@ -5,7 +5,7 @@ function makeService() {
   const prisma = {
     inventoryItem: { count: vi.fn(), findMany: vi.fn() },
     inventoryTransaction: { findMany: vi.fn() },
-    invoice: { findMany: vi.fn(), count: vi.fn().mockResolvedValue(0) },
+    invoice: { findMany: vi.fn().mockResolvedValue([]), count: vi.fn().mockResolvedValue(0) },
     product: { count: vi.fn().mockResolvedValue(0) },
     payment: { findMany: vi.fn().mockResolvedValue([]) },
     paymentCheck: { findMany: vi.fn().mockResolvedValue([]) },
