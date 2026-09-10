@@ -476,6 +476,10 @@ export function InventoryPage() {
               <span className="kpi-icon">▣</span>
               <div><small>ارزش انبار (خرید)</small><strong>{formatRial(items.reduce((sum, item) => sum + item.quantity * Number(item.purchasePrice ?? item.salePrice), 0))}</strong><em>بر پایه قیمت خرید</em></div>
             </article>
+            <article className="inventory-kpi inventory-kpi-sale-value">
+              <span className="kpi-icon">◈</span>
+              <div><small>ارزش انبار (فروش)</small><strong>{formatRial(items.reduce((sum, item) => sum + item.quantity * Number(item.salePrice || 0), 0))}</strong><em>بر پایه قیمت فروش</em></div>
+            </article>
             <article className="inventory-kpi inventory-kpi-alert">
               <span className="kpi-icon">△</span>
               <div><small>زیر آستانه</small><strong>{formatPersianNumber(items.filter((item) => item.quantity > 0 && item.minStock != null && item.quantity <= item.minStock).length)}</strong><em>نیاز به سفارش</em></div>
