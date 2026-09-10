@@ -6950,6 +6950,35 @@ button.btn-primary-lg:hover:not(:disabled) {
 .reports-page .cards, section:has(.report-check-table) .dashboard-cards { gap: 10px; }.reports-page .page-title { gap: 10px; }.reports-page .page-title > button { white-space: nowrap; }
 .report-filters { gap: 8px !important; }.report-filters button { min-height: 38px; padding: 7px 12px; }
 @media (max-width: 800px) { .check-row { grid-template-columns: 1fr 1fr; }.customer-head, .customer-row { min-width: 920px; }.lbl-stage { transform: scale(.7); margin-bottom: -100px; } }
+
+/* Invoice payment dialog: cheque fields need the same readable dimensions
+   as the invoice creation form, not the compact report controls. */
+.pay-modal-body .paybox .pr .money-in,
+.pay-modal-body .check-fields .money-in,
+.pay-modal-body .check-fields input {
+  box-sizing: border-box;
+  min-height: 44px;
+  height: 44px;
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--sv-border-2);
+  border-radius: 9px;
+  background: var(--sv-surface);
+  color: var(--sv-text);
+  font-size: 14px;
+  line-height: 1.5;
+  direction: rtl;
+  text-align: right;
+}
+.pay-modal-body .paybox .pr .money-in { width: 170px; margin-inline-start: auto; }
+.pay-modal-body .check-fields input::placeholder { color: var(--sv-text-3); opacity: 1; }
+.pay-modal-body .check-fields input:focus,
+.pay-modal-body .paybox .pr .money-in:focus { outline: 3px solid color-mix(in srgb, var(--sv-brand-500) 18%, transparent); border-color: var(--sv-brand-500); }
+.pay-modal-body .check-fields input[type='date'] { direction: ltr; text-align: left; }
+.pay-modal-body .check-row { grid-template-columns: 72px repeat(5, minmax(120px, 1fr)); gap: 10px; align-items: stretch; }
+.pay-modal-body .check-row strong { display: flex; align-items: center; font-size: 13px; color: var(--sv-text-2); }
+@media (max-width: 900px) { .pay-modal-body .check-row { grid-template-columns: 1fr 1fr; } .pay-modal-body .check-row strong { grid-column: 1 / -1; } .pay-modal-body .paybox .pr .money-in { width: 150px; } }
+@media (max-width: 560px) { .pay-modal-body .check-row { grid-template-columns: 1fr; } .pay-modal-body .paybox .pr { flex-wrap: wrap; } .pay-modal-body .paybox .pr .money-in { width: 100%; margin-inline-start: 0; } }
 /* Reference data: explicit readable controls and compact vehicle hierarchy. */
 .admin .references-page .reference-card input,
 .admin .references-page .reference-card select,
