@@ -3,10 +3,13 @@ import { DashboardService } from './dashboard.service';
 
 function makeService() {
   const prisma = {
-    product: { count: vi.fn() },
     inventoryItem: { count: vi.fn(), findMany: vi.fn() },
     inventoryTransaction: { findMany: vi.fn() },
-    invoice: { findMany: vi.fn() },
+    invoice: { findMany: vi.fn(), count: vi.fn().mockResolvedValue(0) },
+    product: { count: vi.fn().mockResolvedValue(0) },
+    payment: { findMany: vi.fn().mockResolvedValue([]) },
+    paymentCheck: { findMany: vi.fn().mockResolvedValue([]) },
+    purchaseInvoice: { count: vi.fn().mockResolvedValue(0) },
   };
   return { service: new DashboardService(prisma as never), prisma };
 }

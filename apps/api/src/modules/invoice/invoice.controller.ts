@@ -108,6 +108,8 @@ export class InvoiceController {
     return this.invoices.updateCheckStatus(checkId, body.status ?? 'pending', body.notes, request.user?.id);
   }
 
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('seller', 'accountant')
   @Post(':id/pay')
   pay(@Param('id') id: string, @Body() body: PayInvoiceDto, @Req() request: AuthenticatedRequest) {
     return this.invoices.pay(id, body.amount ?? 0, body.method ?? 'cash', request.user?.id ?? '', body.checks);

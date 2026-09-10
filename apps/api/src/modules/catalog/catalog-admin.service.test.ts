@@ -4,7 +4,9 @@ import { CatalogAdminService } from './catalog-admin.service';
 function makeService() {
   const prisma = {
     product: { create: vi.fn(), update: vi.fn(), findFirst: vi.fn() },
+    inventoryItem: { create: vi.fn() },
     counter: { upsert: vi.fn().mockResolvedValue({ lastValue: 12 }) },
+    $transaction: vi.fn(async (callback: (tx: unknown) => unknown) => callback(prisma)),
   };
   return { service: new CatalogAdminService(prisma as never), prisma };
 }

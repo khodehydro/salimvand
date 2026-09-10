@@ -1009,7 +1009,7 @@ export class InvoiceService {
         number: invoice.number,
         shortCode: shortCode.code,
         total: invoice.total.toString(),
-        items: (invoice.items as Array<{ productName: string; quantity: number }>).map((item) => ({
+        items: ((invoice.items ?? []) as Array<{ productName: string; quantity: number }>).map((item) => ({
           name: item.productName,
           quantity: item.quantity,
         })),

@@ -195,7 +195,7 @@ describe('InventoryService', () => {
     const prisma = { inventoryItem: { findMany } };
     const result = await new InventoryService(prisma as never).list({ q: '  ' });
     const args = findMany.mock.calls[0][0] as { where: Record<string, unknown> };
-    expect(args.where).toEqual({ isActive: true });
+    expect(args.where).toEqual({ isActive: true, product: { deletedAt: null } });
     expect(result.data).toHaveLength(1);
   });
 

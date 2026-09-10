@@ -36,7 +36,7 @@ describe('InvoiceController', () => {
       { items: [{ inventoryItemId: 'item-1', quantity: 1, unitPrice: '100' }] },
       'user-1',
     );
-    expect(pay).toHaveBeenCalledWith('invoice-1', '100', 'cash', 'user-1');
+    expect(pay).toHaveBeenCalledWith('invoice-1', '100', 'cash', 'user-1', undefined);
   });
 
   it('routes the SMS resend with the caller identity and an optional corrected mobile', async () => {
