@@ -196,6 +196,17 @@ export class SettingsService {
     const file = join(root, status.file);
     const bytes = await readFile(file).catch(() => null);
     if (!bytes) throw new BadRequestException('فایل پشتیبان یافت نشد');
+    const rcloneConfig = process.env.RCLONE_CONFIG ?? '/home/salimvand/.config/rclone/rclone.conf';
+    const rcloneReady = await stat(rcloneConfig).then(() => true).catch(() => false);
+    if (rcloneReady) {
+      const rcloneEnv = { ...process.env, RCLONE_CONFIG: rcloneConfig };
+      const folder = process.env.RCLONE_DRIVE_FOLDER ?? 'Salimvand Backups';
+      const destination = `google-drive:${folder}/${status.file}`;
+      await new Promise<void>((resolve, reject) => execFile('rclone', ['copyto', file, destination], { env: rcloneEnv }, (error, _stdout, stderr) => error ? reject(new Error(stderr || 'ارسال Backup به Google Drive ناموفق بود')) : resolve()));
+      const link = await new Promise<string>((resolve, reject) => execFile('rclone', ['link', destination], { env: rcloneEnv }, (error, stdout, stderr) => error ? reject(new Error(stderr || 'ساخت لینک Google Drive ناموفق بود')) : resolve(stdout.trim())));
+      await unlink(file).catch(() => undefined); await unlink(`${file}.manifest`).catch(() => undefined);
+      return { ok: true, data: { name: status.file, webViewLink: link } };
+    }
     const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
     if (!folderId) throw new BadRequestException('پوشهٔ مقصد Google Drive تنظیم نشده است');
     let accessToken = process.env.GOOGLE_DRIVE_ACCESS_TOKEN;
