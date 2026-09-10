@@ -323,23 +323,13 @@ export function InvoicesPage({
     return groups;
   }, [candidates]);
 
-  const lineTotal = (line: DraftLine) =>
-    invoiceTotals(
-      [{ salePrice: line.price, quantity: line.quantity, lineDiscount: line.lineDiscount }],
-      0,
-    ).total;
-  const lineDiscountSum = lines.reduce((sum, line) => sum + Math.max(0, line.lineDiscount || 0), 0);
-  const {
-    subtotal,
-    discount: discountValue,
-    total,
-  } = invoiceTotals(
-    lines.map((line) => ({
-      salePrice: line.price,
-      quantity: line.quantity,
-      lineDiscount: line.lineDiscount,
-    })),
-    Number(discount) || 0,
+  const lineTotal = (line: DraftLine) => invoiceTotals([{ salePrice: line.price, quantity: line.quantity, lineDiscount: 0 }], 0).total;
+  const discountPercent = Math.min(100, Math.max(0, Number(discount) || 0));
+  const grossSubtotal = lines.reduce((sum, line) => sum + Math.max(0, line.price) * Math.max(1, line.quantity), 0);
+  const discountAmount = Math.round(grossSubtotal * discountPercent / 100);
+  const { subtotal, discount: discountValue, total } = invoiceTotals(
+    lines.map((line) => ({ salePrice: line.price, quantity: line.quantity, lineDiscount: 0 })),
+    discountAmount,
   );
   const paymentTotal = sumPayments(payments);
   const remainingDebt = debtLeft(total, payments);
@@ -926,8 +916,7 @@ export function InvoicesPage({
                   <div>برند</div>
                   <div>تعداد</div>
                   <div className="hd-hide num price-column-title">قیمت واحد (قابل ویرایش)</div>
-                  <div className="hd-hide num">تخفیف</div>
-                  <div className="num">جمع</div>
+                  <div className="num">مبلغ نهایی</div>
                   <div />
                 </div>
                 {lines.length ? (
@@ -979,18 +968,7 @@ export function InvoicesPage({
                           })
                         }
                       />
-                      <FaNumberInput
-                        className="money-in hd-hide"
-                        aria-label={`تخفیف ${line.item.product.name}`}
-                        placeholder="۰"
-                        value={line.lineDiscount ? String(line.lineDiscount) : ''}
-                        onChange={(plain) =>
-                          setLine(line.item.id, {
-                            lineDiscount: Math.max(0, Number(plain) || 0),
-                          })
-                        }
-                      />
-                      <div className="num b">{money(lineTotal(line))}</div>
+<div className="num b">{money(lineTotal(line))}</div>
                       <button
                         type="button"
                         className="btn-icon-danger"
@@ -1030,24 +1008,16 @@ export function InvoicesPage({
                   <span>جمع اقلام ({persianNumber(lines.length)} قلم)</span>
                   <b>{money(subtotal)}</b>
                 </div>
-                {lineDiscountSum > 0 && (
-                  <div className="ln">
-                    <span>تخفیف ردیف‌ها</span>
-                    <b>{money(lineDiscountSum)}</b>
+                <div className="invoice-discount-field field">
+                  <span className="lab">تخفیف کل فاکتور (درصد)</span>
+                  <div className="percent-input-wrap">
+                    <FaNumberInput className="money-in" aria-label="درصد تخفیف کل فاکتور" value={discount} placeholder="۰" onChange={(plain) => setDiscount(String(Math.min(100, Math.max(0, Number(plain) || 0))))} />
+                    <b>٪</b>
                   </div>
-                )}
-                <div className="field">
-                  <span className="lab">تخفیف کل فاکتور (ریال)</span>
-                  <FaNumberInput
-                    className="money-in"
-                    aria-label="تخفیف کل"
-                    value={discount}
-                    placeholder="۰"
-                    onChange={(plain) => setDiscount(plain)}
-                  />
+                  <small>مبلغ تخفیف: {money(discountValue)}</small>
                 </div>
                 <div className="ln grand">
-                  <span>مبلغ نهایی</span>
+                  <span>مبلغ نهایی پس از تخفیف</span>
                   <b>{money(total)}</b>
                 </div>
 

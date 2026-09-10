@@ -4785,7 +4785,7 @@ button.btn-primary-lg:hover:not(:disabled) {
 }
 .irow {
   display: grid;
-  grid-template-columns: 1.7fr 0.9fr 92px 100px 84px 110px 36px;
+  grid-template-columns: 1.7fr 0.9fr 92px 100px 110px 36px;
   gap: 9px;
   align-items: center;
   padding: 10px 14px;
@@ -4870,6 +4870,11 @@ button.btn-primary-lg:hover:not(:disabled) {
   background: var(--sv-surface-2);
   color: var(--sv-text-3);
 }
+.invoice-discount-field { margin-top: 12px; }
+.percent-input-wrap { position: relative; display: flex; align-items: center; }
+.percent-input-wrap .money-in { padding-inline-end: 30px; }
+.percent-input-wrap > b { position: absolute; right: 11px; color: var(--sv-primary); pointer-events: none; }
+.invoice-discount-field > small { display: block; margin-top: 4px; color: var(--sv-text-3); font-size: 10px; }
 .invoice-price-input {
   border-color: color-mix(in srgb, var(--sv-primary) 45%, var(--sv-border-2));
   background: color-mix(in srgb, var(--sv-primary) 4%, var(--sv-surface));
