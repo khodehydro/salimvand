@@ -404,6 +404,8 @@ export function InvoicesPage({
 
   const create = async () => {
     if (!lines.length) return setMessage('حداقل یک قلم برای فاکتور انتخاب کنید');
+    if (lines.some((line) => !Number.isFinite(line.price) || line.price <= 0))
+      return setMessage('قیمت واحد همهٔ اقلام باید بیشتر از صفر باشد');
     if (discountValue > subtotal) return setMessage('تخفیف نمی‌تواند از جمع اقلام بیشتر باشد');
     if (paymentTotal > total) return setMessage('مجموع دریافتی از مبلغ فاکتور بیشتر است');
     if (mobile && !isValidIranMobile(mobile))
@@ -923,7 +925,7 @@ export function InvoicesPage({
                   <div>محصول / قفسه</div>
                   <div>برند</div>
                   <div>تعداد</div>
-                  <div className="hd-hide num">فی (ریال)</div>
+                  <div className="hd-hide num price-column-title">قیمت واحد (قابل ویرایش)</div>
                   <div className="hd-hide num">تخفیف</div>
                   <div className="num">جمع</div>
                   <div />
@@ -967,8 +969,9 @@ export function InvoicesPage({
                         </button>
                       </div>
                       <FaNumberInput
-                        className="money-in hd-hide"
-                        aria-label={`فی ${line.item.product.name}`}
+                        className="money-in hd-hide invoice-price-input"
+                        aria-label={`قیمت واحد قابل ویرایش ${line.item.product.name}`}
+                        title="قیمت پیش‌فرض از انبار آمده است؛ در صورت نیاز آن را تغییر دهید."
                         value={String(line.price)}
                         onChange={(plain) =>
                           setLine(line.item.id, {

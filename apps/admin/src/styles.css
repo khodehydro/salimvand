@@ -4870,6 +4870,17 @@ button.btn-primary-lg:hover:not(:disabled) {
   background: var(--sv-surface-2);
   color: var(--sv-text-3);
 }
+.invoice-price-input {
+  border-color: color-mix(in srgb, var(--sv-primary) 45%, var(--sv-border-2));
+  background: color-mix(in srgb, var(--sv-primary) 4%, var(--sv-surface));
+  font-weight: 700;
+}
+.invoice-price-input:focus {
+  outline: none;
+  border-color: var(--sv-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sv-primary) 15%, transparent);
+}
+.price-column-title { color: var(--sv-primary); }
 .rows-empty {
   margin: 0;
   padding: 18px 14px;
