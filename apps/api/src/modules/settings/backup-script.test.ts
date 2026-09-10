@@ -27,9 +27,7 @@ describe('production backup script', () => {
     await chmod(pgDump, 0o755);
     const statusFile = join(root, 'status.json');
     const script = resolve(process.cwd(), '../../scripts/backup.sh');
-    const command = process.platform === 'win32' ? 'bash.exe' : script;
-    const args = process.platform === 'win32' ? [script] : [];
-    await execute(command, args, {
+    await execute(script, [], {
       env: {
         ...process.env,
         APP_DIR: appDir,

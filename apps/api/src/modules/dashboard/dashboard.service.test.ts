@@ -82,6 +82,7 @@ describe('DashboardService', () => {
   it('groups the sales trend by day and returns JSON-safe amounts', async () => {
     const { service, prisma } = makeService();
     prisma.invoice = {
+      count: vi.fn().mockResolvedValue(0),
       findMany: vi.fn().mockResolvedValue([
         { issuedAt: new Date('2026-08-01T10:00:00Z'), total: 1000n, paidAmount: 400n },
         { issuedAt: new Date('2026-08-01T15:00:00Z'), total: 500n, paidAmount: 500n },
