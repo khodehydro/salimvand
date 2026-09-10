@@ -14,8 +14,8 @@ created_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 backup_status=failed; backup_file=""; encrypted=false; work="$(mktemp -d -p "${TMPDIR:-/tmp}" salimvand-backup.XXXXXX)"
 cleanup() { rm -rf "$work"; }
 trap cleanup EXIT
-write_status() { local exit_code=$?; printf '{"status":"%s","progress":%s,"phase":"%s","createdAt":"%s","file":"%s","encrypted":%s,"exitCode":%s}\n' "$backup_status" "${progress:-0}" "${phase:-starting}" "$created_at" "$(basename "$backup_file")" "$encrypted" "$exit_code" > "$STATUS_FILE"; chmod 0600 "$STATUS_FILE"; exit "$exit_code"; }
-status_progress() { progress="$1"; phase="$2"; printf '{"status":"running","progress":%s,"phase":"%s","createdAt":"%s","file":"","encrypted":false,"exitCode":null}\n' "$progress" "$phase" > "$STATUS_FILE"; chmod 0600 "$STATUS_FILE"; }
+write_status() { local exit_code=$?; printf '{"status":"%s","progress":%s,"phase":"%s","createdAt":"%s","file":"%s","encrypted":%s,"exitCode":%s}\n' "$backup_status" "${progress:-0}" "${phase:-starting}" "$created_at" "$(basename "$backup_file")" "$encrypted" "$exit_code" > "$STATUS_FILE"; chmod 0600 "$STATUS_FILE"; if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then chown salimvand:salimvand "$STATUS_FILE" 2>/dev/null || true; [[ -n "$backup_file" && -f "$backup_file" ]] && chown salimvand:salimvand "$backup_file" "$backup_file.manifest" 2>/dev/null || true; fi; exit "$exit_code"; }
+status_progress() { progress="$1"; phase="$2"; printf '{"status":"running","progress":%s,"phase":"%s","createdAt":"%s","file":"","encrypted":false,"exitCode":null}\n' "$progress" "$phase" > "$STATUS_FILE"; chmod 0600 "$STATUS_FILE"; [[ "${EUID:-$(id -u)}" -eq 0 ]] && chown salimvand:salimvand "$STATUS_FILE" 2>/dev/null || true; }
 trap write_status EXIT
 status_progress 5 'آماده‌سازی فایل موقت'
 mkdir -p "$work/database" "$work/media" "$work/metadata"
