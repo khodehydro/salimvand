@@ -5452,11 +5452,28 @@ button.btn-primary-lg:hover:not(:disabled) {
 }
 .shelves-box input,
 .shelves-box select {
+  width: 100%;
+  min-height: 42px;
+  box-sizing: border-box;
   border: 1px solid var(--sv-border-2);
-  border-radius: 8px;
-  padding: 10px;
-  font: inherit;
+  border-radius: 9px;
+  padding: 9px 12px;
+  background: var(--sv-surface-2);
+  color: var(--sv-text);
+  caret-color: var(--sv-primary);
+  font: 13px Vazirmatn, Tahoma, sans-serif;
+  color-scheme: light;
+  transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
 }
+.shelves-box input::placeholder { color: var(--sv-text-3); opacity: 1; }
+.shelves-box input:focus,
+.shelves-box select:focus {
+  outline: none;
+  border-color: var(--sv-primary);
+  background: var(--sv-surface);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sv-primary) 14%, transparent);
+}
+.shelves-box select { cursor: pointer; }
 .shelves-form {
   display: grid;
   gap: 8px;
