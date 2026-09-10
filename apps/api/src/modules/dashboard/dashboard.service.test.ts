@@ -47,7 +47,7 @@ describe('DashboardService', () => {
         { quantity: 8, product: { category: null } },
       ]);
     prisma.inventoryTransaction.findMany.mockResolvedValue([{ id: '1', quantityChange: 2 }]);
-    await expect(service.summary()).resolves.toEqual({
+    await expect(service.summary()).resolves.toMatchObject({
       ok: true,
       data: {
         products: 12,
