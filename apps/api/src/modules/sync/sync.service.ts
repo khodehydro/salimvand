@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma.service';
 import { InventoryService } from '../inventory/inventory.service';
 import { CatalogAdminService } from '../catalog/catalog-admin.service';
 import { InvoiceService } from '../invoice/invoice.service';
+import { PurchaseService } from '../suppliers/purchase.service';
 
 const parseCursor = (value?: string) => {
   if (!value) return 0n;
@@ -13,7 +14,7 @@ const parseCursor = (value?: string) => {
 
 @Injectable()
 export class SyncService {
-  constructor(private readonly prisma: PrismaService, private readonly inventory: InventoryService, private readonly catalog: CatalogAdminService, private readonly invoice: InvoiceService) {}
+  constructor(private readonly prisma: PrismaService, private readonly inventory: InventoryService, private readonly catalog: CatalogAdminService, private readonly invoice: InvoiceService, private readonly purchases: PurchaseService) {}
 
   async registerDevice(userId: string, deviceId: string, name?: string) {
     const device = await this.prisma.syncDevice.upsert({
@@ -79,9 +80,17 @@ export class SyncService {
     const productOperation = type.startsWith('product.');
     const allowed = inventoryOperation
       ? user.role === 'manager' || user.role === 'super_admin' || user.role === 'warehouse'
-      : productOperation
-        ? user.role === 'manager' || user.role === 'super_admin'
-        : false;
+      : type === 'invoice.create'
+        ? user.role === 'manager' || user.role === 'super_admin' || user.role === 'seller'
+        : type === 'purchase.create'
+          ? user.role === 'manager' || user.role === 'super_admin'
+          : type === 'purchase.pay'
+            ? user.role === 'manager' || user.role === 'super_admin' || user.role === 'accountant'
+            : type === 'invoice.pay'
+              ? user.role === 'manager' || user.role === 'super_admin' || user.role === 'seller' || user.role === 'accountant'
+              : productOperation
+                ? user.role === 'manager' || user.role === 'super_admin'
+                : false;
     if (!allowed) throw new BadRequestException('نقش کاربر اجازهٔ اجرای این عملیات را ندارد');
   }
 
@@ -112,6 +121,21 @@ export class SyncService {
     if (input.type === 'invoice.create') {
       if (!Array.isArray(payload.items) || payload.items.length === 0) throw new BadRequestException('اقلام فاکتور الزامی است');
       return this.invoice.create(payload as never, userId);
+    }
+    if (input.type === 'invoice.pay') {
+      const invoiceId = typeof payload.invoiceId === 'string' ? payload.invoiceId : '';
+      if (!invoiceId) throw new BadRequestException('invoiceId عملیات الزامی است');
+      return this.invoice.pay(invoiceId, String(payload.amount ?? ''), payload.method as never, userId, Array.isArray(payload.checks) ? payload.checks as never : undefined);
+    }
+    if (input.type === 'purchase.create') {
+      const supplierId = typeof payload.supplierId === 'string' ? payload.supplierId : '';
+      if (!supplierId || !Array.isArray(payload.lines) || payload.lines.length === 0) throw new BadRequestException('تأمین‌کننده و اقلام خرید الزامی است');
+      return this.purchases.create(supplierId, payload.lines as never, payload.paidAmount as never, userId);
+    }
+    if (input.type === 'purchase.pay') {
+      const invoiceId = typeof payload.invoiceId === 'string' ? payload.invoiceId : '';
+      if (!invoiceId) throw new BadRequestException('invoiceId خرید الزامی است');
+      return this.purchases.pay(invoiceId, String(payload.amount ?? ''), payload.method as never, typeof payload.notes === 'string' ? payload.notes : undefined, userId, undefined, payload.check as never);
     }
     throw new BadRequestException(`نوع عملیات پشتیبانی نمی‌شود: ${input.type}`);
   }
