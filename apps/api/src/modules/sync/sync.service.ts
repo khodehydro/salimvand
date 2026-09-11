@@ -179,6 +179,15 @@ export class SyncService {
       } catch (error) {
         const conflict = error instanceof ConflictException;
         await this.prisma.syncOperation.update({ where: { operationId: operation.operationId }, data: { status: conflict ? 'conflict' : 'failed', error: error instanceof Error ? error.message.slice(0, 500) : 'بازیابی عملیات ناموفق بود' } });
+        if (conflict) {
+          const response = error.getResponse();
+          const details = typeof response === 'object' && response !== null ? response as Record<string, unknown> : {};
+          await this.prisma.syncConflict.upsert({
+            where: { operationId_status: { operationId: operation.operationId, status: 'open' } },
+            create: { operationId: operation.operationId, userId: operation.userId, deviceId: operation.deviceId, type: operation.type, code: typeof details.code === 'string' ? details.code : 'CONFLICT', payload: operation.payload as Prisma.InputJsonValue, serverState: details as Prisma.InputJsonValue },
+            update: { serverState: details as Prisma.InputJsonValue },
+          });
+        }
         results.push({ operationId: operation.operationId, status: conflict ? 'conflict' : 'failed' });
       }
     }
