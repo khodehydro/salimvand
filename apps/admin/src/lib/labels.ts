@@ -324,7 +324,7 @@ export function renderLabelHTML(o: LabelOptions): string {
     o.showFoot && o.size !== '38x22'
       ? `
       <div class="lb-foot">
-        <span>${esc(o.footerText || 'اصالت کالا')}</span>
+        <span>${esc(o.footerText || 'اصالت و گارانتی کالا')}</span>
         <span class="lb-digits-latin">${STORE_SITE}</span>
       </div>`
       : '';
