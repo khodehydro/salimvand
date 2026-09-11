@@ -115,6 +115,9 @@ export class CatalogAdminService {
       if (operationId) {
         await tx.productOperation.create({ data: { operationId, productId: created.id, type: 'product.create' } });
       }
+      if (operationId) {
+        await tx.productOperation.create({ data: { operationId, productId: updated.id, type: 'product.update' } });
+      }
       if (userId && 'auditLog' in tx)
         await writeAudit(tx as Prisma.TransactionClient, {
           userId,
@@ -132,7 +135,7 @@ export class CatalogAdminService {
     return { ok: true, data: product };
   }
 
-  async update(id: string, input: Record<string, unknown>, userId?: string, ip?: string) {
+  async update(id: string, input: Record<string, unknown>, userId?: string, ip?: string, operationId?: string) {
     await this.ensureExists(id);
     const data: Record<string, unknown> = {};
     for (const key of [
@@ -170,6 +173,10 @@ export class CatalogAdminService {
       ? await this.prisma.product.findUnique({ where: { id } })
       : await this.prisma.product.findFirst({ where: { id } });
     const updateProduct = async (tx: Prisma.TransactionClient | typeof this.prisma) => {
+      if (operationId) {
+        const previous = await tx.productOperation.findUnique({ where: { operationId } });
+        if (previous) return tx.product.findUniqueOrThrow({ where: { id: previous.productId } });
+      }
       const updated = await tx.product.update({ where: { id }, data });
       if (userId && 'auditLog' in tx)
         await writeAudit(tx as Prisma.TransactionClient, {
