@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
 import { InventoryService } from '../inventory/inventory.service';
 import { CatalogAdminService } from '../catalog/catalog-admin.service';
+import { InvoiceService } from '../invoice/invoice.service';
 
 const parseCursor = (value?: string) => {
   if (!value) return 0n;
@@ -12,7 +13,7 @@ const parseCursor = (value?: string) => {
 
 @Injectable()
 export class SyncService {
-  constructor(private readonly prisma: PrismaService, private readonly inventory: InventoryService, private readonly catalog: CatalogAdminService) {}
+  constructor(private readonly prisma: PrismaService, private readonly inventory: InventoryService, private readonly catalog: CatalogAdminService, private readonly invoice: InvoiceService) {}
 
   async registerDevice(userId: string, deviceId: string, name?: string) {
     const device = await this.prisma.syncDevice.upsert({
@@ -87,7 +88,7 @@ export class SyncService {
   private async applyOperation(userId: string, input: { type: string; deviceId: string; payload: Record<string, unknown> }) {
     const payload = input.payload;
     const itemId = typeof payload.itemId === 'string' ? payload.itemId : '';
-    if (!itemId) throw new BadRequestException('itemId عملیات الزامی است');
+    if ((input.type.startsWith('inventory.') && !itemId)) throw new BadRequestException('itemId عملیات الزامی است');
     if (input.type === 'inventory.receive' || input.type === 'inventory.adjust') {
       const quantity = Number(payload.quantity);
       if (!Number.isInteger(quantity)) throw new BadRequestException('quantity عملیات نامعتبر است');
@@ -107,6 +108,10 @@ export class SyncService {
       if (!productId) throw new BadRequestException('productId عملیات الزامی است');
       const { productId: _productId, ...changes } = payload;
       return this.catalog.update(productId, changes, userId);
+    }
+    if (input.type === 'invoice.create') {
+      if (!Array.isArray(payload.items) || payload.items.length === 0) throw new BadRequestException('اقلام فاکتور الزامی است');
+      return this.invoice.create(payload as never, userId);
     }
     throw new BadRequestException(`نوع عملیات پشتیبانی نمی‌شود: ${input.type}`);
   }
