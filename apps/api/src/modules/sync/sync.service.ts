@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
 
 const parseCursor = (value?: string) => {
@@ -30,7 +31,7 @@ export class SyncService {
       this.prisma.brand.findMany({ where: { isActive: true }, orderBy: { name: 'asc' }, select: { id: true, name: true } }),
       this.prisma.location.findMany({ orderBy: { code: 'asc' }, select: { id: true, parentId: true, type: true, code: true, name: true } }),
       this.prisma.product.findMany({ where: { deletedAt: null }, orderBy: { updatedAt: 'asc' }, select: { id: true, code: true, slug: true, name: true, categoryId: true, status: true, availabilityOverride: true, updatedAt: true } }),
-      this.prisma.inventoryItem.findMany({ where: { isActive: true }, orderBy: { id: 'asc' }, select: { id: true, productId: true, brandId: true, barcode: true, quantity: true, purchasePrice: true, salePrice: true, minStock: true, locationId: true, updatedAt: true } }),
+      this.prisma.inventoryItem.findMany({ where: { isActive: true }, orderBy: { id: 'asc' }, select: { id: true, productId: true, brandId: true, barcode: true, quantity: true, purchasePrice: true, salePrice: true, minStock: true, locationId: true } }),
       this.prisma.syncChange.aggregate({ _max: { revision: true } }),
     ]);
     return { ok: true, data: { deviceId, categories, brands, locations, products, inventory, cursor: String(cursor._max.revision ?? 0n) } };
@@ -55,7 +56,7 @@ export class SyncService {
       if (existing.userId !== userId || existing.deviceId !== input.deviceId) throw new ConflictException('شناسه عملیات متعلق به دستگاه دیگری است');
       return { ok: true, data: { operationId: existing.operationId, status: existing.status, result: existing.result, duplicate: true } };
     }
-    const operation = await this.prisma.syncOperation.create({ data: { ...input, userId }, select: { operationId: true, status: true, createdAt: true } });
+    const operation = await this.prisma.syncOperation.create({ data: { ...input, payload: input.payload as Prisma.InputJsonValue, userId }, select: { operationId: true, status: true, createdAt: true } });
     return { ok: true, data: { ...operation, duplicate: false } };
   }
 
