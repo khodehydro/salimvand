@@ -150,6 +150,36 @@ export class SyncService {
     throw new BadRequestException(`نوع عملیات پشتیبانی نمی‌شود: ${input.type}`);
   }
 
+
+  /** Replays only domain operations with idempotency guarantees. Product writes are
+   * deliberately excluded until their own idempotency contract is complete. */
+  async recoverPending(limit = 100) {
+    const safeTypes = ['inventory.receive', 'inventory.adjust', 'inventory.transfer', 'invoice.create', 'invoice.pay', 'purchase.create', 'purchase.pay'];
+    const candidates = await this.prisma.syncOperation.findMany({
+      where: { status: 'pending', type: { in: safeTypes }, OR: [{ lastAttemptAt: null }, { lastAttemptAt: { lt: new Date(Date.now() - 30_000) } }] },
+      orderBy: { createdAt: 'asc' }, take: Math.min(100, Math.max(1, limit)),
+    });
+    const results: Array<{ operationId: string; status: string }> = [];
+    for (const operation of candidates) {
+      const claimed = await this.prisma.syncOperation.updateMany({
+        where: { operationId: operation.operationId, status: 'pending', OR: [{ lastAttemptAt: null }, { lastAttemptAt: { lt: new Date(Date.now() - 30_000) } }] },
+        data: { attempts: { increment: 1 }, lastAttemptAt: new Date() },
+      });
+      if (claimed.count !== 1) continue;
+      try {
+        const result = await this.applyOperation(operation.userId, { operationId: operation.operationId, type: operation.type, deviceId: operation.deviceId, payload: operation.payload as Record<string, unknown> });
+        const safeResult = JSON.parse(JSON.stringify(result, (_key, value) => typeof value === 'bigint' ? value.toString() : value)) as Prisma.InputJsonValue;
+        await this.prisma.syncOperation.update({ where: { operationId: operation.operationId }, data: { status: 'applied', result: safeResult, appliedAt: new Date() } });
+        results.push({ operationId: operation.operationId, status: 'applied' });
+      } catch (error) {
+        const conflict = error instanceof ConflictException;
+        await this.prisma.syncOperation.update({ where: { operationId: operation.operationId }, data: { status: conflict ? 'conflict' : 'failed', error: error instanceof Error ? error.message.slice(0, 500) : 'بازیابی عملیات ناموفق بود' } });
+        results.push({ operationId: operation.operationId, status: conflict ? 'conflict' : 'failed' });
+      }
+    }
+    return { ok: true, data: { inspected: candidates.length, results } };
+  }
+
   async conflicts(userId: string, status?: 'open' | 'resolved') {
     const rows = await this.prisma.syncConflict.findMany({ where: { userId, ...(status ? { status } : {}) }, orderBy: { createdAt: 'desc' }, take: 100 });
     return { ok: true, data: rows };

@@ -644,6 +644,8 @@ model SyncOperation {
   status        SyncOperationStatus @default(pending)
   result        Json?
   error         String?             @db.VarChar(500)
+  attempts      Int                 @default(0)
+  lastAttemptAt DateTime?           @db.Timestamptz(6)
   createdAt     DateTime            @default(now()) @db.Timestamptz(6)
   appliedAt     DateTime?           @db.Timestamptz(6)
   user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)

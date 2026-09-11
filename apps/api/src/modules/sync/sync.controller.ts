@@ -33,6 +33,10 @@ export class SyncController {
     return this.sync.operations(request.user?.id ?? '', body.operationIds);
   }
 
+  @Post('operations/recover') recover() {
+    return this.sync.recoverPending();
+  }
+
   @Get('conflicts') conflicts(@Query('status') status: 'open' | 'resolved' | undefined, @Req() request: AuthenticatedRequest) {
     return this.sync.conflicts(request.user?.id ?? '', status);
   }
