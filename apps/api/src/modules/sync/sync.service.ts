@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Injectable } from '@nestjs/comm
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
 import { InventoryService } from '../inventory/inventory.service';
+import { CatalogAdminService } from '../catalog/catalog-admin.service';
 
 const parseCursor = (value?: string) => {
   if (!value) return 0n;
@@ -11,7 +12,7 @@ const parseCursor = (value?: string) => {
 
 @Injectable()
 export class SyncService {
-  constructor(private readonly prisma: PrismaService, private readonly inventory: InventoryService) {}
+  constructor(private readonly prisma: PrismaService, private readonly inventory: InventoryService, private readonly catalog: CatalogAdminService) {}
 
   async registerDevice(userId: string, deviceId: string, name?: string) {
     const device = await this.prisma.syncDevice.upsert({
@@ -85,6 +86,13 @@ export class SyncService {
       const locationId = typeof payload.locationId === 'string' ? payload.locationId : '';
       if (!locationId) throw new BadRequestException('locationId عملیات الزامی است');
       return this.inventory.transfer(itemId, locationId, userId);
+    }
+    if (input.type === 'product.create') return this.catalog.create(payload, userId);
+    if (input.type === 'product.update') {
+      const productId = typeof payload.productId === 'string' ? payload.productId : '';
+      if (!productId) throw new BadRequestException('productId عملیات الزامی است');
+      const { productId: _productId, ...changes } = payload;
+      return this.catalog.update(productId, changes, userId);
     }
     throw new BadRequestException(`نوع عملیات پشتیبانی نمی‌شود: ${input.type}`);
   }

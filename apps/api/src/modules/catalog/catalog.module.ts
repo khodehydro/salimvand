@@ -18,5 +18,6 @@ import { CompatibilityService } from './compatibility.service';
     CompatibilityController,
   ],
   providers: [CatalogService, CatalogAdminService, ReferenceService, CompatibilityService],
+  exports: [CatalogAdminService],
 })
 export class CatalogModule {}
