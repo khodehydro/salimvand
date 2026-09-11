@@ -16,6 +16,7 @@ import {
   formatRial,
   normalizeDigits,
   parseDigitsInput,
+  validateSyncOperationEnvelope,
 } from './index';
 
 describe('shared utilities', () => {
@@ -123,6 +124,19 @@ describe('shared utilities', () => {
     const seo = buildProductSeo({ name: 'قاب ستون', vehicleNames: ['پژو ۲۰۶'] });
     expect(seo.seoTitle).toContain('قاب ستون');
     expect(seo.seoDescription).toContain('میاندوآب');
+  });
+  it('validates canonical offline operation envelopes', () => {
+    const valid = validateSyncOperationEnvelope({
+      operationId: 'android-2026-0001',
+      deviceId: 'phone-a',
+      type: 'invoice.pay',
+      payload: { invoiceId: 'inv-1', amount: '1000', method: 'cash' },
+    });
+    expect(valid.ok).toBe(true);
+    expect(validateSyncOperationEnvelope(null).ok).toBe(false);
+    expect(validateSyncOperationEnvelope({ operationId: 'short', deviceId: 'phone-a', type: 'invoice.pay', payload: {} }).ok).toBe(false);
+    expect(validateSyncOperationEnvelope({ operationId: 'android-2026-0002', deviceId: 'phone-a', type: 'unsupported', payload: {} }).ok).toBe(false);
+    expect(validateSyncOperationEnvelope({ operationId: 'android-2026-0003', deviceId: 'phone-a', type: 'invoice.pay', payload: [] }).ok).toBe(false);
   });
   it('formats Jalali dates with Persian digits', () => {
     const formatted = formatJalaliDate(new Date('2026-08-27T12:00:00Z'));
