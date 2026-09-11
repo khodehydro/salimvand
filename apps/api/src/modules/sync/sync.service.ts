@@ -5,6 +5,7 @@ import { InventoryService } from '../inventory/inventory.service';
 import { CatalogAdminService } from '../catalog/catalog-admin.service';
 import { InvoiceService } from '../invoice/invoice.service';
 import { PurchaseService } from '../suppliers/purchase.service';
+import { validateSyncOperationEnvelope } from '@salimvand/shared';
 
 const parseCursor = (value?: string) => {
   if (!value) return 0n;
@@ -54,7 +55,11 @@ export class SyncService {
    * a separate step: every mutation must be wired to its domain transaction
    * before Android is allowed to submit it. */
   async queueOperation(userId: string, input: { operationId: string; deviceId: string; type: string; payload: Record<string, unknown> }) {
-    await this.touchDevice(userId, input.deviceId);
+    const contract = validateSyncOperationEnvelope(input);
+    if (!contract.ok) throw new BadRequestException(contract.error);
+    const normalizedInput = contract.value;
+    await this.touchDevice(userId, normalizedInput.deviceId);
+    input = normalizedInput;
     const existing = await this.prisma.syncOperation.findUnique({ where: { operationId: input.operationId } });
     if (existing) {
       if (existing.userId !== userId || existing.deviceId !== input.deviceId) throw new ConflictException('شناسه عملیات متعلق به دستگاه دیگری است');
