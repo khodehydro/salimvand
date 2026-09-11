@@ -134,6 +134,16 @@ model Product {
   @@map("products")
 }
 
+model ProductOperation {
+  id          String   @id @default(uuid()) @db.Uuid
+  operationId String   @unique @db.VarChar(100)
+  productId   String   @db.Uuid
+  type        String   @db.VarChar(40)
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+  @@index([productId])
+  @@map("product_operations")
+}
+
 model ProductImage {
   id        String   @id @default(uuid()) @db.Uuid
   productId String   @db.Uuid

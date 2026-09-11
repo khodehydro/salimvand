@@ -69,13 +69,17 @@ export class CatalogAdminService {
     return { ok: true, data: product };
   }
 
-  async create(input: Record<string, unknown>, userId?: string, ip?: string) {
+  async create(input: Record<string, unknown>, userId?: string, ip?: string, operationId?: string) {
     const name = this.stringValue(input.name);
     const categoryId = this.stringValue(input.categoryId);
     if (!name || !categoryId) throw new BadRequestException('نام محصول و دسته‌بندی الزامی است');
     const code = await this.nextCode('product');
     const seo = buildProductSeo({ name, slug: this.optionalString(input.slug) ?? undefined });
     const createProduct = async (tx: Prisma.TransactionClient | typeof this.prisma) => {
+      if (operationId) {
+        const previous = await tx.productOperation.findUnique({ where: { operationId } });
+        if (previous) return tx.product.findUniqueOrThrow({ where: { id: previous.productId } });
+      }
       const created = await tx.product.create({
         data: {
           name,
@@ -107,6 +111,9 @@ export class CatalogAdminService {
             quantity: 0,
           },
         });
+      }
+      if (operationId) {
+        await tx.productOperation.create({ data: { operationId, productId: created.id, type: 'product.create' } });
       }
       if (userId && 'auditLog' in tx)
         await writeAudit(tx as Prisma.TransactionClient, {

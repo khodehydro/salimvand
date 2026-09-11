@@ -126,7 +126,7 @@ export class SyncService {
       if (!locationId) throw new BadRequestException('locationId عملیات الزامی است');
       return this.inventory.transfer(itemId, locationId, userId, input.operationId);
     }
-    if (input.type === 'product.create') return this.catalog.create(payload, userId);
+    if (input.type === 'product.create') return this.catalog.create(payload, userId, undefined, input.operationId);
     if (input.type === 'product.update') {
       const productId = typeof payload.productId === 'string' ? payload.productId : '';
       if (!productId) throw new BadRequestException('productId عملیات الزامی است');
@@ -159,7 +159,7 @@ export class SyncService {
   /** Replays only domain operations with idempotency guarantees. Product writes are
    * deliberately excluded until their own idempotency contract is complete. */
   async recoverPending(limit = 100) {
-    const safeTypes = ['inventory.receive', 'inventory.adjust', 'inventory.transfer', 'invoice.create', 'invoice.pay', 'purchase.create', 'purchase.pay'];
+    const safeTypes = ['inventory.receive', 'inventory.adjust', 'inventory.transfer', 'invoice.create', 'invoice.pay', 'purchase.create', 'purchase.pay', 'product.create'];
     const candidates = await this.prisma.syncOperation.findMany({
       where: { status: 'pending', type: { in: safeTypes }, OR: [{ lastAttemptAt: null }, { lastAttemptAt: { lt: new Date(Date.now() - 30_000) } }] },
       orderBy: { createdAt: 'asc' }, take: Math.min(100, Math.max(1, limit)),
