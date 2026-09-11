@@ -7154,3 +7154,21 @@ button.btn-primary-lg:hover:not(:disabled) {
   background: color-mix(in srgb, var(--sv-surface-2) 94%, transparent);
   color: var(--sv-text-2);
 }
+
+/* Keep the legacy brand-tint utilities dark-theme safe. These palette
+   values are intentionally light in the design system and were used by
+   older cards, chips, counters and operation buttons. */
+[data-theme='dark'] .admin {
+  --sv-brand-50: var(--sv-surface-3);
+  --sv-brand-100: var(--sv-surface-3);
+}
+[data-theme='dark'] .admin .row-action,
+[data-theme='dark'] .admin .product-actions-cell .row-action {
+  background: var(--sv-surface-3);
+  color: var(--sv-link);
+  border: 1px solid var(--sv-border);
+}
+[data-theme='dark'] .admin .row-action:hover {
+  background: var(--sv-surface-2);
+  border-color: var(--sv-border-2);
+}
