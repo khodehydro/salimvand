@@ -211,7 +211,7 @@ describe('InvoiceService', () => {
       'card',
       'user-1',
     );
-    expect(result.data.paymentStatus).toBe('partial');
+    expect((result.data as { paymentStatus?: string }).paymentStatus).toBe('partial');
     expect(update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
