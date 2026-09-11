@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
 import { InventoryService } from '../inventory/inventory.service';
@@ -14,8 +14,25 @@ const parseCursor = (value?: string) => {
 };
 
 @Injectable()
-export class SyncService {
+export class SyncService implements OnModuleInit, OnModuleDestroy {
+  private recoveryTimer?: NodeJS.Timeout;
+
   constructor(private readonly prisma: PrismaService, private readonly inventory: InventoryService, private readonly catalog: CatalogAdminService, private readonly invoice: InvoiceService, private readonly purchases: PurchaseService) {}
+
+  onModuleInit() {
+    // A stale pending operation is eligible only after 30 seconds, so this
+    // interval cannot race a request that is still applying its transaction.
+    this.recoveryTimer = setInterval(() => {
+      void this.recoverPending(50).catch((error: unknown) => {
+        console.error('[sync] pending operation recovery failed', error);
+      });
+    }, 60_000);
+    this.recoveryTimer.unref();
+  }
+
+  onModuleDestroy() {
+    if (this.recoveryTimer) clearInterval(this.recoveryTimer);
+  }
 
   async registerDevice(userId: string, deviceId: string, name?: string) {
     const device = await this.prisma.syncDevice.upsert({
