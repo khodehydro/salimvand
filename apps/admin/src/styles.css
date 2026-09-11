@@ -7136,3 +7136,21 @@ button.btn-primary-lg:hover:not(:disabled) {
 .purchase-item-results p,
 .purchase-item-results > small { display: block; padding: 8px; margin: 0; }
 .purchase-selected-item { color: var(--sv-success, #16835b); font-size: 10px; }
+
+/* Dark theme audit: legacy page-specific surfaces must follow the design
+   tokens instead of staying bright when the root theme changes. */
+[data-theme='dark'] .backup-drive-btn {
+  color: var(--sv-link);
+  border-color: var(--sv-border-2);
+  background: var(--sv-surface-2);
+}
+[data-theme='dark'] .sheet-barcode {
+  background: var(--sv-surface-2);
+}
+[data-theme='dark'] .sheet-barcode code {
+  color: var(--sv-text);
+}
+[data-theme='dark'] .image-item[draggable='true']::before {
+  background: color-mix(in srgb, var(--sv-surface-2) 94%, transparent);
+  color: var(--sv-text-2);
+}
