@@ -2228,3 +2228,24 @@ p {
     box-shadow: 0 8px 25px #0b1c2f18;
   }
 }
+
+/* Product imagery stays square and fully visible across the home catalog and
+   the catalog listing. Contain prevents wide/tall product photos from being
+   cropped inside the 1:1 card frame. */
+.product-image {
+  height: auto;
+  aspect-ratio: 1 / 1;
+}
+.product-image img {
+  object-fit: contain;
+  object-position: center;
+}
+@media (max-width: 620px) {
+  .product-image { height: auto; aspect-ratio: 1 / 1; }
+}
+.catalog .product-card > img,
+.catalog .image-placeholder {
+  height: auto;
+  aspect-ratio: 1 / 1;
+  object-fit: contain;
+}
