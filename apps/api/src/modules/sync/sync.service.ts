@@ -120,22 +120,22 @@ export class SyncService {
     }
     if (input.type === 'invoice.create') {
       if (!Array.isArray(payload.items) || payload.items.length === 0) throw new BadRequestException('اقلام فاکتور الزامی است');
-      return this.invoice.create(payload as never, userId);
+      return this.invoice.create({ ...payload, operationId: input.operationId } as never, userId);
     }
     if (input.type === 'invoice.pay') {
       const invoiceId = typeof payload.invoiceId === 'string' ? payload.invoiceId : '';
       if (!invoiceId) throw new BadRequestException('invoiceId عملیات الزامی است');
-      return this.invoice.pay(invoiceId, String(payload.amount ?? ''), payload.method as never, userId, Array.isArray(payload.checks) ? payload.checks as never : undefined);
+      return this.invoice.pay(invoiceId, String(payload.amount ?? ''), payload.method as never, userId, Array.isArray(payload.checks) ? payload.checks as never : undefined, input.operationId);
     }
     if (input.type === 'purchase.create') {
       const supplierId = typeof payload.supplierId === 'string' ? payload.supplierId : '';
       if (!supplierId || !Array.isArray(payload.lines) || payload.lines.length === 0) throw new BadRequestException('تأمین‌کننده و اقلام خرید الزامی است');
-      return this.purchases.create(supplierId, payload.lines as never, payload.paidAmount as never, userId);
+      return this.purchases.create(supplierId, payload.lines as never, payload.paidAmount as never, userId, undefined, input.operationId);
     }
     if (input.type === 'purchase.pay') {
       const invoiceId = typeof payload.invoiceId === 'string' ? payload.invoiceId : '';
       if (!invoiceId) throw new BadRequestException('invoiceId خرید الزامی است');
-      return this.purchases.pay(invoiceId, String(payload.amount ?? ''), payload.method as never, typeof payload.notes === 'string' ? payload.notes : undefined, userId, undefined, payload.check as never);
+      return this.purchases.pay(invoiceId, String(payload.amount ?? ''), payload.method as never, typeof payload.notes === 'string' ? payload.notes : undefined, userId, undefined, payload.check as never, input.operationId);
     }
     throw new BadRequestException(`نوع عملیات پشتیبانی نمی‌شود: ${input.type}`);
   }

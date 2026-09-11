@@ -310,6 +310,7 @@ model Invoice {
   paymentStatus PaymentStatus @default(unpaid)
   paymentMethod PaymentMethod?
   paidAmount   BigInt        @default(0)
+  operationId  String?       @unique @db.VarChar(100)
   paidAt       DateTime?     @db.Timestamptz(6)
   issuedById   String        @db.Uuid
   issuedBy     User          @relation(fields: [issuedById], references: [id])
@@ -350,6 +351,7 @@ model PurchaseInvoice {
   subtotal       BigInt         @default(0)
   total          BigInt         @default(0)
   paidAmount     BigInt         @default(0)
+  operationId   String?        @unique @db.VarChar(100)
   status         PurchaseStatus @default(issued)
   issuedById     String         @db.Uuid
   supplier       Supplier       @relation(fields: [supplierId], references: [id])
@@ -370,6 +372,7 @@ model SupplierPayment {
   notes        String?
   paidAt       DateTime        @default(now()) @db.Timestamptz(6)
   receivedById String          @db.Uuid
+  operationId  String?         @unique @db.VarChar(100)
   supplier     Supplier        @relation(fields: [supplierId], references: [id])
   invoice      PurchaseInvoice @relation(fields: [invoiceId], references: [id])
   receivedBy   User           @relation(fields: [receivedById], references: [id])
@@ -446,6 +449,7 @@ model Payment {
   amount      BigInt
   method      PaymentMethod
   receivedById String       @db.Uuid
+  operationId  String?       @unique @db.VarChar(100)
   receivedAt  DateTime      @default(now()) @db.Timestamptz(6)
   invoice     Invoice       @relation(fields: [invoiceId], references: [id])
   receivedBy  User          @relation(fields: [receivedById], references: [id])

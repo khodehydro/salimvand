@@ -26,6 +26,7 @@ type CreateInput = {
   storePhone?: string;
   customerAddress?: string;
   discount?: string | number;
+  operationId?: string;
   items?: Array<{ inventoryItemId?: string; quantity?: number; unitPrice?: string | number }>;
 };
 
@@ -113,6 +114,10 @@ export class InvoiceService {
     const publicShortCode = createPublicShortCode();
     const publicTokenExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     const invoice = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      if (input.operationId) {
+        const previous = await tx.invoice.findUnique({ where: { operationId: input.operationId }, include: { items: true } });
+        if (previous) return previous;
+      }
       const counter = await tx.counter.upsert({
         where: { key: 'invoice' },
         update: { lastValue: { increment: 1 } },
@@ -147,6 +152,7 @@ export class InvoiceService {
           subtotal: totals.subtotal,
           discount: totals.discount,
           total: totals.total,
+          operationId: input.operationId,
           issuedById: userId,
           items: {
             create: lines.map((line) => ({
@@ -718,6 +724,7 @@ export class InvoiceService {
     method: 'cash' | 'card' | 'transfer' | 'credit',
     userId: string,
     checks?: Array<{ checkNumber?: string; bank?: string; branch?: string; amount: string; dueDate: string }>,
+    operationId?: string,
   ) {
     if (!userId || !['cash', 'card', 'transfer', 'credit'].includes(method))
       throw new BadRequestException('کاربر و روش پرداخت معتبر الزامی است');
@@ -729,6 +736,10 @@ export class InvoiceService {
     }
     if (paidAmount <= 0n) throw new BadRequestException('مبلغ پرداخت باید مثبت باشد');
     const result = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      if (operationId) {
+        const previous = await tx.payment.findUnique({ where: { operationId } });
+        if (previous) return { ok: true, data: { payment: previous, duplicate: true } };
+      }
       const invoice = await tx.invoice.findUnique({ where: { id } });
       if (!invoice || invoice.status === 'voided') throw new NotFoundException('فاکتور پیدا نشد');
       // Returns shrink what the customer can still owe: cap new payments at
@@ -760,6 +771,7 @@ export class InvoiceService {
           amount: paidAmount,
           method,
           receivedById: userId,
+          operationId,
         },
       });
       if (method === 'credit') {

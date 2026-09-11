@@ -41,10 +41,15 @@ export class PurchaseService {
     actorId: string,
     ip?: string,
     check?: { checkNumber?: string; bank?: string; branch?: string; amount: string; dueDate: string },
+    operationId?: string,
   ) {
     const paymentAmount = parseMoney(amount, 'مبلغ پرداخت');
     if (paymentAmount <= 0n) throw new BadRequestException('مبلغ پرداخت باید مثبت باشد');
     return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      if (operationId) {
+        const previous = await tx.supplierPayment.findUnique({ where: { operationId } });
+        if (previous) return { ok: true, data: { payment: previous, duplicate: true } };
+      }
       const invoice = await tx.purchaseInvoice.findUnique({ where: { id: invoiceId } });
       if (!invoice || invoice.status !== 'issued')
         throw new NotFoundException('فاکتور خرید پیدا نشد');
@@ -70,6 +75,7 @@ export class PurchaseService {
           method,
           notes: notes?.trim() || null,
           receivedById: actorId,
+          operationId,
         },
       });
       if (method === 'credit') {
@@ -119,6 +125,7 @@ export class PurchaseService {
     paidAmount: number | string | undefined,
     actorId: string,
     ip?: string,
+    operationId?: string,
   ) {
     if (!supplierId || !Array.isArray(lines) || !lines.length)
       throw new BadRequestException('تأمین‌کننده و حداقل یک قلم خرید الزامی است');
@@ -147,6 +154,10 @@ export class PurchaseService {
     const paid = parseMoney(paidAmount, 'مبلغ پرداخت');
     if (paid < 0n) throw new BadRequestException('مبلغ پرداخت معتبر نیست');
     return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      if (operationId) {
+        const previous = await tx.purchaseInvoice.findUnique({ where: { operationId }, include: { items: true } });
+        if (previous) return { ok: true, data: previous, duplicate: true };
+      }
       const supplier = await tx.supplier.findFirst({
         where: { id: supplierId, isActive: true, deletedAt: null },
       });
@@ -170,6 +181,7 @@ export class PurchaseService {
           subtotal: total,
           total,
           paidAmount: paid,
+          operationId,
           issuedById: actorId,
           items: {
             create: normalized.map((line, index) => ({
