@@ -63,7 +63,7 @@ export class SyncService {
     const operation = await this.prisma.syncOperation.create({ data: { ...input, payload: input.payload as Prisma.InputJsonValue, userId }, select: { operationId: true, status: true, createdAt: true } });
     try {
       await this.assertOperationRole(userId, input.type);
-      const result = await this.applyOperation(userId, input);
+      const result = await this.applyOperation(userId, { ...input, operationId: input.operationId });
       const safeResult = JSON.parse(JSON.stringify(result, (_key, value) => typeof value === 'bigint' ? value.toString() : value)) as Prisma.InputJsonValue;
       const applied = await this.prisma.syncOperation.update({ where: { operationId: input.operationId }, data: { status: 'applied', result: safeResult, appliedAt: new Date() }, select: { operationId: true, status: true, result: true, appliedAt: true } });
       return { ok: true, data: { ...applied, duplicate: false } };
@@ -94,7 +94,7 @@ export class SyncService {
     if (!allowed) throw new BadRequestException('نقش کاربر اجازهٔ اجرای این عملیات را ندارد');
   }
 
-  private async applyOperation(userId: string, input: { type: string; deviceId: string; payload: Record<string, unknown> }) {
+  private async applyOperation(userId: string, input: { operationId: string; type: string; deviceId: string; payload: Record<string, unknown> }) {
     const payload = input.payload;
     const itemId = typeof payload.itemId === 'string' ? payload.itemId : '';
     if ((input.type.startsWith('inventory.') && !itemId)) throw new BadRequestException('itemId عملیات الزامی است');
@@ -103,13 +103,13 @@ export class SyncService {
       if (!Number.isInteger(quantity)) throw new BadRequestException('quantity عملیات نامعتبر است');
       const reason = typeof payload.reason === 'string' ? payload.reason : 'عملیات موبایل';
       return input.type === 'inventory.receive'
-        ? this.inventory.receive({ itemId, quantity, userId, reason })
-        : this.inventory.adjust({ itemId, quantity, userId, reason });
+        ? this.inventory.receive({ itemId, quantity, userId, reason, operationId: input.operationId })
+        : this.inventory.adjust({ itemId, quantity, userId, reason, operationId: input.operationId });
     }
     if (input.type === 'inventory.transfer') {
       const locationId = typeof payload.locationId === 'string' ? payload.locationId : '';
       if (!locationId) throw new BadRequestException('locationId عملیات الزامی است');
-      return this.inventory.transfer(itemId, locationId, userId);
+      return this.inventory.transfer(itemId, locationId, userId, input.operationId);
     }
     if (input.type === 'product.create') return this.catalog.create(payload, userId);
     if (input.type === 'product.update') {

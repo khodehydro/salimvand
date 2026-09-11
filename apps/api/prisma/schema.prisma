@@ -236,6 +236,7 @@ model InventoryTransaction {
   refType        String?                   @db.VarChar(30)
   refId          String?                   @db.Uuid
   reason         String?                   @db.VarChar(255)
+  operationId    String?                   @unique @db.VarChar(100)
   userId         String                    @db.Uuid
   item           InventoryItem             @relation(fields: [itemId], references: [id])
   user           User                      @relation(fields: [userId], references: [id])
@@ -607,7 +608,6 @@ model BackupJob {
   @@map("backup_jobs")
 }
 
-
 enum SyncOperationStatus {
   pending
   applied
@@ -616,45 +616,45 @@ enum SyncOperationStatus {
 }
 
 model SyncDevice {
-  id String @id @default(uuid()) @db.Uuid
-  userId String @db.Uuid
-  deviceId String @db.VarChar(100)
-  name String? @db.VarChar(120)
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @db.Uuid
+  deviceId   String   @db.VarChar(100)
+  name       String?  @db.VarChar(120)
   lastSeenAt DateTime @default(now()) @db.Timestamptz(6)
-  createdAt DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt DateTime @updatedAt @db.Timestamptz(6)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(6)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@unique([userId, deviceId])
   @@index([userId, lastSeenAt])
   @@map("sync_devices")
 }
 
 model SyncOperation {
-  id String @id @default(uuid()) @db.Uuid
-  operationId String @unique @db.VarChar(100)
-  deviceId String @db.VarChar(100)
-  userId String @db.Uuid
-  type String @db.VarChar(80)
-  payload Json
-  status SyncOperationStatus @default(pending)
-  result Json?
-  error String? @db.VarChar(500)
-  createdAt DateTime @default(now()) @db.Timestamptz(6)
-  appliedAt DateTime? @db.Timestamptz(6)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id            String              @id @default(uuid()) @db.Uuid
+  operationId   String              @unique @db.VarChar(100)
+  deviceId      String              @db.VarChar(100)
+  userId        String              @db.Uuid
+  type          String              @db.VarChar(80)
+  payload       Json
+  status        SyncOperationStatus @default(pending)
+  result        Json?
+  error         String?             @db.VarChar(500)
+  createdAt     DateTime            @default(now()) @db.Timestamptz(6)
+  appliedAt     DateTime?           @db.Timestamptz(6)
+  user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@index([userId, status, createdAt])
   @@index([deviceId, createdAt])
   @@map("sync_operations")
 }
 
 model SyncChange {
-  revision BigInt @id @default(autoincrement())
-  entityType String @db.VarChar(60)
-  entityId String @db.VarChar(100)
-  action String @db.VarChar(30)
-  payload Json?
-  operationId String? @db.VarChar(100)
-  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  revision    BigInt   @id @default(autoincrement())
+  entityType  String   @db.VarChar(60)
+  entityId    String   @db.VarChar(100)
+  action      String   @db.VarChar(30)
+  payload     Json?
+  operationId String?  @db.VarChar(100)
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
   @@index([createdAt])
   @@index([entityType, entityId, revision])
   @@map("sync_changes")

@@ -12,6 +12,7 @@ export type StockMutation = {
   reason?: string;
   refType?: string;
   refId?: string;
+  operationId?: string;
 };
 
 @Injectable()
@@ -236,8 +237,15 @@ export class InventoryService {
     return this.mutate(input, 'purchase');
   }
 
-  async transfer(itemId: string, locationId: string, userId: string) {
+  async transfer(itemId: string, locationId: string, userId: string, operationId?: string) {
     return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      if (operationId) {
+        const previous = await tx.inventoryTransaction.findUnique({ where: { operationId } });
+        if (previous) {
+          const item = await tx.inventoryItem.findUnique({ where: { id: itemId } });
+          return { ok: true, data: { item, transaction: previous }, duplicate: true };
+        }
+      }
       const current = await tx.inventoryItem.findUnique({ where: { id: itemId } });
       if (!current) throw new NotFoundException('قلم موجودی پیدا نشد');
       const item = await tx.inventoryItem.update({ where: { id: itemId }, data: { locationId } });
@@ -249,6 +257,7 @@ export class InventoryService {
           quantityAfter: current.quantity,
           userId,
           reason: `انتقال به موقعیت ${locationId}`,
+          operationId,
         },
       });
       return { ok: true, data: { item, transaction } };
@@ -404,6 +413,13 @@ export class InventoryService {
 
   private async mutate(input: StockMutation, type: 'adjustment' | 'purchase') {
     return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      if (input.operationId) {
+        const previous = await tx.inventoryTransaction.findUnique({ where: { operationId: input.operationId } });
+        if (previous) {
+          const item = await tx.inventoryItem.findUnique({ where: { id: input.itemId } });
+          return { ok: true, data: { item, transaction: previous }, duplicate: true };
+        }
+      }
       const item = await tx.inventoryItem.findUnique({ where: { id: input.itemId } });
       if (!item) throw new NotFoundException('قلم موجودی پیدا نشد');
       const next = calculateNextQuantity(item.quantity, input.quantity, input.reason);
@@ -421,6 +437,7 @@ export class InventoryService {
           reason: input.reason,
           refType: input.refType,
           refId: input.refId,
+          operationId: input.operationId,
         },
       });
       await writeAudit(tx, {
