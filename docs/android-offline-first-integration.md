@@ -800,3 +800,359 @@ Agent دیگر باید این Deliverableها را تولید کند:
 11. گزارش تست دو دستگاه
 
 هدف نهایی این نیست که Android فقط داده را نمایش دهد؛ هدف این است که هر تغییر مهم به یک Operation قابل تکرار، قابل پیگیری، Auditپذیر و Conflict-aware تبدیل شود.
+
+---
+
+# 22. محدودهٔ نهایی Android: فقط سه تب کاربردی
+
+هدف این پروژه ساخت نسخهٔ کامل پنل مدیریت روی Android نیست. اپلیکیشن Android عمداً کوچک و عملیاتی می‌ماند و فقط سه بخش اصلی دارد:
+
+```text
+تب ۱: محصولات و موجودی
+تب ۲: صدور فاکتور
+تب ۳: ایجاد محصول
+```
+
+صفحه‌های داشبورد، گزارش‌ها، مشتریان، خریدها، تنظیمات، کاربران، پیامک، PDFهای مدیریتی و سایر بخش‌های پنل در نسخهٔ اول Android ساخته نمی‌شوند و فقط در پنل وب باقی می‌مانند.
+
+## تب ۱: محصولات و موجودی
+
+هدف: مشاهدهٔ سریع کالا، جست‌وجو و تغییرات روزمرهٔ انبار.
+
+### قابلیت‌های ضروری
+
+- لیست محصولات فعال
+- جست‌وجو با نام، کد، بارکد و شماره قطعه
+- نمایش نام و تصویر محصول در صورت وجود
+- نمایش دسته‌بندی
+- نمایش برند
+- نمایش قفسه/مکان انبار
+- نمایش موجودی فعلی
+- نمایش حداقل موجودی و هشدار کمبود
+- نمایش قیمت خرید
+- نمایش قیمت فروش
+- فیلتر کمبود موجودی
+- فیلتر دسته و مکان
+- Refresh از سرور
+- مشاهدهٔ آخرین وضعیت در حالت Offline
+- افزایش موجودی
+- کاهش یا اصلاح موجودی
+- انتقال به قفسه/مکان دیگر
+
+### رفتار Offline
+
+لیست و جست‌وجو از Room انجام می‌شود و به اینترنت وابسته نیست. عملیات افزایش، اصلاح و انتقال موجودی در صف محلی ثبت می‌شود:
+
+```text
+inventory.receive
+inventory.adjust
+inventory.transfer
+```
+
+کاربر باید وضعیت هر تغییر را ببیند:
+
+```text
+در انتظار ارسال
+در حال ارسال
+ثبت شد
+Conflict
+خطا
+```
+
+در این تب مقدار محلی فقط Cache/پیش‌نمایش است. موجودی معتبر نهایی از سرور و Change Feed می‌آید.
+
+### UI پیشنهادی
+
+```text
+SearchBox
+Filter chips: همه، کمبود، دسته، قفسه
+ProductCard یا CompactRow
+  نام
+  کد
+  موجودی
+  قفسه
+  قیمت فروش
+  دکمه +
+  دکمه -
+  منوی انتقال
+SyncStatusBadge
+```
+
+برای اصلاح موجودی، مقدار و علت تغییر الزامی باشد. برای فروش یا تغییر حساس، دوبار کلیک نباید دو Operation ایجاد کند؛ دکمه باید بعد از اولین کلیک Disable شود و همان `operationId` حفظ شود.
+
+## تب ۲: صدور فاکتور
+
+هدف: ثبت سریع فروش، نه بازسازی همهٔ امکانات Invoice پنل وب.
+
+### قابلیت‌های ضروری
+
+- جست‌وجوی محصول از Cache محلی
+- افزودن کالا به سبد
+- تغییر تعداد
+- نمایش قیمت واحد و جمع
+- انتخاب مشتری موجود یا ثبت اطلاعات محدود مشتری
+- نمایش مبلغ نهایی
+- انتخاب روش پرداخت
+- ثبت به‌عنوان Draft در حالت Offline
+- ارسال خودکار بعد از اتصال
+- نمایش شماره موقت تا قبل از تأیید سرور
+- نمایش شماره رسمی فقط بعد از `applied`
+- نمایش Conflict در صورت تغییر قیمت/موجودی/وضعیت مشتری
+
+### چیزهایی که در نسخهٔ اول Android انجام نمی‌شوند
+
+- گزارش‌های پیچیدهٔ مالی
+- طراحی کامل PDF فاکتور
+- مدیریت کامل برگشت کالا
+- ویرایش فاکتور رسمی بعد از ثبت
+- مدیریت کامل چک‌ها مگر اینکه API و UI جداگانه اضافه شود
+- امکانات کامل حسابداری پنل وب
+
+### جریان Draft
+
+```text
+انتخاب محصول از Cache
+  -> ساخت InvoiceDraft در Room
+  -> افزودن اقلام
+  -> ذخیره شماره موقت
+  -> در صورت Offline: باقی ماندن در Draft/Pending
+  -> در صورت Online: تبدیل به invoice.create
+  -> بررسی موجودی در Backend
+  -> applied یا conflict
+```
+
+Operation ایجاد فاکتور:
+
+```text
+invoice.create
+```
+
+پرداخت باید Operation جدا باشد و به فاکتور رسمی سرور متصل شود:
+
+```text
+invoice.pay
+```
+
+تا وقتی `invoice.create` موفق نشده، Android نباید `invoice.pay` را ارسال کند.
+
+## تب ۳: ایجاد محصول
+
+هدف: ثبت سریع محصول جدید در انبار/کاتالوگ.
+
+### فیلدهای ضروری
+
+- نام محصول
+- دسته‌بندی
+- برند در صورت نیاز
+- شماره قطعه
+- بارکد اختیاری یا تولیدشده
+- قیمت خرید
+- قیمت فروش
+- موجودی اولیه
+- قفسه/مکان
+- حداقل موجودی
+- تصویر اختیاری
+- وضعیت فعال/مخفی
+
+### رفتار Offline
+
+فرم ابتدا در Draft محلی ذخیره می‌شود. بعد از تأیید کاربر:
+
+```text
+product.create
+```
+
+به صف اضافه می‌شود. `operationId` در تمام Retryها ثابت می‌ماند. Backend برای ایجاد محصول رکورد idempotency دارد و Replay باعث محصول تکراری نمی‌شود.
+
+ویرایش‌های محدود بعدی:
+
+```text
+product.update
+```
+
+اگر محصول هنوز در حالت Pending ایجاد است، تغییرات را ابتدا روی Draft محلی Merge کن و از ساخت چند Operation غیرضروری خودداری کن.
+
+---
+
+# 23. معماری پنل وب و Android
+
+## Backend مشترک
+
+Backend منبع نهایی حقیقت است و شامل این لایه‌هاست:
+
+```text
+NestJS API
+  ├── Auth و Role Guard
+  ├── Catalog/Product Module
+  ├── Inventory Module
+  ├── Invoice Module
+  ├── Supplier/Purchase Module
+  ├── Sync Module
+  ├── Audit Module
+  └── Prisma/PostgreSQL
+```
+
+ماژول Sync نقطهٔ اتصال Android به Domain Serviceهاست و نباید منطق مالی یا موجودی جداگانه‌ای در Android پیاده شود.
+
+## پنل وب Admin
+
+پنل فعلی یک برنامهٔ React/Vite است و برای مدیریت کامل استفاده می‌شود:
+
+```text
+apps/admin
+  ├── ProductsPage
+  ├── InventoryPage
+  ├── InvoicesPage
+  ├── PurchasesPage
+  ├── CustomersPage
+  ├── UsersPage
+  ├── ReportsPage
+  ├── SettingsPage
+  └── سایر صفحات مدیریتی
+```
+
+پنل وب برای عملیات پیچیده و مدیریتی مرجع است. Android نسخهٔ کوچک‌شدهٔ پنل نیست؛ فقط سه Workflow روزانه را ارائه می‌کند.
+
+Endpointهای Catalog در Backend:
+
+```text
+GET    /api/v1/products
+GET    /api/v1/products/:id
+POST   /api/v1/products
+PATCH  /api/v1/products/:id
+POST   /api/v1/products/:id/restore
+```
+
+Endpointهای Invoice پنل وب:
+
+```text
+GET    /api/v1/invoices
+GET    /api/v1/invoices/options
+POST   /api/v1/invoices
+POST   /api/v1/invoices/:id/pay
+POST   /api/v1/invoices/:id/returns
+```
+
+Android برای عملیات Offline نباید مستقیماً منطق حساس را با Endpointهای عادی پنل دور بزند؛ برای Commandهای آفلاین از این Endpoint استفاده کند:
+
+```text
+POST /api/v1/sync/operations
+```
+
+## Android App
+
+معماری پیشنهادی:
+
+```text
+UI Layer
+  ├── ProductsScreen
+  ├── InvoiceScreen
+  └── CreateProductScreen
+
+ViewModel Layer
+  ├── ProductsViewModel
+  ├── InvoiceViewModel
+  └── CreateProductViewModel
+
+Repository Layer
+  ├── ProductRepository
+  ├── InventoryRepository
+  ├── InvoiceRepository
+  └── SyncRepository
+
+Local Data
+  ├── Room Database
+  ├── SyncQueue
+  ├── SyncState
+  ├── Conflicts
+  └── DraftInvoices
+
+Remote Data
+  ├── Retrofit API
+  ├── Auth Interceptor
+  ├── Sync Worker
+  └── Network Monitor
+```
+
+## مرزبندی پنل و Android
+
+```text
+پنل وب: عملیات کامل و پیچیده
+Android: سه Workflow سریع و روزانه
+Backend: منبع حقیقت، اعتبارسنجی، Transaction و Audit
+Room: Cache، Draft و Queue
+Cloud/API: تصمیم نهایی دربارهٔ موجودی و مالی
+```
+
+Android نباید:
+
+- مستقیماً دیتابیس را تغییر دهد.
+- موجودی سرور را با مقدار محلی Overwrite کند.
+- فاکتور رسمی را بدون پاسخ سرور قطعی فرض کند.
+- برای Retry، OperationId جدید بسازد.
+- Secret یا Token را در Queue ذخیره کند.
+- تمام صفحات پنل وب را کپی کند.
+
+---
+
+# 24. اولویت پیاده‌سازی Android
+
+به دلیل محدود بودن Scope، ترتیب کار این باشد:
+
+## فاز A: تب محصولات Read-only
+
+```text
+Login
+Device Registration
+Bootstrap
+Room Product/Inventory
+Search
+Filters
+Pull
+```
+
+## فاز B: تغییر موجودی
+
+```text
+Queue
+inventory.receive
+inventory.adjust
+inventory.transfer
+Worker
+Retry
+Status Badge
+```
+
+## فاز C: تب صدور فاکتور
+
+```text
+Product picker
+Cart
+InvoiceDraft
+invoice.create
+Conflict UI
+invoice.pay بعد از Applied
+```
+
+## فاز D: تب ایجاد محصول
+
+```text
+Create form
+Local Draft
+product.create
+product.update
+Image upload در صورت نیاز
+```
+
+## فاز E: پایداری
+
+```text
+Crash recovery
+Two-device test
+Duplicate test
+Conflict test
+Battery/network constraints
+Release build
+```
+
+در هر فاز UI فقط زمانی به فاز بعد برود که وضعیت Sync عملیات برای کاربر قابل مشاهده و قابل فهم باشد.
