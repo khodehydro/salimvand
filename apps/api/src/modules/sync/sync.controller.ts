@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
 import { RolesGuard } from '../../common/auth/roles.guard';
@@ -31,5 +31,13 @@ export class SyncController {
 
   @Post('operations/status') statuses(@Body() body: SyncOperationIdsDto, @Req() request: AuthenticatedRequest) {
     return this.sync.operations(request.user?.id ?? '', body.operationIds);
+  }
+
+  @Get('conflicts') conflicts(@Query('status') status: 'open' | 'resolved' | undefined, @Req() request: AuthenticatedRequest) {
+    return this.sync.conflicts(request.user?.id ?? '', status);
+  }
+
+  @Post('conflicts/:id/resolve') resolve(@Param('id') id: string, @Body() body: Record<string, unknown>, @Req() request: AuthenticatedRequest) {
+    return this.sync.resolveConflict(request.user?.id ?? '', id, body);
   }
 }

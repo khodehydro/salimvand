@@ -267,6 +267,7 @@ model User {
   returns ReturnRecord[]
   syncDevices SyncDevice[]
   syncOperations SyncOperation[]
+  syncConflicts SyncConflict[]
   createdAt    DateTime               @default(now()) @db.Timestamptz(6)
   updatedAt    DateTime               @updatedAt @db.Timestamptz(6)
   @@map("users")
@@ -662,4 +663,29 @@ model SyncChange {
   @@index([createdAt])
   @@index([entityType, entityId, revision])
   @@map("sync_changes")
+}
+
+
+enum SyncConflictStatus {
+  open
+  resolved
+}
+
+model SyncConflict {
+  id String @id @default(uuid()) @db.Uuid
+  operationId String @db.VarChar(100)
+  userId String @db.Uuid
+  deviceId String @db.VarChar(100)
+  type String @db.VarChar(80)
+  code String @db.VarChar(80)
+  payload Json
+  serverState Json?
+  status SyncConflictStatus @default(open)
+  resolution Json?
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  resolvedAt DateTime? @db.Timestamptz(6)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, status, createdAt])
+  @@unique([operationId, status])
+  @@map("sync_conflicts")
 }

@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
 import { InventoryService } from '../inventory/inventory.service';
@@ -68,7 +68,17 @@ export class SyncService {
       const applied = await this.prisma.syncOperation.update({ where: { operationId: input.operationId }, data: { status: 'applied', result: safeResult, appliedAt: new Date() }, select: { operationId: true, status: true, result: true, appliedAt: true } });
       return { ok: true, data: { ...applied, duplicate: false } };
     } catch (error) {
-      await this.prisma.syncOperation.update({ where: { operationId: input.operationId }, data: { status: 'failed', error: error instanceof Error ? error.message.slice(0, 500) : 'عملیات ناموفق بود' } });
+      const isConflict = error instanceof ConflictException;
+      const response = isConflict ? error.getResponse() : null;
+      const details = typeof response === 'object' && response !== null ? response as Record<string, unknown> : {};
+      await this.prisma.syncOperation.update({ where: { operationId: input.operationId }, data: { status: isConflict ? 'conflict' : 'failed', error: error instanceof Error ? error.message.slice(0, 500) : 'عملیات ناموفق بود' } });
+      if (isConflict) {
+        await this.prisma.syncConflict.upsert({
+          where: { operationId_status: { operationId: input.operationId, status: 'open' } },
+          create: { operationId: input.operationId, userId, deviceId: input.deviceId, type: input.type, code: typeof details.code === 'string' ? details.code : 'CONFLICT', payload: input.payload as Prisma.InputJsonValue, serverState: details as Prisma.InputJsonValue },
+          update: { serverState: details as Prisma.InputJsonValue },
+        });
+      }
       throw error;
     }
   }
@@ -138,6 +148,19 @@ export class SyncService {
       return this.purchases.pay(invoiceId, String(payload.amount ?? ''), payload.method as never, typeof payload.notes === 'string' ? payload.notes : undefined, userId, undefined, payload.check as never, input.operationId);
     }
     throw new BadRequestException(`نوع عملیات پشتیبانی نمی‌شود: ${input.type}`);
+  }
+
+  async conflicts(userId: string, status?: 'open' | 'resolved') {
+    const rows = await this.prisma.syncConflict.findMany({ where: { userId, ...(status ? { status } : {}) }, orderBy: { createdAt: 'desc' }, take: 100 });
+    return { ok: true, data: rows };
+  }
+
+  async resolveConflict(userId: string, id: string, resolution: Record<string, unknown>) {
+    const conflict = await this.prisma.syncConflict.findFirst({ where: { id, userId, status: 'open' } });
+    if (!conflict) throw new NotFoundException('Conflict پیدا نشد');
+    const updated = await this.prisma.syncConflict.update({ where: { id }, data: { status: 'resolved', resolution: resolution as Prisma.InputJsonValue, resolvedAt: new Date() } });
+    await this.prisma.syncOperation.updateMany({ where: { operationId: conflict.operationId, userId, status: 'conflict' }, data: { status: 'failed', error: 'Conflict توسط اپراتور حل شد؛ اجرای مجدد نیازمند تصمیم کلاینت است' } });
+    return { ok: true, data: updated };
   }
 
   async operations(userId: string, ids: string[]) {
