@@ -60,6 +60,7 @@ export class SyncService {
     }
     const operation = await this.prisma.syncOperation.create({ data: { ...input, payload: input.payload as Prisma.InputJsonValue, userId }, select: { operationId: true, status: true, createdAt: true } });
     try {
+      await this.assertOperationRole(userId, input.type);
       const result = await this.applyOperation(userId, input);
       const safeResult = JSON.parse(JSON.stringify(result, (_key, value) => typeof value === 'bigint' ? value.toString() : value)) as Prisma.InputJsonValue;
       const applied = await this.prisma.syncOperation.update({ where: { operationId: input.operationId }, data: { status: 'applied', result: safeResult, appliedAt: new Date() }, select: { operationId: true, status: true, result: true, appliedAt: true } });
@@ -68,6 +69,19 @@ export class SyncService {
       await this.prisma.syncOperation.update({ where: { operationId: input.operationId }, data: { status: 'failed', error: error instanceof Error ? error.message.slice(0, 500) : 'عملیات ناموفق بود' } });
       throw error;
     }
+  }
+
+  private async assertOperationRole(userId: string, type: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+    if (!user) throw new BadRequestException('کاربر عملیات پیدا نشد');
+    const inventoryOperation = type.startsWith('inventory.');
+    const productOperation = type.startsWith('product.');
+    const allowed = inventoryOperation
+      ? user.role === 'manager' || user.role === 'super_admin' || user.role === 'warehouse'
+      : productOperation
+        ? user.role === 'manager' || user.role === 'super_admin'
+        : false;
+    if (!allowed) throw new BadRequestException('نقش کاربر اجازهٔ اجرای این عملیات را ندارد');
   }
 
   private async applyOperation(userId: string, input: { type: string; deviceId: string; payload: Record<string, unknown> }) {
