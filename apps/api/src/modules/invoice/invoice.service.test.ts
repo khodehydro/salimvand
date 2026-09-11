@@ -828,7 +828,9 @@ describe('InvoiceService.list and panel link/pdf actions', () => {
       PDFDocument.prototype.font = originalFont;
     }
     // presentation forms (FB50–FEFF) are outside the base Arabic block
-    const persianLines = drawn.filter((line) => /[\u0600-\u06FF\uFB50-\uFEFF]/.test(line));
+    // Numeric-only table cells contain Persian digits but no letters to shape.
+    // Assert shaping only on lines that actually contain Arabic/Persian letters.
+    const persianLines = drawn.filter((line) => /[\u0621-\u063A\u063F-\u064A\u067E\u0686\u0698\u06A9\u06AF\u06CC\uFB50-\uFEFF]/.test(line));
     expect(persianLines.length).toBeGreaterThan(8);
     // No line may carry unshaped Persian LETTERS (digits/punctuation are fine).
     const unshapedLetter = /[\u0621-\u063A\u063F-\u064A\u067E\u0686\u0698\u06A9\u06AF\u06CC]/;
