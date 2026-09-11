@@ -25,4 +25,10 @@ export async function writeAudit(tx: Prisma.TransactionClient, input: AuditInput
       ip: input.ip,
     },
   });
+  // Publish metadata-only invalidation events for Offline-First clients.
+  // Audit snapshots are deliberately excluded because they may contain secrets.
+  const syncChange = (tx as unknown as { syncChange?: { create?: (args: unknown) => Promise<unknown> } }).syncChange;
+  if (syncChange?.create) {
+    await syncChange.create({ data: { entityType: input.entityType, entityId: input.entityId ?? 'unknown', action: input.action } });
+  }
 }
