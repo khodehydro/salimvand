@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
+import { InventoryService } from '../inventory/inventory.service';
 
 const parseCursor = (value?: string) => {
   if (!value) return 0n;
@@ -10,7 +11,7 @@ const parseCursor = (value?: string) => {
 
 @Injectable()
 export class SyncService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly inventory: InventoryService) {}
 
   async registerDevice(userId: string, deviceId: string, name?: string) {
     const device = await this.prisma.syncDevice.upsert({
@@ -57,7 +58,35 @@ export class SyncService {
       return { ok: true, data: { operationId: existing.operationId, status: existing.status, result: existing.result, duplicate: true } };
     }
     const operation = await this.prisma.syncOperation.create({ data: { ...input, payload: input.payload as Prisma.InputJsonValue, userId }, select: { operationId: true, status: true, createdAt: true } });
-    return { ok: true, data: { ...operation, duplicate: false } };
+    try {
+      const result = await this.applyOperation(userId, input);
+      const safeResult = JSON.parse(JSON.stringify(result, (_key, value) => typeof value === 'bigint' ? value.toString() : value)) as Prisma.InputJsonValue;
+      const applied = await this.prisma.syncOperation.update({ where: { operationId: input.operationId }, data: { status: 'applied', result: safeResult, appliedAt: new Date() }, select: { operationId: true, status: true, result: true, appliedAt: true } });
+      return { ok: true, data: { ...applied, duplicate: false } };
+    } catch (error) {
+      await this.prisma.syncOperation.update({ where: { operationId: input.operationId }, data: { status: 'failed', error: error instanceof Error ? error.message.slice(0, 500) : 'عملیات ناموفق بود' } });
+      throw error;
+    }
+  }
+
+  private async applyOperation(userId: string, input: { type: string; deviceId: string; payload: Record<string, unknown> }) {
+    const payload = input.payload;
+    const itemId = typeof payload.itemId === 'string' ? payload.itemId : '';
+    if (!itemId) throw new BadRequestException('itemId عملیات الزامی است');
+    if (input.type === 'inventory.receive' || input.type === 'inventory.adjust') {
+      const quantity = Number(payload.quantity);
+      if (!Number.isInteger(quantity)) throw new BadRequestException('quantity عملیات نامعتبر است');
+      const reason = typeof payload.reason === 'string' ? payload.reason : 'عملیات موبایل';
+      return input.type === 'inventory.receive'
+        ? this.inventory.receive({ itemId, quantity, userId, reason })
+        : this.inventory.adjust({ itemId, quantity, userId, reason });
+    }
+    if (input.type === 'inventory.transfer') {
+      const locationId = typeof payload.locationId === 'string' ? payload.locationId : '';
+      if (!locationId) throw new BadRequestException('locationId عملیات الزامی است');
+      return this.inventory.transfer(itemId, locationId, userId);
+    }
+    throw new BadRequestException(`نوع عملیات پشتیبانی نمی‌شود: ${input.type}`);
   }
 
   async operations(userId: string, ids: string[]) {
