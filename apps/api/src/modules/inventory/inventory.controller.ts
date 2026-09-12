@@ -18,6 +18,9 @@ import {
 @Roles('warehouse')
 export class InventoryController {
   constructor(private readonly inventory: InventoryService) {}
+  @Get('summary') @Roles('manager', 'warehouse', 'accountant') summary() {
+    return this.inventory.summary();
+  }
   @Get('items') @Roles('warehouse', 'accountant') list(
     @Query('q') q?: string,
     @Query('brandId') brandId?: string,
