@@ -60,7 +60,7 @@ export class AuthController {
     });
     return {
       ok: true,
-      data: { accessToken: this.auth.issueAccessToken(authUser), user: authUser },
+      data: { accessToken: this.auth.issueAccessToken(authUser), refreshToken, user: authUser },
     };
   }
 
@@ -124,12 +124,12 @@ export class AuthController {
       maxAge: 7 * 24 * 60 * 60 * 1000,
       path: '/api/v1/auth',
     });
-    return { ok: true, data: { accessToken: this.auth.issueAccessToken(user) } };
+    return { ok: true, data: { accessToken: this.auth.issueAccessToken(user), refreshToken: nextToken } };
   }
 
   @Post('logout')
-  logout(@Req() request: Request, @Res({ passthrough: true }) response: Response) {
-    const token = (request.cookies as Record<string, string> | undefined)?.['salimvand.refresh'];
+  logout(@Body('refreshToken') fallback: string | undefined, @Req() request: Request, @Res({ passthrough: true }) response: Response) {
+    const token = fallback ?? (request.cookies as Record<string, string> | undefined)?.['salimvand.refresh'];
     response.clearCookie('salimvand.refresh', {
       httpOnly: true,
       sameSite: 'strict',

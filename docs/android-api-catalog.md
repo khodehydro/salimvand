@@ -27,6 +27,7 @@ Content-Type: application/json
 POST /auth/login
 POST /auth/refresh
 POST /auth/logout
+GET  /auth/me
 POST /sync/devices
 ```
 
@@ -366,3 +367,27 @@ AsyncImage(model = product.imageUrl, contentDescription = product.name)
 ```
 
 مسیرهای `/uploads/...` روی VPS و Nginx سرو می‌شوند و نباید به `localhost`، `127.0.0.1` یا IP داخلی تبدیل شوند.
+
+
+## قرارداد Native Refresh Token
+
+در Login و Refresh، Backend برای Android این پاسخ را می‌دهد:
+
+```json
+{
+  "accessToken": "...",
+  "refreshToken": "...",
+  "user": {}
+}
+```
+
+Android باید `refreshToken` را فقط در Android Keystore/Encrypted DataStore نگه دارد. سرور همچنان Cookie امن وب را نیز تنظیم می‌کند. Logout موبایل:
+
+```http
+POST /api/v1/auth/logout
+Content-Type: application/json
+
+{ "refreshToken": "..." }
+```
+
+`operationIds` در Status الزاماً UUID نیستند؛ باید همان شناسهٔ ثابت تولیدشده توسط Android باشند.

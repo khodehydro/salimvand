@@ -1,4 +1,4 @@
-import { IsObject, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import { IsArray, IsObject, IsOptional, IsString, MaxLength, ArrayMaxSize } from 'class-validator';
 
 export class RegisterSyncDeviceDto {
   @IsString() @MaxLength(100) deviceId!: string;
@@ -13,5 +13,5 @@ export class QueueSyncOperationDto {
 }
 
 export class SyncOperationIdsDto {
-  @IsUUID('4', { each: true }) operationIds!: string[];
+  @IsArray() @ArrayMaxSize(100) @IsString({ each: true }) @MaxLength(100, { each: true }) operationIds!: string[];
 }
