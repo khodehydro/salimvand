@@ -115,9 +115,6 @@ export class CatalogAdminService {
       if (operationId) {
         await tx.productOperation.create({ data: { operationId, productId: created.id, type: 'product.create' } });
       }
-      if (operationId) {
-        await tx.productOperation.create({ data: { operationId, productId: updated.id, type: 'product.update' } });
-      }
       if (userId && 'auditLog' in tx)
         await writeAudit(tx as Prisma.TransactionClient, {
           userId,
@@ -178,6 +175,9 @@ export class CatalogAdminService {
         if (previous) return tx.product.findUniqueOrThrow({ where: { id: previous.productId } });
       }
       const updated = await tx.product.update({ where: { id }, data });
+      if (operationId) {
+        await tx.productOperation.create({ data: { operationId, productId: updated.id, type: 'product.update' } });
+      }
       if (userId && 'auditLog' in tx)
         await writeAudit(tx as Prisma.TransactionClient, {
           userId,
