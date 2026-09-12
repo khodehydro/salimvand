@@ -266,5 +266,5 @@ export function validateSyncOperationEnvelope(input: unknown):
   if (typeof value.deviceId !== 'string' || !deviceIdPattern.test(value.deviceId)) return { ok: false, error: 'deviceId is invalid' };
   if (typeof value.type !== 'string' || !(SYNC_OPERATION_TYPES as readonly string[]).includes(value.type)) return { ok: false, error: 'operation type is unsupported' };
   if (!value.payload || typeof value.payload !== 'object' || Array.isArray(value.payload)) return { ok: false, error: 'payload must be an object' };
-  return { ok: true, value: value as SyncOperationEnvelope };
+  return { ok: true, value: value as unknown as SyncOperationEnvelope };
 }
