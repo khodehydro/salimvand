@@ -129,7 +129,9 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
               ? user.role === 'manager' || user.role === 'super_admin' || user.role === 'seller' || user.role === 'accountant'
               : productOperation
                 ? user.role === 'manager' || user.role === 'super_admin'
-                : false;
+                : customerOperation
+                  ? user.role === 'seller' || user.role === 'manager' || user.role === 'super_admin'
+                  : false;
     if (!allowed) throw new BadRequestException('نقش کاربر اجازهٔ اجرای این عملیات را ندارد');
   }
 
