@@ -1184,7 +1184,7 @@ export class InvoiceService {
       include: {
         customer: true,
         items: { include: { inventoryItem: { include: { product: true, brand: true, location: { include: { parent: true } } } } } },
-        payments: { include: { checks: true }, orderBy: { paidAt: 'desc' } },
+        payments: { include: { checks: true }, orderBy: { receivedAt: 'desc' } },
         returns: { orderBy: { createdAt: 'desc' } },
       },
     });
