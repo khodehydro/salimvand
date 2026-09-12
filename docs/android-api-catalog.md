@@ -346,3 +346,23 @@ operationId در Retry تغییر نکند
 429      درخواست بیش از حد
 500      خطای موقت سرور؛ Retry با Backoff
 ```
+
+
+## تصاویر محصولات
+
+Bootstrap اکنون برای هر محصول این فیلدها را برمی‌گرداند:
+
+```json
+{
+  "images": [{ "id": "...", "path": "/uploads/products/.../large.webp", "alt": "..." }],
+  "imageUrl": "https://salimvand.ir/uploads/products/.../large.webp"
+}
+```
+
+برای Android از `imageUrl` استفاده کن؛ `imageUrl` قابل استفادهٔ مستقیم در Coil/Glide است. اگر `imageUrl` برابر `null` بود، Placeholder نمایش بده. تصویر محلی را با `productId` و `imageUrl` در Cache ذخیره کن.
+
+```kotlin
+AsyncImage(model = product.imageUrl, contentDescription = product.name)
+```
+
+مسیرهای `/uploads/...` روی VPS و Nginx سرو می‌شوند و نباید به `localhost`، `127.0.0.1` یا IP داخلی تبدیل شوند.

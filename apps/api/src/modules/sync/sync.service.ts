@@ -52,11 +52,16 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
       this.prisma.category.findMany({ where: { isActive: true }, orderBy: { name: 'asc' }, select: { id: true, parentId: true, name: true, slug: true, code: true } }),
       this.prisma.brand.findMany({ where: { isActive: true }, orderBy: { name: 'asc' }, select: { id: true, name: true } }),
       this.prisma.location.findMany({ orderBy: { code: 'asc' }, select: { id: true, parentId: true, type: true, code: true, name: true } }),
-      this.prisma.product.findMany({ where: { deletedAt: null }, orderBy: { updatedAt: 'asc' }, select: { id: true, code: true, slug: true, name: true, categoryId: true, status: true, availabilityOverride: true, updatedAt: true } }),
+      this.prisma.product.findMany({ where: { deletedAt: null }, orderBy: { updatedAt: 'asc' }, select: { id: true, code: true, slug: true, name: true, categoryId: true, status: true, availabilityOverride: true, updatedAt: true, images: { where: { isPrimary: true }, orderBy: { sort: 'asc' }, take: 1, select: { id: true, path: true, alt: true } } } }),
       this.prisma.inventoryItem.findMany({ where: { isActive: true }, orderBy: { id: 'asc' }, select: { id: true, productId: true, brandId: true, barcode: true, quantity: true, purchasePrice: true, salePrice: true, minStock: true, locationId: true } }),
       this.prisma.syncChange.aggregate({ _max: { revision: true } }),
     ]);
-    return { ok: true, data: { deviceId, categories, brands, locations, products, inventory, cursor: String(cursor._max.revision ?? 0n) } };
+    const publicSiteUrl = (process.env.PUBLIC_SITE_URL ?? process.env.APP_URL ?? 'https://salimvand.ir').replace(/\/$/, '');
+    const productsWithImageUrls = products.map((product) => ({
+      ...product,
+      imageUrl: product.images[0] ? (/^https?:\/\//i.test(product.images[0].path) ? product.images[0].path : `${publicSiteUrl}${product.images[0].path}`) : null,
+    }));
+    return { ok: true, data: { deviceId, categories, brands, locations, products: productsWithImageUrls, inventory, cursor: String(cursor._max.revision ?? 0n) } };
   }
 
   async pull(userId: string, deviceId: string, cursorValue?: string, limitValue?: string) {
