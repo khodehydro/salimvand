@@ -116,6 +116,7 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
     if (!user) throw new BadRequestException('کاربر عملیات پیدا نشد');
     const inventoryOperation = type.startsWith('inventory.');
     const productOperation = type.startsWith('product.');
+    const customerOperation = type === 'customer.create';
     const allowed = inventoryOperation
       ? user.role === 'manager' || user.role === 'super_admin' || user.role === 'warehouse'
       : type === 'invoice.create'
@@ -159,6 +160,12 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
     if (input.type === 'invoice.create') {
       if (!Array.isArray(payload.items) || payload.items.length === 0) throw new BadRequestException('اقلام فاکتور الزامی است');
       return this.invoice.create({ ...payload, operationId: input.operationId } as never, userId);
+    }
+    if (input.type === 'customer.create') {
+      const name = typeof payload.name === 'string' ? payload.name : '';
+      const mobile = typeof payload.mobile === 'string' ? payload.mobile : '';
+      if (!name || !mobile) throw new BadRequestException('نام و موبایل مشتری الزامی است');
+      return this.invoice.createCustomer({ name, mobile, notes: typeof payload.notes === 'string' ? payload.notes : undefined });
     }
     if (input.type === 'invoice.pay') {
       const invoiceId = typeof payload.invoiceId === 'string' ? payload.invoiceId : '';

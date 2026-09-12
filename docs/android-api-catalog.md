@@ -311,6 +311,21 @@ POST /sync/operations
 }
 ```
 
+## ایجاد مشتری Offline/Online
+
+```http
+POST /sync/operations
+```
+
+```json
+{
+  "operationId": "android-device-customer-000001",
+  "deviceId": "android-device",
+  "type": "customer.create",
+  "payload": { "name": "نام مشتری", "mobile": "09xxxxxxxxx", "notes": "" }
+}
+```
+
 ## جدول Operationها
 
 | عملیات | type | نتیجهٔ موفق |
