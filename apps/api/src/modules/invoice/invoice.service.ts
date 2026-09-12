@@ -1178,6 +1178,20 @@ export class InvoiceService {
     };
   }
 
+  async get(id: string) {
+    const invoice = await this.prisma.invoice.findUnique({
+      where: { id },
+      include: {
+        customer: true,
+        items: { include: { inventoryItem: { include: { product: true, brand: true, location: { include: { parent: true } } } } } },
+        payments: { include: { check: true }, orderBy: { paidAt: 'desc' } },
+        returns: { orderBy: { createdAt: 'desc' } },
+      },
+    });
+    if (!invoice) throw new NotFoundException('فاکتور پیدا نشد');
+    return { ok: true, data: invoice };
+  }
+
   /** Issues a fresh public link for an invoice (the old link stops working). */
   async rotateLink(id: string, userId: string, ip?: string) {
     const invoice = await this.prisma.invoice.findUnique({
