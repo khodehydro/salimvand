@@ -735,6 +735,16 @@ export class InvoiceService {
       throw new BadRequestException('مبلغ پرداخت معتبر نیست');
     }
     if (paidAmount <= 0n) throw new BadRequestException('مبلغ پرداخت باید مثبت باشد');
+    if (method === 'credit') {
+      if (!checks?.length) throw new BadRequestException('حداقل یک چک برای پرداخت چکی وارد کنید');
+      const todayTehran = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Tehran', year: 'numeric', month: '2-digit', day: '2-digit',
+      }).format(new Date());
+      for (const check of checks) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(check.dueDate) || Number.isNaN(new Date(`${check.dueDate}T00:00:00Z`).getTime()) || check.dueDate < todayTehran)
+          throw new BadRequestException({ code: 'INVALID_CHECK_DUE_DATE', message: 'تاریخ سررسید چک نمی‌تواند گذشته باشد' });
+      }
+    }
     const result = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       if (operationId) {
         const previous = await tx.payment.findUnique({ where: { operationId } });
