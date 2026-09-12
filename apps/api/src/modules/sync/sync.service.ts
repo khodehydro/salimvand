@@ -91,7 +91,8 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
     try {
       await this.assertOperationRole(userId, input.type);
       const result = await this.applyOperation(userId, { ...input, operationId: input.operationId });
-      const safeResult = JSON.parse(JSON.stringify(result, (_key, value) => typeof value === 'bigint' ? value.toString() : value)) as Prisma.InputJsonValue;
+      const resultData = result && typeof result === 'object' && 'data' in result ? (result as { data: unknown }).data : result;
+      const safeResult = JSON.parse(JSON.stringify(resultData, (_key, value) => typeof value === 'bigint' ? value.toString() : value)) as Prisma.InputJsonValue;
       const applied = await this.prisma.syncOperation.update({ where: { operationId: input.operationId }, data: { status: 'applied', result: safeResult, appliedAt: new Date() }, select: { operationId: true, status: true, result: true, appliedAt: true } });
       return { ok: true, data: { ...applied, duplicate: false } };
     } catch (error) {
@@ -195,7 +196,8 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
       if (claimed.count !== 1) continue;
       try {
         const result = await this.applyOperation(operation.userId, { operationId: operation.operationId, type: operation.type, deviceId: operation.deviceId, payload: operation.payload as Record<string, unknown> });
-        const safeResult = JSON.parse(JSON.stringify(result, (_key, value) => typeof value === 'bigint' ? value.toString() : value)) as Prisma.InputJsonValue;
+        const resultData = result && typeof result === 'object' && 'data' in result ? (result as { data: unknown }).data : result;
+      const safeResult = JSON.parse(JSON.stringify(resultData, (_key, value) => typeof value === 'bigint' ? value.toString() : value)) as Prisma.InputJsonValue;
         await this.prisma.syncOperation.update({ where: { operationId: operation.operationId }, data: { status: 'applied', result: safeResult, appliedAt: new Date() } });
         results.push({ operationId: operation.operationId, status: 'applied' });
       } catch (error) {
