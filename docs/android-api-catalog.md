@@ -53,11 +53,11 @@ x-device-id: android-uuid
 GET /sync/bootstrap
 GET /sync/pull?cursor=0&limit=200
 POST /sync/operations/status
-GET /sync/operations?status=pending
 GET /sync/conflicts?status=open
 POST /sync/conflicts/{conflictId}/resolve
-POST /sync/operations/recover
 ```
+
+`GET /sync/operations` وجود ندارد و نباید صدا زده شود. `POST /sync/operations/recover` فقط برای مدیران Backend است (`super_admin` و `manager`) و Android هرگز آن را اجرا نمی‌کند؛ بازیابی عملیاتهای معلق توسط تایمر خود سرور انجام می‌شود.
 
 وضعیت Operation:
 
@@ -277,6 +277,8 @@ GET /products/{productId}
 
 ### ایجاد محصول Offline یا Online
 
+`product.create` اختیاریاً زیرشیء `inventory` دارد؛ در این صورت Product، دقیقاً یک InventoryItem و در صورت `initialQuantity > 0` یک ردیف ledger با `type=initial` در **یک تراکنش** ساخته می‌شوند و قلم خنثیِ بدون برند ساخته نمی‌شود. `categoryId` و در صورت ارسال `brandId`/`locationId` باید شناسهٔ واقعی و موجود باشند؛ نام آزاد برند پذیرفته نیست. تعداد فقط از طریق ledger ثبت می‌شود.
+
 ```http
 POST /sync/operations
 ```
@@ -287,16 +289,50 @@ POST /sync/operations
   "deviceId": "android-device",
   "type": "product.create",
   "payload": {
-    "name": "لنت ترمز پژو 206",
+    "name": "لنت ترمز جلو پژو ۲۰۶",
     "categoryId": "category-id",
     "partNumber": "PN-206",
     "description": "توضیح محصول",
-    "status": "active"
+    "status": "active",
+    "inventory": {
+      "brandId": "brand-id-or-null",
+      "barcode": "6261234567890",
+      "purchasePrice": "1850000",
+      "salePrice": "2450000",
+      "minStock": 3,
+      "locationId": "location-id-or-null",
+      "initialQuantity": 10
+    }
+  }
+}
+```
+
+پاسخ موفق `result` حداقل شامل این فیلدهاست تا Draft محلی دقیق جایگزین شود:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "operationId": "android-device-product-000001",
+    "status": "applied",
+    "result": {
+      "id": "product-id",
+      "inventoryItem": {
+        "id": "inventory-item-id",
+        "barcode": "6261234567890",
+        "purchasePrice": "1850000",
+        "salePrice": "2450000",
+        "quantity": 10
+      }
+    },
+    "duplicate": false
   }
 }
 ```
 
 ### ویرایش محصول
+
+فیلدهای کاتالوگ و در صورت نیاز زیرشیء `inventory` (با `itemId` صریح) در **یک تراکنش** اعمال می‌شوند. `quantity` در ویرایش metadata پذیرفته نمی‌شود؛ تعداد فقط با `inventory.receive` یا `inventory.adjust` تغییر می‌کند.
 
 ```json
 {
@@ -306,10 +342,43 @@ POST /sync/operations
   "payload": {
     "productId": "product-id",
     "name": "نام جدید",
-    "status": "active"
+    "status": "active",
+    "inventory": {
+      "itemId": "inventory-item-id",
+      "purchasePrice": "1900000",
+      "salePrice": "2500000",
+      "minStock": 5,
+      "locationId": "location-id",
+      "barcode": "6261234567890",
+      "brandId": "brand-id"
+    }
   }
 }
 ```
+
+### ویرایش metadata قلم موجودی (بدون تغییر تعداد)
+
+برای ویرایش مستقیم قیمت/قفسه/بارکد/برند یک قلم، بدون ساخت محصول:
+
+```json
+{
+  "operationId": "android-device-meta-000001",
+  "deviceId": "android-device",
+  "type": "inventory.update_metadata",
+  "payload": {
+    "itemId": "inventory-item-id",
+    "purchasePrice": "1900000",
+    "salePrice": "2500000",
+    "minStock": 5,
+    "locationId": "location-id",
+    "barcode": "6261234567890",
+    "brandId": "brand-id",
+    "notes": "یادداشت اختیاری"
+  }
+}
+```
+
+هر دو مسیر idempotent هستند و audit/sync change ثبت می‌کنند.
 
 ## ایجاد مشتری Offline/Online
 
@@ -328,15 +397,17 @@ POST /sync/operations
 
 ## جدول Operationها
 
-| عملیات | type | نتیجهٔ موفق |
-|---|---|---|
-| دریافت موجودی | `inventory.receive` | تراکنش موجودی |
-| اصلاح موجودی | `inventory.adjust` | تراکنش موجودی |
-| انتقال قفسه | `inventory.transfer` | تراکنش انتقال |
-| ایجاد فاکتور | `invoice.create` | فاکتور رسمی |
-| پرداخت فاکتور | `invoice.pay` | پرداخت |
-| ایجاد محصول | `product.create` | محصول |
-| ویرایش محصول | `product.update` | محصول ویرایش‌شده |
+| عملیات              | type                        | نتیجهٔ موفق                                |
+| ------------------- | --------------------------- | ------------------------------------------ |
+| دریافت موجودی       | `inventory.receive`         | تراکنش موجودی                              |
+| اصلاح موجودی        | `inventory.adjust`          | تراکنش موجودی                              |
+| انتقال قفسه         | `inventory.transfer`        | تراکنش انتقال                              |
+| ویرایش metadata قلم | `inventory.update_metadata` | قلم به‌روزشده                              |
+| ایجاد فاکتور        | `invoice.create`            | فاکتور رسمی                                |
+| پرداخت فاکتور       | `invoice.pay`               | پرداخت                                     |
+| ایجاد محصول         | `product.create`            | محصول + قلم موجودی + ledger اولیه          |
+| ویرایش محصول        | `product.update`            | محصول ویرایش‌شده (+ قلم در صورت inventory) |
+| ایجاد مشتری         | `customer.create`           | مشتری                                      |
 
 ## قواعد ارسال
 
@@ -350,6 +421,91 @@ operationId در Retry تغییر نکند
 در Conflict عملیات به Queue برنگردد مگر بعد از تصمیم کاربر
 ```
 
+### Schema ثابت پاسخ Operation
+
+همهٔ پاسخهای `POST /sync/operations` و `POST /sync/operations/status`:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "operationId": "...",
+    "status": "applied|pending|conflict|failed",
+    "result": {},
+    "duplicate": false
+  }
+}
+```
+
+`result` برای ایجادهای مهم (محصول، فاکتور، پرداخت) هرگز null یا مبهم نیست. ارسال مجدد همان `operationId` در وضعیت `pending`، همان عملیات را claim و اجرا می‌کند؛ پس Retry پس از تصمیم `retry` واقعاً اجرا می‌شود.
+
+## Conflict و تصمیم اپراتور
+
+```http
+GET /sync/conflicts?status=open
+POST /sync/conflicts/{conflictId}/resolve
+```
+
+بدنهٔ resolve:
+
+```json
+{ "decision": "retry | reject | accept_server_state | create_new_draft", "note": "اختیاری" }
+```
+
+هر مقدار دیگری با 400 رد می‌شود. پاسخ resolve:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "conflictId": "...",
+    "decision": "retry",
+    "operationId": "android-device-op-000001",
+    "status": "applied",
+    "result": {},
+    "error": null,
+    "serverState": null,
+    "snapshot": null,
+    "draft": null,
+    "conflict": null
+  }
+}
+```
+
+- `retry`: عملیات اصلی به حالت قابل اجرا برمی‌گردد و **بلافاصله** اعمال می‌شود؛ `status` پاسخ نتیجهٔ واقعی اجراست (`applied` یا `conflict` جدید یا `failed`). در conflict مجدد، فیلد `conflict` شناسهٔ Conflict باز جدید را برمی‌گرداند.
+- `reject`: عملیات به‌صورت قطعی `failed` می‌شود.
+- `accept_server_state`: عملیات `failed` می‌شود و `snapshot` وضعیت تازهٔ سرور (قلم موجودی / محصول + اقلام / فاکتور) را برمی‌گرداند تا cache بدون LWW کورکورانه تصحیح شود.
+- `create_new_draft`: عملیات `failed` می‌شود و `draft` شامل `type`، `payload` اصلی و `serverState` برای پیش‌نویس جدید است.
+
+## Payload تغییرات Pull
+
+`GET /sync/pull` برای موجودیتهای `product`, `inventory_item`, `invoice`, `customer`, `brand`, `category`, `location` یک snapshot کامل و بدون secret در `payload` برمی‌گرداند. `action` فقط یکی از:
+
+```text
+created  → payload را در cache درج/جایگزین کن
+updated  → payload را در cache جایگزین کن
+deleted  → رکورد را با entityId از cache حذف کن
+```
+
+نمونهٔ payload قلم موجودی (پولها رشتهٔ ریالی):
+
+```json
+{
+  "id": "inventory-item-id",
+  "productId": "product-id",
+  "brandId": "brand-id-or-null",
+  "barcode": "6261234567890",
+  "quantity": 10,
+  "purchasePrice": "1850000",
+  "salePrice": "2450000",
+  "minStock": 3,
+  "locationId": "location-id-or-null",
+  "isActive": true
+}
+```
+
+payload محصول هم‌شکل ردیفهای `products` در Bootstrap است (`id`, `code`, `slug`, `name`, `categoryId`, `status`, `priceDisplay`, `image`, `imageUrl`, ...). حذف نرم محصول، علاوه بر `product/deleted`، برای همهٔ اقلام آن `inventory_item/deleted` صادر می‌کند.
+
 ## کدهای مهم پاسخ
 
 ```text
@@ -362,7 +518,6 @@ operationId در Retry تغییر نکند
 429      درخواست بیش از حد
 500      خطای موقت سرور؛ Retry با Backoff
 ```
-
 
 ## تصاویر محصولات
 
@@ -382,7 +537,6 @@ AsyncImage(model = product.imageUrl, contentDescription = product.name)
 ```
 
 مسیرهای `/uploads/...` روی VPS و Nginx سرو می‌شوند و نباید به `localhost`، `127.0.0.1` یا IP داخلی تبدیل شوند.
-
 
 ## قرارداد Native Refresh Token
 

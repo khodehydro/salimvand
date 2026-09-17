@@ -13,35 +13,64 @@ type AuthenticatedRequest = Request & { user?: { id: string } };
 export class SyncController {
   constructor(private readonly sync: SyncService) {}
 
-  @Post('devices') register(@Body() body: RegisterSyncDeviceDto, @Req() request: AuthenticatedRequest) {
+  @Post('devices') register(
+    @Body() body: RegisterSyncDeviceDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
     return this.sync.registerDevice(request.user?.id ?? '', body.deviceId, body.name);
   }
 
-  @Get('bootstrap') bootstrap(@Headers('x-device-id') deviceId: string, @Req() request: AuthenticatedRequest) {
+  @Get('bootstrap') bootstrap(
+    @Headers('x-device-id') deviceId: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
     return this.sync.bootstrap(request.user?.id ?? '', deviceId);
   }
 
-  @Get('pull') pull(@Headers('x-device-id') deviceId: string, @Query('cursor') cursor: string | undefined, @Query('limit') limit: string | undefined, @Req() request: AuthenticatedRequest) {
+  @Get('pull') pull(
+    @Headers('x-device-id') deviceId: string,
+    @Query('cursor') cursor: string | undefined,
+    @Query('limit') limit: string | undefined,
+    @Req() request: AuthenticatedRequest,
+  ) {
     return this.sync.pull(request.user?.id ?? '', deviceId, cursor, limit);
   }
 
-  @Post('operations') queue(@Body() body: QueueSyncOperationDto, @Req() request: AuthenticatedRequest) {
+  @Post('operations') queue(
+    @Body() body: QueueSyncOperationDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
     return this.sync.queueOperation(request.user?.id ?? '', body);
   }
 
-  @Post('operations/status') statuses(@Body() body: SyncOperationIdsDto, @Req() request: AuthenticatedRequest) {
+  @Post('operations/status') statuses(
+    @Body() body: SyncOperationIdsDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
     return this.sync.operations(request.user?.id ?? '', body.operationIds);
   }
 
-  @Post('operations/recover') recover() {
+  /** Administrative recovery of stale pending operations. It replays other
+   * users' work, so it is manager/super_admin-only — Android clients must
+   * never call it (the background timer recovers their operations anyway). */
+  @Roles('super_admin', 'manager')
+  @Post('operations/recover')
+  recover() {
     return this.sync.recoverPending();
   }
 
-  @Get('conflicts') conflicts(@Query('status') status: 'open' | 'resolved' | undefined, @Req() request: AuthenticatedRequest) {
+  @Get('conflicts') conflicts(
+    @Query('status') status: 'open' | 'resolved' | undefined,
+    @Req() request: AuthenticatedRequest,
+  ) {
     return this.sync.conflicts(request.user?.id ?? '', status);
   }
 
-  @Post('conflicts/:id/resolve') resolve(@Param('id') id: string, @Body() body: Record<string, unknown>, @Req() request: AuthenticatedRequest) {
+  @Post('conflicts/:id/resolve') resolve(
+    @Param('id') id: string,
+    @Body() body: Record<string, unknown>,
+    @Req() request: AuthenticatedRequest,
+  ) {
     return this.sync.resolveConflict(request.user?.id ?? '', id, body);
   }
 }

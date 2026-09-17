@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { InvoiceController, PublicInvoiceController } from './invoice.controller';
 import { InvoicePaymentMethod } from './invoice.dto';
 import { ROLES_KEY } from '../../common/auth/roles.decorator';
+import { PATH_METADATA, METHOD_METADATA } from '../../common/http/multipart.constants';
 
 const request = { user: { id: 'user-1' } } as never;
 
@@ -115,5 +116,51 @@ describe('PublicInvoiceController', () => {
     });
     expect(qr).toHaveBeenCalledWith('ABC123');
     expect(getPublic).toHaveBeenCalledWith('ABC123');
+  });
+});
+
+describe('invoice route ordering', () => {
+  it('declares static GET segments before the :id param route', () => {
+    // NestJS matches routes in declaration order: if @Get(':id') came first,
+    // GET /invoices/customers would be answered by get('customers') and 404.
+    const methodNames = Object.getOwnPropertyNames(InvoiceController.prototype).filter(
+      (name) => name !== 'constructor',
+    );
+    const handler = (prototype: unknown, name: string) =>
+      (prototype as Record<string, unknown>)[name] as object;
+    const getPath = (name: string) => {
+      const paths = Reflect.getMetadata(PATH_METADATA, handler(InvoiceController.prototype, name));
+      const method = Reflect.getMetadata(
+        METHOD_METADATA,
+        handler(InvoiceController.prototype, name),
+      );
+      return { name, paths: Array.isArray(paths) ? paths : [paths], method };
+    };
+    const getRoutes = methodNames.map(getPath).filter((route) => route.method === 0); // 0 = GET
+    const position = (segment: string) =>
+      getRoutes.findIndex((route) => (route.paths as string[]).includes(segment));
+    expect(position('customers')).toBeGreaterThanOrEqual(0);
+    expect(position('options')).toBeGreaterThanOrEqual(0);
+    expect(position(':id')).toBeGreaterThan(position('customers'));
+    expect(position(':id')).toBeGreaterThan(position('options'));
+    // Same guarantee for the public controller's static routes.
+    const publicNames = Object.getOwnPropertyNames(PublicInvoiceController.prototype).filter(
+      (name) => name !== 'constructor',
+    );
+    const publicGets = publicNames
+      .map((name) => ({
+        paths: Reflect.getMetadata(PATH_METADATA, handler(PublicInvoiceController.prototype, name)),
+        method: Reflect.getMetadata(
+          METHOD_METADATA,
+          handler(PublicInvoiceController.prototype, name),
+        ),
+      }))
+      .filter((route) => route.method === 0);
+    const publicPosition = (segment: string) =>
+      publicGets.findIndex((route) =>
+        (Array.isArray(route.paths) ? route.paths : [route.paths]).includes(segment),
+      );
+    expect(publicPosition('qr/:shortCode')).toBeGreaterThanOrEqual(0);
+    expect(publicPosition(':token')).toBeGreaterThan(publicPosition('qr/:shortCode'));
   });
 });

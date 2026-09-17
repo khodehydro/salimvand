@@ -1,0 +1,397 @@
+import { describe, expect, it, vi } from 'vitest';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { SyncService } from './sync.service';
+
+const USER_ID = 'user-1';
+
+function makeService(overrides: Record<string, unknown> = {}) {
+  const prisma = {
+    syncDevice: { upsert: vi.fn().mockResolvedValue({}) },
+    syncOperation: {
+      findUnique: vi.fn().mockResolvedValue(null),
+      create: vi.fn().mockResolvedValue({}),
+      update: vi.fn().mockResolvedValue({}),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+    syncConflict: {
+      findFirst: vi.fn().mockResolvedValue(null),
+      upsert: vi.fn().mockResolvedValue({
+        id: 'conflict-2',
+        code: 'INSUFFICIENT_STOCK',
+        serverState: { itemId: 'i1' },
+      }),
+      update: vi.fn().mockResolvedValue({}),
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+    user: { findUnique: vi.fn().mockResolvedValue({ role: 'manager' }) },
+    inventoryItem: {
+      findUnique: vi.fn().mockResolvedValue(null),
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+    product: { findUnique: vi.fn().mockResolvedValue(null) },
+    productOperation: { findUnique: vi.fn().mockResolvedValue(null) },
+    invoice: { findUnique: vi.fn().mockResolvedValue(null) },
+    customer: { findUnique: vi.fn().mockResolvedValue(null) },
+    ...overrides,
+  };
+  const inventory = {
+    receive: vi.fn(),
+    adjust: vi.fn(),
+    transfer: vi.fn(),
+    updateMetadata: vi.fn(),
+  };
+  const catalog = { create: vi.fn(), update: vi.fn() };
+  const invoice = { create: vi.fn(), createCustomer: vi.fn(), pay: vi.fn() };
+  const purchases = { create: vi.fn(), pay: vi.fn() };
+  const service = new SyncService(
+    prisma as never,
+    inventory as never,
+    catalog as never,
+    invoice as never,
+    purchases as never,
+  );
+  return { service, prisma, inventory, catalog, invoice, purchases };
+}
+
+const OPERATION = {
+  operationId: 'android-device-op-000001',
+  deviceId: 'android-device',
+  type: 'inventory.receive',
+  payload: { itemId: 'i1', quantity: 5 },
+};
+
+describe('SyncService.queueOperation', () => {
+  it('applies a fresh operation and returns the fixed response schema', async () => {
+    const { service, prisma, inventory } = makeService();
+    inventory.receive.mockResolvedValue({ ok: true, data: { item: { id: 'i1', quantity: 5n } } });
+    const result = await service.queueOperation(USER_ID, OPERATION);
+    expect(result).toEqual({
+      ok: true,
+      data: {
+        operationId: 'android-device-op-000001',
+        status: 'applied',
+        result: { item: { id: 'i1', quantity: '5' } },
+        duplicate: false,
+      },
+    });
+    expect(prisma.syncOperation.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'applied' }) }),
+    );
+  });
+
+  it('verifies the role before the operation row is created', async () => {
+    const { service, prisma } = makeService();
+    prisma.user.findUnique.mockResolvedValue({ role: 'seller' });
+    await expect(service.queueOperation(USER_ID, OPERATION)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    expect(prisma.syncOperation.create).not.toHaveBeenCalled();
+  });
+
+  it('re-applies a duplicate pending operation so a revived retry actually runs', async () => {
+    const { service, prisma, inventory } = makeService();
+    prisma.syncOperation.findUnique.mockResolvedValue({
+      ...OPERATION,
+      userId: USER_ID,
+      status: 'pending',
+      payload: OPERATION.payload,
+    });
+    inventory.receive.mockResolvedValue({ ok: true, data: { item: { id: 'i1' } } });
+    const result = await service.queueOperation(USER_ID, OPERATION);
+    expect(result.data).toMatchObject({
+      operationId: OPERATION.operationId,
+      status: 'applied',
+      duplicate: true,
+    });
+    expect(inventory.receive).toHaveBeenCalled();
+  });
+
+  it('keeps a duplicate applied operation read-only', async () => {
+    const { service, prisma, inventory } = makeService();
+    prisma.syncOperation.findUnique.mockResolvedValue({
+      ...OPERATION,
+      userId: USER_ID,
+      status: 'applied',
+      result: { item: { id: 'i1' } },
+    });
+    const result = await service.queueOperation(USER_ID, OPERATION);
+    expect(result.data).toMatchObject({ status: 'applied', duplicate: true });
+    expect(inventory.receive).not.toHaveBeenCalled();
+  });
+
+  it('records a conflict with the open row and rethrows the original 409', async () => {
+    const { service, prisma, inventory } = makeService();
+    inventory.receive.mockRejectedValue(
+      new ConflictException({
+        code: 'INSUFFICIENT_STOCK',
+        message: 'موجودی کافی نیست',
+        itemId: 'i1',
+      }),
+    );
+    await expect(service.queueOperation(USER_ID, OPERATION)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    expect(prisma.syncOperation.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'conflict' }) }),
+    );
+    expect(prisma.syncConflict.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { operationId_status: { operationId: OPERATION.operationId, status: 'open' } },
+      }),
+    );
+  });
+
+  it('rejects an operation from another device owner', async () => {
+    const { service, prisma } = makeService();
+    prisma.syncOperation.findUnique.mockResolvedValue({
+      ...OPERATION,
+      userId: 'someone-else',
+      status: 'applied',
+    });
+    await expect(service.queueOperation(USER_ID, OPERATION)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+  });
+});
+
+describe('SyncService.applyOperation routing', () => {
+  it('routes product.create with the inventory sub-object to the atomic catalog service', async () => {
+    const { service, catalog } = makeService();
+    catalog.create.mockResolvedValue({ ok: true, data: { id: 'p1', inventoryItem: { id: 'i1' } } });
+    const payload = {
+      name: 'لنت',
+      categoryId: 'c1',
+      inventory: { salePrice: '1000', initialQuantity: 2 },
+    };
+    const result = await service.queueOperation(USER_ID, {
+      operationId: 'android-device-product-000001',
+      deviceId: 'android-device',
+      type: 'product.create',
+      payload,
+    });
+    expect(result.data.status).toBe('applied');
+    expect(catalog.create).toHaveBeenCalledWith(
+      payload,
+      USER_ID,
+      undefined,
+      'android-device-product-000001',
+    );
+    expect(result.data.result).toEqual({ id: 'p1', inventoryItem: { id: 'i1' } });
+  });
+
+  it('routes product.update and strips productId/inventory from the catalog changes', async () => {
+    const { service, catalog } = makeService();
+    catalog.update.mockResolvedValue({ ok: true, data: { id: 'p1', inventoryItem: { id: 'i1' } } });
+    await service.queueOperation(USER_ID, {
+      operationId: 'android-device-product-000002',
+      deviceId: 'android-device',
+      type: 'product.update',
+      payload: {
+        productId: 'p1',
+        name: 'نام جدید',
+        inventory: { itemId: 'i1', salePrice: '2000' },
+      },
+    });
+    expect(catalog.update).toHaveBeenCalledWith(
+      'p1',
+      { name: 'نام جدید' },
+      USER_ID,
+      undefined,
+      'android-device-product-000002',
+    );
+  });
+
+  it('routes inventory.update_metadata with idempotency and the caller identity', async () => {
+    const { service, inventory } = makeService();
+    inventory.updateMetadata.mockResolvedValue({ ok: true, data: { id: 'i1' } });
+    const result = await service.queueOperation(USER_ID, {
+      operationId: 'android-device-meta-000001',
+      deviceId: 'android-device',
+      type: 'inventory.update_metadata',
+      payload: {
+        itemId: 'i1',
+        salePrice: '2000',
+        minStock: 4,
+        locationId: 'shelf-9',
+        barcode: '6260000000123',
+      },
+    });
+    expect(result.data.status).toBe('applied');
+    expect(inventory.updateMetadata).toHaveBeenCalledWith(
+      {
+        itemId: 'i1',
+        salePrice: '2000',
+        minStock: 4,
+        locationId: 'shelf-9',
+        barcode: '6260000000123',
+        purchasePrice: undefined,
+        brandId: undefined,
+        notes: undefined,
+      },
+      USER_ID,
+      'android-device-meta-000001',
+    );
+  });
+
+  it('rejects an unsupported operation type at the envelope level', async () => {
+    const { service } = makeService();
+    await expect(
+      service.queueOperation(USER_ID, { ...OPERATION, type: 'inventory.delete' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+});
+
+describe('SyncService.resolveConflict', () => {
+  const conflictRow = {
+    id: 'conflict-1',
+    operationId: OPERATION.operationId,
+    userId: USER_ID,
+    deviceId: 'android-device',
+    type: 'inventory.receive',
+    code: 'INSUFFICIENT_STOCK',
+    payload: OPERATION.payload,
+    serverState: { code: 'INSUFFICIENT_STOCK', itemId: 'i1' },
+    status: 'open',
+  };
+  const operationRow = { ...OPERATION, userId: USER_ID, status: 'conflict' };
+
+  it('rejects any decision outside the fixed vocabulary', async () => {
+    const { service, prisma } = makeService();
+    prisma.syncConflict.findFirst.mockResolvedValue(conflictRow);
+    await expect(
+      service.resolveConflict(USER_ID, 'conflict-1', { decision: 'force_local' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.resolveConflict(USER_ID, 'conflict-1', {})).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+  });
+
+  it('retry revives the operation, applies it and returns the final status', async () => {
+    const { service, prisma, inventory } = makeService();
+    prisma.syncConflict.findFirst.mockResolvedValue(conflictRow);
+    prisma.syncOperation.findUnique.mockResolvedValue(operationRow);
+    inventory.receive.mockResolvedValue({ ok: true, data: { item: { id: 'i1', quantity: 5n } } });
+    const result = await service.resolveConflict(USER_ID, 'conflict-1', { decision: 'retry' });
+    expect(prisma.syncOperation.updateMany).toHaveBeenCalledWith({
+      where: { operationId: OPERATION.operationId, userId: USER_ID, status: 'conflict' },
+      data: { status: 'pending', error: null, lastAttemptAt: null },
+    });
+    expect(inventory.receive).toHaveBeenCalledWith(
+      expect.objectContaining({ itemId: 'i1', operationId: OPERATION.operationId }),
+    );
+    expect(result.data).toMatchObject({
+      decision: 'retry',
+      operationId: OPERATION.operationId,
+      status: 'applied',
+    });
+    expect(result.data.result).toEqual({ item: { id: 'i1', quantity: '5' } });
+  });
+
+  it('retry that conflicts again returns the new open conflict instead of a duplicate failed operation', async () => {
+    const { service, prisma, inventory } = makeService();
+    prisma.syncConflict.findFirst.mockResolvedValue(conflictRow);
+    prisma.syncOperation.findUnique.mockResolvedValue(operationRow);
+    inventory.receive.mockRejectedValue(
+      new ConflictException({ code: 'INSUFFICIENT_STOCK', message: 'موجودی کافی نیست' }),
+    );
+    const result = await service.resolveConflict(USER_ID, 'conflict-1', { decision: 'retry' });
+    expect(result.data.status).toBe('conflict');
+    expect(result.data.conflict).toMatchObject({ code: 'INSUFFICIENT_STOCK' });
+    expect(prisma.syncOperation.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'conflict' }) }),
+    );
+  });
+
+  it('reject marks the operation terminally failed', async () => {
+    const { service, prisma } = makeService();
+    prisma.syncConflict.findFirst.mockResolvedValue(conflictRow);
+    const result = await service.resolveConflict(USER_ID, 'conflict-1', {
+      decision: 'reject',
+      note: 'اشتباه بود',
+    });
+    expect(result.data).toMatchObject({ decision: 'reject', status: 'failed' });
+    expect(prisma.syncOperation.updateMany).toHaveBeenCalledWith({
+      where: { operationId: OPERATION.operationId, userId: USER_ID, status: 'conflict' },
+      data: { status: 'failed', error: 'عملیات توسط اپراتور رد شد' },
+    });
+  });
+
+  it('accept_server_state returns a fresh server snapshot for the cache', async () => {
+    const { service, prisma } = makeService();
+    prisma.syncConflict.findFirst.mockResolvedValue(conflictRow);
+    prisma.syncOperation.findUnique.mockResolvedValue(operationRow);
+    prisma.inventoryItem.findUnique.mockResolvedValue({
+      id: 'i1',
+      productId: 'p1',
+      brandId: null,
+      barcode: '6260000000123',
+      quantity: 3,
+      purchasePrice: 100n,
+      salePrice: 120n,
+      minStock: null,
+      locationId: null,
+      isActive: true,
+    });
+    const result = await service.resolveConflict(USER_ID, 'conflict-1', {
+      decision: 'accept_server_state',
+    });
+    expect(result.data.status).toBe('failed');
+    expect(result.data.serverState).toEqual({ code: 'INSUFFICIENT_STOCK', itemId: 'i1' });
+    expect(result.data.snapshot).toEqual({
+      id: 'i1',
+      productId: 'p1',
+      brandId: null,
+      barcode: '6260000000123',
+      quantity: 3,
+      purchasePrice: '100',
+      salePrice: '120',
+      minStock: null,
+      locationId: null,
+      isActive: true,
+    });
+  });
+
+  it('create_new_draft returns the original payload and server state as draft guidance', async () => {
+    const { service, prisma } = makeService();
+    prisma.syncConflict.findFirst.mockResolvedValue(conflictRow);
+    const result = await service.resolveConflict(USER_ID, 'conflict-1', {
+      decision: 'create_new_draft',
+    });
+    expect(result.data).toMatchObject({ decision: 'create_new_draft', status: 'failed' });
+    expect(result.data.draft).toEqual({
+      type: 'inventory.receive',
+      payload: OPERATION.payload,
+      serverState: { code: 'INSUFFICIENT_STOCK', itemId: 'i1' },
+    });
+  });
+
+  it('throws 404 when the conflict does not belong to the caller', async () => {
+    const { service, prisma } = makeService();
+    prisma.syncConflict.findFirst.mockResolvedValue(null);
+    await expect(
+      service.resolveConflict(USER_ID, 'missing', { decision: 'retry' }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+describe('SyncService.recoverPending', () => {
+  it('replays stale pending operations and records their outcome', async () => {
+    const { service, prisma, inventory } = makeService();
+    prisma.syncOperation.findMany.mockResolvedValue([
+      { ...OPERATION, userId: USER_ID, status: 'pending', lastAttemptAt: null },
+    ]);
+    inventory.receive.mockResolvedValue({ ok: true, data: { item: { id: 'i1' } } });
+    const result = await service.recoverPending();
+    expect(prisma.syncOperation.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ status: 'pending' }) }),
+    );
+    expect(inventory.receive).toHaveBeenCalledWith(
+      expect.objectContaining({ operationId: OPERATION.operationId }),
+    );
+    expect(result.data).toEqual({
+      inspected: 1,
+      results: [{ operationId: OPERATION.operationId, status: 'applied' }],
+    });
+  });
+});

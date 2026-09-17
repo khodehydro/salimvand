@@ -9,6 +9,7 @@ import { NotificationsService, buildInvoiceMessage } from '../notifications/noti
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
 import { writeAudit } from '../../common/audit/audit-log';
+import { buildInvoiceSyncPayload } from '../../common/sync/sync-payloads';
 import { calculateInvoiceTotals, InvoiceLineInput } from './invoice.rules';
 import * as QRCode from 'qrcode';
 import PDFDocument = require('pdfkit');
@@ -72,7 +73,11 @@ export class InvoiceService {
   private async storeProfile(): Promise<{ address: string; phone: string; logoUrl: string }> {
     try {
       const row = await this.prisma.setting.findUnique({ where: { key: 'store.profile' } });
-      const profile = (row?.value ?? {}) as { address?: unknown; phones?: unknown; logoUrl?: unknown };
+      const profile = (row?.value ?? {}) as {
+        address?: unknown;
+        phones?: unknown;
+        logoUrl?: unknown;
+      };
       return {
         address: typeof profile.address === 'string' ? profile.address.trim() : '',
         phone: typeof profile.phones === 'string' ? profile.phones.trim() : '',
@@ -115,7 +120,10 @@ export class InvoiceService {
     const publicTokenExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     const invoice = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       if (input.operationId) {
-        const previous = await tx.invoice.findUnique({ where: { operationId: input.operationId }, include: { items: true } });
+        const previous = await tx.invoice.findUnique({
+          where: { operationId: input.operationId },
+          include: { items: true },
+        });
         if (previous) return previous;
       }
       const counter = await tx.counter.upsert({
@@ -200,6 +208,7 @@ export class InvoiceService {
         entityType: 'invoice',
         entityId: created.id,
         after: { number, total: totals.total.toString() },
+        syncPayload: buildInvoiceSyncPayload(created, created.items),
       });
       for (const line of lines) {
         const item = await tx.inventoryItem.findUniqueOrThrow({
@@ -337,7 +346,11 @@ export class InvoiceService {
       );
     // Older invoices were issued before the store snapshot existed — fill
     // the store contact block from settings so the customer still sees it.
-    let storeContact: { storeAddress?: string | null; storePhone?: string | null; storeLogoUrl?: string | null } = {};
+    let storeContact: {
+      storeAddress?: string | null;
+      storePhone?: string | null;
+      storeLogoUrl?: string | null;
+    } = {};
     {
       const profile = await this.storeProfile();
       storeContact = {
@@ -540,10 +553,22 @@ export class InvoiceService {
       const rowHeight = 34;
       const drawHeader = () => {
         const headerY = doc.y;
-        doc.save().fillColor('#0d2b4b').rect(tableX, headerY, tableWidth, headerHeight).fill().restore();
+        doc
+          .save()
+          .fillColor('#0d2b4b')
+          .rect(tableX, headerY, tableWidth, headerHeight)
+          .fill()
+          .restore();
         let x = tableX;
         headers.forEach((header, index) => {
-          doc.fillColor('#ffffff').fontSize(8).text(text(header), x + 5, headerY + 9, { width: widths[index] - 10, align: 'right', lineBreak: false });
+          doc
+            .fillColor('#ffffff')
+            .fontSize(8)
+            .text(text(header), x + 5, headerY + 9, {
+              width: widths[index] - 10,
+              align: 'right',
+              lineBreak: false,
+            });
           x += widths[index];
         });
         doc.y = headerY + headerHeight;
@@ -552,17 +577,41 @@ export class InvoiceService {
       doc.moveDown(0.25);
       drawHeader();
       rows.forEach((row, rowIndex) => {
-        if (doc.y + rowHeight > doc.page.height - 80) { doc.addPage(); drawHeader(); }
+        if (doc.y + rowHeight > doc.page.height - 80) {
+          doc.addPage();
+          drawHeader();
+        }
         const y = doc.y;
-        doc.save().fillColor(rowIndex % 2 === 0 ? '#f4f7fa' : '#ffffff').rect(tableX, y, tableWidth, rowHeight).fill().restore();
+        doc
+          .save()
+          .fillColor(rowIndex % 2 === 0 ? '#f4f7fa' : '#ffffff')
+          .rect(tableX, y, tableWidth, rowHeight)
+          .fill()
+          .restore();
         doc.strokeColor('#cbd5df').lineWidth(0.5).rect(tableX, y, tableWidth, rowHeight).stroke();
         let x = tableX;
         row.forEach((cell, index) => {
-          doc.strokeColor('#d6dee7').moveTo(x, y).lineTo(x, y + rowHeight).stroke();
-          doc.fillColor('#17243b').fontSize(8).text(text(cell), x + 5, y + 9, { width: widths[index] - 10, height: rowHeight - 10, align: 'right', ellipsis: true, lineBreak: false });
+          doc
+            .strokeColor('#d6dee7')
+            .moveTo(x, y)
+            .lineTo(x, y + rowHeight)
+            .stroke();
+          doc
+            .fillColor('#17243b')
+            .fontSize(8)
+            .text(text(cell), x + 5, y + 9, {
+              width: widths[index] - 10,
+              height: rowHeight - 10,
+              align: 'right',
+              ellipsis: true,
+              lineBreak: false,
+            });
           x += widths[index];
         });
-        doc.moveTo(tableX + tableWidth, y).lineTo(tableX + tableWidth, y + rowHeight).stroke();
+        doc
+          .moveTo(tableX + tableWidth, y)
+          .lineTo(tableX + tableWidth, y + rowHeight)
+          .stroke();
         doc.y = y + rowHeight;
       });
     };
@@ -708,13 +757,39 @@ export class InvoiceService {
     };
   }
 
-  async updateCheckStatus(checkId: string, status: 'pending' | 'cleared' | 'bounced' | 'cancelled', notes?: string, actorId?: string) {
-    if (!['pending', 'cleared', 'bounced', 'cancelled'].includes(status)) throw new BadRequestException('وضعیت چک معتبر نیست');
+  async updateCheckStatus(
+    checkId: string,
+    status: 'pending' | 'cleared' | 'bounced' | 'cancelled',
+    notes?: string,
+    actorId?: string,
+  ) {
+    if (!['pending', 'cleared', 'bounced', 'cancelled'].includes(status))
+      throw new BadRequestException('وضعیت چک معتبر نیست');
     const check = await this.prisma.paymentCheck.findUnique({ where: { id: checkId } });
     if (!check) throw new NotFoundException('چک پیدا نشد');
     const now = new Date();
-    const updated = await this.prisma.paymentCheck.update({ where: { id: checkId }, data: { status, notes: notes?.trim() || undefined, clearedAt: status === 'cleared' ? now : null, bouncedAt: status === 'bounced' ? now : null } });
-    if (actorId) await writeAudit(this.prisma, { userId: actorId, action: 'update', entityType: 'payment_check', entityId: checkId, before: { status: check.status }, after: { status: updated.status, clearedAt: updated.clearedAt, bouncedAt: updated.bouncedAt } });
+    const updated = await this.prisma.paymentCheck.update({
+      where: { id: checkId },
+      data: {
+        status,
+        notes: notes?.trim() || undefined,
+        clearedAt: status === 'cleared' ? now : null,
+        bouncedAt: status === 'bounced' ? now : null,
+      },
+    });
+    if (actorId)
+      await writeAudit(this.prisma, {
+        userId: actorId,
+        action: 'update',
+        entityType: 'payment_check',
+        entityId: checkId,
+        before: { status: check.status },
+        after: {
+          status: updated.status,
+          clearedAt: updated.clearedAt,
+          bouncedAt: updated.bouncedAt,
+        },
+      });
     return { ok: true, data: updated };
   }
 
@@ -723,7 +798,13 @@ export class InvoiceService {
     amount: string | number,
     method: 'cash' | 'card' | 'transfer' | 'credit',
     userId: string,
-    checks?: Array<{ checkNumber?: string; bank?: string; branch?: string; amount: string; dueDate: string }>,
+    checks?: Array<{
+      checkNumber?: string;
+      bank?: string;
+      branch?: string;
+      amount: string;
+      dueDate: string;
+    }>,
     operationId?: string,
   ) {
     if (!userId || !['cash', 'card', 'transfer', 'credit'].includes(method))
@@ -738,11 +819,21 @@ export class InvoiceService {
     if (method === 'credit') {
       if (!checks?.length) throw new BadRequestException('حداقل یک چک برای پرداخت چکی وارد کنید');
       const todayTehran = new Intl.DateTimeFormat('en-CA', {
-        timeZone: 'Asia/Tehran', year: 'numeric', month: '2-digit', day: '2-digit',
+        timeZone: 'Asia/Tehran',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
       }).format(new Date());
       for (const check of checks) {
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(check.dueDate) || Number.isNaN(new Date(`${check.dueDate}T00:00:00Z`).getTime()) || check.dueDate < todayTehran)
-          throw new BadRequestException({ code: 'INVALID_CHECK_DUE_DATE', message: 'تاریخ سررسید چک نمی‌تواند گذشته باشد' });
+        if (
+          !/^\d{4}-\d{2}-\d{2}$/.test(check.dueDate) ||
+          Number.isNaN(new Date(`${check.dueDate}T00:00:00Z`).getTime()) ||
+          check.dueDate < todayTehran
+        )
+          throw new BadRequestException({
+            code: 'INVALID_CHECK_DUE_DATE',
+            message: 'تاریخ سررسید چک نمی‌تواند گذشته باشد',
+          });
       }
     }
     const result = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
@@ -786,11 +877,25 @@ export class InvoiceService {
       });
       if (method === 'credit') {
         if (!checks?.length) throw new BadRequestException('حداقل یک چک برای پرداخت چکی وارد کنید');
-        const checkRows = checks.map((check) => ({ ...check, amount: BigInt(check.amount || '0') }));
-        if (checkRows.some((check) => !check.dueDate || check.amount <= 0n)) throw new BadRequestException('تاریخ و مبلغ همهٔ چک‌ها الزامی است');
+        const checkRows = checks.map((check) => ({
+          ...check,
+          amount: BigInt(check.amount || '0'),
+        }));
+        if (checkRows.some((check) => !check.dueDate || check.amount <= 0n))
+          throw new BadRequestException('تاریخ و مبلغ همهٔ چک‌ها الزامی است');
         const checksTotal = checkRows.reduce((sum, check) => sum + check.amount, 0n);
-        if (checksTotal !== paidAmount) throw new BadRequestException('جمع مبالغ چک‌ها باید با مبلغ پرداختی برابر باشد');
-        await tx.paymentCheck.createMany({ data: checkRows.map((check) => ({ paymentId: payment.id, amount: check.amount, dueDate: new Date(check.dueDate), checkNumber: check.checkNumber, bank: check.bank, branch: check.branch })) });
+        if (checksTotal !== paidAmount)
+          throw new BadRequestException('جمع مبالغ چک‌ها باید با مبلغ پرداختی برابر باشد');
+        await tx.paymentCheck.createMany({
+          data: checkRows.map((check) => ({
+            paymentId: payment.id,
+            amount: check.amount,
+            dueDate: new Date(check.dueDate),
+            checkNumber: check.checkNumber,
+            bank: check.bank,
+            branch: check.branch,
+          })),
+        });
       }
       await writeAudit(tx, {
         userId,
@@ -799,6 +904,7 @@ export class InvoiceService {
         entityId: id,
         before: { paidAmount: invoice.paidAmount.toString(), paymentStatus: invoice.paymentStatus },
         after: { paidAmount: nextPaid.toString(), paymentStatus: status, method },
+        syncPayload: buildInvoiceSyncPayload(updated, updated.items),
       });
       return { ok: true, data: updated };
     });
@@ -880,6 +986,21 @@ export class InvoiceService {
             paidAt: nextStatus === 'paid' ? (invoice.paidAt ?? new Date()) : invoice.paidAt,
           },
         });
+      const returnedInvoice = await tx.invoice.findUnique({
+        where: { id },
+        include: {
+          items: {
+            select: {
+              id: true,
+              inventoryItemId: true,
+              productName: true,
+              quantity: true,
+              unitPrice: true,
+              lineTotal: true,
+            },
+          },
+        },
+      });
       await writeAudit(tx, {
         userId,
         action: 'return',
@@ -892,6 +1013,9 @@ export class InvoiceService {
           restock: input.restock !== false,
           ...(nextStatus !== invoice.paymentStatus ? { paymentStatus: nextStatus } : {}),
         },
+        syncPayload: returnedInvoice
+          ? buildInvoiceSyncPayload(returnedInvoice, returnedInvoice.items)
+          : undefined,
       });
       return { ok: true, data: { ...record, quantityAfter } };
     });
@@ -952,6 +1076,7 @@ export class InvoiceService {
         storePhone: nextStorePhone,
         customerAddress: customerAddress ?? invoice.customerAddress,
       },
+      syncPayload: buildInvoiceSyncPayload(updated),
     });
     return { ok: true, data: updated };
   }
@@ -994,6 +1119,7 @@ export class InvoiceService {
         entityId: id,
         before: { status: invoice.status, number: invoice.number },
         after: { status: updated.status },
+        syncPayload: buildInvoiceSyncPayload(updated, updated.items),
       });
       return { ok: true, data: updated };
     });
@@ -1036,6 +1162,26 @@ export class InvoiceService {
           ...(mobile === invoice.customerMobile ? {} : { customerMobile: mobile }),
         },
       });
+      const rotated = await tx.invoice.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          number: true,
+          status: true,
+          customerId: true,
+          customerName: true,
+          customerMobile: true,
+          subtotal: true,
+          discount: true,
+          total: true,
+          paymentStatus: true,
+          paymentMethod: true,
+          paidAmount: true,
+          issuedAt: true,
+          paidAt: true,
+          voidedAt: true,
+        },
+      });
       await writeAudit(tx, {
         userId,
         ip,
@@ -1044,6 +1190,9 @@ export class InvoiceService {
         entityId: id,
         before: { publicLink: 'rotated' },
         after: { publicShortCode: shortCode.code, linkExpiresAt: linkExpiresAt.toISOString() },
+        // The public link never travels inside a pull payload; the snapshot is
+        // only there so offline caches can refresh the invoice row itself.
+        syncPayload: rotated ? buildInvoiceSyncPayload(rotated) : undefined,
       });
     });
     await this.notifications.enqueue({
@@ -1062,10 +1211,12 @@ export class InvoiceService {
         number: invoice.number,
         shortCode: shortCode.code,
         total: invoice.total.toString(),
-        items: ((invoice.items ?? []) as Array<{ productName: string; quantity: number }>).map((item) => ({
-          name: item.productName,
-          quantity: item.quantity,
-        })),
+        items: ((invoice.items ?? []) as Array<{ productName: string; quantity: number }>).map(
+          (item) => ({
+            name: item.productName,
+            quantity: item.quantity,
+          }),
+        ),
       },
     });
     return {
@@ -1193,7 +1344,13 @@ export class InvoiceService {
       where: { id },
       include: {
         customer: true,
-        items: { include: { inventoryItem: { include: { product: true, brand: true, location: { include: { parent: true } } } } } },
+        items: {
+          include: {
+            inventoryItem: {
+              include: { product: true, brand: true, location: { include: { parent: true } } },
+            },
+          },
+        },
         payments: { include: { checks: true }, orderBy: { receivedAt: 'desc' } },
         returns: { orderBy: { createdAt: 'desc' } },
       },

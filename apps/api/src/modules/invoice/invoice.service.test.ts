@@ -514,7 +514,10 @@ describe('InvoiceService.resendSms', () => {
     const prisma = {
       invoice: { findUnique: async () => record, update },
       $transaction: async (run: (tx: unknown) => Promise<unknown>) =>
-        run({ invoice: { update }, auditLog: { create: async () => undefined } }),
+        run({
+          invoice: { update, findUnique: async () => ({ ...record, items: [] }) },
+          auditLog: { create: async () => undefined },
+        }),
     };
     const service = new InvoiceService(prisma as never, { enqueue } as never);
     return { service, update, enqueue };
@@ -830,7 +833,9 @@ describe('InvoiceService.list and panel link/pdf actions', () => {
     // presentation forms (FB50–FEFF) are outside the base Arabic block
     // Numeric-only table cells contain Persian digits but no letters to shape.
     // Assert shaping only on lines that actually contain Arabic/Persian letters.
-    const persianLines = drawn.filter((line) => /[\u0621-\u063A\u063F-\u064A\u067E\u0686\u0698\u06A9\u06AF\u06CC\uFB50-\uFEFF]/.test(line));
+    const persianLines = drawn.filter((line) =>
+      /[\u0621-\u063A\u063F-\u064A\u067E\u0686\u0698\u06A9\u06AF\u06CC\uFB50-\uFEFF]/.test(line),
+    );
     expect(persianLines.length).toBeGreaterThan(8);
     // No line may carry unshaped Persian LETTERS (digits/punctuation are fine).
     const unshapedLetter = /[\u0621-\u063A\u063F-\u064A\u067E\u0686\u0698\u06A9\u06AF\u06CC]/;

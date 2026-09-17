@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
 import { writeAudit } from '../../common/audit/audit-log';
+import { buildCustomerSyncPayload } from '../../common/sync/sync-payloads';
 
 /** Outstanding debt per invoice = total − returns − paid (never below 0 for
  * the sum): a returned item stops counting as debt the moment the return is
@@ -41,7 +42,12 @@ export class CustomersService {
       include: {
         invoices: {
           where: { status: 'issued' },
-          select: { total: true, paidAmount: true, issuedAt: true, returns: { select: { refundAmount: true } } },
+          select: {
+            total: true,
+            paidAmount: true,
+            issuedAt: true,
+            returns: { select: { refundAmount: true } },
+          },
         },
       },
     });
@@ -67,13 +73,22 @@ export class CustomersService {
       include: {
         invoices: {
           orderBy: { issuedAt: 'desc' },
-          include: { items: true, returns: { select: { refundAmount: true } }, payments: { include: { checks: true }, orderBy: { receivedAt: 'desc' } } },
+          include: {
+            items: true,
+            returns: { select: { refundAmount: true } },
+            payments: { include: { checks: true }, orderBy: { receivedAt: 'desc' } },
+          },
         },
         payments: { orderBy: { paidAt: 'desc' }, take: 50 },
       },
     });
     if (!customer) throw new NotFoundException('مشتری پیدا نشد');
-    const smsLogs = await this.prisma.smsLog.findMany({ where: { mobile: customer.mobile }, orderBy: { createdAt: 'desc' }, take: 20, select: { id: true, message: true, status: true, createdAt: true } });
+    const smsLogs = await this.prisma.smsLog.findMany({
+      where: { mobile: customer.mobile },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+      select: { id: true, message: true, status: true, createdAt: true },
+    });
     return {
       ok: true,
       data: {
@@ -110,6 +125,7 @@ export class CustomersService {
         entityType: 'customer',
         entityId: customer.id,
         after: { name, mobile },
+        syncPayload: buildCustomerSyncPayload(customer),
       });
     return { ok: true, data: customer };
   }
@@ -140,6 +156,7 @@ export class CustomersService {
         entityId: id,
         before: { name: before.name, isActive: before.isActive },
         after: { name: customer.name, isActive: customer.isActive },
+        syncPayload: buildCustomerSyncPayload(customer),
       });
     return { ok: true, data: customer };
   }
@@ -239,6 +256,7 @@ export class CustomersService {
           },
         });
       }
+      const paidCustomer = await tx.customer.findUnique({ where: { id } });
       await writeAudit(tx, {
         userId: actorId,
         ip,
@@ -255,6 +273,7 @@ export class CustomersService {
             amount: item.amount.toString(),
           })),
         },
+        syncPayload: paidCustomer ? buildCustomerSyncPayload(paidCustomer) : undefined,
       });
       // JSON-safe: BigInts are stringified here so the endpoint never depends
       // on the express `json replacer` to serialize the response.

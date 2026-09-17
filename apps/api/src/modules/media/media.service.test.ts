@@ -92,3 +92,66 @@ describe('MediaService.uploadSiteAsset', () => {
     expect(setting.update).not.toHaveBeenCalled();
   });
 });
+describe('MediaService product image changes', () => {
+  const product = {
+    id: 'p1',
+    code: 'BRK-1',
+    slug: 'lent',
+    name: 'لنت ترمز',
+    categoryId: 'c1',
+    status: 'active',
+    availabilityOverride: null,
+    priceDisplay: 'inherit',
+    partNumber: null,
+    updatedAt: new Date('2026-09-17T00:00:00Z'),
+    images: [{ id: 'img-1', path: '/uploads/products/img-1/large.webp', alt: 'لنت' }],
+  };
+  const prisma = {
+    product: { findFirst: vi.fn(async () => product) },
+    productImage: {
+      create: vi.fn(async () => ({
+        id: 'img-2',
+        productId: 'p1',
+        path: 'https://cdn.example.com/x.webp',
+      })),
+      delete: vi.fn(async () => ({})),
+      findFirst: vi.fn(async () => ({ id: 'img-1', productId: 'p1' })),
+      findUnique: vi.fn(async () => ({ id: 'img-1', path: '/uploads/products/img-1/large.webp' })),
+      update: vi.fn(async () => ({ id: 'img-1', isPrimary: true })),
+      updateMany: vi.fn(async () => ({ count: 1 })),
+      findMany: vi.fn(async () => [{ id: 'img-1' }, { id: 'img-2' }]),
+    },
+    syncChange: { create: vi.fn(async () => ({})) },
+    // $transaction is called both with a callback (makePrimary) and with an
+    // array of promises (reorder).
+    $transaction: vi.fn(async (arg: unknown) =>
+      Array.isArray(arg) ? Promise.all(arg) : (arg as (tx: unknown) => Promise<unknown>)(prisma),
+    ),
+  };
+
+  it('publishes a product sync change (with primary image) after attaching an image', async () => {
+    const service = new MediaService(prisma as never);
+    const result = await service.addFromUrl('p1', 'https://cdn.example.com/x.webp', 'لنت');
+    expect(result.ok).toBe(true);
+    expect(prisma.syncChange.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        entityType: 'product',
+        entityId: 'p1',
+        action: 'updated',
+        payload: expect.objectContaining({
+          id: 'p1',
+          imageUrl: 'https://salimvand.ir/uploads/products/img-1/large.webp',
+        }),
+      }),
+    });
+  });
+
+  it('publishes a product sync change after removing, reordering or promoting images', async () => {
+    (prisma.syncChange.create as ReturnType<typeof vi.fn>).mockClear();
+    const service = new MediaService(prisma as never);
+    await service.remove('p1', 'img-1');
+    await service.reorder('p1', ['img-1', 'img-2']);
+    await service.makePrimary('p1', 'img-1');
+    expect(prisma.syncChange.create).toHaveBeenCalledTimes(3);
+  });
+});

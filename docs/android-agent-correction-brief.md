@@ -200,10 +200,12 @@ GET /sync/pull?cursor=0&limit=200
 inventory.receive
 inventory.adjust
 inventory.transfer
+inventory.update_metadata
 product.create
 product.update
 invoice.create
 invoice.pay
+customer.create
 purchase.create
 purchase.pay
 ```
@@ -242,9 +244,7 @@ POST /sync/operations/status
 
 ```json
 {
-  "operationIds": [
-    "android-device-000001"
-  ]
+  "operationIds": ["android-device-000001"]
 }
 ```
 
@@ -258,7 +258,7 @@ POST /sync/operations/status
 GET /sync/operations
 ```
 
-این مسیر فقط برای Recovery مدیریتی Backend است و Android نباید در نصب مجدد آن را اجرا کند:
+این مسیر فقط برای مدیران Backend است (`super_admin` و `manager`) و Android نباید در نصب مجدد آن را اجرا کند؛ تایمر خود سرور عملیاتهای معلق همهٔ کاربران را بازیابی می‌کند:
 
 ```http
 POST /sync/operations/recover
@@ -542,6 +542,8 @@ GET /products/{id}
 
 ### ایجاد محصول
 
+زیرشیء `inventory` اختیاری است؛ با ارسال آن، Product + دقیقاً یک InventoryItem + ردیف ledger با `type=initial` در یک تراکنش ساخته می‌شوند و قلم خنثی اضافی ساخته نمی‌شود. `categoryId` و UUIDهای اختیاری (`brandId`, `locationId`) باید واقعی باشند.
+
 ```json
 {
   "operationId": "android-device-product-000001",
@@ -552,12 +554,25 @@ GET /products/{id}
     "categoryId": "category-id",
     "partNumber": "PN-206",
     "description": "توضیح",
-    "status": "active"
+    "status": "active",
+    "inventory": {
+      "brandId": "brand-id-or-null",
+      "barcode": "6261234567890",
+      "purchasePrice": "1850000",
+      "salePrice": "2450000",
+      "minStock": 3,
+      "locationId": "location-id-or-null",
+      "initialQuantity": 10
+    }
   }
 }
 ```
 
+`result` پاسخ شامل `product.id` و `inventoryItem` (id، barcode، قیمتها و quantity نهایی) است تا Draft محلی دقیق جایگزین شود. Retry با همان `operationId` هیچ محصول یا ledger دومی نمی‌سازد.
+
 ### ویرایش محصول
+
+فیلدهای کاتالوگ و زیرشیء `inventory` (با `itemId` صریح) در یک تراکنش اعمال می‌شوند؛ `quantity` فقط با receive/adjust تغییر می‌کند.
 
 ```json
 {
@@ -567,8 +582,22 @@ GET /products/{id}
   "payload": {
     "productId": "product-id",
     "name": "نام جدید",
-    "status": "active"
+    "status": "active",
+    "inventory": { "itemId": "inventory-item-id", "salePrice": "2500000" }
   }
+}
+```
+
+### ویرایش metadata قلم موجودی
+
+برای قیمت/قفسه/بارکد/برند یک قلم بدون ساخت محصول:
+
+```json
+{
+  "operationId": "android-device-meta-000001",
+  "deviceId": "android-device",
+  "type": "inventory.update_metadata",
+  "payload": { "itemId": "inventory-item-id", "salePrice": "2500000", "locationId": "location-id" }
 }
 ```
 
@@ -596,14 +625,16 @@ status
 createdAt
 ```
 
-تصمیم‌های پیشنهادی UI:
+تصمیمهای مجاز resolve (هر مقدار دیگر با 400 رد می‌شود):
 
-```text
-retry
-reject
-accept_server_state
-create_new_draft
+```json
+{ "decision": "retry | reject | accept_server_state | create_new_draft", "note": "اختیاری" }
 ```
+
+- `retry`: عملیات به حالت قابل اجرا برمی‌گردد و بلافاصله اجرا می‌شود؛ پاسخ، `status` نهایی را برمی‌گرداند (`applied` / `conflict` / `failed`). در conflict مجدد فیلد `conflict` شناسهٔ Conflict باز جدید را دارد.
+- `reject`: عملیات قطعی `failed` می‌شود.
+- `accept_server_state`: `snapshot` تازهٔ سرور در پاسخ برمی‌گردد تا cache بدون LWW اشتباه تصحیح شود.
+- `create_new_draft`: `draft` شامل payload اصلی و serverState برای پیش‌نویس جدید برمی‌گردد.
 
 Android نباید Conflict را فقط با تغییر UI resolved کند؛ ابتدا باید پاسخ Backend دریافت شود.
 

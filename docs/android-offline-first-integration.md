@@ -248,11 +248,22 @@ x-device-id: <deviceId>
     "changes": [
       {
         "revision": "124",
-        "entityType": "product",
+        "entityType": "inventory_item",
         "entityId": "...",
         "action": "updated",
-        "payload": {},
-        "operationId": "...",
+        "payload": {
+          "id": "inventory-item-id",
+          "productId": "product-id",
+          "brandId": null,
+          "barcode": "6261234567890",
+          "quantity": 10,
+          "purchasePrice": "1850000",
+          "salePrice": "2450000",
+          "minStock": 3,
+          "locationId": "location-id",
+          "isActive": true
+        },
+        "operationId": null,
         "createdAt": "2026-09-11T10:00:00.000Z"
       }
     ],
@@ -261,6 +272,16 @@ x-device-id: <deviceId>
   }
 }
 ```
+
+قرارداد payload برای `product`, `inventory_item`, `invoice`, `customer`, `brand`, `category`, `location`:
+
+```text
+action=created|updated → payload یک snapshot کامل و بدون secret است؛ در Cache درج/جایگزین کن
+action=deleted         → رکورد entityId را از Cache حذف کن
+entityTypeهای دیگر      → payload خالی است؛ صرفاً invalidation
+```
+
+حذف نرم محصول برای خود محصول و همهٔ `inventory_item`های آن رویداد `deleted` صادر می‌کند.
 
 الگوریتم Pull:
 
@@ -565,10 +586,7 @@ POST /api/v1/sync/operations/status
 
 ```json
 {
-  "operationIds": [
-    "android-device-000001",
-    "android-device-invoice-000001"
-  ]
+  "operationIds": ["android-device-000001", "android-device-invoice-000001"]
 }
 ```
 

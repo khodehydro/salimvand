@@ -2,13 +2,33 @@ import { describe, expect, it, vi } from 'vitest';
 import { BadRequestException } from '@nestjs/common';
 import { InventoryService } from './inventory.service';
 
-function makeService(item = { id: 'i1', quantity: 10 }) {
+const FULL_ITEM = {
+  id: 'i1',
+  productId: 'p1',
+  brandId: 'b1',
+  barcode: '6260000000123',
+  quantity: 10,
+  purchasePrice: 1000000n,
+  salePrice: 1200000n,
+  minStock: 2,
+  locationId: 'shelf-1',
+  isActive: true,
+};
+
+function makeService(item = FULL_ITEM) {
   const tx = {
     inventoryItem: {
       findUnique: vi.fn().mockResolvedValue(item),
       update: vi.fn().mockResolvedValue({ ...item, quantity: 7 }),
+      findFirst: vi.fn().mockResolvedValue(null),
     },
-    inventoryTransaction: { create: vi.fn().mockResolvedValue({ id: 't1', quantityAfter: 7 }) },
+    inventoryTransaction: {
+      create: vi.fn().mockResolvedValue({ id: 't1', quantityAfter: 7 }),
+      findUnique: vi.fn().mockResolvedValue(null),
+    },
+    inventoryOperation: { create: vi.fn(), findUnique: vi.fn().mockResolvedValue(null) },
+    brand: { findUnique: vi.fn().mockResolvedValue({ id: 'b1', isActive: true }) },
+    location: { findUnique: vi.fn().mockResolvedValue({ id: 'shelf-2' }) },
   };
   const prisma = {
     $transaction: vi.fn(async (callback: (value: typeof tx) => unknown) => callback(tx)),
@@ -207,5 +227,73 @@ describe('InventoryService', () => {
     const prisma = { inventoryItem: { findMany } };
     const result = await new InventoryService(prisma as never).list({ status: 'out' });
     expect(result.data.map((item: { id: string }) => item.id)).toEqual(['zero']);
+  });
+});
+
+describe('InventoryService.updateMetadata (offline command inventory.update_metadata)', () => {
+  it('updates prices, shelf and barcode atomically without touching quantity', async () => {
+    const { service, tx } = makeService();
+    const result = await service.updateMetadata(
+      {
+        itemId: 'i1',
+        purchasePrice: '1500000',
+        salePrice: '1900000',
+        minStock: 5,
+        locationId: 'shelf-2',
+        barcode: '6261111222333',
+      },
+      'u1',
+      'android-meta-0001',
+    );
+    expect(result).toMatchObject({ ok: true, duplicate: false });
+    const update = tx.inventoryItem.update.mock.calls[0][0] as { data: Record<string, unknown> };
+    expect(update.data).toEqual({
+      purchasePrice: 1500000n,
+      salePrice: 1900000n,
+      minStock: 5,
+      locationId: 'shelf-2',
+      barcode: '6261111222333',
+    });
+    expect(update.data).not.toHaveProperty('quantity');
+    expect(tx.inventoryOperation.create).toHaveBeenCalledWith({
+      data: { operationId: 'android-meta-0001', itemId: 'i1', type: 'inventory.update_metadata' },
+    });
+  });
+
+  it('is idempotent per operationId and replays the stored line', async () => {
+    const { service, tx } = makeService();
+    tx.inventoryOperation.findUnique.mockResolvedValue({
+      operationId: 'android-meta-0002',
+      itemId: 'i1',
+      type: 'inventory.update_metadata',
+    });
+    tx.inventoryItem.findUnique.mockResolvedValue(FULL_ITEM);
+    const result = await service.updateMetadata(
+      { itemId: 'i1', salePrice: '1900000' },
+      'u1',
+      'android-meta-0002',
+    );
+    expect(result).toMatchObject({ ok: true, duplicate: true, data: { id: 'i1' } });
+    expect(tx.inventoryItem.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects brand duplicates on the same product and unknown locations', async () => {
+    const { service, tx } = makeService();
+    tx.inventoryItem.findFirst.mockResolvedValue({ id: 'other' });
+    await expect(
+      service.updateMetadata({ itemId: 'i1', brandId: 'b1' }, 'u1', 'android-meta-0003'),
+    ).rejects.toThrow('این برند قبلاً برای همین محصول ثبت شده است');
+    tx.inventoryItem.findFirst.mockResolvedValue(null);
+    tx.location.findUnique.mockResolvedValue(null);
+    await expect(
+      service.updateMetadata({ itemId: 'i1', locationId: 'void' }, 'u1', 'android-meta-0004'),
+    ).rejects.toThrow('موقعیت انبار نامعتبر است');
+  });
+
+  it('rejects an empty metadata payload instead of writing a no-op', async () => {
+    const { service } = makeService();
+    await expect(
+      service.updateMetadata({ itemId: 'i1' }, 'u1', 'android-meta-0005'),
+    ).rejects.toThrow('تغییری ارسال نشده است');
   });
 });

@@ -37,15 +37,23 @@ describe('customer payment accounting', () => {
       amount: 1200n,
       paidAt: new Date('2026-09-01T10:00:00Z'),
     }));
+    const customerRow = {
+      id: 'customer-1',
+      name: 'مشتری',
+      mobile: '09351112233',
+      address: null,
+      notes: null,
+      isActive: true,
+      updatedAt: new Date('2026-09-17T00:00:00Z'),
+      invoices: [
+        { id: 'invoice-1', total: 1000n, paidAmount: 0n, paymentStatus: 'unpaid' },
+        { id: 'invoice-2', total: 500n, paidAmount: 0n, paymentStatus: 'unpaid' },
+      ],
+    };
     const tx = {
       customer: {
-        findFirst: vi.fn(async () => ({
-          id: 'customer-1',
-          invoices: [
-            { id: 'invoice-1', total: 1000n, paidAmount: 0n, paymentStatus: 'unpaid' },
-            { id: 'invoice-2', total: 500n, paidAmount: 0n, paymentStatus: 'unpaid' },
-          ],
-        })),
+        findFirst: vi.fn(async () => customerRow),
+        findUnique: vi.fn(async () => customerRow),
       },
       customerPayment: { create: receiptCreate },
       invoice: { update: invoiceUpdate },
@@ -86,15 +94,23 @@ describe('customer payment accounting', () => {
 
   it('allocates a payment to the requested invoice only', async () => {
     const invoiceUpdate = vi.fn(async () => ({}));
+    const customerRow = {
+      id: 'customer-1',
+      name: 'مشتری',
+      mobile: '09351112233',
+      address: null,
+      notes: null,
+      isActive: true,
+      updatedAt: new Date('2026-09-17T00:00:00Z'),
+      invoices: [
+        { id: 'invoice-1', total: 1000n, paidAmount: 0n, paymentStatus: 'unpaid' },
+        { id: 'invoice-2', total: 500n, paidAmount: 0n, paymentStatus: 'unpaid' },
+      ],
+    };
     const tx = {
       customer: {
-        findFirst: vi.fn(async () => ({
-          id: 'customer-1',
-          invoices: [
-            { id: 'invoice-1', total: 1000n, paidAmount: 0n, paymentStatus: 'unpaid' },
-            { id: 'invoice-2', total: 500n, paidAmount: 0n, paymentStatus: 'unpaid' },
-          ],
-        })),
+        findFirst: vi.fn(async () => customerRow),
+        findUnique: vi.fn(async () => customerRow),
       },
       customerPayment: { create: vi.fn(async () => ({ id: 'receipt-1' })) },
       invoice: { update: invoiceUpdate },

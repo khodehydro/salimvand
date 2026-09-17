@@ -41,6 +41,30 @@ export class InvoiceController {
     return this.invoices.list();
   }
 
+  // Static segments are declared before the `:id` param routes: NestJS matches
+  // in declaration order, so GET /invoices/customers and /invoices/options
+  // must never fall through to @Get(':id').
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('seller')
+  @Get('customers')
+  customers(@Query('search') search?: string) {
+    return this.invoices.customers(search);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('seller')
+  @Post('customers')
+  createCustomer(@Body() body: { name?: string; mobile?: string; notes?: string }) {
+    return this.invoices.createCustomer(body);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('seller')
+  @Get('options')
+  options() {
+    return this.invoices.options();
+  }
+
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('seller', 'accountant')
   @Get(':id/pdf')
@@ -70,27 +94,6 @@ export class InvoiceController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('seller')
-  @Get('customers')
-  customers(@Query('search') search?: string) {
-    return this.invoices.customers(search);
-  }
-
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('seller')
-  @Post('customers')
-  createCustomer(@Body() body: { name?: string; mobile?: string; notes?: string }) {
-    return this.invoices.createCustomer(body);
-  }
-
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('seller')
-  @Get('options')
-  options() {
-    return this.invoices.options();
-  }
-
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('seller')
   @Post()
   create(@Body() body: CreateInvoiceDto, @Req() request: AuthenticatedRequest) {
     return this.invoices.create(body, request.user?.id ?? '');
@@ -111,15 +114,30 @@ export class InvoiceController {
   @Roles('seller', 'accountant')
   @Patch('checks/:checkId/status')
   @Roles('seller', 'accountant')
-  updateCheckStatus(@Param('checkId') checkId: string, @Body() body: { status?: 'pending' | 'cleared' | 'bounced' | 'cancelled'; notes?: string }, @Req() request: AuthenticatedRequest) {
-    return this.invoices.updateCheckStatus(checkId, body.status ?? 'pending', body.notes, request.user?.id);
+  updateCheckStatus(
+    @Param('checkId') checkId: string,
+    @Body() body: { status?: 'pending' | 'cleared' | 'bounced' | 'cancelled'; notes?: string },
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.invoices.updateCheckStatus(
+      checkId,
+      body.status ?? 'pending',
+      body.notes,
+      request.user?.id,
+    );
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('seller', 'accountant')
   @Post(':id/pay')
   pay(@Param('id') id: string, @Body() body: PayInvoiceDto, @Req() request: AuthenticatedRequest) {
-    return this.invoices.pay(id, body.amount ?? 0, body.method ?? 'cash', request.user?.id ?? '', body.checks);
+    return this.invoices.pay(
+      id,
+      body.amount ?? 0,
+      body.method ?? 'cash',
+      request.user?.id ?? '',
+      body.checks,
+    );
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

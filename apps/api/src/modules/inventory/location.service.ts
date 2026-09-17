@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service';
 import { writeAudit } from '../../common/audit/audit-log';
+import { buildLocationSyncPayload } from '../../common/sync/sync-payloads';
 
 const LOCATION_TYPES = ['warehouse', 'aisle', 'shelf', 'level', 'box'] as const;
 
@@ -58,6 +59,7 @@ export class LocationService {
       entityId: data.id,
       after: { name, code, type, parentId },
       ip: input.ip,
+      syncPayload: buildLocationSyncPayload(data),
     });
     return { ok: true, data };
   }
@@ -97,6 +99,7 @@ export class LocationService {
       before: { name: existing.name, code: existing.code, parentId: existing.parentId },
       after: { name, code, parentId },
       ip: input.ip,
+      syncPayload: buildLocationSyncPayload(data),
     });
     return { ok: true, data };
   }
@@ -120,6 +123,9 @@ export class LocationService {
       before: { name: existing.name, code: existing.code, parentId: existing.parentId },
       after: { detachedItems: existing._count.items },
       ip,
+      // Deletions publish action=deleted with a minimal payload; the before
+      // snapshot above stays audit-only.
+      syncPayload: { id },
     });
     return { ok: true, data: { id, detachedItems: existing._count.items } };
   }
