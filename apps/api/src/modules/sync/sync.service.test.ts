@@ -180,7 +180,7 @@ describe('SyncService.applyOperation routing', () => {
     expect(result.data.result).toEqual({ id: 'p1', inventoryItem: { id: 'i1' } });
   });
 
-  it('routes product.update and strips productId/inventory from the catalog changes', async () => {
+  it('routes product.update and forwards the nested inventory object to the atomic catalog service', async () => {
     const { service, catalog } = makeService();
     catalog.update.mockResolvedValue({ ok: true, data: { id: 'p1', inventoryItem: { id: 'i1' } } });
     await service.queueOperation(USER_ID, {
@@ -193,9 +193,11 @@ describe('SyncService.applyOperation routing', () => {
         inventory: { itemId: 'i1', salePrice: '2000' },
       },
     });
+    // Only productId is stripped; inventory must survive the routing so
+    // CatalogAdminService.update can apply it in the same transaction.
     expect(catalog.update).toHaveBeenCalledWith(
       'p1',
-      { name: 'نام جدید' },
+      { name: 'نام جدید', inventory: { itemId: 'i1', salePrice: '2000' } },
       USER_ID,
       undefined,
       'android-device-product-000002',

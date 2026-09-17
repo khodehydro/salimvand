@@ -494,9 +494,10 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
     if (input.type === 'product.update') {
       const productId = typeof payload.productId === 'string' ? payload.productId : '';
       if (!productId) throw new BadRequestException('productId عملیات الزامی است');
-      // The nested inventory object is handled by catalog.update itself; only
-      // the catalog fields travel through `changes`.
-      const { productId: _productId, inventory: _inventory, ...changes } = payload;
+      // Only productId is stripped: the nested inventory object must travel
+      // with `changes` because CatalogAdminService.update applies it in the
+      // same transaction as the catalog fields.
+      const { productId: _productId, ...changes } = payload;
       return this.catalog.update(productId, changes, userId, undefined, input.operationId);
     }
     if (input.type === 'invoice.create') {
