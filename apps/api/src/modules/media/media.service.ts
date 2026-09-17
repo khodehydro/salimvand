@@ -127,6 +127,7 @@ export class MediaService {
     if (file.buffer.length > 5 * 1024 * 1024)
       throw new BadRequestException('حجم تصویر نباید بیشتر از ۵ مگابایت باشد');
     await this.ensureProduct(productId);
+    const isPrimary = await this.firstImageBecomesPrimary(productId);
     const id = randomUUID();
     const dir = join(this.uploadRoot, id);
     await mkdir(dir, { recursive: true });
@@ -142,7 +143,7 @@ export class MediaService {
       .toFile(join(dir, 'small.webp'));
     const path = `/uploads/products/${id}/large.webp`;
     const image = await this.prisma.productImage.create({
-      data: { productId, path, alt: alt?.trim() || undefined, sort: 0, isPrimary: false },
+      data: { productId, path, alt: alt?.trim() || undefined, sort: 0, isPrimary },
     });
     await this.publishProductImageChange(productId);
     return { ok: true, data: image };
@@ -152,8 +153,9 @@ export class MediaService {
     if (!/^https:\/\//i.test(url))
       throw new BadRequestException('آدرس تصویر باید با https شروع شود');
     await this.ensureProduct(productId);
+    const isPrimary = await this.firstImageBecomesPrimary(productId);
     const image = await this.prisma.productImage.create({
-      data: { productId, path: url, alt: alt?.trim() || undefined, sort: 0, isPrimary: false },
+      data: { productId, path: url, alt: alt?.trim() || undefined, sort: 0, isPrimary },
     });
     await this.publishProductImageChange(productId);
     return { ok: true, data: image };
@@ -161,6 +163,7 @@ export class MediaService {
 
   async selectExisting(productId: string, imageId: string, alt?: string) {
     await this.ensureProduct(productId);
+    const isPrimary = await this.firstImageBecomesPrimary(productId);
     const source = await this.prisma.productImage.findUnique({ where: { id: imageId } });
     if (!source) throw new NotFoundException('رسانه پیدا نشد');
     const image = await this.prisma.productImage.create({
@@ -169,7 +172,7 @@ export class MediaService {
         path: source.path,
         alt: alt?.trim() || source.alt || undefined,
         sort: 0,
-        isPrimary: false,
+        isPrimary,
       },
     });
     await this.publishProductImageChange(productId);
@@ -225,6 +228,18 @@ export class MediaService {
       where: { id: productId, deletedAt: null },
     });
     if (!product) throw new NotFoundException('محصول پیدا نشد');
+  }
+
+  /** The first image attached to a product becomes its primary one
+   * automatically: sync events and bootstrap only carry the primary image
+   * (imageUrl), so a product whose first image stayed non-primary would
+   * never show a picture on offline clients. */
+  private async firstImageBecomesPrimary(productId: string) {
+    const primary = await this.prisma.productImage.findFirst({
+      where: { productId, isPrimary: true },
+      select: { id: true },
+    });
+    return !primary;
   }
 
   /** Offline caches key products by their primary image (bootstrap sends

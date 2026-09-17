@@ -1,14 +1,31 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import sharp = require('sharp');
 
-vi.mock('node:fs/promises', () => ({
-  mkdir: vi.fn(async () => undefined),
-  writeFile: vi.fn(async () => undefined),
-  readdir: vi.fn(async () => ['logo-ab12cd34.png', 'favicon-99aa88bb.ico', 'notes.txt']),
-  rm: vi.fn(async () => undefined),
-}));
-vi.mock('sharp', () => ({ default: vi.fn() }));
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  return {
+    // mkdir stays real so `upload` can write the processed webp files into a
+    // temporary directory; only the library-facing helpers stay deterministic.
+    ...actual,
+    readdir: vi.fn(async () => ['logo-ab12cd34.png', 'favicon-99aa88bb.ico', 'notes.txt']),
+    rm: vi.fn(async () => undefined),
+    writeFile: vi.fn(async () => undefined),
+  };
+});
 
 import { MediaService } from './media.service';
+
+// Real upload root for the sharp pipeline. UPLOAD_DIR is read when a service
+// is constructed, and every construction below happens inside a test body —
+// i.e. after this module-level assignment.
+const uploadDir = mkdtempSync(join(tmpdir(), 'salimvand-media-test-'));
+process.env.UPLOAD_DIR = uploadDir;
+afterAll(() => {
+  rmSync(uploadDir, { recursive: true, force: true });
+});
 
 describe('MediaService.uploadSiteAsset', () => {
   const file = (buffer: Buffer, mimetype = 'image/png') => ({
@@ -153,5 +170,139 @@ describe('MediaService product image changes', () => {
     await service.reorder('p1', ['img-1', 'img-2']);
     await service.makePrimary('p1', 'img-1');
     expect(prisma.syncChange.create).toHaveBeenCalledTimes(3);
+  });
+
+  it('keeps a new image non-primary when the product already has a primary image', async () => {
+    (prisma.productImage.create as ReturnType<typeof vi.fn>).mockClear();
+    const service = new MediaService(prisma as never);
+    await service.addFromUrl('p1', 'https://cdn.example.com/second.webp');
+    expect(prisma.productImage.create).toHaveBeenCalledTimes(1);
+    expect(prisma.productImage.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ isPrimary: false }) }),
+    );
+  });
+});
+
+describe('MediaService first image of an imageless product', () => {
+  // No existing primary image: productImage.findFirst (the primary lookup)
+  // returns null, so the attached image must become the primary one.
+  const baseProduct = {
+    id: 'p9',
+    code: 'BRK-9',
+    slug: 'no-image',
+    name: 'محصول بدون تصویر',
+    categoryId: 'c1',
+    status: 'active',
+    availabilityOverride: null,
+    priceDisplay: 'inherit',
+    partNumber: null,
+    description: null,
+    updatedAt: new Date('2026-09-17T00:00:00Z'),
+  };
+  // Path of the image the create mock last registered —
+  // publishProductImageChange runs after the create, so the product query
+  // reflects the new primary image.
+  let createdPath = '';
+  const create = vi.fn(async (args: { data: { path: string } & Record<string, unknown> }) => {
+    createdPath = args.data.path;
+    return { id: 'img-new', productId: 'p9', ...args.data };
+  });
+  const prisma = {
+    product: {
+      findFirst: vi.fn(async () => ({
+        ...baseProduct,
+        images: [{ id: 'img-new', path: createdPath, alt: 'اولین تصویر' }],
+      })),
+    },
+    productImage: {
+      findFirst: vi.fn(async () => null),
+      findUnique: vi.fn(async () => ({
+        id: 'src-1',
+        path: 'https://cdn.example.com/src.webp',
+        alt: 'منبع',
+      })),
+      create,
+    },
+    syncChange: { create: vi.fn(async () => ({})) },
+  };
+
+  beforeEach(() => {
+    create.mockClear();
+    (prisma.syncChange.create as ReturnType<typeof vi.fn>).mockClear();
+  });
+
+  /** The three acceptance criteria of the regression: the new image is
+   * primary, a product SyncChange row is created, and its payload carries
+   * the primary image's non-empty imageUrl. */
+  const expectPrimaryImageSyncChange = () => {
+    expect(prisma.syncChange.create).toHaveBeenCalledTimes(1);
+    const call = (prisma.syncChange.create as ReturnType<typeof vi.fn>).mock.calls[0][0] as {
+      data: {
+        entityType: string;
+        entityId: string;
+        action: string;
+        payload: { imageUrl: string };
+      };
+    };
+    expect(call.data).toMatchObject({
+      entityType: 'product',
+      entityId: 'p9',
+      action: 'updated',
+    });
+    expect(call.data.payload.imageUrl).toBe(
+      /^https?:\/\//i.test(createdPath) ? createdPath : `https://salimvand.ir${createdPath}`,
+    );
+  };
+
+  it('upload: makes the first image primary and publishes its imageUrl in a product sync change', async () => {
+    const service = new MediaService(prisma as never);
+    const png = await sharp({
+      create: { width: 16, height: 16, channels: 3, background: '#336699' },
+    })
+      .png()
+      .toBuffer();
+    const result = await service.upload(
+      'p9',
+      { buffer: png, mimetype: 'image/png', originalname: 'a.png' },
+      'اولین تصویر',
+    );
+    expect(result.ok).toBe(true);
+    expect(result.data.isPrimary).toBe(true);
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ isPrimary: true }) }),
+    );
+    expectPrimaryImageSyncChange();
+  });
+
+  it('addFromUrl: makes the first image primary and publishes its imageUrl in a product sync change', async () => {
+    const service = new MediaService(prisma as never);
+    const result = await service.addFromUrl('p9', 'https://cdn.example.com/first.webp', 'اولین');
+    expect(result.ok).toBe(true);
+    expect(result.data.isPrimary).toBe(true);
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          isPrimary: true,
+          path: 'https://cdn.example.com/first.webp',
+        }),
+      }),
+    );
+    expectPrimaryImageSyncChange();
+  });
+
+  it('selectExisting: makes the first image primary and publishes its imageUrl in a product sync change', async () => {
+    const service = new MediaService(prisma as never);
+    const result = await service.selectExisting('p9', 'src-1', 'اولین');
+    expect(result.ok).toBe(true);
+    expect(result.data.isPrimary).toBe(true);
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          isPrimary: true,
+          path: 'https://cdn.example.com/src.webp',
+        }),
+      }),
+    );
+    expectPrimaryImageSyncChange();
   });
 });
