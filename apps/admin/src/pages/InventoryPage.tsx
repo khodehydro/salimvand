@@ -5,7 +5,7 @@ import { Modal } from '@salimvand/ui';
 import { StockStepper } from '../components/StockStepper';
 import { ProductCreateModal } from '../components/ProductCreateModal';
 import { BarcodeSvg } from '../components/BarcodeSvg';
-import { formatPersianNumber, formatRial } from '@salimvand/shared';
+import { formatJalaliDate, formatPersianNumber, formatRial } from '@salimvand/shared';
 import { FaNumberInput } from '../components/FaNumberInput';
 import { locationLabel } from '../lib/location-label';
 
@@ -19,6 +19,8 @@ type Item = {
   quantity: number;
   salePrice: string;
   purchasePrice?: string;
+  /** When the current sale price took effect (ISO) — the Shamsi price badge. */
+  priceUpdatedAt?: string | null;
   minStock?: number | null;
   product?: {
     id: string;
@@ -48,6 +50,21 @@ type VehicleMake = {
   models: Array<{ id: string; name: string; trims: Array<{ id: string; name: string }> }>;
 };
 type Transaction = { id: string; type: string; quantityChange: number; quantityAfter: number };
+/** Sale-price timeline row of one stock line (GET /inventory/items/:id/price-history). */
+type PriceHistoryRow = {
+  id: string;
+  oldSalePrice: string | null;
+  newSalePrice: string;
+  source: string;
+  userName: string | null;
+  changedAt: string;
+  changedAtJalali: string;
+};
+const priceSourceLabels: Record<string, string> = {
+  panel: 'پنل',
+  android: 'اندروید',
+  bulk: 'تغییر گروهی',
+};
 
 const tabs = [
   { id: 'stock', label: 'لیست انبار', hint: 'جست‌وجوی لحظه‌ای، بارکدخوان و اصلاح سریع موجودی' },
@@ -112,6 +129,7 @@ export function InventoryPage() {
   // Detail sheet for one inventory item: ledger, transfer and bulk receive.
   const [detail, setDetail] = useState<Item | null>(null);
   const [history, setHistory] = useState<Transaction[]>([]);
+  const [priceHistory, setPriceHistory] = useState<PriceHistoryRow[]>([]);
   const [transferLocation, setTransferLocation] = useState('');
   const [receiveQty, setReceiveQty] = useState('');
   const [busy, setBusy] = useState(false);
@@ -205,9 +223,14 @@ export function InventoryPage() {
     setTransferLocation(item.location?.id ?? '');
     setReceiveQty('');
     setHistory([]);
+    setPriceHistory([]);
     try {
-      const result = await api<{ data: Transaction[] }>(`/inventory/items/${item.id}/transactions`);
-      setHistory(result.data);
+      const [transactions, prices] = await Promise.all([
+        api<{ data: Transaction[] }>(`/inventory/items/${item.id}/transactions`),
+        api<{ data: PriceHistoryRow[] }>(`/inventory/items/${item.id}/price-history`),
+      ]);
+      setHistory(transactions.data);
+      setPriceHistory(prices.data);
     } catch (e) {
       setMessage((e as Error).message);
     }
@@ -583,6 +606,11 @@ export function InventoryPage() {
                     <span className="inv-shelf" title={item.location ? locationLabel(item.location) : 'بدون قفسه'}>{item.location ? `📦 ${locationLabel(item.location)}` : 'بدون قفسه'}</span>
                     <div className="inventory-price">
                       <b>{salePrice > 0 ? formatRial(salePrice) : '—'}</b><small>قیمت فروش</small>
+                      {item.priceUpdatedAt && (
+                        <small className="inv-price-date">
+                          از {formatJalaliDate(item.priceUpdatedAt)}
+                        </small>
+                      )}
                     </div>
                     {purchasePrice > 0 && <small className="inventory-purchase-price">خرید: {formatRial(purchasePrice)}</small>}
                     {grossProfit !== null && <span className={`inventory-margin ${grossProfit < 0 ? 'negative' : ''}`}>{grossProfit < 0 ? 'ضرر' : 'سود'}: {formatRial(grossProfit)}{margin !== null ? ` · ${margin.toFixed(1)}٪` : ''}</span>}
@@ -811,7 +839,14 @@ export function InventoryPage() {
               </div>
               <div>
                 <dt>قیمت فروش</dt>
-                <dd>{Number(detail.salePrice) > 0 ? formatRial(Number(detail.salePrice)) : 'ثبت نشده'}</dd>
+                <dd>
+                  {Number(detail.salePrice) > 0 ? formatRial(Number(detail.salePrice)) : 'ثبت نشده'}
+                  {detail.priceUpdatedAt && (
+                    <small className="inv-price-date">
+                      {' '}از {formatJalaliDate(detail.priceUpdatedAt)}
+                    </small>
+                  )}
+                </dd>
               </div>
               <div>
                 <dt>قیمت خرید</dt>
@@ -875,6 +910,31 @@ export function InventoryPage() {
                 ))}
               </div>
             )}
+            <div className="history price-history">
+              <h3>تاریخچهٔ قیمت (شمسی)</h3>
+              {priceHistory.length > 0 ? (
+                priceHistory.map((row) => (
+                  <div key={row.id}>
+                    <span title={row.changedAt}>{row.changedAtJalali}</span>
+                    <b>
+                      {row.oldSalePrice !== null && row.oldSalePrice !== row.newSalePrice
+                        ? `${formatRial(Number(row.oldSalePrice))} → `
+                        : ''}
+                      {formatRial(Number(row.newSalePrice))}
+                    </b>
+                    <small>
+                      {priceSourceLabels[row.source] ?? row.source}
+                      {row.userName ? ` · ${row.userName}` : ''}
+                    </small>
+                  </div>
+                ))
+              ) : (
+                <p className="muted">
+                  هنوز تغییری در قیمت فروش این قلم ثبت نشده است؛ از این به بعد هر تغییر قیمت
+                  به‌طور خودکار با تاریخ شمسی ثبت می‌شود.
+                </p>
+              )}
+            </div>
           </div>
         )}
       </Modal>

@@ -261,7 +261,9 @@ x-device-id: <deviceId>
           "salePrice": "2450000",
           "minStock": 3,
           "locationId": "location-id",
-          "isActive": true
+          "isActive": true,
+          "priceUpdatedAt": "2026-09-18T08:30:00.000Z",
+          "priceUpdatedAtJalali": "۱۴۰۵/۰۶/۲۷"
         },
         "operationId": null,
         "createdAt": "2026-09-11T10:00:00.000Z"

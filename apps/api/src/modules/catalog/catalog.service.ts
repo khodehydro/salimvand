@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service';
+import { formatJalaliDate } from '@salimvand/shared';
 
 type PublicProduct = {
   slug: string;
@@ -9,6 +10,7 @@ type PublicProduct = {
     quantity: number;
     minStock: number | null;
     salePrice: bigint;
+    priceUpdatedAt?: Date | null;
     brand: { name: string } | null;
   }>;
   images: Array<{ path: string; alt: string | null; isPrimary: boolean }>;
@@ -101,6 +103,7 @@ export class CatalogService {
               quantity: true,
               minStock: true,
               salePrice: true,
+              priceUpdatedAt: true,
               brand: { select: { name: true } },
             },
           },
@@ -127,6 +130,9 @@ export class CatalogService {
         })),
         availability: this.availability(product.inventoryItems, product.availabilityOverride),
         price: this.publicPrice(product, showPrices),
+        // Shamsi date of when the displayed price took effect — the badge that
+        // tells customers (and the operator) the number is current.
+        priceUpdatedAtJalali: this.publicPriceDate(product, showPrices),
         brands: product.inventoryItems.filter((item) => item.brand).map((item) => ({
           name: item.brand!.name,
           inStock: item.quantity > 0,
@@ -155,6 +161,19 @@ export class CatalogService {
       product.inventoryItems[0].salePrice,
     );
     return min.toString();
+  }
+
+  /** Shamsi date stamp of the cheapest active brand price — only meaningful
+   * while the price itself is visible. `null` when no price change has been
+   * recorded since the price-history feature was deployed. */
+  private publicPriceDate(product: PublicProduct, showPrices: boolean): string | null {
+    const visible = showPrices ? product.priceDisplay !== 'hide' : product.priceDisplay === 'show';
+    if (!visible || product.inventoryItems.length === 0) return null;
+    const cheapest = product.inventoryItems.reduce(
+      (lowest, item) => (item.salePrice < lowest.salePrice ? item : lowest),
+      product.inventoryItems[0],
+    );
+    return cheapest.priceUpdatedAt ? formatJalaliDate(cheapest.priceUpdatedAt) : null;
   }
 
   /** Reads the site-wide price display switch (store.pricing.showPrices). */

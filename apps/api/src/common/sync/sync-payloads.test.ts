@@ -61,6 +61,7 @@ describe('sync payload builders (Android pull contract)', () => {
         minStock: 3,
         locationId: null,
         isActive: true,
+        priceUpdatedAt: null,
       }),
     ).toEqual({
       id: 'i1',
@@ -73,7 +74,38 @@ describe('sync payload builders (Android pull contract)', () => {
       minStock: 3,
       locationId: null,
       isActive: true,
+      priceUpdatedAt: null,
+      priceUpdatedAtJalali: null,
     });
+  });
+
+  it('carries the sale-price stamp as ISO plus pre-formatted Shamsi', () => {
+    const payload = buildInventoryItemSyncPayload({
+      id: 'i2',
+      productId: 'p1',
+      brandId: null,
+      barcode: '6261234567891',
+      quantity: 4,
+      purchasePrice: 1000000n,
+      salePrice: 1300000n,
+      minStock: null,
+      locationId: null,
+      isActive: true,
+      priceUpdatedAt: new Date('2026-09-18T08:30:00.000Z'),
+    });
+    expect(payload.priceUpdatedAt).toBe('2026-09-18T08:30:00.000Z');
+    // fa-IR persian calendar with Persian digits — the offline price badge
+    // renders this string verbatim.
+    expect(payload.priceUpdatedAtJalali).toMatch(
+      /^[\u06F0-\u06F9]{4}\/[\u06F0-\u06F9]{2}\/[\u06F0-\u06F9]{2}$/,
+    );
+    expect(payload.priceUpdatedAtJalali).toBe(
+      new Intl.DateTimeFormat('fa-IR-u-ca-persian', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(new Date('2026-09-18T08:30:00.000Z')),
+    );
   });
 
   it('never leaks public token hashes from an invoice snapshot', () => {

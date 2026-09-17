@@ -3368,6 +3368,11 @@ body,
   display: grid;
   gap: 4px;
 }
+/* Shamsi stamp of the current sale price, under the price input. */
+.ier-fields .ier-price-date {
+  color: var(--sv-text-3);
+  font-size: 10px;
+}
 .ier-fields input,
 .ier-fields select {
   border: 1px solid var(--sv-border-2);
@@ -6498,6 +6503,19 @@ button.btn-primary-lg:hover:not(:disabled) {
 .inventory-price { display: grid; gap: 1px; }
 .inventory-price b { color: var(--sv-link); font-size: 12px; }
 .inventory-price small { color: var(--sv-text-3); font-size: 10px; }
+/* Shamsi stamp of the current sale price — «از ۱۴۰۵/۰۶/۲۷». */
+.inventory-price .inv-price-date,
+.sheet-meta .inv-price-date { color: var(--sv-text-3); font-size: 10px; }
+.sheet-meta .inv-price-date { display: block; margin-top: 2px; }
+/* Sale-price timeline rows (کارت قلم › تاریخچهٔ قیمت). */
+.history.price-history { margin-top: 14px; }
+.history.price-history > div { align-items: center; }
+.history.price-history > div > span {
+  min-width: 150px;
+  color: var(--sv-text-2);
+  font-variant-numeric: tabular-nums;
+}
+.history.price-history > div > small { margin-inline-start: auto; }
 .inventory-actions-cell { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 @media (max-width: 980px) {
   .inventory-list-head { display: none; }

@@ -9,6 +9,7 @@ import type {
   InvoiceItem,
   Customer,
 } from '@prisma/client';
+import { formatJalaliDate } from '@salimvand/shared';
 
 /** Entities whose SyncChange rows carry a full rebuildable snapshot for the
  * offline clients. Everything else stays metadata-only invalidation. */
@@ -84,7 +85,7 @@ export function buildInventoryItemSyncPayload(
     | 'minStock'
     | 'locationId'
     | 'isActive'
-  >,
+  > & { priceUpdatedAt?: Date | null },
 ) {
   return {
     id: item.id,
@@ -97,6 +98,9 @@ export function buildInventoryItemSyncPayload(
     minStock: item.minStock,
     locationId: item.locationId,
     isActive: item.isActive,
+    // When the current sale price took effect — the offline price badge.
+    priceUpdatedAt: item.priceUpdatedAt instanceof Date ? item.priceUpdatedAt.toISOString() : null,
+    priceUpdatedAtJalali: item.priceUpdatedAt ? formatJalaliDate(item.priceUpdatedAt) : null,
   };
 }
 

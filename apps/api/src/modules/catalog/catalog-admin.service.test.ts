@@ -43,6 +43,7 @@ function makeService() {
       findFirst: vi.fn().mockResolvedValue(null),
       findMany: vi.fn().mockResolvedValue([]),
     },
+    inventoryPriceHistory: { create: vi.fn().mockResolvedValue({ id: 1n }) },
     inventoryTransaction: { create: vi.fn() },
     inventoryOperation: { create: vi.fn(), findUnique: vi.fn().mockResolvedValue(null) },
     productOperation: { create: vi.fn(), findUnique: vi.fn().mockResolvedValue(null) },
@@ -247,6 +248,17 @@ describe('atomic product + inventory creation (mobile contract)', () => {
     expect(prisma.inventoryOperation.create).toHaveBeenCalledWith({
       data: { operationId: 'android-op-0001', itemId: ITEM_ID, type: 'product.create' },
     });
+    // The opening sale price gets the first row of the price history timeline.
+    expect(prisma.inventoryPriceHistory.create).toHaveBeenCalledWith({
+      data: {
+        itemId: ITEM_ID,
+        oldSalePrice: null,
+        newSalePrice: 2450000n,
+        userId: 'user-1',
+        source: 'android',
+        operationId: 'android-op-0001',
+      },
+    });
   });
 
   it('rejects an unknown brand, category or barcode instead of writing partial data', async () => {
@@ -378,8 +390,40 @@ describe('product.update with a nested inventory object', () => {
     expect(updateCall.data).toEqual({
       salePrice: 2600000n,
       locationId: '10ca7e00-0000-4000-8000-000000000002',
+      priceUpdatedAt: expect.any(Date),
     });
     expect(updateCall.data).not.toHaveProperty('quantity');
+    // The sale-price change lands in the price history ledger, in the same
+    // transaction, attributed to the offline operation.
+    expect(prisma.inventoryPriceHistory.create).toHaveBeenCalledWith({
+      data: {
+        itemId: ITEM_ID,
+        oldSalePrice: 2450000n,
+        newSalePrice: 2600000n,
+        userId: 'user-1',
+        source: 'android',
+        operationId: 'android-op-0003',
+      },
+    });
+  });
+
+  it('writes no price history when the nested inventory edit keeps the price', async () => {
+    const { service, prisma } = makeService();
+    prisma.product.findFirst.mockResolvedValue({ id: PRODUCT_ID });
+    prisma.product.update.mockResolvedValue({ id: PRODUCT_ID });
+    prisma.inventoryItem.findUnique.mockResolvedValue(INVENTORY_ITEM);
+    await service.update(
+      PRODUCT_ID,
+      { inventory: { itemId: ITEM_ID, minStock: 8 } },
+      'user-1',
+      undefined,
+      'android-op-0004',
+    );
+    const updateCall = prisma.inventoryItem.update.mock.calls[0]?.[0] as {
+      data: Record<string, unknown>;
+    };
+    expect(updateCall.data).not.toHaveProperty('priceUpdatedAt');
+    expect(prisma.inventoryPriceHistory.create).not.toHaveBeenCalled();
   });
 
   it('rejects an inventory item that belongs to another product', async () => {

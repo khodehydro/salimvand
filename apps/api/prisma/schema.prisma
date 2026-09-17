@@ -239,16 +239,37 @@ model InventoryItem {
   locationId   String?                @db.Uuid
   notes        String?
   isActive     Boolean                @default(true)
+  /// When the current salePrice took effect — feeds the Shamsi price badges.
+  priceUpdatedAt DateTime?            @db.Timestamptz(6)
   product      Product                @relation(fields: [productId], references: [id])
   brand        Brand?                 @relation(fields: [brandId], references: [id])
   location     Location?              @relation(fields: [locationId], references: [id])
   transactions InventoryTransaction[]
   invoiceItems InvoiceItem[]
   purchaseItems PurchaseInvoiceItem[]
+  priceHistory InventoryPriceHistory[]
   @@unique([productId, brandId])
   @@index([productId])
   @@index([locationId])
   @@map("inventory_items")
+}
+
+/// Sale-price audit trail: one row per actual price change so the shop can
+/// see — in Shamsi — when a price was at a given number (inflation tracking).
+/// priceUpdatedAt on the item itself feeds the light-weight badges.
+model InventoryPriceHistory {
+  id           BigInt        @id @default(autoincrement())
+  itemId       String        @db.Uuid
+  oldSalePrice BigInt?
+  newSalePrice BigInt
+  userId       String?       @db.Uuid
+  source       String        @default("panel") @db.VarChar(30)
+  operationId  String?       @unique @db.VarChar(100)
+  item         InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  user         User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt    DateTime      @default(now()) @db.Timestamptz(6)
+  @@index([itemId, createdAt(sort: Desc)])
+  @@map("inventory_price_history")
 }
 
 model InventoryTransaction {
@@ -292,6 +313,7 @@ model User {
   syncDevices SyncDevice[]
   syncOperations SyncOperation[]
   syncConflicts SyncConflict[]
+  priceHistory InventoryPriceHistory[]
   createdAt    DateTime               @default(now()) @db.Timestamptz(6)
   updatedAt    DateTime               @updatedAt @db.Timestamptz(6)
   @@map("users")

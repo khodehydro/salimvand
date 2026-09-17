@@ -601,6 +601,14 @@ p {
   font-size: 13px;
   font-weight: 700;
 }
+/* Shamsi stamp of when this price took effect — the anti-inflation badge. */
+.card-price-date {
+  display: block;
+  color: var(--text-3);
+  font-size: 10px;
+  font-weight: 400;
+  margin-top: 2px;
+}
 .card-footer b {
   font-size: 15px;
 }
@@ -1953,6 +1961,18 @@ p {
 .product-price span {
   color: var(--text-3);
   font-size: 11px;
+}
+/* «قیمت به‌روز: ۱۴۰۵/۰۶/۲۷» — when the displayed number took effect. */
+.product-price .price-update-badge {
+  justify-self: center;
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-2);
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 11px;
+  line-height: 1.6;
 }
 /* The product page shows the phone number alone — one tap dials the store. */
 .product-phone {

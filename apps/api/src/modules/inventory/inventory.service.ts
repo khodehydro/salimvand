@@ -1,10 +1,11 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service';
 import { Prisma } from '@prisma/client';
-import { createEan13 } from '@salimvand/shared';
+import { createEan13, formatJalaliDate } from '@salimvand/shared';
 import { calculateNextQuantity } from './inventory.rules';
 import { writeAudit, writeSyncChange } from '../../common/audit/audit-log';
 import { buildInventoryItemSyncPayload } from '../../common/sync/sync-payloads';
+import { recordSalePriceChange } from '../../common/inventory/price-history';
 
 export type StockMutation = {
   itemId: string;
@@ -197,6 +198,7 @@ export class InventoryService {
     if (initialQuantity > 0 && !input.userId)
       throw new BadRequestException('کاربر ثبت‌کنندهٔ موجودی الزامی است');
     const result = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const salePrice = BigInt(input.salePrice ?? 0);
       const item = await tx.inventoryItem.create({
         data: {
           productId: input.productId!,
@@ -204,10 +206,19 @@ export class InventoryService {
           barcode,
           quantity: initialQuantity,
           purchasePrice: BigInt(input.purchasePrice ?? 0),
-          salePrice: BigInt(input.salePrice ?? 0),
+          salePrice,
           minStock: input.minStock,
           locationId: input.locationId,
+          // Opening price entry — only when a price was actually set.
+          ...(salePrice > 0n ? { priceUpdatedAt: new Date() } : {}),
         },
+      });
+      await recordSalePriceChange(tx, {
+        itemId: item.id,
+        oldSalePrice: null,
+        newSalePrice: salePrice,
+        userId: input.userId,
+        source: 'panel',
       });
       if (initialQuantity > 0)
         await tx.inventoryTransaction.create({
@@ -262,12 +273,23 @@ export class InventoryService {
         const next = Number(value) * (1 + percent / 100);
         return BigInt(roundTo > 0 ? Math.round(next / roundTo) * roundTo : Math.round(next));
       };
+      const nextSalePrice = apply(item.salePrice, salePercent);
       const updated = await this.prisma.inventoryItem.update({
         where: { id: item.id },
         data: {
           purchasePrice: apply(item.purchasePrice, purchasePercent),
-          salePrice: apply(item.salePrice, salePercent),
+          salePrice: nextSalePrice,
+          ...(salePercent && nextSalePrice !== item.salePrice
+            ? { priceUpdatedAt: new Date() }
+            : {}),
         },
+      });
+      // A bulk reprice is part of the price history too (source=bulk).
+      await recordSalePriceChange(this.prisma, {
+        itemId: item.id,
+        oldSalePrice: item.salePrice,
+        newSalePrice: nextSalePrice,
+        source: 'bulk',
       });
       // A bulk price change must also refresh offline caches: one change row
       // per item, without flooding the audit log with hundreds of entries.
@@ -374,10 +396,21 @@ export class InventoryService {
       }
       if (input.notes !== undefined) data.notes = input.notes.trim() || null;
       if (!Object.keys(data).length) throw new BadRequestException('تغییری ارسال نشده است');
+      // A real sale-price change stamps the badge timestamp on the line.
+      const nextSalePrice = (data.salePrice as bigint | undefined) ?? existing.salePrice;
+      if (nextSalePrice !== existing.salePrice) data.priceUpdatedAt = new Date();
       const item = await tx.inventoryItem.update({
         where: { id: input.itemId },
         data: data as never,
         include: { product: true, brand: true, location: { include: { parent: true } } },
+      });
+      await recordSalePriceChange(tx, {
+        itemId: input.itemId,
+        oldSalePrice: existing.salePrice,
+        newSalePrice: nextSalePrice,
+        userId,
+        source: operationId ? 'android' : 'panel',
+        operationId,
       });
       if (operationId)
         await tx.inventoryOperation.create({
@@ -492,6 +525,31 @@ export class InventoryService {
     return { ok: true, data: rows };
   }
 
+  /** Sale-price timeline of one stock line — the inflation-management view.
+   * Timestamps are ISO for sorting and pre-formatted Shamsi (fa-IR persian
+   * calendar) so every client renders the same date without a local library. */
+  async priceHistory(itemId: string) {
+    const rows = await this.prisma.inventoryPriceHistory.findMany({
+      where: { itemId },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+      include: { user: { select: { name: true } } },
+    });
+    return {
+      ok: true,
+      data: rows.map((row) => ({
+        id: row.id.toString(),
+        itemId: row.itemId,
+        oldSalePrice: row.oldSalePrice === null ? null : row.oldSalePrice.toString(),
+        newSalePrice: row.newSalePrice.toString(),
+        source: row.source,
+        userName: row.user?.name ?? null,
+        changedAt: row.createdAt.toISOString(),
+        changedAtJalali: formatJalaliDate(row.createdAt, 'dateTime'),
+      })),
+    };
+  }
+
   async removeItem(id: string, userId?: string) {
     const item = await this.prisma.inventoryItem.findUnique({
       where: { id },
@@ -528,6 +586,8 @@ export class InventoryService {
     if (!existing) throw new NotFoundException('قلم موجودی پیدا نشد');
 
     const updated = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const nextSalePrice =
+        data.salePrice !== undefined ? BigInt(data.salePrice) : existing.salePrice;
       const item = await tx.inventoryItem.update({
         where: { id },
         data: {
@@ -537,8 +597,16 @@ export class InventoryService {
           purchasePrice: data.purchasePrice !== undefined ? BigInt(data.purchasePrice) : undefined,
           isActive: data.isActive !== undefined ? data.isActive : undefined,
           notes: data.notes !== undefined ? data.notes : undefined,
+          ...(nextSalePrice !== existing.salePrice ? { priceUpdatedAt: new Date() } : {}),
         },
         include: { product: true, brand: true, location: { include: { parent: true } } },
+      });
+      await recordSalePriceChange(tx, {
+        itemId: id,
+        oldSalePrice: existing.salePrice,
+        newSalePrice: nextSalePrice,
+        userId,
+        source: 'panel',
       });
 
       if (userId) {

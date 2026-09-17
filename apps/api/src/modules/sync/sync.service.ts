@@ -164,6 +164,7 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
           salePrice: true,
           minStock: true,
           locationId: true,
+          priceUpdatedAt: true,
         },
       }),
       this.prisma.syncChange.aggregate({ _max: { revision: true } }),

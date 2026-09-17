@@ -7,6 +7,7 @@ import {
   buildInventoryItemSyncPayload,
   buildProductSyncPayload,
 } from '../../common/sync/sync-payloads';
+import { recordSalePriceChange } from '../../common/inventory/price-history';
 
 /** Inventory fields accepted inside product.create — brand, barcode, prices,
  * shelf and the opening stock, applied in the same transaction as the catalog
@@ -217,7 +218,19 @@ export class CatalogAdminService {
             salePrice: inventoryInput.salePrice,
             minStock: inventoryInput.minStock,
             locationId,
+            // Opening price entry — only when a price was actually set.
+            ...(inventoryInput.salePrice && inventoryInput.salePrice > 0n
+              ? { priceUpdatedAt: new Date() }
+              : {}),
           },
+        });
+        await recordSalePriceChange(tx, {
+          itemId: inventoryItem.id,
+          oldSalePrice: null,
+          newSalePrice: inventoryInput.salePrice ?? 0n,
+          userId,
+          source: operationId ? 'android' : 'panel',
+          operationId,
         });
         if (inventoryInput.initialQuantity > 0)
           await tx.inventoryTransaction.create({
@@ -342,7 +355,10 @@ export class CatalogAdminService {
       const updated = await tx.product.update({ where: { id }, data });
       let inventoryItem = null;
       if (inventoryInput) {
-        inventoryItem = await this.applyInventoryMetadata(tx, id, inventoryInput);
+        inventoryItem = await this.applyInventoryMetadata(tx, id, inventoryInput, {
+          userId,
+          operationId,
+        });
         if (operationId)
           await tx.inventoryOperation.create({
             data: { operationId, itemId: inventoryInput.itemId, type: 'product.update' },
@@ -552,6 +568,7 @@ export class CatalogAdminService {
     tx: Prisma.TransactionClient | typeof this.prisma,
     productId: string,
     input: ProductUpdateInventoryInput,
+    context?: { userId?: string; operationId?: string },
   ) {
     const existing = await tx.inventoryItem.findUnique({ where: { id: input.itemId } });
     if (!existing || existing.productId !== productId || !existing.isActive)
@@ -590,8 +607,23 @@ export class CatalogAdminService {
     if (input.salePrice !== undefined) data.salePrice = input.salePrice;
     if (input.minStock !== undefined) data.minStock = input.minStock;
     if (input.notes !== undefined) data.notes = input.notes.trim() || null;
+    // A real sale-price change stamps the badge timestamp on the line.
+    const nextSalePrice = input.salePrice ?? existing.salePrice;
+    if (nextSalePrice !== existing.salePrice) data.priceUpdatedAt = new Date();
     if (Object.keys(data).length === 0) return existing;
-    return tx.inventoryItem.update({ where: { id: input.itemId }, data: data as never });
+    const updated = await tx.inventoryItem.update({
+      where: { id: input.itemId },
+      data: data as never,
+    });
+    await recordSalePriceChange(tx, {
+      itemId: input.itemId,
+      oldSalePrice: existing.salePrice,
+      newSalePrice: nextSalePrice,
+      userId: context?.userId,
+      source: context?.operationId ? 'android' : 'panel',
+      operationId: context?.operationId,
+    });
+    return updated;
   }
 
   /** Idempotent replay of product.create: rebuilds the exact result (product

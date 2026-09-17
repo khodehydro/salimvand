@@ -351,6 +351,8 @@ describe('SyncService.resolveConflict', () => {
       minStock: null,
       locationId: null,
       isActive: true,
+      priceUpdatedAt: null,
+      priceUpdatedAtJalali: null,
     });
   });
 

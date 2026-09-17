@@ -125,6 +125,40 @@ GET /inventory/low-stock
 GET /inventory/items/{inventoryItemId}/transactions
 ```
 
+### تاریخچهٔ قیمت فروش یک قلم (شمسی)
+
+هر تغییر قیمت فروش — از پنل، اندروید یا تغییر گروهی — به‌طور خودکار با تاریخ ثبت می‌شود. این
+endpoint تایم‌لاین کامل یک قلم را برمی‌گرداند (جدیدترین اول، حداکثر ۱۰۰ ردیف):
+
+```http
+GET /inventory/items/{inventoryItemId}/price-history
+```
+
+نیازمند JWT با نقش `warehouse` یا `manager` یا `accountant` است. پاسخ:
+
+```json
+{
+  "ok": true,
+  "data": [
+    {
+      "id": "42",
+      "itemId": "inventory-item-id",
+      "oldSalePrice": "2450000",
+      "newSalePrice": "2600000",
+      "source": "android",
+      "userName": "سلیم‌وند",
+      "changedAt": "2026-09-18T08:30:00.000Z",
+      "changedAtJalali": "۱۴۰۵/۰۶/۲۷، ۱۲:۰۰"
+    }
+  ]
+}
+```
+
+- `oldSalePrice` برای ردیف اول (قیمت اولیهٔ ثبت‌شده) `null` است.
+- `source` یکی از `panel` (پنل وب)، `android` (عملیات offline اندروید) یا `bulk` (تغییر گروهی قیمت) است.
+- `changedAtJalali` از پیش با تقویم شمسی (fa-IR persian) فرمت شده و می‌تواند مستقیم نمایش داده شود؛
+  `changedAt` ISO است و برای مرتب‌سازی/فیلتر محلی است.
+
 ### دریافت موجودی
 
 برای Offline از Sync استفاده شود:
@@ -334,6 +368,10 @@ POST /sync/operations
 
 فیلدهای کاتالوگ و در صورت نیاز زیرشیء `inventory` (با `itemId` صریح) در **یک تراکنش** اعمال می‌شوند. `quantity` در ویرایش metadata پذیرفته نمی‌شود؛ تعداد فقط با `inventory.receive` یا `inventory.adjust` تغییر می‌کند.
 
+**تغییر قیمت فروش** از همین مسیر ممکن است: کافی است در `inventory` فقط `itemId` و `salePrice` را بفرستید
+(یا از `inventory.update_metadata` استفاده کنید). سرور به‌طور خودکار تاریخ شمسی تغییر را در
+تاریخچهٔ قیمت ثبت و `priceUpdatedAt` قلم را به‌روز می‌کند.
+
 ```json
 {
   "operationId": "android-device-product-update-000001",
@@ -500,9 +538,18 @@ deleted  → رکورد را با entityId از cache حذف کن
   "salePrice": "2450000",
   "minStock": 3,
   "locationId": "location-id-or-null",
-  "isActive": true
+  "isActive": true,
+  "priceUpdatedAt": "2026-09-18T08:30:00.000Z",
+  "priceUpdatedAtJalali": "۱۴۰۵/۰۶/۲۷"
 }
 ```
+
+`priceUpdatedAt` تاریخ اعمال قیمت فروش فعلی است (ISO یا `null` اگر از زمان فعال‌شدن این قابلیت
+قیمت تغییر نکرده باشد) و `priceUpdatedAtJalali` همان تاریخ با تقویم شمسی — برای بج «قیمت از»
+کنار قیمت در اپ قابل نمایش است. ردیفهای `inventory` در Bootstrap هم همین دو فیلد را دارند.
+
+تغییر قیمت فروش از اندروید از همان دو مسیر قبلی انجام می‌شود (`product.update` با
+`inventory.salePrice` یا `inventory.update_metadata`) — تاریخ و تاریخچه به‌طور خودکار ثبت می‌شود.
 
 payload محصول هم‌شکل ردیفهای `products` در Bootstrap است (`id`, `code`, `slug`, `name`, `categoryId`, `status`, `priceDisplay`, `image`, `imageUrl`, ...). حذف نرم محصول، علاوه بر `product/deleted`، برای همهٔ اقلام آن `inventory_item/deleted` صادر می‌کند.
 

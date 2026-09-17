@@ -135,6 +135,54 @@ describe('storefront price visibility', () => {
     expect(result.data[0].price).toBe('1500000');
   });
 
+  it('stamps the public price with the Shamsi date it took effect', async () => {
+    const { service, prisma } = makeService();
+    prisma.setting.findMany.mockResolvedValue([
+      { key: 'store.pricing', value: { showPrices: true } },
+    ]);
+    // The cheapest line (ایساکو, 1.5M) carries the price stamp — that is the
+    // number the storefront shows, so the badge must use its date.
+    prisma.product.findMany.mockResolvedValue([
+      {
+        ...pricedRow,
+        inventoryItems: [
+          {
+            quantity: 3,
+            minStock: null,
+            salePrice: 1_800_000n,
+            priceUpdatedAt: new Date('2026-09-10T08:00:00Z'),
+            brand: { name: 'اصلی' },
+          },
+          {
+            quantity: 1,
+            minStock: null,
+            salePrice: 1_500_000n,
+            priceUpdatedAt: new Date('2026-09-18T08:30:00Z'),
+            brand: { name: 'ایساکو' },
+          },
+        ],
+      },
+    ]);
+    prisma.product.count.mockResolvedValue(1);
+
+    const result = await service.listPublicProducts({});
+    expect(result.data[0].price).toBe('1500000');
+    expect(result.data[0].priceUpdatedAtJalali).toBe(
+      new Intl.DateTimeFormat('fa-IR-u-ca-persian', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(new Date('2026-09-18T08:30:00Z')),
+    );
+    // JSON view stays free of the internal price columns.
+    expect(JSON.stringify(result.data[0])).not.toContain('salePrice');
+    // Pre-feature lines without a recorded change show no badge at all.
+    prisma.product.findMany.mockResolvedValue([pricedRow]);
+    const withoutStamp = await service.listPublicProducts({});
+    expect(withoutStamp.data[0].price).toBe('1500000');
+    expect(withoutStamp.data[0].priceUpdatedAtJalali).toBeNull();
+  });
+
   it('lets a single product hide its price while prices are globally on', async () => {
     const { service, prisma } = makeService();
     prisma.setting.findMany.mockResolvedValue([

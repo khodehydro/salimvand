@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { createEan13, formatRial } from '@salimvand/shared';
+import { createEan13, formatJalaliDate, formatRial } from '@salimvand/shared';
 import { FaNumberInput } from '../components/FaNumberInput';
 import { locationChip, locationLabel } from '../lib/location-label';
 import { api } from '../lib/api';
@@ -65,6 +65,7 @@ type ProductDetail = {
     purchasePrice: string;
     minStock?: number | null;
     isActive: boolean;
+    priceUpdatedAt?: string | null;
     brand?: { id: string; name: string } | null;
     location?: { id: string; code: string; name: string } | null;
   }>;
@@ -1008,6 +1009,11 @@ function ProductEditor({
                             value={edit.salePrice}
                             onChange={(plain) => setItemEdit(entry, { salePrice: plain })}
                           />
+                          {entry.priceUpdatedAt && (
+                            <small className="ier-price-date">
+                              قیمت فعلی از {formatJalaliDate(entry.priceUpdatedAt)}
+                            </small>
+                          )}
                         </label>
                         <label>
                           قیمت خرید

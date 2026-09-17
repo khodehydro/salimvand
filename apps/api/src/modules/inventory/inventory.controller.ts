@@ -1,4 +1,15 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import type { Request } from 'express';
 type AuthenticatedRequest = Request & { user?: { id: string } };
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
@@ -33,7 +44,9 @@ export class InventoryController {
   @Get('labels') @Roles('warehouse', 'accountant') labels(@Query('q') q?: string) {
     return this.inventory.labelItems(q);
   }
-  @Post('bulk-prices') @Roles('manager', 'warehouse') bulkPrices(@Body() body: Record<string, unknown>) {
+  @Post('bulk-prices') @Roles('manager', 'warehouse') bulkPrices(
+    @Body() body: Record<string, unknown>,
+  ) {
     return this.inventory.bulkUpdatePrices({
       brandId: typeof body.brandId === 'string' ? body.brandId : undefined,
       categoryId: typeof body.categoryId === 'string' ? body.categoryId : undefined,
@@ -48,7 +61,10 @@ export class InventoryController {
   ) {
     return this.inventory.create({ ...body, userId: request.user?.id });
   }
-  @Delete('items/:id') async removeItem(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
+  @Delete('items/:id') async removeItem(
+    @Param('id') id: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
     return this.inventory.removeItem(id, request.user?.id);
   }
   @Patch('items/:id') updateItem(
@@ -102,5 +118,11 @@ export class InventoryController {
   }
   @Get('items/:id/transactions') transactions(@Param('id') itemId: string) {
     return this.inventory.transactions(itemId);
+  }
+  /** Sale-price timeline of a stock line (Shamsi dates) — the inflation view. */
+  @Get('items/:id/price-history')
+  @Roles('warehouse', 'manager', 'accountant')
+  priceHistory(@Param('id') itemId: string) {
+    return this.inventory.priceHistory(itemId);
   }
 }

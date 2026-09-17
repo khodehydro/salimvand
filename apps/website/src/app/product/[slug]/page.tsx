@@ -24,6 +24,8 @@ type Product = {
   availability: string;
   /** Cheapest active brand price (rial, as a string) or null while hidden. */
   price?: string | null;
+  /** Shamsi date of when the displayed price took effect (badge). */
+  priceUpdatedAtJalali?: string | null;
   brands: Array<{ name: string; inStock: boolean }>;
   images?: Array<{ path: string; thumbnailPath?: string; alt?: string }>;
   compatibilities?: Array<{
@@ -269,6 +271,11 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
               <div className="product-price">
                 <small>قیمت</small>
                 <b>{formatRial(Number(product.price))}</b>
+                {product.priceUpdatedAtJalali && (
+                  <span className="price-update-badge">
+                    قیمت به‌روز: {product.priceUpdatedAtJalali}
+                  </span>
+                )}
                 {(product.brands?.length ?? 0) > 1 && <span>ارزان‌ترین برند موجود</span>}
               </div>
             )}
