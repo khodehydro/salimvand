@@ -245,6 +245,61 @@ GET /invoices/options
 GET /invoices/customers?search={text}
 ```
 
+`search` خالی هم مجاز است و ۱۰۰ مشتری آخر را برمی‌گرداند (برای باز شدن Customer Picker). هر مشتری:
+
+```text
+id
+name
+mobile
+address
+notes
+isActive
+createdAt
+```
+
+### ثبت/به‌روزرسانی مشتری از فرم فاکتور
+
+```http
+POST /invoices/customers
+```
+
+نقش: `seller`. اعتبارسنجی: `name` (حداکثر ۱۵۰)، `mobile` با فرمت ایران، `address` اختیاری (حداکثر ۵۰۰)، `notes` اختیاری (حداکثر ۱۰۰۰).
+
+```json
+{
+  "name": "حسن رضایی",
+  "mobile": "09121234567",
+  "address": "تهران، خیابان نمونه، پلاک ۱۲",
+  "notes": "مشتری تعمیرگاه"
+}
+```
+
+- موبایل تکراری مشتری جدید نمی‌سازد (upsert روی موبایل).
+- `name` همیشه به‌روزرسانی می‌شود؛ اما `address` و `notes` **فقط اگر در درخواست ارسال شده باشند** تغییر می‌کنند (ارسال رشتهٔ خالی = پاک کردن؛ حذف فیلد = حفظ مقدار قبلی).
+- آدرس یک فاکتور (`customerAddress` در `invoice.create`) فقط snapshot همان فاکتور است و پروفایل مشتری موجود را تغییر نمی‌دهد؛ برای تغییر دائمی آدرس، همین endpoint با آدرس جدید یا `PATCH /customers/:id` استفاده شود. مشتری جدیدِ داخل فرم فاکتور (نام+موبایل جدید) آدرس را هم روی پروفایل و هم روی فاکتور ذخیره می‌کند.
+
+همین عملیات به‌صورت آفلاین هم قابل صف‌کردن است:
+
+```http
+POST /sync/operations
+```
+
+```json
+{
+  "operationId": "android-device-customer-000001",
+  "deviceId": "android-device",
+  "type": "customer.create",
+  "payload": {
+    "name": "حسن رضایی",
+    "mobile": "09121234567",
+    "address": "تهران، خیابان نمونه، پلاک ۱۲",
+    "notes": "مشتری تعمیرگاه"
+  }
+}
+```
+
+تغییرات آدرس/notes مشتری از طریق `GET /sync/pull` (entityType مشتری با snapshot کامل شامل `address`) به بقیهٔ دستگاه‌ها می‌رسد.
+
 ### فهرست فاکتورها
 
 ```http

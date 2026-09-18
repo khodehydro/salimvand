@@ -14,6 +14,7 @@ import { InvoiceService } from '../invoice/invoice.service';
 import { PurchaseService } from '../suppliers/purchase.service';
 import { SYNC_CONFLICT_DECISIONS, validateSyncOperationEnvelope } from '@salimvand/shared';
 import {
+  buildCustomerSyncPayload,
   buildInventoryItemSyncPayload,
   buildInvoiceSyncPayload,
   buildProductSyncPayload,
@@ -513,6 +514,7 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
       return this.invoice.createCustomer({
         name,
         mobile,
+        address: typeof payload.address === 'string' ? payload.address : undefined,
         notes: typeof payload.notes === 'string' ? payload.notes : undefined,
       });
     }
@@ -764,14 +766,9 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
         const mobile = typeof payload.mobile === 'string' ? payload.mobile : '';
         if (!mobile) return null;
         const customer = await this.prisma.customer.findUnique({ where: { mobile } });
-        return customer
-          ? {
-              id: customer.id,
-              name: customer.name,
-              mobile: customer.mobile,
-              isActive: customer.isActive,
-            }
-          : null;
+        // Full snapshot (address/notes included) so the client can rebuild
+        // its customer cache entry from the operation result.
+        return customer ? buildCustomerSyncPayload(customer) : null;
       }
     } catch {
       return null;

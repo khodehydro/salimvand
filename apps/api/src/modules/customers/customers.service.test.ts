@@ -183,3 +183,52 @@ describe('customer payment accounting', () => {
     expect(receiptCreate).not.toHaveBeenCalled();
   });
 });
+
+describe('customer profile sync', () => {
+  it('broadcasts an address change through the sync pull payload', async () => {
+    const before = {
+      id: 'customer-1',
+      name: 'حسن رضایی',
+      mobile: '09121234567',
+      address: 'تهران، خیابان نمونه، پلاک ۱۲',
+      notes: null,
+      isActive: true,
+    };
+    const updated = {
+      ...before,
+      address: 'تهران، خیابان جدید، پلاک ۲۰',
+      updatedAt: new Date('2026-09-18T12:00:00Z'),
+    };
+    const customerUpdate = vi.fn(async () => updated);
+    const syncChangeCreate = vi.fn(async () => ({}));
+    const prisma = {
+      customer: { findUnique: vi.fn(async () => before), update: customerUpdate },
+      auditLog: { create: vi.fn(async () => ({})) },
+      syncChange: { create: syncChangeCreate },
+    };
+    await new CustomersService(prisma as never).update(
+      'customer-1',
+      { address: 'تهران، خیابان جدید، پلاک ۲۰' },
+      'user-1',
+    );
+    expect(customerUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { address: 'تهران، خیابان جدید، پلاک ۲۰' } }),
+    );
+    // The sync change carries the full rebuildable snapshot so every Android
+    // device pulls the new address on the next GET /sync/pull.
+    expect(syncChangeCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          entityType: 'customer',
+          entityId: 'customer-1',
+          action: 'updated',
+          payload: expect.objectContaining({
+            id: 'customer-1',
+            address: 'تهران، خیابان جدید، پلاک ۲۰',
+            updatedAt: '2026-09-18T12:00:00.000Z',
+          }),
+        }),
+      }),
+    );
+  });
+});

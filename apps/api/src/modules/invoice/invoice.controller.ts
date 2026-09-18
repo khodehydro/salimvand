@@ -18,6 +18,7 @@ import { RolesGuard } from '../../common/auth/roles.guard';
 import { Roles } from '../../common/auth/roles.decorator';
 import { InvoiceService } from './invoice.service';
 import {
+  CreateInvoiceCustomerDto,
   CreateInvoiceDto,
   PayInvoiceDto,
   ReturnInvoiceItemDto,
@@ -54,7 +55,7 @@ export class InvoiceController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('seller')
   @Post('customers')
-  createCustomer(@Body() body: { name?: string; mobile?: string; notes?: string }) {
+  createCustomer(@Body() body: CreateInvoiceCustomerDto) {
     return this.invoices.createCustomer(body);
   }
 

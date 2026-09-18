@@ -30,6 +30,25 @@ export class CreateInvoiceDto {
   @ValidateNested({ each: true }) @Type(() => InvoiceItemDto) items!: InvoiceItemDto[];
 }
 
+export class CreateInvoiceCustomerDto {
+  @IsString()
+  @MaxLength(150)
+  name!: string;
+
+  @IsMobilePhone('fa-IR')
+  mobile!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  address?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  notes?: string;
+}
+
 /** Addresses stay editable after issue: the store snapshot may change or the
  * customer address is only filled in later (e.g. for delivery). */
 export class UpdateInvoiceAddressesDto {
@@ -54,7 +73,10 @@ export class PaymentCheckDto {
 export class PayInvoiceDto {
   @IsNumberString() amount!: string;
   @IsEnum(InvoicePaymentMethod) method!: InvoicePaymentMethod;
-  @IsOptional() @ValidateNested({ each: true }) @Type(() => PaymentCheckDto) checks?: PaymentCheckDto[];
+  @IsOptional()
+  @ValidateNested({ each: true })
+  @Type(() => PaymentCheckDto)
+  checks?: PaymentCheckDto[];
 }
 
 export class ReturnInvoiceItemDto {

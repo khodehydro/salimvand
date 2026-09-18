@@ -180,6 +180,29 @@ describe('SyncService.applyOperation routing', () => {
     expect(result.data.result).toEqual({ id: 'p1', inventoryItem: { id: 'i1' } });
   });
 
+  it('routes customer.create with the address and notes to the invoice customer service', async () => {
+    const { service, invoice } = makeService();
+    invoice.createCustomer.mockResolvedValue({ ok: true, data: { id: 'customer-1' } });
+    const result = await service.queueOperation(USER_ID, {
+      operationId: 'android-device-customer-000001',
+      deviceId: 'android-device',
+      type: 'customer.create',
+      payload: {
+        name: 'حسن رضایی',
+        mobile: '09121234567',
+        address: 'تهران، خیابان نمونه، پلاک ۱۲',
+        notes: 'مشتری تعمیرگاه',
+      },
+    });
+    expect(result.data.status).toBe('applied');
+    expect(invoice.createCustomer).toHaveBeenCalledWith({
+      name: 'حسن رضایی',
+      mobile: '09121234567',
+      address: 'تهران، خیابان نمونه، پلاک ۱۲',
+      notes: 'مشتری تعمیرگاه',
+    });
+  });
+
   it('routes product.update and forwards the nested inventory object to the atomic catalog service', async () => {
     const { service, catalog } = makeService();
     catalog.update.mockResolvedValue({ ok: true, data: { id: 'p1', inventoryItem: { id: 'i1' } } });
@@ -353,6 +376,42 @@ describe('SyncService.resolveConflict', () => {
       isActive: true,
       priceUpdatedAt: null,
       priceUpdatedAtJalali: null,
+    });
+  });
+
+  it('accept_server_state for customer.create returns the full customer payload with the address', async () => {
+    const { service, prisma } = makeService();
+    const customerConflict = {
+      ...conflictRow,
+      type: 'customer.create',
+      payload: { name: 'حسن رضایی', mobile: '09121234567' },
+    };
+    prisma.syncConflict.findFirst.mockResolvedValue(customerConflict);
+    prisma.syncOperation.findUnique.mockResolvedValue({
+      ...operationRow,
+      type: 'customer.create',
+      payload: { name: 'حسن رضایی', mobile: '09121234567' },
+    });
+    prisma.customer.findUnique.mockResolvedValue({
+      id: 'customer-1',
+      name: 'حسن رضایی',
+      mobile: '09121234567',
+      address: 'تهران، خیابان نمونه، پلاک ۱۲',
+      notes: 'مشتری تعمیرگاه',
+      isActive: true,
+      updatedAt: new Date('2026-09-18T12:00:00Z'),
+    });
+    const result = await service.resolveConflict(USER_ID, 'conflict-1', {
+      decision: 'accept_server_state',
+    });
+    expect(result.data.snapshot).toEqual({
+      id: 'customer-1',
+      name: 'حسن رضایی',
+      mobile: '09121234567',
+      address: 'تهران، خیابان نمونه، پلاک ۱۲',
+      notes: 'مشتری تعمیرگاه',
+      isActive: true,
+      updatedAt: '2026-09-18T12:00:00.000Z',
     });
   });
 

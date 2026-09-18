@@ -578,6 +578,146 @@ describe('InvoiceService', () => {
       expect.objectContaining({ data: expect.objectContaining({ status: 'voided' }) }),
     );
   });
+
+  it('creates a customer from the issue flow with address and notes', async () => {
+    const upsert = vi.fn(async () => ({ id: 'customer-1' }));
+    const prisma = { customer: { upsert } };
+    await new InvoiceService(prisma as never).createCustomer({
+      name: 'حسن رضایی',
+      mobile: '09121234567',
+      address: 'تهران، خیابان نمونه، پلاک ۱۲',
+      notes: 'مشتری تعمیرگاه',
+    });
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { mobile: '09121234567' },
+        create: {
+          name: 'حسن رضایی',
+          mobile: '09121234567',
+          address: 'تهران، خیابان نمونه، پلاک ۱۲',
+          notes: 'مشتری تعمیرگاه',
+        },
+      }),
+    );
+  });
+
+  it('keeps an existing customer address unless the request carries one', async () => {
+    // Duplicate mobiles upsert into the same row — never a second customer.
+    const upsert = vi.fn(
+      async (_args: {
+        where: { mobile: string };
+        create: { name: string; mobile: string; address?: string; notes?: string };
+        update: { name: string; address?: string | null; notes?: string | null };
+      }) => ({ id: 'customer-1' }),
+    );
+    const prisma = { customer: { upsert } };
+    // No address/notes in the request → the saved profile stays untouched.
+    await new InvoiceService(prisma as never).createCustomer({
+      name: 'حسن رضایی',
+      mobile: '09121234567',
+    });
+    expect(upsert.mock.calls[0]?.[0].update).toEqual({ name: 'حسن رضایی' });
+    // An explicit (even empty) value is applied — empty clears the field.
+    await new InvoiceService(prisma as never).createCustomer({
+      name: 'حسن رضایی',
+      mobile: '09121234567',
+      address: '',
+      notes: 'مشتری تعمیرگاه',
+    });
+    expect(upsert.mock.calls[1]?.[0].update).toEqual({
+      name: 'حسن رضایی',
+      address: null,
+      notes: 'مشتری تعمیرگاه',
+    });
+  });
+
+  it('returns the customer address in the issue-form customer list', async () => {
+    const rows = [
+      {
+        id: 'customer-1',
+        name: 'حسن رضایی',
+        mobile: '09121234567',
+        address: 'تهران، خیابان نمونه، پلاک ۱۲',
+        notes: null,
+        isActive: true,
+        createdAt: new Date('2026-09-18T12:00:00Z'),
+      },
+    ];
+    const queryRawUnsafe = vi.fn(async (_query: string, _pattern: string) => rows);
+    const prisma = { $queryRawUnsafe: queryRawUnsafe };
+    const result = await new InvoiceService(prisma as never).customers('');
+    expect(result.data[0].address).toBe('تهران، خیابان نمونه، پلاک ۱۲');
+    const [sql] = queryRawUnsafe.mock.calls[0] ?? [];
+    expect(sql).toContain('"address"');
+    // An empty search still lists the latest customers for the picker.
+    expect(sql).toContain('LIMIT 100');
+    expect(queryRawUnsafe.mock.calls[0]?.[1]).toBe('%');
+  });
+
+  it('snapshots the invoice address and links the customer without rewriting the profile', async () => {
+    const invoiceCreate = vi.fn(async () => ({
+      id: 'invoice-1',
+      number: 'INV-000001',
+      items: [],
+    }));
+    const invoiceUpdate = vi.fn(async () => ({}));
+    const customerUpsert = vi.fn(async () => ({ id: 'customer-1' }));
+    const tx = {
+      counter: { upsert: vi.fn(async () => ({ lastValue: 1 })) },
+      inventoryItem: {
+        updateMany: vi.fn(async () => ({ count: 1 })),
+        findUniqueOrThrow: vi.fn(async () => ({ quantity: 3 })),
+      },
+      invoice: { create: invoiceCreate, update: invoiceUpdate },
+      customer: { upsert: customerUpsert },
+      inventoryTransaction: { create: vi.fn(), updateMany: vi.fn() },
+      auditLog: { create: vi.fn() },
+      syncChange: { create: vi.fn() },
+    };
+    const prisma = {
+      inventoryItem: {
+        findMany: vi.fn(async () => [{ id: 'item-1', product: { name: 'لنت' } }]),
+      },
+      $transaction: vi.fn(async (callback: (client: typeof tx) => Promise<unknown>) =>
+        callback(tx),
+      ),
+    };
+    await new InvoiceService(prisma as never).create(
+      {
+        items: [{ inventoryItemId: 'item-1', quantity: 1, unitPrice: 100 }],
+        customerName: 'حسن رضایی',
+        customerMobile: '09121234567',
+        // One-off delivery address for this invoice only.
+        customerAddress: 'تهران، تحویل کارخانه، درب ۳',
+      },
+      'user-1',
+    );
+    // The invoice keeps its own address snapshot.
+    expect(invoiceCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          customerName: 'حسن رضایی',
+          customerMobile: '09121234567',
+          customerAddress: 'تهران، تحویل کارخانه، درب ۳',
+        }),
+      }),
+    );
+    // A brand-new inline customer also gets the address on its profile…
+    expect(customerUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { mobile: '09121234567' },
+        create: expect.objectContaining({
+          address: 'تهران، تحویل کارخانه، درب ۳',
+        }),
+        // …but an existing customer's profile is never rewritten by a sale:
+        // the update branch carries the name only.
+        update: { name: 'حسن رضایی' },
+      }),
+    );
+    expect(invoiceUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { customerId: 'customer-1' } }),
+    );
+  });
 });
 
 describe('InvoiceService.resendSms', () => {

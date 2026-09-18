@@ -177,9 +177,17 @@ export class InvoiceService {
       if (customerName && customerMobile) {
         // Prisma upsert: ids are generated client-side, no database-side
         // uuid function has to exist for this to work.
+        // A brand-new inline customer keeps the invoice address on its
+        // profile too; an existing one is never rewritten — the invoice's
+        // customerAddress is only a snapshot (explicit profile edits go
+        // through PATCH /customers/:id).
         const customer = await tx.customer.upsert({
           where: { mobile: customerMobile },
-          create: { name: customerName, mobile: customerMobile },
+          create: {
+            name: customerName,
+            mobile: customerMobile,
+            address: input.customerAddress?.trim() || undefined,
+          },
           update: { name: customerName },
           select: { id: true },
         });
@@ -707,25 +715,42 @@ export class InvoiceService {
       id: string;
       name: string;
       mobile: string;
+      address: string | null;
       notes: string | null;
       isActive: boolean;
       createdAt: Date;
     }>(
       this.prisma as unknown as { $queryRawUnsafe: unknown },
-      'SELECT "id", "name", "mobile", "notes", "isActive", "createdAt" FROM "customers" WHERE "isActive" = true AND ("name" ILIKE $1 OR "mobile" ILIKE $1) ORDER BY "createdAt" DESC LIMIT 100',
+      'SELECT "id", "name", "mobile", "address", "notes", "isActive", "createdAt" FROM "customers" WHERE "isActive" = true AND ("name" ILIKE $1 OR "mobile" ILIKE $1) ORDER BY "createdAt" DESC LIMIT 100',
       pattern,
     );
     return { ok: true, data: rows };
   }
 
-  async createCustomer(input: { name?: string; mobile?: string; notes?: string }) {
+  async createCustomer(input: {
+    name?: string;
+    mobile?: string;
+    address?: string;
+    notes?: string;
+  }) {
     const name = input.name?.trim();
     const mobile = input.mobile?.trim();
     if (!name || !mobile) throw new BadRequestException('نام و موبایل مشتری الزامی است');
+    // Address/notes are only touched when the request carries them: the issue
+    // form prefills them from the profile, and a one-off delivery address on
+    // one invoice must never silently rewrite the saved customer profile.
+    const update: { name: string; address?: string | null; notes?: string | null } = { name };
+    if (input.address !== undefined) update.address = input.address.trim() || null;
+    if (input.notes !== undefined) update.notes = input.notes.trim() || null;
     const customer = await this.prisma.customer.upsert({
       where: { mobile },
-      create: { name, mobile, notes: input.notes?.trim() || undefined },
-      update: { name, notes: input.notes?.trim() || undefined },
+      create: {
+        name,
+        mobile,
+        address: input.address?.trim() || undefined,
+        notes: input.notes?.trim() || undefined,
+      },
+      update,
     });
     return { ok: true, data: customer };
   }

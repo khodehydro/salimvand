@@ -18,6 +18,14 @@ describe('InvoiceController', () => {
     ]);
     expect(Reflect.getMetadata(ROLES_KEY, InvoiceController.prototype.create)).toEqual(['seller']);
     expect(Reflect.getMetadata(ROLES_KEY, InvoiceController.prototype.void)).toEqual(['manager']);
+    // The issue-form customer picker/creator stays seller-only, matching the
+    // customer.create sync operation's role policy.
+    expect(Reflect.getMetadata(ROLES_KEY, InvoiceController.prototype.customers)).toEqual([
+      'seller',
+    ]);
+    expect(Reflect.getMetadata(ROLES_KEY, InvoiceController.prototype.createCustomer)).toEqual([
+      'seller',
+    ]);
     // The narrow return-sheet read mirrors the POST returns roles: warehouse
     // may process returns without gaining access to the full invoice detail.
     expect(Reflect.getMetadata(ROLES_KEY, InvoiceController.prototype.returnContext)).toEqual([
@@ -35,6 +43,22 @@ describe('InvoiceController', () => {
       data: { id: 'invoice-1' },
     });
     expect(returnContext).toHaveBeenCalledWith('invoice-1');
+  });
+
+  it('routes the issue-form customer list and creator to the service', async () => {
+    const customers = vi.fn(async () => ({ ok: true, data: [] }));
+    const createCustomer = vi.fn(async () => ({ ok: true, data: { id: 'customer-1' } }));
+    const controller = new InvoiceController({ customers, createCustomer } as never);
+    await controller.customers('حسن');
+    expect(customers).toHaveBeenCalledWith('حسن');
+    const body = {
+      name: 'حسن رضایی',
+      mobile: '09121234567',
+      address: 'تهران، خیابان نمونه، پلاک ۱۲',
+      notes: 'مشتری تعمیرگاه',
+    };
+    await controller.createCustomer(body);
+    expect(createCustomer).toHaveBeenCalledWith(body);
   });
 
   it('routes invoice creation and payment to the service', async () => {
