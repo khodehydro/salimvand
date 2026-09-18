@@ -859,48 +859,95 @@ describe('InvoiceService.getPublic document payload', () => {
 });
 
 describe('InvoiceService.list and panel link/pdf actions', () => {
-  it('lists invoices without leaking token hashes', async () => {
-    const rows = [
-      {
-        id: 'inv-1',
-        number: 'INV-000001',
-        status: 'issued',
-        customerName: 'علی',
-        customerMobile: '09123456789',
-        subtotal: 100n,
-        discount: 0n,
-        total: 100n,
-        paidAmount: 50n,
-        paymentStatus: 'partial',
-        paymentMethod: null,
-        paidAt: null,
-        issuedAt: new Date(),
-        voidedAt: null,
-        publicTokenExpiresAt: null,
-        items: [
-          {
-            productName: 'لنت ترمز',
-            quantity: 1,
-            unitPrice: 100n,
-            lineTotal: 100n,
-            inventoryItem: { brand: { name: 'ایساکو' } },
-          },
-        ],
-      },
-    ];
-    const prisma = {
-      invoice: {
-        findMany: vi.fn(async () => rows),
-        findUnique: vi.fn(),
-      },
-    };
+  const pageRows = (count: number) =>
+    Array.from({ length: count }, (_, index) => ({
+      id: `inv-${count - index}`,
+      number: `INV-00000${count - index}`,
+      status: 'issued',
+      customerName: 'علی',
+      customerMobile: '09123456789',
+      subtotal: 100n,
+      discount: 0n,
+      total: 100n,
+      paidAmount: 50n,
+      paymentStatus: 'partial',
+      paymentMethod: null,
+      paidAt: null,
+      issuedAt: new Date(`2026-09-18T10:0${index}:00Z`),
+      voidedAt: null,
+      publicTokenExpiresAt: null,
+    }));
+  const listHarness = (rows: unknown[], aggregates = {}) => ({
+    invoice: { findMany: vi.fn(async (_args: unknown) => rows), findUnique: vi.fn() },
+    invoiceItem: {
+      groupBy: vi.fn(async () => [
+        { invoiceId: 'inv-2', _count: { _all: 3 } },
+        { invoiceId: 'inv-1', _count: { _all: 2 } },
+      ]),
+    },
+    returnRecord: {
+      groupBy: vi.fn(async () => [{ invoiceId: 'inv-1', _sum: { refundAmount: 30n } }]),
+    },
+    ...aggregates,
+  });
+
+  it('lists paginated summary rows without leaking token hashes or line data', async () => {
+    const prisma = listHarness(pageRows(2));
     const result = await new InvoiceService(prisma as never).list();
+    expect(prisma.invoice.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderBy: [{ issuedAt: 'desc' }, { id: 'desc' }],
+        take: 101,
+      }),
+    );
     const serialized = JSON.stringify(result, (_key, value) =>
       typeof value === 'bigint' ? String(value) : value,
     );
     expect(serialized).not.toContain('publicTokenHash');
     expect(serialized).not.toContain('publicShortCodeHash');
-    expect(result.data[0].items[0].inventoryItem.brand?.name).toBe('ایساکو');
+    // The archive is summary-only: no items/returns join per invoice.
+    expect(serialized).not.toContain('"items"');
+    expect(serialized).not.toContain('"returns"');
+    expect(result.data[0].itemCount).toBe(3);
+    expect(result.data[1].itemCount).toBe(2);
+    expect(result.data[1].returnedTotal).toBe(30n);
+    expect(result.data[1].netTotal).toBe(70n);
+    expect(result.hasMore).toBe(false);
+    expect(result.nextCursor).toBeNull();
+  });
+
+  it('reports the next cursor when another page exists', async () => {
+    const prisma = listHarness(pageRows(3));
+    const result = await new InvoiceService(prisma as never).list(undefined, '2');
+    const listArgs = prisma.invoice.findMany.mock.calls[0]?.[0] as { take: number };
+    expect(listArgs.take).toBe(3);
+    expect(result.data).toHaveLength(2);
+    expect(result.hasMore).toBe(true);
+    expect(result.nextCursor).toBe(`2026-09-18T10:01:00.000Z|inv-2`);
+  });
+
+  it('continues from the cursor with a stable (issuedAt, id) keyset', async () => {
+    const prisma = listHarness(pageRows(1));
+    await new InvoiceService(prisma as never).list('2026-09-18T10:01:00.000Z|inv-2', '50');
+    expect(prisma.invoice.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          OR: [
+            { issuedAt: { lt: new Date('2026-09-18T10:01:00.000Z') } },
+            { issuedAt: new Date('2026-09-18T10:01:00.000Z'), id: { lt: 'inv-2' } },
+          ],
+        },
+        take: 51,
+      }),
+    );
+  });
+
+  it('rejects a malformed cursor instead of silently repeating the page', async () => {
+    const prisma = listHarness([]);
+    await expect(new InvoiceService(prisma as never).list('not-a-cursor')).rejects.toThrow(
+      'کرسر فهرست فاکتورها نامعتبر است',
+    );
+    expect(prisma.invoice.findMany).not.toHaveBeenCalled();
   });
 
   it('rotates the public link for panel viewing with an audit trail', async () => {

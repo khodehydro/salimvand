@@ -369,6 +369,9 @@ model Invoice {
   issuedAt     DateTime      @default(now()) @db.Timestamptz(6)
   voidedAt     DateTime?     @db.Timestamptz(6)
   @@index([status, issuedAt])
+  // Cursor-paginated archive listing: keyset on (issuedAt, id) — [status,
+  // issuedAt] alone cannot serve the statusless "all invoices" scan.
+  @@index([issuedAt, id])
   @@map("invoices")
 }
 

@@ -117,59 +117,77 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
    * internal tokens; the mobile client only receives operational catalog data. */
   async bootstrap(userId: string, deviceId: string) {
     await this.touchDevice(userId, deviceId);
-    const [categories, brands, locations, products, inventory, cursor] = await Promise.all([
-      this.prisma.category.findMany({
-        where: { isActive: true },
-        orderBy: { name: 'asc' },
-        select: { id: true, parentId: true, name: true, slug: true, code: true },
-      }),
-      this.prisma.brand.findMany({
-        where: { isActive: true },
-        orderBy: { name: 'asc' },
-        select: { id: true, name: true },
-      }),
-      this.prisma.location.findMany({
-        orderBy: { code: 'asc' },
-        select: { id: true, parentId: true, type: true, code: true, name: true },
-      }),
-      this.prisma.product.findMany({
-        where: { deletedAt: null },
-        orderBy: { updatedAt: 'asc' },
-        select: {
-          id: true,
-          code: true,
-          slug: true,
-          name: true,
-          categoryId: true,
-          status: true,
-          availabilityOverride: true,
-          updatedAt: true,
-          images: {
-            where: { isPrimary: true },
-            orderBy: { sort: 'asc' },
-            take: 1,
-            select: { id: true, path: true, alt: true },
+    const [categories, brands, locations, products, inventory, customers, cursor] =
+      await Promise.all([
+        this.prisma.category.findMany({
+          where: { isActive: true },
+          orderBy: { name: 'asc' },
+          select: { id: true, parentId: true, name: true, slug: true, code: true },
+        }),
+        this.prisma.brand.findMany({
+          where: { isActive: true },
+          orderBy: { name: 'asc' },
+          select: { id: true, name: true },
+        }),
+        this.prisma.location.findMany({
+          orderBy: { code: 'asc' },
+          select: { id: true, parentId: true, type: true, code: true, name: true },
+        }),
+        this.prisma.product.findMany({
+          where: { deletedAt: null },
+          orderBy: { updatedAt: 'asc' },
+          select: {
+            id: true,
+            code: true,
+            slug: true,
+            name: true,
+            categoryId: true,
+            status: true,
+            availabilityOverride: true,
+            updatedAt: true,
+            images: {
+              where: { isPrimary: true },
+              orderBy: { sort: 'asc' },
+              take: 1,
+              select: { id: true, path: true, alt: true },
+            },
           },
-        },
-      }),
-      this.prisma.inventoryItem.findMany({
-        where: { isActive: true },
-        orderBy: { id: 'asc' },
-        select: {
-          id: true,
-          productId: true,
-          brandId: true,
-          barcode: true,
-          quantity: true,
-          purchasePrice: true,
-          salePrice: true,
-          minStock: true,
-          locationId: true,
-          priceUpdatedAt: true,
-        },
-      }),
-      this.prisma.syncChange.aggregate({ _max: { revision: true } }),
-    ]);
+        }),
+        this.prisma.inventoryItem.findMany({
+          where: { isActive: true },
+          orderBy: { id: 'asc' },
+          select: {
+            id: true,
+            productId: true,
+            brandId: true,
+            barcode: true,
+            quantity: true,
+            purchasePrice: true,
+            salePrice: true,
+            minStock: true,
+            locationId: true,
+            priceUpdatedAt: true,
+          },
+        }),
+        // Recent customers (with address/notes) so the first seller login has
+        // the picker ready without a second round trip; the pull stream keeps
+        // it fresh afterwards.
+        this.prisma.customer.findMany({
+          where: { isActive: true },
+          orderBy: { createdAt: 'desc' },
+          take: 100,
+          select: {
+            id: true,
+            name: true,
+            mobile: true,
+            address: true,
+            notes: true,
+            isActive: true,
+            updatedAt: true,
+          },
+        }),
+        this.prisma.syncChange.aggregate({ _max: { revision: true } }),
+      ]);
     const publicSiteUrl = (
       process.env.PUBLIC_SITE_URL ??
       process.env.APP_URL ??
@@ -192,6 +210,9 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
         locations,
         products: productsWithImageUrls,
         inventory,
+        // Same payload shape as the sync pull stream, so the client caches
+        // bootstrap customers and pulled customers identically.
+        customers: customers.map(buildCustomerSyncPayload),
         cursor: String(cursor._max.revision ?? 0n),
       },
     };

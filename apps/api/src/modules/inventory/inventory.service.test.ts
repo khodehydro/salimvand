@@ -217,19 +217,95 @@ describe('InventoryService', () => {
     const findMany = vi.fn().mockResolvedValue([{ id: 'i1', quantity: 3, minStock: null }]);
     const prisma = { inventoryItem: { findMany } };
     const result = await new InventoryService(prisma as never).list({ q: '  ' });
-    const args = findMany.mock.calls[0][0] as { where: Record<string, unknown> };
+    const args = findMany.mock.calls[0][0] as {
+      where: Record<string, unknown>;
+      take: number;
+    };
     expect(args.where).toEqual({ isActive: true, product: { deletedAt: null } });
+    expect(args.take).toBe(201);
     expect(result.data).toHaveLength(1);
+    expect(result.hasMore).toBe(false);
+    expect(result.nextCursor).toBeNull();
+  });
+
+  it('paginates the live list with an id keyset and reports the next cursor', async () => {
+    const findMany = vi.fn().mockResolvedValue([{ id: 'i3' }, { id: 'i2' }, { id: 'i1' }]);
+    const prisma = { inventoryItem: { findMany } };
+    const result = await new InventoryService(prisma as never).list({ limit: '2' });
+    const args = findMany.mock.calls[0][0] as { take: number };
+    expect(args.take).toBe(3);
+    expect(result.data.map((item: { id: string }) => item.id)).toEqual(['i3', 'i2']);
+    expect(result.hasMore).toBe(true);
+    expect(result.nextCursor).toBe('i2');
+    await new InventoryService(prisma as never).list({ cursor: 'i2' });
+    expect(findMany.mock.calls[1][0].where).toEqual({
+      isActive: true,
+      product: { deletedAt: null },
+      id: { lt: 'i2' },
+    });
   });
 
   it('filters the list to out-of-stock rows with status=out', async () => {
-    const findMany = vi.fn().mockResolvedValue([
-      { id: 'ok', quantity: 5, minStock: 2 },
-      { id: 'zero', quantity: 0, minStock: null },
-    ]);
-    const prisma = { inventoryItem: { findMany } };
+    // The quantity <= 0 condition runs in SQL (Prisma cannot compare two
+    // columns), so the status views fetch a raw id universe first.
+    const queryRaw = vi.fn().mockResolvedValue([{ id: 'zero' }]);
+    const findMany = vi.fn().mockResolvedValue([{ id: 'zero', quantity: 0 }]);
+    const prisma = { $queryRaw: queryRaw, inventoryItem: { findMany } };
     const result = await new InventoryService(prisma as never).list({ status: 'out' });
     expect(result.data.map((item: { id: string }) => item.id)).toEqual(['zero']);
+    expect(findMany.mock.calls[0][0].where).toEqual({
+      isActive: true,
+      product: { deletedAt: null },
+      id: { in: ['zero'] },
+    });
+  });
+});
+
+describe('InventoryService.summary and low-stock (SQL aggregates)', () => {
+  it('computes the summary with a single SQL aggregate instead of loading rows', async () => {
+    const queryRaw = vi.fn().mockResolvedValue([
+      {
+        itemCount: 4,
+        totalQuantity: 90n,
+        purchaseValue: 1_000n,
+        saleValue: 1_400n,
+        lowStockCount: 2,
+        outOfStockCount: 1,
+      },
+    ]);
+    const prisma = { $queryRaw: queryRaw };
+    const result = await new InventoryService(prisma as never).summary();
+    expect(result.data).toEqual({
+      itemCount: 4,
+      totalQuantity: '90',
+      purchaseValue: '1000',
+      saleValue: '1400',
+      lowStockCount: 2,
+      outOfStockCount: 1,
+    });
+    const sql = String(queryRaw.mock.calls[0][0][0]);
+    expect(sql).toContain('SUM(i.quantity * i."purchasePrice")');
+    expect(sql).toContain('COALESCE(i."minStock", 0)');
+    expect(sql).toContain('p."deletedAt" IS NULL');
+  });
+
+  it('low-stock rows are filtered in SQL and keep their quantity order', async () => {
+    const queryRaw = vi.fn().mockResolvedValue([{ id: 'a' }, { id: 'b' }]);
+    const findMany = vi.fn().mockResolvedValue([{ id: 'b' }, { id: 'a' }]);
+    const prisma = { $queryRaw: queryRaw, inventoryItem: { findMany } };
+    const result = await new InventoryService(prisma as never).lowStock();
+    expect(result.data.map((item: { id: string }) => item.id)).toEqual(['a', 'b']);
+    expect(String(queryRaw.mock.calls[0][0][0])).toContain('quantity <= COALESCE("minStock", 0)');
+    expect(findMany.mock.calls[0][0].where).toEqual({ id: { in: ['a', 'b'] } });
+  });
+
+  it('low-stock with no matches short-circuits without the hydration query', async () => {
+    const queryRaw = vi.fn().mockResolvedValue([]);
+    const findMany = vi.fn();
+    const prisma = { $queryRaw: queryRaw, inventoryItem: { findMany } };
+    const result = await new InventoryService(prisma as never).lowStock();
+    expect(result.data).toEqual([]);
+    expect(findMany).not.toHaveBeenCalled();
   });
 });
 

@@ -458,3 +458,47 @@ describe('SyncService.recoverPending', () => {
     });
   });
 });
+
+describe('SyncService.bootstrap', () => {
+  it('ships the 100 most recent customers with addresses for the first login', async () => {
+    const updatedAt = new Date('2026-09-18T12:00:00Z');
+    const { service, result } = await (async () => {
+      const made = makeService({
+        category: { findMany: vi.fn().mockResolvedValue([]) },
+        brand: { findMany: vi.fn().mockResolvedValue([]) },
+        location: { findMany: vi.fn().mockResolvedValue([]) },
+        product: { findMany: vi.fn().mockResolvedValue([]) },
+        customer: {
+          findUnique: vi.fn().mockResolvedValue(null),
+          findMany: vi.fn().mockResolvedValue([
+            {
+              id: 'customer-1',
+              name: 'حسن رضایی',
+              mobile: '09121234567',
+              address: 'تهران، خیابان نمونه، پلاک ۱۲',
+              notes: 'مشتری تعمیرگاه',
+              isActive: true,
+              updatedAt,
+            },
+          ]),
+        },
+        syncChange: { aggregate: vi.fn().mockResolvedValue({ _max: { revision: 42n } }) },
+      });
+      const bootstrapped = await made.service.bootstrap(USER_ID, 'android-device');
+      return { service: made.service, result: bootstrapped };
+    })();
+    // Same shape as the pull stream, so the client caches both identically.
+    expect(result.data.customers).toEqual([
+      {
+        id: 'customer-1',
+        name: 'حسن رضایی',
+        mobile: '09121234567',
+        address: 'تهران، خیابان نمونه، پلاک ۱۲',
+        notes: 'مشتری تعمیرگاه',
+        isActive: true,
+        updatedAt: updatedAt.toISOString(),
+      },
+    ]);
+    expect(result.data.cursor).toBe('42');
+  });
+});

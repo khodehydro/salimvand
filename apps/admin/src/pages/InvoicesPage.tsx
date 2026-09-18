@@ -12,7 +12,7 @@ import {
   remainingDebt as debtLeft,
   type PaymentRow,
 } from '../lib/invoice-math';
-import { api, downloadFile } from '../lib/api';
+import { api, downloadFile, fetchAllPages } from '../lib/api';
 import { publicSiteUrl } from '../lib/public-site';
 import { paramsFromHash } from '../lib/admin-route';
 import { formatPersianNumber } from '@salimvand/shared';
@@ -38,7 +38,11 @@ type Invoice = {
   paymentStatus: string;
   status: string;
   issuedAt: string;
-  items: InvoiceItemRow[];
+  /** Archive rows are paginated summaries — line data only arrives with the
+   * detail view (fetchInvoiceDetail). */
+  items?: InvoiceItemRow[];
+  /** Line count on summary rows; avoids loading every line of every invoice. */
+  itemCount?: number;
   returns?: ReturnRow[];
 };
 type StockOption = {
@@ -135,7 +139,9 @@ export function InvoicesPage({
   const [mobile, setMobile] = useState('');
   const [discount, setDiscount] = useState('');
   const [payments, setPayments] = useState<PaymentRow[]>([{ method: 'cash', amount: '' }]);
-  const [checksDraft, setChecksDraft] = useState([{ checkNumber: '', bank: '', branch: '', dueDate: '', amount: '' }]);
+  const [checksDraft, setChecksDraft] = useState([
+    { checkNumber: '', bank: '', branch: '', dueDate: '', amount: '' },
+  ]);
   const [paying, setPaying] = useState<Invoice | null>(null);
   const [viewing, setViewing] = useState<Invoice | null>(null);
   // Public-link dialog: shows the short tokenized link for one invoice.
@@ -175,10 +181,12 @@ export function InvoicesPage({
   const searchRef = useRef<HTMLInputElement | null>(null);
 
   const load = () =>
-    api<{ data: Invoice[] }>('/invoices')
-      .then((result) => {
-        setRows(result.data);
-        return result.data;
+    // The archive endpoint is cursor-paginated (summaries only); drain the
+    // pages so client-side search across the whole history keeps working.
+    fetchAllPages<Invoice>('/invoices', { limit: 200 })
+      .then((data) => {
+        setRows(data);
+        return data;
       })
       .catch((error: Error) => {
         setMessage(error.message);
@@ -235,10 +243,10 @@ export function InvoicesPage({
       const match = rows.find((row) => row.id === invoiceId);
       if (match) openViewing(match);
       else
-        void api<{ data: Invoice[] }>('/invoices')
-          .then((result) => {
-            setRows(result.data);
-            const found = result.data.find((row) => row.id === invoiceId);
+        void fetchAllPages<Invoice>('/invoices', { limit: 200 })
+          .then((data) => {
+            setRows(data);
+            const found = data.find((row) => row.id === invoiceId);
             if (found) openViewing(found);
           })
           .catch(() => undefined);
@@ -252,9 +260,12 @@ export function InvoicesPage({
   useEffect(() => {
     void load();
     if (canCreate)
-      void api<{ data: StockOption[]; storeAddress?: string; storePhone?: string; storeLogoUrl?: string }>(
-        '/invoices/options',
-      )
+      void api<{
+        data: StockOption[];
+        storeAddress?: string;
+        storePhone?: string;
+        storeLogoUrl?: string;
+      }>('/invoices/options')
         .then((result) => {
           setOptions(result.data);
           // Store contact block from settings — shown read-only in the issue
@@ -323,11 +334,19 @@ export function InvoicesPage({
     return groups;
   }, [candidates]);
 
-  const lineTotal = (line: DraftLine) => invoiceTotals([{ salePrice: line.price, quantity: line.quantity, lineDiscount: 0 }], 0).total;
+  const lineTotal = (line: DraftLine) =>
+    invoiceTotals([{ salePrice: line.price, quantity: line.quantity, lineDiscount: 0 }], 0).total;
   const discountPercent = Math.min(100, Math.max(0, Number(discount) || 0));
-  const grossSubtotal = lines.reduce((sum, line) => sum + Math.max(0, line.price) * Math.max(1, line.quantity), 0);
-  const discountAmount = Math.round(grossSubtotal * discountPercent / 100);
-  const { subtotal, discount: discountValue, total } = invoiceTotals(
+  const grossSubtotal = lines.reduce(
+    (sum, line) => sum + Math.max(0, line.price) * Math.max(1, line.quantity),
+    0,
+  );
+  const discountAmount = Math.round((grossSubtotal * discountPercent) / 100);
+  const {
+    subtotal,
+    discount: discountValue,
+    total,
+  } = invoiceTotals(
     lines.map((line) => ({ salePrice: line.price, quantity: line.quantity, lineDiscount: 0 })),
     discountAmount,
   );
@@ -426,7 +445,18 @@ export function InvoicesPage({
         if (amount <= 0) continue;
         await api(`/invoices/${response.data.id}/pay`, {
           method: 'POST',
-          body: JSON.stringify({ amount: String(amount), method: row.method, ...(row.method === 'credit' ? { checks: checksDraft.map((check) => ({ ...check, amount: check.amount || String(amount) })) } : {}) }),
+          body: JSON.stringify({
+            amount: String(amount),
+            method: row.method,
+            ...(row.method === 'credit'
+              ? {
+                  checks: checksDraft.map((check) => ({
+                    ...check,
+                    amount: check.amount || String(amount),
+                  })),
+                }
+              : {}),
+          }),
         });
       }
       const qr = await api<{ data: { dataUrl: string } }>(
@@ -465,7 +495,18 @@ export function InvoicesPage({
         if (amount <= 0) continue;
         await api(`/invoices/${paying.id}/pay`, {
           method: 'POST',
-          body: JSON.stringify({ amount: String(amount), method: row.method, ...(row.method === 'credit' ? { checks: checksDraft.map((check) => ({ ...check, amount: check.amount || String(amount) })) } : {}) }),
+          body: JSON.stringify({
+            amount: String(amount),
+            method: row.method,
+            ...(row.method === 'credit'
+              ? {
+                  checks: checksDraft.map((check) => ({
+                    ...check,
+                    amount: check.amount || String(amount),
+                  })),
+                }
+              : {}),
+          }),
         });
       }
       setMessage('پرداخت ثبت و در Audit Log نوشته شد.');
@@ -479,12 +520,44 @@ export function InvoicesPage({
   const payAmountValid = () => payments.some((row) => Number(row.amount) > 0);
 
   /** Opens the invoice detail modal with a fresh address draft. */
+  /** Archive rows are summaries; the detail view (lines + returns + per-line
+   * returnedQuantity) is fetched on demand and cached onto the row. */
+  const fetchInvoiceDetail = (invoice: Invoice): Promise<Invoice | null> =>
+    api<{ data: Invoice }>(`/invoices/${invoice.id}`)
+      .then((result) => {
+        const detail = result.data;
+        const returnedPerLine = new Map<string, number>();
+        let returnedTotal = 0;
+        for (const record of detail.returns ?? []) {
+          returnedPerLine.set(
+            record.invoiceItemId,
+            (returnedPerLine.get(record.invoiceItemId) ?? 0) + record.quantity,
+          );
+          returnedTotal += Number(record.refundAmount);
+        }
+        return {
+          ...detail,
+          itemCount: detail.items?.length ?? 0,
+          returnedTotal: String(returnedTotal),
+          netTotal: String(Number(detail.total) - returnedTotal),
+          items: (detail.items ?? []).map((item) => ({
+            ...item,
+            returnedQuantity: returnedPerLine.get(item.id) ?? 0,
+          })),
+        };
+      })
+      .catch(() => null);
+
   const openViewing = (invoice: Invoice) => {
     setViewing(invoice);
     setAddressDraft({
       store: invoice.storeAddress ?? '',
       phone: invoice.storePhone ?? '',
       customer: invoice.customerAddress ?? '',
+    });
+    void fetchInvoiceDetail(invoice).then((detail) => {
+      // Only upgrade the modal if the user is still on this invoice.
+      setViewing((current) => (current && current.id === invoice.id && detail ? detail : current));
     });
   };
 
@@ -502,8 +575,10 @@ export function InvoicesPage({
         }),
       });
       setMessage(`آدرس‌های فاکتور ${formatPersianNumber(viewing.number)} ذخیره شد.`);
-      const updated = await load();
-      setViewing(updated.find((row) => row.id === viewing.id) ?? null);
+      await load();
+      // The archive row is a summary — refresh the open modal from the detail.
+      const detail = await fetchInvoiceDetail(viewing);
+      if (detail) setViewing(detail);
     } catch (error) {
       setMessage((error as Error).message);
     } finally {
@@ -522,10 +597,22 @@ export function InvoicesPage({
     setReturnRestock(true);
   };
 
-  const printReturnReceipt = (invoice: Invoice, item: InvoiceItemRow, quantity: number, reason: string, restock: boolean) => {
-    const win = window.open('', '_blank', 'width=800,height=700'); if (!win) return;
-    const date = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'full', timeStyle: 'short' }).format(new Date());
-    win.document.write(`<!doctype html><html dir="rtl"><head><meta charset="utf-8"><title>رسید مرجوعی ${invoice.number}</title><style>body{font-family:Vazirmatn,Tahoma,sans-serif;color:#17243b;padding:28px;max-width:760px;margin:auto}.head{display:flex;justify-content:space-between;border-bottom:3px solid #173b63;padding-bottom:14px}.brand{font-size:21px;font-weight:800;color:#173b63}h1{font-size:19px;margin:28px 0 8px}.meta{color:#64748b;font-size:11px;margin-bottom:20px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccd5df;padding:10px;text-align:right}th{background:#edf2f7}.note{margin-top:20px;padding:12px;background:#f5f8fb;border-radius:8px;font-size:12px}.sign{display:flex;justify-content:space-between;margin-top:70px;font-size:11px;color:#64748b}@media print{body{padding:0}}</style></head><body><div class="head"><span class="brand">فروشگاه سلیم وند</span><span>رسید مرجوعی کالا</span></div><h1>رسید مرجوعی فاکتور ${invoice.number}</h1><div class="meta">مشتری: ${invoice.customerName ?? 'حضوری'} · تاریخ ثبت: ${date}</div><table><thead><tr><th>محصول</th><th>تعداد</th><th>مبلغ برگشت</th><th>مقصد کالا</th></tr></thead><tbody><tr><td>${item.productName}</td><td>${quantity}</td><td>${money(Number(item.unitPrice) * quantity)}</td><td>${restock ? 'بازگشت به انبار' : 'ضایعات'}</td></tr></tbody></table><div class="note"><b>دلیل مرجوعی:</b> ${reason}</div><div class="sign"><span>امضای مشتری</span><span>امضای فروشگاه</span></div><script>window.onload=()=>setTimeout(()=>window.print(),250)</script></body></html>`); win.document.close();
+  const printReturnReceipt = (
+    invoice: Invoice,
+    item: InvoiceItemRow,
+    quantity: number,
+    reason: string,
+    restock: boolean,
+  ) => {
+    const win = window.open('', '_blank', 'width=800,height=700');
+    if (!win) return;
+    const date = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'full', timeStyle: 'short' }).format(
+      new Date(),
+    );
+    win.document.write(
+      `<!doctype html><html dir="rtl"><head><meta charset="utf-8"><title>رسید مرجوعی ${invoice.number}</title><style>body{font-family:Vazirmatn,Tahoma,sans-serif;color:#17243b;padding:28px;max-width:760px;margin:auto}.head{display:flex;justify-content:space-between;border-bottom:3px solid #173b63;padding-bottom:14px}.brand{font-size:21px;font-weight:800;color:#173b63}h1{font-size:19px;margin:28px 0 8px}.meta{color:#64748b;font-size:11px;margin-bottom:20px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccd5df;padding:10px;text-align:right}th{background:#edf2f7}.note{margin-top:20px;padding:12px;background:#f5f8fb;border-radius:8px;font-size:12px}.sign{display:flex;justify-content:space-between;margin-top:70px;font-size:11px;color:#64748b}@media print{body{padding:0}}</style></head><body><div class="head"><span class="brand">فروشگاه سلیم وند</span><span>رسید مرجوعی کالا</span></div><h1>رسید مرجوعی فاکتور ${invoice.number}</h1><div class="meta">مشتری: ${invoice.customerName ?? 'حضوری'} · تاریخ ثبت: ${date}</div><table><thead><tr><th>محصول</th><th>تعداد</th><th>مبلغ برگشت</th><th>مقصد کالا</th></tr></thead><tbody><tr><td>${item.productName}</td><td>${quantity}</td><td>${money(Number(item.unitPrice) * quantity)}</td><td>${restock ? 'بازگشت به انبار' : 'ضایعات'}</td></tr></tbody></table><div class="note"><b>دلیل مرجوعی:</b> ${reason}</div><div class="sign"><span>امضای مشتری</span><span>امضای فروشگاه</span></div><script>window.onload=()=>setTimeout(()=>window.print(),250)</script></body></html>`,
+    );
+    win.document.close();
   };
 
   const submitReturn = async () => {
@@ -554,7 +641,12 @@ export function InvoicesPage({
         }.`,
       );
       const updated = await load();
-      if (viewing) setViewing(updated.find((row) => row.id === returnLine.invoice.id) ?? null);
+      // Refresh the open modal with fresh line data (the list row is a summary).
+      const refreshed = updated.find((row) => row.id === returnLine.invoice.id);
+      if (viewing && refreshed) {
+        const detail = await fetchInvoiceDetail(refreshed);
+        if (detail) setViewing(detail);
+      }
       setReturnLine(null);
     } catch (error) {
       setMessage((error as Error).message);
@@ -602,7 +694,9 @@ export function InvoicesPage({
     <section className="invoices-page">
       <div className="page-title">
         <div>
-          <h1 className="invoice-page-heading">{storeLogoUrl && <img src={storeLogoUrl} alt="فروشگاه سلیم‌وند" />}فروش و فاکتورها</h1>
+          <h1 className="invoice-page-heading">
+            {storeLogoUrl && <img src={storeLogoUrl} alt="فروشگاه سلیم‌وند" />}فروش و فاکتورها
+          </h1>
           <p className="muted">
             {tab === 'issue'
               ? 'صدور فاکتور چندقلمی با اسکنر، مصرف اتمیک موجودی و پرداخت چندروشه'
@@ -968,7 +1062,7 @@ export function InvoicesPage({
                           })
                         }
                       />
-<div className="num b">{money(lineTotal(line))}</div>
+                      <div className="num b">{money(lineTotal(line))}</div>
                       <button
                         type="button"
                         className="btn-icon-danger"
@@ -1011,7 +1105,15 @@ export function InvoicesPage({
                 <div className="invoice-discount-field field">
                   <span className="lab">تخفیف کل فاکتور (درصد)</span>
                   <div className="percent-input-wrap">
-                    <FaNumberInput className="money-in" aria-label="درصد تخفیف کل فاکتور" value={discount} placeholder="۰" onChange={(plain) => setDiscount(String(Math.min(100, Math.max(0, Number(plain) || 0))))} />
+                    <FaNumberInput
+                      className="money-in"
+                      aria-label="درصد تخفیف کل فاکتور"
+                      value={discount}
+                      placeholder="۰"
+                      onChange={(plain) =>
+                        setDiscount(String(Math.min(100, Math.max(0, Number(plain) || 0))))
+                      }
+                    />
                     <b>٪</b>
                   </div>
                   <small>مبلغ تخفیف: {money(discountValue)}</small>
@@ -1060,18 +1162,83 @@ export function InvoicesPage({
                       </div>
                     );
                   })}
-                  {payments.some((entry) => entry.method === 'credit') && <div className="check-fields">
-                    <b>جزئیات چک‌ها</b>
-                    {checksDraft.map((check, index) => <div className="check-row" key={index}>
-                      <strong>چک {index + 1}</strong>
-                      <input placeholder="شماره چک" value={check.checkNumber} onChange={(e) => setChecksDraft((all) => all.map((item, i) => i === index ? { ...item, checkNumber: e.target.value } : item))} />
-                      <input placeholder="بانک" value={check.bank} onChange={(e) => setChecksDraft((all) => all.map((item, i) => i === index ? { ...item, bank: e.target.value } : item))} />
-                      <input placeholder="شعبه" value={check.branch} onChange={(e) => setChecksDraft((all) => all.map((item, i) => i === index ? { ...item, branch: e.target.value } : item))} />
-<JalaliDateInput value={check.dueDate} onChange={(value) => setChecksDraft((all) => all.map((item, i) => i === index ? { ...item, dueDate: value } : item))} />
-                      <FaNumberInput className="money-in" placeholder="مبلغ چک" value={check.amount} onChange={(plain) => setChecksDraft((all) => all.map((item, i) => i === index ? { ...item, amount: plain } : item))} />
-                    </div>)}
-                    <button type="button" className="outline" onClick={() => setChecksDraft((all) => [...all, { checkNumber: '', bank: '', branch: '', dueDate: '', amount: '' }])}>+ افزودن چک</button>
-                  </div>}
+                  {payments.some((entry) => entry.method === 'credit') && (
+                    <div className="check-fields">
+                      <b>جزئیات چک‌ها</b>
+                      {checksDraft.map((check, index) => (
+                        <div className="check-row" key={index}>
+                          <strong>چک {index + 1}</strong>
+                          <input
+                            placeholder="شماره چک"
+                            value={check.checkNumber}
+                            onChange={(e) =>
+                              setChecksDraft((all) =>
+                                all.map((item, i) =>
+                                  i === index ? { ...item, checkNumber: e.target.value } : item,
+                                ),
+                              )
+                            }
+                          />
+                          <input
+                            placeholder="بانک"
+                            value={check.bank}
+                            onChange={(e) =>
+                              setChecksDraft((all) =>
+                                all.map((item, i) =>
+                                  i === index ? { ...item, bank: e.target.value } : item,
+                                ),
+                              )
+                            }
+                          />
+                          <input
+                            placeholder="شعبه"
+                            value={check.branch}
+                            onChange={(e) =>
+                              setChecksDraft((all) =>
+                                all.map((item, i) =>
+                                  i === index ? { ...item, branch: e.target.value } : item,
+                                ),
+                              )
+                            }
+                          />
+                          <JalaliDateInput
+                            value={check.dueDate}
+                            onChange={(value) =>
+                              setChecksDraft((all) =>
+                                all.map((item, i) =>
+                                  i === index ? { ...item, dueDate: value } : item,
+                                ),
+                              )
+                            }
+                          />
+                          <FaNumberInput
+                            className="money-in"
+                            placeholder="مبلغ چک"
+                            value={check.amount}
+                            onChange={(plain) =>
+                              setChecksDraft((all) =>
+                                all.map((item, i) =>
+                                  i === index ? { ...item, amount: plain } : item,
+                                ),
+                              )
+                            }
+                          />
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        className="outline"
+                        onClick={() =>
+                          setChecksDraft((all) => [
+                            ...all,
+                            { checkNumber: '', bank: '', branch: '', dueDate: '', amount: '' },
+                          ])
+                        }
+                      >
+                        + افزودن چک
+                      </button>
+                    </div>
+                  )}
                   <div className="hr" />
                   <div className="pr">
                     <span className="mut">پرداخت‌شده</span>
@@ -1265,13 +1432,83 @@ export function InvoicesPage({
                     </div>
                   );
                 })}
-                  {payments.some((entry) => entry.method === 'credit') && <div className="check-fields">
+                {payments.some((entry) => entry.method === 'credit') && (
+                  <div className="check-fields">
                     <b>جزئیات چک‌ها</b>
-                    {checksDraft.map((check, index) => <div className="check-row" key={index}>
-                      <strong>چک {index + 1}</strong><input placeholder="شماره چک" value={check.checkNumber} onChange={(e) => setChecksDraft((all) => all.map((item, i) => i === index ? { ...item, checkNumber: e.target.value } : item))} /><input placeholder="بانک" value={check.bank} onChange={(e) => setChecksDraft((all) => all.map((item, i) => i === index ? { ...item, bank: e.target.value } : item))} /><input placeholder="شعبه" value={check.branch} onChange={(e) => setChecksDraft((all) => all.map((item, i) => i === index ? { ...item, branch: e.target.value } : item))} /><JalaliDateInput value={check.dueDate} onChange={(value) => setChecksDraft((all) => all.map((item, i) => i === index ? { ...item, dueDate: value } : item))} /><FaNumberInput className="money-in" placeholder="مبلغ چک" value={check.amount} onChange={(plain) => setChecksDraft((all) => all.map((item, i) => i === index ? { ...item, amount: plain } : item))} />
-                    </div>)}
-                    <button type="button" className="outline" onClick={() => setChecksDraft((all) => [...all, { checkNumber: '', bank: '', branch: '', dueDate: '', amount: '' }])}>+ افزودن چک</button>
-                  </div>}
+                    {checksDraft.map((check, index) => (
+                      <div className="check-row" key={index}>
+                        <strong>چک {index + 1}</strong>
+                        <input
+                          placeholder="شماره چک"
+                          value={check.checkNumber}
+                          onChange={(e) =>
+                            setChecksDraft((all) =>
+                              all.map((item, i) =>
+                                i === index ? { ...item, checkNumber: e.target.value } : item,
+                              ),
+                            )
+                          }
+                        />
+                        <input
+                          placeholder="بانک"
+                          value={check.bank}
+                          onChange={(e) =>
+                            setChecksDraft((all) =>
+                              all.map((item, i) =>
+                                i === index ? { ...item, bank: e.target.value } : item,
+                              ),
+                            )
+                          }
+                        />
+                        <input
+                          placeholder="شعبه"
+                          value={check.branch}
+                          onChange={(e) =>
+                            setChecksDraft((all) =>
+                              all.map((item, i) =>
+                                i === index ? { ...item, branch: e.target.value } : item,
+                              ),
+                            )
+                          }
+                        />
+                        <JalaliDateInput
+                          value={check.dueDate}
+                          onChange={(value) =>
+                            setChecksDraft((all) =>
+                              all.map((item, i) =>
+                                i === index ? { ...item, dueDate: value } : item,
+                              ),
+                            )
+                          }
+                        />
+                        <FaNumberInput
+                          className="money-in"
+                          placeholder="مبلغ چک"
+                          value={check.amount}
+                          onChange={(plain) =>
+                            setChecksDraft((all) =>
+                              all.map((item, i) =>
+                                i === index ? { ...item, amount: plain } : item,
+                              ),
+                            )
+                          }
+                        />
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      className="outline"
+                      onClick={() =>
+                        setChecksDraft((all) => [
+                          ...all,
+                          { checkNumber: '', bank: '', branch: '', dueDate: '', amount: '' },
+                        ])
+                      }
+                    >
+                      + افزودن چک
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
             <footer className="pay-modal-f">
@@ -1356,7 +1593,7 @@ export function InvoicesPage({
                   <code>{formatPersianNumber(invoice.number)}</code>
                   <span>{invoice.customerName ?? 'مشتری حضوری'}</span>
                   <span>
-                    {persianNumber(invoice.items.length)}
+                    {persianNumber(invoice.itemCount ?? invoice.items?.length ?? 0)}
                     {returned > 0 && <small className="chip warn">برگشتی {money(returned)}</small>}
                   </span>
                   <strong>{money(net(invoice))}</strong>
@@ -1533,7 +1770,7 @@ export function InvoicesPage({
               </div>
 
               <div className="invoice-detail-items">
-                {viewing.items.map((item) => {
+                {(viewing.items ?? []).map((item) => {
                   const returnedQty = item.returnedQuantity ?? 0;
                   const remaining = lineRemaining(item.quantity, returnedQty);
                   return (
@@ -1567,7 +1804,9 @@ export function InvoicesPage({
                 <div className="returns-history">
                   <h3>تاریخچهٔ برگشتی‌ها</h3>
                   {viewing.returns.map((record) => {
-                    const line = viewing.items.find((item) => item.id === record.invoiceItemId);
+                    const line = (viewing.items ?? []).find(
+                      (item) => item.id === record.invoiceItemId,
+                    );
                     return (
                       <div key={record.id}>
                         <b>{line?.productName ?? '—'}</b>

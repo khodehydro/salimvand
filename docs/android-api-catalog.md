@@ -215,7 +215,11 @@ POST /sync/operations
 GET /sync/bootstrap
 ```
 
-از فیلد `data.locations` استفاده شود. در هر Location این اطلاعات موجود است:
+از فیلد `data.locations` استفاده شود. علاوه بر آن، bootstrap این بخش‌ها را برمی‌گرداند: `categories`،
+`brands`، `products` (با `imageUrl`)، `inventory` و **`customers`** — ۱۰۰ مشتری اخیر با آدرس/توضیحات
+(همان شکل payload سمت pull) تا picker مشتری در اولین لاگین بدون درخواست اضافه پر شود.
+
+در هر Location این اطلاعات موجود است:
 
 ```text
 id
@@ -303,8 +307,12 @@ POST /sync/operations
 ### فهرست فاکتورها
 
 ```http
-GET /invoices
+GET /invoices?cursor=<nextCursor>&limit=100
 ```
+
+فقط پنل وب — endpoint پنل است و صفحه‌بندی cursor-based دارد (ردیف‌ها خلاصه‌اند: `itemCount`،
+`returnedTotal`، `netTotal`؛ اقلام و مرجوعی‌ها از `GET /invoices/{id}`). **اندروید از این endpoint
+استفاده نمی‌کند** — فهرست/جزئیات فاکتور اندروید از sync pull می‌آید.
 
 ### ایجاد فاکتور Offline یا Online
 

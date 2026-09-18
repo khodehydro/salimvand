@@ -22,43 +22,80 @@ export class InventoryService {
   constructor(private readonly prisma: PrismaService) {}
 
   async summary() {
-    const items = await this.prisma.inventoryItem.findMany({
-      where: { isActive: true, product: { deletedAt: null } },
-      select: { quantity: true, minStock: true, purchasePrice: true, salePrice: true },
-    });
-    const totals = items.reduce(
-      (result, item) => ({
-        quantity: result.quantity + BigInt(item.quantity),
-        purchaseValue: result.purchaseValue + BigInt(item.quantity) * item.purchasePrice,
-        saleValue: result.saleValue + BigInt(item.quantity) * item.salePrice,
-        lowStockCount: result.lowStockCount + (item.quantity <= (item.minStock ?? 0) ? 1 : 0),
-        outOfStockCount: result.outOfStockCount + (item.quantity <= 0 ? 1 : 0),
-      }),
-      { quantity: 0n, purchaseValue: 0n, saleValue: 0n, lowStockCount: 0, outOfStockCount: 0 },
-    );
+    // One SQL aggregate instead of pulling every row into memory — with tens
+    // of thousands of items the old reduce blocked the event loop.
+    const [row] = await this.prisma.$queryRaw<
+      {
+        itemCount: number;
+        totalQuantity: bigint;
+        purchaseValue: bigint;
+        saleValue: bigint;
+        lowStockCount: number;
+        outOfStockCount: number;
+      }[]
+    >`
+      SELECT COUNT(*)::int AS "itemCount",
+             COALESCE(SUM(i.quantity), 0)::bigint AS "totalQuantity",
+             COALESCE(SUM(i.quantity * i."purchasePrice"), 0)::bigint AS "purchaseValue",
+             COALESCE(SUM(i.quantity * i."salePrice"), 0)::bigint AS "saleValue",
+             COALESCE(SUM(CASE WHEN i.quantity <= COALESCE(i."minStock", 0) THEN 1 ELSE 0 END), 0)::int AS "lowStockCount",
+             COALESCE(SUM(CASE WHEN i.quantity <= 0 THEN 1 ELSE 0 END), 0)::int AS "outOfStockCount"
+      FROM "inventory_items" i
+      JOIN "products" p ON p.id = i."productId"
+      WHERE i."isActive" = true AND p."deletedAt" IS NULL`;
     return {
       ok: true,
       data: {
-        itemCount: items.length,
-        totalQuantity: totals.quantity.toString(),
-        purchaseValue: totals.purchaseValue.toString(),
-        saleValue: totals.saleValue.toString(),
-        lowStockCount: totals.lowStockCount,
-        outOfStockCount: totals.outOfStockCount,
+        itemCount: row?.itemCount ?? 0,
+        totalQuantity: (row?.totalQuantity ?? 0n).toString(),
+        purchaseValue: (row?.purchaseValue ?? 0n).toString(),
+        saleValue: (row?.saleValue ?? 0n).toString(),
+        lowStockCount: row?.lowStockCount ?? 0,
+        outOfStockCount: row?.outOfStockCount ?? 0,
       },
     };
   }
 
   async list(
-    filters: { q?: string; brandId?: string; locationId?: string; status?: 'low' | 'out' } = {},
+    filters: {
+      q?: string;
+      brandId?: string;
+      locationId?: string;
+      status?: 'low' | 'out';
+      cursor?: string;
+      limit?: string;
+    } = {},
   ) {
     const q = filters.q?.trim();
+    const limit = Math.min(500, Math.max(1, Number(filters.limit ?? 200) || 200));
+    // Prisma cannot compare two columns (quantity <= minStock), so the status
+    // views are pre-filtered in SQL: the raw id universe replaces the old
+    // fetch-everything-then-filter-in-JS pass.
+    const statusUniverse =
+      filters.status === 'low' || filters.status === 'out'
+        ? await this.prisma.$queryRaw<Array<{ id: string }>>`
+            SELECT i.id FROM "inventory_items" i
+            JOIN "products" p ON p.id = i."productId"
+            WHERE i."isActive" = true
+              AND p."deletedAt" IS NULL
+              AND i.quantity ${filters.status === 'out' ? Prisma.sql`<= 0` : Prisma.sql`<= COALESCE(i."minStock", 0)`}`
+        : null;
     const items = await this.prisma.inventoryItem.findMany({
       where: {
         isActive: true,
         product: { deletedAt: null },
         ...(filters.brandId ? { brandId: filters.brandId } : {}),
         ...(filters.locationId ? { locationId: filters.locationId } : {}),
+        ...(statusUniverse
+          ? {
+              id: {
+                in: statusUniverse.map((row) => row.id),
+                ...(filters.cursor ? { lt: filters.cursor } : {}),
+              },
+            }
+          : filters.cursor
+            ? { id: { lt: filters.cursor } }
+            : {}),
         // Live panel search matches barcode, product name, product code and
         // brand name — one input, no button to press.
         ...(q
@@ -73,6 +110,7 @@ export class InventoryService {
           : {}),
       },
       orderBy: { id: 'desc' },
+      take: limit + 1,
       include: {
         brand: true,
         // parent = the warehouse (انبار) of the shelf — the panel always
@@ -90,13 +128,14 @@ export class InventoryService {
         },
       },
     });
-    const filtered =
-      filters.status === 'out'
-        ? items.filter((item) => item.quantity <= 0)
-        : filters.status === 'low'
-          ? items.filter((item) => item.quantity <= (item.minStock ?? 0))
-          : items;
-    return { ok: true, data: filtered };
+    const hasMore = items.length > limit;
+    const page = hasMore ? items.slice(0, limit) : items;
+    return {
+      ok: true,
+      data: page,
+      hasMore,
+      nextCursor: hasMore && page.length ? page[page.length - 1].id : null,
+    };
   }
 
   /** Label-ready rows for the panel's product-label studio (برچسب محصولات):
@@ -482,9 +521,15 @@ export class InventoryService {
   }
 
   async lowStock() {
+    // The low-stock condition (quantity <= COALESCE(minStock, 0)) runs in SQL —
+    // the old version pulled the whole table and filtered in JavaScript.
+    const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM "inventory_items"
+      WHERE "isActive" = true AND quantity <= COALESCE("minStock", 0)
+      ORDER BY quantity ASC, id ASC`;
+    if (!rows.length) return { ok: true, data: [] };
     const items = await this.prisma.inventoryItem.findMany({
-      where: { isActive: true },
-      orderBy: { quantity: 'asc' },
+      where: { id: { in: rows.map((row) => row.id) } },
       // Same shape as list() so the panel can render low-stock rows with the
       // identical rich cards.
       include: {
@@ -499,13 +544,11 @@ export class InventoryService {
         },
       },
     });
-    return {
-      ok: true,
-      data: items.filter(
-        (item: { quantity: number; minStock: number | null }) =>
-          item.quantity <= (item.minStock ?? 0),
-      ),
-    };
+    const byId = new Map(items.map((item) => [item.id, item]));
+    const ordered = rows
+      .map((row) => byId.get(row.id))
+      .filter((item): item is (typeof items)[number] => Boolean(item));
+    return { ok: true, data: ordered };
   }
 
   async byBarcode(barcode: string) {

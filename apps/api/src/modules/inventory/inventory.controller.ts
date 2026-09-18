@@ -37,8 +37,10 @@ export class InventoryController {
     @Query('brandId') brandId?: string,
     @Query('locationId') locationId?: string,
     @Query('status') status?: 'low' | 'out',
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
   ) {
-    return this.inventory.list({ q, brandId, locationId, status });
+    return this.inventory.list({ q, brandId, locationId, status, cursor, limit });
   }
   /** Flat label rows for the product-label studio page (برچسب محصولات). */
   @Get('labels') @Roles('warehouse', 'accountant') labels(@Query('q') q?: string) {

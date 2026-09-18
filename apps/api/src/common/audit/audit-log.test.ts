@@ -14,7 +14,18 @@ function makeTx() {
   const changeRows: ChangeRow[] = [];
   const tx = {
     auditLog: { create: vi.fn(async ({ data }: { data: unknown }) => auditRows.push(data)) },
-    syncChange: { create: vi.fn(async ({ data }: { data: ChangeRow }) => changeRows.push(data)) },
+    syncChange: {
+      create: vi.fn(async ({ data }: { data: ChangeRow }) => changeRows.push(data)),
+      // Compaction: one live row per entity — the previous row is dropped.
+      deleteMany: vi.fn(async ({ where }: { where: { entityType: string; entityId: string } }) => {
+        for (let index = changeRows.length - 1; index >= 0; index -= 1)
+          if (
+            changeRows[index].entityType === where.entityType &&
+            changeRows[index].entityId === where.entityId
+          )
+            changeRows.splice(index, 1);
+      }),
+    },
   };
   return { tx, auditRows, changeRows };
 }
@@ -95,5 +106,39 @@ describe('writeAudit sync publication', () => {
     await expect(
       writeSyncChange({} as never, { entityType: 'product', entityId: 'p1', action: 'created' }),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe('writeSyncChange compaction', () => {
+  it('replaces the previous row so each entity keeps at most one live change', async () => {
+    const { tx, changeRows } = makeTx();
+    await writeSyncChange(tx as never, {
+      entityType: 'inventory_item',
+      entityId: 'i1',
+      action: 'updated',
+      payload: { id: 'i1', quantity: 3 },
+    });
+    await writeSyncChange(tx as never, {
+      entityType: 'inventory_item',
+      entityId: 'i1',
+      action: 'updated',
+      payload: { id: 'i1', quantity: 5 },
+    });
+    await writeSyncChange(tx as never, {
+      entityType: 'invoice',
+      entityId: 'inv-1',
+      action: 'updated',
+      payload: { id: 'inv-1' },
+    });
+    // The table stays proportional to the entity count — not the mutation
+    // count — while every entity's latest state stays pullable.
+    expect(changeRows).toHaveLength(2);
+    expect(changeRows.find((row) => row.entityId === 'i1')?.payload).toEqual({
+      id: 'i1',
+      quantity: 5,
+    });
+    expect(tx.syncChange.deleteMany).toHaveBeenCalledWith({
+      where: { entityType: 'inventory_item', entityId: 'i1' },
+    });
   });
 });

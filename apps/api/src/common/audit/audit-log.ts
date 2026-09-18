@@ -84,15 +84,29 @@ export async function writeAudit(tx: Prisma.TransactionClient, input: AuditInput
 }
 
 /** Writes a SyncChange row directly (no audit-log entry) — for bulk mutations
- * that would flood the audit trail with hundreds of identical rows. */
+ * that would flood the audit trail with hundreds of identical rows.
+ *
+ * Compaction: every entity keeps at most ONE live change row. The previous
+ * row is replaced by the new one, which always carries a higher revision —
+ * so any device, however far behind, still pulls the entity's latest state
+ * and the append-only table stays proportional to the entity count instead
+ * of growing with every mutation forever. */
 export async function writeSyncChange(
   tx: Prisma.TransactionClient,
   input: SyncChangeInput,
 ): Promise<void> {
   const syncChange = (
-    tx as unknown as { syncChange?: { create?: (args: unknown) => Promise<unknown> } }
+    tx as unknown as {
+      syncChange?: {
+        create?: (args: unknown) => Promise<unknown>;
+        deleteMany?: (args: unknown) => Promise<unknown>;
+      };
+    }
   ).syncChange;
   if (!syncChange?.create) return;
+  await syncChange.deleteMany?.({
+    where: { entityType: input.entityType, entityId: input.entityId },
+  });
   const payload =
     input.payload === undefined ? undefined : (jsonSafe(input.payload) as Prisma.InputJsonValue);
   await syncChange.create({

@@ -1374,9 +1374,40 @@ export class InvoiceService {
     return execute(query, ...values);
   }
 
-  async list() {
+  /** Cursor for the paginated invoice archive: `<issuedAtISO>|<id>`. The id
+   * tie-breaker keeps the keyset stable when two invoices share a millisecond
+   * (offline batch replays do that). */
+  private parseListCursor(cursor?: string): { issuedAt: Date; id: string } | null {
+    if (!cursor) return null;
+    const separator = cursor.indexOf('|');
+    if (separator <= 0) throw new BadRequestException('کرسر فهرست فاکتورها نامعتبر است');
+    const issuedAt = new Date(cursor.slice(0, separator));
+    const id = cursor.slice(separator + 1);
+    if (!id || Number.isNaN(issuedAt.getTime()))
+      throw new BadRequestException('کرسر فهرست فاکتورها نامعتبر است');
+    return { issuedAt, id };
+  }
+
+  /** Paginated archive for the panel. Rows are summaries — items and returns
+   * do not travel with the list (thousands of invoices made this response
+   * megabytes); the detail endpoint serves them one invoice at a time. */
+  async list(cursor?: string, limitValue?: string) {
+    const limit = Math.min(500, Math.max(1, Number(limitValue ?? 100) || 100));
+    const keyset = this.parseListCursor(cursor);
     const rows = await this.prisma.invoice.findMany({
-      orderBy: { issuedAt: 'desc' },
+      ...(keyset
+        ? {
+            where: {
+              OR: [
+                { issuedAt: { lt: keyset.issuedAt } },
+                { issuedAt: keyset.issuedAt, id: { lt: keyset.id } },
+              ],
+            },
+          }
+        : {}),
+      orderBy: [{ issuedAt: 'desc' }, { id: 'desc' }],
+      // One extra row only tells us whether another page exists.
+      take: limit + 1,
       select: {
         id: true,
         number: true,
@@ -1395,55 +1426,47 @@ export class InvoiceService {
         issuedAt: true,
         voidedAt: true,
         publicTokenExpiresAt: true,
-        items: {
-          select: {
-            id: true,
-            productName: true,
-            quantity: true,
-            unitPrice: true,
-            lineTotal: true,
-            inventoryItem: { select: { brand: { select: { name: true } } } },
-          },
-        },
-        returns: {
-          orderBy: { createdAt: 'desc' },
-          select: {
-            id: true,
-            invoiceItemId: true,
-            quantity: true,
-            refundAmount: true,
-            reason: true,
-            restock: true,
-            createdAt: true,
-          },
-        },
       },
     });
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    const ids = page.map((row) => row.id);
+    // Two grouped queries instead of per-invoice item/return joins.
+    const [itemCounts, returnTotals] = ids.length
+      ? await Promise.all([
+          this.prisma.invoiceItem.groupBy({
+            by: ['invoiceId'],
+            where: { invoiceId: { in: ids } },
+            _count: { _all: true },
+          }),
+          this.prisma.returnRecord.groupBy({
+            by: ['invoiceId'],
+            where: { invoiceId: { in: ids } },
+            _sum: { refundAmount: true },
+          }),
+        ])
+      : [[], []];
+    const itemCountById = new Map(itemCounts.map((row) => [row.invoiceId, row._count._all]));
+    const returnedById = new Map(returnTotals.map((row) => [row.invoiceId, row._sum.refundAmount]));
     // Never surface the token hashes — the raw public link is only ever handed
     // out once at issue time or through the audited rotate endpoint. Net
     // amounts after partial returns are computed here so the panel and the
     // debt views always show what the customer effectively owes.
+    const data = page.map((row) => {
+      const returnedTotal = returnedById.get(row.id) ?? 0n;
+      return {
+        ...row,
+        itemCount: itemCountById.get(row.id) ?? 0,
+        returnedTotal,
+        netTotal: row.total - returnedTotal,
+      };
+    });
+    const last = page[page.length - 1];
     return {
       ok: true,
-      data: rows.map((row) => {
-        const rowReturns = row.returns ?? [];
-        const { returnedTotal, netTotal } = netInvoiceTotals(row.total, rowReturns);
-        const returnedPerLine = new Map<string, number>();
-        for (const record of rowReturns)
-          returnedPerLine.set(
-            record.invoiceItemId,
-            (returnedPerLine.get(record.invoiceItemId) ?? 0) + record.quantity,
-          );
-        return {
-          ...row,
-          returnedTotal,
-          netTotal,
-          items: row.items.map((item) => ({
-            ...item,
-            returnedQuantity: returnedPerLine.get(item.id) ?? 0,
-          })),
-        };
-      }),
+      data,
+      hasMore,
+      nextCursor: hasMore && last ? `${last.issuedAt.toISOString()}|${last.id}` : null,
     };
   }
 

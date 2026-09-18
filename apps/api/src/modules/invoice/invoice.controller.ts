@@ -38,8 +38,8 @@ export class InvoiceController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('seller', 'accountant')
   @Get()
-  list() {
-    return this.invoices.list();
+  list(@Query('cursor') cursor?: string, @Query('limit') limit?: string) {
+    return this.invoices.list(cursor, limit);
   }
 
   // Static segments are declared before the `:id` param routes: NestJS matches
