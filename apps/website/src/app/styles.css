@@ -1306,15 +1306,22 @@ p {
 }
 .inv-contact-btn small {
   font-size: 10.5px;
-  opacity: 0.85;
 }
+/* Call mirrors the site's quick-call bar (navy), navigation is green like
+ * the site's «مسیریابی سریع» link. */
 .inv-contact-btn.call {
+  background: var(--navy);
+  color: var(--on-brand);
+}
+.inv-contact-btn.call small {
+  color: var(--brand-200);
+}
+.inv-contact-btn.nav {
   background: var(--ok);
   color: #fff;
 }
-.inv-contact-btn.nav {
-  background: var(--brand-900);
-  color: #fff;
+.inv-contact-btn.nav small {
+  color: rgba(255, 255, 255, 0.85);
 }
 .invoice-empty {
   text-align: center;

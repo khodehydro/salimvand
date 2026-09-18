@@ -314,7 +314,7 @@ export async function InvoiceDocument({
           <div className="inv-contact-actions">
             {callHref && (
               <a className="inv-contact-btn call" href={callHref}>
-                <b>📞 تماس با فروشگاه</b>
+                <b>تماس با فروشگاه</b>
                 <small dir="ltr">{formatPersianNumber(dialable)}</small>
               </a>
             )}
@@ -325,7 +325,7 @@ export async function InvoiceDocument({
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                <b>🧭 مسیریابی سریع</b>
+                <b>مسیریابی سریع</b>
                 <small>مسیر تا فروشگاه با بلد</small>
               </a>
             )}
