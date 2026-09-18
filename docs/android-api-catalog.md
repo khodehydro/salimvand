@@ -300,6 +300,84 @@ transfer
 credit
 ```
 
+### مرجوعی کالا (شیت مرجوعی)
+
+مرجوعی **عمداً Online و مستقیم** ثبت می‌شود (در صف Sync آفلاین قرار نمی‌گیرد). برای شیت مرجوعی به‌جای
+`GET /invoices/{id}` (که نقش warehouse اجازهٔ دیدنش را ندارد) از endpoint محدود زیر استفاده کنید:
+
+```http
+GET /invoices/{invoiceId}/return-context
+```
+
+نقش‌ها: `manager`، `warehouse`، `accountant`. این پاسخ فقط دادهٔ لازم برای مرجوعی را دارد — بدون
+موبایل/آدرس مشتری و بدون تاریخچهٔ پرداخت‌ها:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "id": "invoice-id",
+    "number": "INV-1001",
+    "status": "issued",
+    "paymentStatus": "partial",
+    "total": "250000000",
+    "paidAmount": "100000000",
+    "returnedTotal": "10000000",
+    "netTotal": "240000000",
+    "items": [
+      {
+        "id": "invoice-item-id",
+        "productName": "لنت ترمز جلو",
+        "quantity": 4,
+        "unitPrice": "10000000",
+        "returnedQuantity": 1
+      }
+    ],
+    "returns": [
+      {
+        "id": "return-record-id",
+        "invoiceItemId": "invoice-item-id",
+        "quantity": 1,
+        "refundAmount": "10000000",
+        "reason": "ناسازگاری با خودرو",
+        "restock": true,
+        "createdAt": "2026-09-18T10:15:00.000Z"
+      }
+    ]
+  }
+}
+```
+
+`returnedQuantity` هر قلم = مجموع مرجوعی‌های ثبت‌شدهٔ همان ردیف؛ حداکثر قابل مرجوعی =
+`quantity - returnedQuantity`. پول‌ها رشتهٔ ریالی هستند.
+
+ثبت مرجوعی:
+
+```http
+POST /invoices/{invoiceId}/returns
+```
+
+نقش‌ها: `manager`، `warehouse`، `accountant`. بدنه:
+
+```json
+{
+  "invoiceItemId": "invoice-item-id",
+  "quantity": 2,
+  "reason": "ناسازگاری با خودرو",
+  "restock": true
+}
+```
+
+- `restock: true` → کالا سالم است: مبلغ از فاکتور کسر می‌شود و موجودی به انبار برمی‌گردد (ردیف ledger با `type=return`).
+- `restock: false` → ضایعات: فقط مبلغ کسر می‌شود، موجودی تغییر نمی‌کند.
+- مبلغ مرجوعی همیشه از **قیمت ثبت‌شده در ردیف فاکتور** محاسبه می‌شود (`quantity × unitPrice`)، نه قیمت روز.
+- بعد از هر مرجوعی، `netTotal = total - returnedTotal` و `paymentStatus` دوباره محاسبه می‌شود (اگر
+  مرجوعی ماندهٔ بدهی را پوشش دهد، فاکتور `paid` می‌شود).
+- فاکتور باطل‌شده (`voided`) و مرجوعی بیش از تعداد خریداری‌شده با خطای خوانا رد می‌شوند.
+- **هم‌زمانی ایمن است:** سرور قبل از بررسی سقف مرجوعی، ردیف فاکتور را با `FOR UPDATE` قفل می‌کند؛
+  دو درخواست هم‌زمان روی آخرین تعداد قابل مرجوعی فقط یکی‌شان موفق می‌شود (دومی ۴۰۰ می‌گیرد).
+  پس retry سمت کلاینت فقط بعد از پاسخ قطعی سرور انجام شود، نه به‌صورت blind retry.
+
 ## تب ۳: ایجاد محصول
 
 ### لیست و جزئیات

@@ -1048,6 +1048,7 @@ Endpointهای Invoice پنل وب:
 ```text
 GET    /api/v1/invoices
 GET    /api/v1/invoices/options
+GET    /api/v1/invoices/:id/return-context
 POST   /api/v1/invoices
 POST   /api/v1/invoices/:id/pay
 POST   /api/v1/invoices/:id/returns

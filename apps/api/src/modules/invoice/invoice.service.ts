@@ -923,6 +923,12 @@ export class InvoiceService {
     if (!userId || !input.invoiceItemId || !Number.isInteger(quantity) || quantity <= 0 || !reason)
       throw new BadRequestException('قلم، تعداد صحیح مثبت و دلیل مرجوعی الزامی است');
     return this.prisma.$transaction(async (tx) => {
+      // Concurrent returns of the same invoice must serialize: the row lock
+      // holds the second transaction until the first one commits, so the
+      // aggregate below sees the committed return and the over-return guard
+      // cannot be raced past (two "return the last item" requests can never
+      // both apply). Different invoices never block each other.
+      await tx.$queryRaw`SELECT id FROM "invoices" WHERE id = ${id} FOR UPDATE`;
       const invoice = await tx.invoice.findUnique({ where: { id }, include: { items: true } });
       if (!invoice || invoice.status === 'voided')
         throw new NotFoundException('فاکتور فعال پیدا نشد');
@@ -1019,6 +1025,83 @@ export class InvoiceService {
       });
       return { ok: true, data: { ...record, quantityAfter } };
     });
+  }
+
+  /** Everything the (mobile) return sheet needs for one invoice —
+   * deliberately narrower than get(): no customer PII (mobile, address,
+   * payments) so the warehouse role can pick a line, quantity, reason and
+   * restock mode without gaining access to sensitive invoice data. */
+  async returnContext(id: string) {
+    const [invoice, returnedAggregate, perLine] = await Promise.all([
+      this.prisma.invoice.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          number: true,
+          status: true,
+          paymentStatus: true,
+          total: true,
+          paidAmount: true,
+          items: { select: { id: true, productName: true, quantity: true, unitPrice: true } },
+          returns: {
+            select: {
+              id: true,
+              invoiceItemId: true,
+              quantity: true,
+              refundAmount: true,
+              reason: true,
+              restock: true,
+              createdAt: true,
+            },
+            orderBy: { createdAt: 'desc' },
+          },
+        },
+      }),
+      this.prisma.returnRecord.aggregate({
+        where: { invoiceId: id },
+        _sum: { refundAmount: true },
+      }),
+      this.prisma.returnRecord.groupBy({
+        by: ['invoiceItemId'],
+        where: { invoiceId: id },
+        _sum: { quantity: true },
+      }),
+    ]);
+    if (!invoice) throw new NotFoundException('فاکتور پیدا نشد');
+    const returnedTotal = returnedAggregate._sum.refundAmount ?? 0n;
+    const returnedByLine = new Map(
+      perLine.map((row) => [row.invoiceItemId, row._sum.quantity ?? 0]),
+    );
+    return {
+      ok: true,
+      data: {
+        id: invoice.id,
+        number: invoice.number,
+        status: invoice.status,
+        paymentStatus: invoice.paymentStatus,
+        // Money stays string-exact in rials — same contract as the sync payloads.
+        total: invoice.total.toString(),
+        paidAmount: invoice.paidAmount.toString(),
+        returnedTotal: returnedTotal.toString(),
+        netTotal: (invoice.total - returnedTotal).toString(),
+        items: invoice.items.map((item) => ({
+          id: item.id,
+          productName: item.productName,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice.toString(),
+          returnedQuantity: returnedByLine.get(item.id) ?? 0,
+        })),
+        returns: invoice.returns.map((row) => ({
+          id: row.id,
+          invoiceItemId: row.invoiceItemId,
+          quantity: row.quantity,
+          refundAmount: row.refundAmount.toString(),
+          reason: row.reason,
+          restock: row.restock,
+          createdAt: row.createdAt.toISOString(),
+        })),
+      },
+    };
   }
 
   /** Editable store/customer contact block on an issued invoice. Empty store

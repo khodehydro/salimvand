@@ -85,6 +85,16 @@ export class InvoiceController {
     return this.invoices.rotateLink(id, request.user?.id ?? '', request.ip);
   }
 
+  // Declared BEFORE @Get(':id') — Nest matches in declaration order. This is
+  // the narrow read the mobile return sheet uses instead of the full invoice
+  // detail: no customer PII and no payments, so warehouse can process returns.
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('manager', 'warehouse', 'accountant')
+  @Get(':id/return-context')
+  returnContext(@Param('id') id: string) {
+    return this.invoices.returnContext(id);
+  }
+
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('seller', 'accountant')
   @Get(':id')

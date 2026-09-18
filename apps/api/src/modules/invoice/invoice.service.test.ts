@@ -153,6 +153,8 @@ describe('InvoiceService', () => {
   it('rejects a payment that would exceed the invoice total', async () => {
     const update = vi.fn();
     const tx = {
+      // Row lock taken by returnItems before the over-return aggregate.
+      $queryRaw: vi.fn(async () => [{ id: 'invoice-1' }]),
       invoice: {
         findUnique: vi.fn(async () => ({
           id: 'invoice-1',
@@ -185,6 +187,8 @@ describe('InvoiceService', () => {
     }));
     const paymentCreate = vi.fn(async () => ({}));
     const tx = {
+      // Row lock taken by returnItems before the over-return aggregate.
+      $queryRaw: vi.fn(async () => [{ id: 'invoice-1' }]),
       invoice: {
         findUnique: vi.fn(async () => ({
           id: 'invoice-1',
@@ -233,6 +237,8 @@ describe('InvoiceService', () => {
 
   it('rejects a return greater than the purchased quantity', async () => {
     const tx = {
+      // Row lock taken by returnItems before the over-return aggregate.
+      $queryRaw: vi.fn(async () => [{ id: 'invoice-1' }]),
       invoice: {
         findUnique: vi.fn(async () => ({
           status: 'issued',
@@ -262,6 +268,8 @@ describe('InvoiceService', () => {
     const returnCreate = vi.fn(async () => ({ id: 'return-1', quantity: 1, refundAmount: 100n }));
     const invoiceUpdate = vi.fn();
     const tx = {
+      // Row lock taken by returnItems before the over-return aggregate.
+      $queryRaw: vi.fn(async () => [{ id: 'invoice-1' }]),
       invoice: {
         findUnique: vi.fn(async () => ({
           id: 'invoice-1',
@@ -300,6 +308,72 @@ describe('InvoiceService', () => {
     expect(invoiceUpdate).not.toHaveBeenCalled();
   });
 
+  it('locks the invoice row before reading previous returns (race safety)', async () => {
+    const queryRaw = vi.fn(async () => [{ id: 'invoice-1' }]);
+    const aggregate = vi.fn(async () => ({ _sum: { quantity: 0, refundAmount: 0n } }));
+    const tx = {
+      $queryRaw: queryRaw,
+      invoice: {
+        findUnique: vi.fn(async () => ({
+          id: 'invoice-1',
+          status: 'issued',
+          total: 200n,
+          paidAmount: 0n,
+          paymentStatus: 'unpaid',
+          paidAt: null,
+          items: [{ id: 'line-1', quantity: 2, unitPrice: 100n, inventoryItemId: 'item-1' }],
+        })),
+        update: vi.fn(),
+      },
+      returnRecord: { aggregate, create: vi.fn(async () => ({ id: 'return-9' })) },
+      inventoryItem: { update: vi.fn(async () => ({ quantity: 6 })) },
+      inventoryTransaction: { create: vi.fn() },
+    };
+    const prisma = {
+      $transaction: vi.fn(async (callback: (client: typeof tx) => Promise<unknown>) =>
+        callback(tx),
+      ),
+    };
+    await new InvoiceService(prisma as never).returnItems(
+      'invoice-1',
+      { invoiceItemId: 'line-1', quantity: 1, reason: 'تعویض' },
+      'user-1',
+    );
+    // The FOR UPDATE row lock is the first statement of the transaction, so a
+    // concurrent return of the same invoice waits and then sees this one's
+    // rows in its aggregate — two "return the last item" requests can never
+    // both apply.
+    const call = queryRaw.mock.calls[0] as unknown as [TemplateStringsArray, string];
+    expect(String(call[0])).toContain('FOR UPDATE');
+    // One parameterized id: the template has a string before and after it.
+    expect(call[0]).toHaveLength(2);
+    expect(call[1]).toBe('invoice-1');
+    expect(aggregate.mock.invocationCallOrder[0]).toBeGreaterThan(
+      queryRaw.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('rejects a return on a voided invoice', async () => {
+    const tx = {
+      $queryRaw: vi.fn(async () => [{ id: 'invoice-1' }]),
+      invoice: { findUnique: vi.fn(async () => ({ status: 'voided', items: [] })) },
+      returnRecord: { aggregate: vi.fn(), create: vi.fn() },
+    };
+    const prisma = {
+      $transaction: vi.fn(async (callback: (client: typeof tx) => Promise<unknown>) =>
+        callback(tx),
+      ),
+    };
+    await expect(
+      new InvoiceService(prisma as never).returnItems(
+        'invoice-1',
+        { invoiceItemId: 'line-1', quantity: 1, reason: 'تعویض' },
+        'user-1',
+      ),
+    ).rejects.toThrow('فاکتور فعال پیدا نشد');
+    expect(tx.returnRecord.create).not.toHaveBeenCalled();
+  });
+
   it('settles the payment status when a return covers the remaining debt', async () => {
     const invoiceUpdate = vi.fn(async () => ({ id: 'invoice-1' }));
     const returnCreate = vi.fn(async () => ({ id: 'return-3', quantity: 1, refundAmount: 100n }));
@@ -310,6 +384,8 @@ describe('InvoiceService', () => {
       .mockResolvedValueOnce({ _sum: { quantity: 0, refundAmount: 0n } })
       .mockResolvedValueOnce({ _sum: { quantity: 1, refundAmount: 100n } });
     const tx = {
+      // Row lock taken by returnItems before the over-return aggregate.
+      $queryRaw: vi.fn(async () => [{ id: 'invoice-1' }]),
       invoice: {
         findUnique: vi.fn(async () => ({
           id: 'invoice-1',
@@ -398,6 +474,8 @@ describe('InvoiceService', () => {
   it('caps new payments at the net amount after returns', async () => {
     const update = vi.fn();
     const tx = {
+      // Row lock taken by returnItems before the over-return aggregate.
+      $queryRaw: vi.fn(async () => [{ id: 'invoice-1' }]),
       invoice: {
         findUnique: vi.fn(async () => ({
           id: 'invoice-1',
@@ -428,6 +506,8 @@ describe('InvoiceService', () => {
     const inventoryUpdate = vi.fn();
     const returnCreate = vi.fn(async () => ({ id: 'return-2', quantity: 1, refundAmount: 100n }));
     const tx = {
+      // Row lock taken by returnItems before the over-return aggregate.
+      $queryRaw: vi.fn(async () => [{ id: 'invoice-1' }]),
       invoice: {
         findUnique: vi.fn(async () => ({
           id: 'invoice-1',
@@ -861,5 +941,113 @@ describe('InvoiceService.list and panel link/pdf actions', () => {
     expect(drawnText).toContain('۰۴۱-۱۲۳۴۵۶۷');
     // No ASCII digit runs survive in the drawn lines.
     expect(drawnText).not.toMatch(/\d{3,}/);
+  });
+});
+
+describe('InvoiceService.returnContext (mobile return sheet)', () => {
+  const createdAt = new Date('2026-09-18T10:15:00.000Z');
+  const invoiceRow = {
+    id: 'invoice-9',
+    number: 'INV-1001',
+    status: 'issued',
+    paymentStatus: 'partial',
+    total: 250000000n,
+    paidAmount: 100000000n,
+    items: [
+      { id: 'line-1', productName: 'لنت ترمز جلو', quantity: 4, unitPrice: 10000000n },
+      { id: 'line-2', productName: 'فیلتر روغن', quantity: 5, unitPrice: 30000000n },
+    ],
+    returns: [
+      {
+        id: 'ret-1',
+        invoiceItemId: 'line-1',
+        quantity: 1,
+        refundAmount: 10000000n,
+        reason: 'ناسازگاری با خودرو',
+        restock: true,
+        createdAt,
+      },
+    ],
+  };
+  const makePrisma = (
+    invoice: unknown,
+    aggregate = { _sum: { refundAmount: 10000000n } },
+    perLine = [{ invoiceItemId: 'line-1', _sum: { quantity: 1 } }],
+  ) => ({
+    invoice: { findUnique: vi.fn(async () => invoice) },
+    returnRecord: {
+      aggregate: vi.fn(async () => aggregate),
+      groupBy: vi.fn(async () => perLine),
+    },
+  });
+
+  it('returns the narrow return-sheet payload with net totals and per-line return counts', async () => {
+    const prisma = makePrisma(invoiceRow);
+    const result = await new InvoiceService(prisma as never).returnContext('invoice-9');
+    expect(result.ok).toBe(true);
+    expect(result.data).toEqual({
+      id: 'invoice-9',
+      number: 'INV-1001',
+      status: 'issued',
+      paymentStatus: 'partial',
+      total: '250000000',
+      paidAmount: '100000000',
+      returnedTotal: '10000000',
+      netTotal: '240000000',
+      items: [
+        {
+          id: 'line-1',
+          productName: 'لنت ترمز جلو',
+          quantity: 4,
+          unitPrice: '10000000',
+          returnedQuantity: 1,
+        },
+        {
+          id: 'line-2',
+          productName: 'فیلتر روغن',
+          quantity: 5,
+          unitPrice: '30000000',
+          returnedQuantity: 0,
+        },
+      ],
+      returns: [
+        {
+          id: 'ret-1',
+          invoiceItemId: 'line-1',
+          quantity: 1,
+          refundAmount: '10000000',
+          reason: 'ناسازگاری با خودرو',
+          restock: true,
+          createdAt: createdAt.toISOString(),
+        },
+      ],
+    });
+    // The narrow read must never leak customer PII or payment history.
+    const serialized = JSON.stringify(result.data);
+    expect(serialized).not.toContain('customerMobile');
+    expect(serialized).not.toContain('customerAddress');
+    expect(serialized).not.toContain('customerName');
+    expect(serialized).not.toContain('payments');
+  });
+
+  it('treats an invoice without returns as zero returned', async () => {
+    const prisma = makePrisma(
+      { ...invoiceRow, returns: [] },
+      // Prisma returns null for SUM over zero rows.
+      { _sum: { refundAmount: null } } as unknown as { _sum: { refundAmount: bigint } },
+      [],
+    );
+    const result = await new InvoiceService(prisma as never).returnContext('invoice-9');
+    expect(result.data.returnedTotal).toBe('0');
+    expect(result.data.netTotal).toBe('250000000');
+    expect(result.data.items.every((item) => item.returnedQuantity === 0)).toBe(true);
+    expect(result.data.returns).toEqual([]);
+  });
+
+  it('404s for an unknown invoice', async () => {
+    const prisma = makePrisma(null);
+    await expect(new InvoiceService(prisma as never).returnContext('unknown')).rejects.toThrow(
+      'فاکتور پیدا نشد',
+    );
   });
 });

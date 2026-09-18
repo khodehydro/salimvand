@@ -18,6 +18,23 @@ describe('InvoiceController', () => {
     ]);
     expect(Reflect.getMetadata(ROLES_KEY, InvoiceController.prototype.create)).toEqual(['seller']);
     expect(Reflect.getMetadata(ROLES_KEY, InvoiceController.prototype.void)).toEqual(['manager']);
+    // The narrow return-sheet read mirrors the POST returns roles: warehouse
+    // may process returns without gaining access to the full invoice detail.
+    expect(Reflect.getMetadata(ROLES_KEY, InvoiceController.prototype.returnContext)).toEqual([
+      'manager',
+      'warehouse',
+      'accountant',
+    ]);
+  });
+
+  it('routes the narrow return-context read for the mobile return sheet', async () => {
+    const returnContext = vi.fn(async () => ({ ok: true, data: { id: 'invoice-1' } }));
+    const controller = new InvoiceController({ returnContext } as never);
+    await expect(controller.returnContext('invoice-1')).resolves.toEqual({
+      ok: true,
+      data: { id: 'invoice-1' },
+    });
+    expect(returnContext).toHaveBeenCalledWith('invoice-1');
   });
 
   it('routes invoice creation and payment to the service', async () => {
@@ -143,6 +160,9 @@ describe('invoice route ordering', () => {
     expect(position('options')).toBeGreaterThanOrEqual(0);
     expect(position(':id')).toBeGreaterThan(position('customers'));
     expect(position(':id')).toBeGreaterThan(position('options'));
+    // The narrow return-sheet read must also be declared before the :id route.
+    expect(position(':id/return-context')).toBeGreaterThanOrEqual(0);
+    expect(position(':id')).toBeGreaterThan(position(':id/return-context'));
     // Same guarantee for the public controller's static routes.
     const publicNames = Object.getOwnPropertyNames(PublicInvoiceController.prototype).filter(
       (name) => name !== 'constructor',
