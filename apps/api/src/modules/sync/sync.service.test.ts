@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { SyncService } from './sync.service';
 
 const USER_ID = 'user-1';
@@ -155,6 +156,68 @@ describe('SyncService.queueOperation', () => {
     const staleFor = Date.now() - (staleBefore as Date).getTime();
     expect(staleFor).toBeGreaterThanOrEqual(4_000);
     expect(staleFor).toBeLessThanOrEqual(6_000);
+  });
+
+  it('retries a failed operation instead of replaying the stale failure', async () => {
+    const { service, prisma, inventory } = makeService();
+    prisma.syncOperation.findUnique.mockResolvedValue({
+      ...OPERATION,
+      userId: USER_ID,
+      status: 'failed',
+      error: 'این برند قبلاً برای همین محصول ثبت شده است',
+      payload: OPERATION.payload,
+    });
+    inventory.receive.mockResolvedValue({ ok: true, data: { item: { id: 'i1' } } });
+    const result = await service.queueOperation(USER_ID, OPERATION);
+    expect(result.data).toMatchObject({
+      operationId: OPERATION.operationId,
+      status: 'applied',
+      duplicate: true,
+    });
+    expect(inventory.receive).toHaveBeenCalled();
+    // A failed claim is immediate (no 5s guard) and clears the stale outcome.
+    const claim = prisma.syncOperation.updateMany.mock.calls[0][0] as {
+      where: { status: string };
+      data: Record<string, unknown>;
+    };
+    expect(claim.where.status).toBe('failed');
+    // Prisma.JsonNull is the typed null for the Json result column.
+    expect(claim.data).toMatchObject({ status: 'pending', error: null, result: Prisma.JsonNull });
+  });
+
+  it('replays a terminal conflict with its recorded error and no side effects', async () => {
+    const { service, prisma, inventory } = makeService();
+    prisma.syncOperation.findUnique.mockResolvedValue({
+      ...OPERATION,
+      userId: USER_ID,
+      status: 'conflict',
+      error: 'موجودی کافی نیست',
+      result: null,
+      payload: OPERATION.payload,
+    });
+    const result = await service.queueOperation(USER_ID, OPERATION);
+    expect(result.data).toMatchObject({
+      status: 'conflict',
+      duplicate: true,
+      error: 'موجودی کافی نیست',
+    });
+    expect(inventory.receive).not.toHaveBeenCalled();
+    expect(prisma.syncOperation.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('answers with the stale status and error when the claim is not won', async () => {
+    const { service, prisma } = makeService();
+    prisma.syncOperation.findUnique.mockResolvedValue({
+      ...OPERATION,
+      userId: USER_ID,
+      status: 'pending',
+      payload: OPERATION.payload,
+    });
+    // Another worker holds the attempt (0 rows matched the claim).
+    prisma.syncOperation.updateMany.mockResolvedValue({ count: 0 });
+    const result = await service.queueOperation(USER_ID, OPERATION);
+    expect(result.data).toMatchObject({ status: 'pending', duplicate: true });
+    expect(result.data.error).toBeUndefined();
   });
 
   it('keeps a duplicate applied operation read-only', async () => {

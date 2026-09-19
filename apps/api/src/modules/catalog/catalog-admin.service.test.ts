@@ -409,6 +409,42 @@ describe('atomic product + inventory creation (mobile contract)', () => {
     ).rejects.toThrow('ساختار قلم موجودی شمارهٔ 1 نامعتبر است');
   });
 
+  it('does not burn a product code when a replay hits the idempotency branch', async () => {
+    const { service, prisma } = makeService();
+    prisma.productOperation.findUnique.mockResolvedValue({
+      operationId: 'android-op-replay-0001',
+      productId: PRODUCT_ID,
+      type: 'product.create',
+    });
+    prisma.product.findUniqueOrThrow.mockResolvedValue({ id: PRODUCT_ID, name: 'لنت' });
+    prisma.inventoryOperation.findMany.mockResolvedValue([
+      { operationId: 'android-op-replay-0001', itemId: ITEM_ID, type: 'product.create' },
+    ]);
+    prisma.inventoryItem.findMany.mockResolvedValue([INVENTORY_ITEM]);
+    await service.create(
+      { name: 'لنت', categoryId: CATEGORY_ID, inventory: { salePrice: '100' } },
+      'user-1',
+      undefined,
+      'android-op-replay-0001',
+    );
+    // The counter lives inside the transaction, after the replay check: a
+    // retry must neither increment it nor mint a second code.
+    expect(prisma.counter.upsert).not.toHaveBeenCalled();
+    expect(prisma.product.create).not.toHaveBeenCalled();
+  });
+
+  it('increments the product code counter on the create transaction itself', async () => {
+    const { service, prisma } = makeService();
+    prisma.product.create.mockResolvedValue({ id: PRODUCT_ID, name: 'لنت' });
+    await service.create({ name: 'لنت', categoryId: CATEGORY_ID }, 'user-1');
+    const call = prisma.counter.upsert.mock.calls[0]?.[0] as {
+      where: { key: string };
+      update: Record<string, unknown>;
+    };
+    expect(call.where.key).toBe('product');
+    expect(call.update).toEqual({ lastValue: { increment: 1 } });
+  });
+
   it('is idempotent per operationId: a retried product.create replays the stored result', async () => {
     const { service, prisma } = makeService();
     prisma.product.create.mockResolvedValue({ id: PRODUCT_ID, name: 'لنت' });

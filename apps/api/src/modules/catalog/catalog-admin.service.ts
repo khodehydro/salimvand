@@ -165,13 +165,17 @@ export class CatalogAdminService {
         throw new BadRequestException('هر برند برای یک محصول فقط یک قلم می‌تواند داشته باشد');
       brandKeys.add(key);
     }
-    const code = await this.nextCode('product');
     const seo = buildProductSeo({ name, slug: this.optionalString(input.slug) ?? undefined });
     const createProduct = async (tx: Prisma.TransactionClient | typeof this.prisma) => {
       if (operationId) {
         const previous = await tx.productOperation.findUnique({ where: { operationId } });
         if (previous) return this.loadCreateResult(tx, previous.productId, operationId);
       }
+      // The code counter is incremented INSIDE this transaction: a rollback
+      // now undoes the increment too, so a failed attempt never burns (or
+      // collides on) a product code, and a replayed operation — which returns
+      // above — never takes a new one.
+      const code = await this.nextCodeInTx(tx, 'product');
       // Reference integrity is checked explicitly (not left to the database
       // FK error) so a mobile payload with a stale categoryId/brandId gets a
       // readable 400 instead of a 500 — and nothing is written at all before
@@ -777,8 +781,15 @@ export class CatalogAdminService {
     return BigInt(text);
   }
 
-  private async nextCode(prefix: string) {
-    const counter = await this.prisma.counter.upsert({
+  private nextCode(prefix: string) {
+    return this.nextCodeInTx(this.prisma, prefix);
+  }
+
+  /** Same as nextCode, but on the caller's transaction — the counter
+   * increment commits (or rolls back) atomically with the row that consumes
+   * the code, so retries can never diverge from the counter. */
+  private async nextCodeInTx(tx: Prisma.TransactionClient | typeof this.prisma, prefix: string) {
+    const counter = await tx.counter.upsert({
       where: { key: prefix },
       update: { lastValue: { increment: 1 } },
       create: { key: prefix, lastValue: 1 },

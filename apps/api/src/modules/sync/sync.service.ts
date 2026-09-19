@@ -6,7 +6,7 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, SyncOperationStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
 import { InventoryService } from '../inventory/inventory.service';
 import { CatalogAdminService } from '../catalog/catalog-admin.service';
@@ -260,14 +260,27 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
     if (existing) {
       if (existing.userId !== userId || existing.deviceId !== normalizedInput.deviceId)
         throw new ConflictException('شناسه عملیات متعلق به دستگاه دیگری است');
+      // Terminal states are read-only replays: the client gets the recorded
+      // outcome — error included — without re-running any side effects
+      // (a conflict stays terminal until resolved through its endpoints).
+      if (existing.status === 'applied' || existing.status === 'conflict') {
+        return {
+          ok: true,
+          data: {
+            operationId: existing.operationId,
+            status: existing.status,
+            result: existing.result,
+            duplicate: true,
+            error: existing.error ?? undefined,
+          },
+        };
+      }
       // A pending duplicate is either an in-flight request or an operation the
-      // caller deliberately revived (conflict decision `retry`). Claiming it
-      // here — with the stale-attempt guard — makes the retry path work even
-      // when the client simply re-POSTs the same operationId.
-      if (
-        existing.status === 'pending' &&
-        (await this.claimOperation(normalizedInput.operationId))
-      ) {
+      // caller deliberately revived (conflict decision `retry`); a failed one
+      // is retried on the spot. Claiming here — with the stale-attempt guard
+      // for pending — makes both paths work even when the client simply
+      // re-POSTs the same operationId.
+      if (await this.claimOperation(normalizedInput.operationId, existing.status)) {
         const outcome = await this.applyAndRecord(userId, {
           operationId: existing.operationId,
           type: existing.type,
@@ -292,6 +305,7 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
           status: existing.status,
           result: existing.result,
           duplicate: true,
+          error: existing.error ?? undefined,
         },
       };
     }
@@ -390,20 +404,40 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
   }
 
   /** Atomic claim so a replaying operation can only ever be applied by one
-   * worker at a time; returns false when someone else holds the attempt. */
-  private async claimOperation(operationId: string): Promise<boolean> {
+   * worker at a time; returns false when someone else holds the attempt.
+   * A failed operation is claimed immediately — no in-flight apply can race
+   * it — and its stale outcome fields are cleared so the re-apply records a
+   * clean result. */
+  private async claimOperation(
+    operationId: string,
+    currentStatus: SyncOperationStatus = 'pending',
+  ): Promise<boolean> {
     const claimed = await this.prisma.syncOperation.updateMany({
       where: {
         operationId,
-        status: 'pending',
-        // Interactive retries may re-claim after 5 seconds: a crashed apply
-        // used to leave the row pending for 30s, which mobile clients hit as
-        // an endless duplicate/pending loop. Applies are idempotent per
-        // operationId, so a rare double-claim of a >5s transaction replays
-        // the stored result instead of duplicating work.
-        OR: [{ lastAttemptAt: null }, { lastAttemptAt: { lt: new Date(Date.now() - 5_000) } }],
+        ...(currentStatus === 'pending'
+          ? {
+              status: 'pending',
+              // Interactive retries may re-claim after 5 seconds: a crashed apply
+              // used to leave the row pending for 30s, which mobile clients hit as
+              // an endless duplicate/pending loop. Applies are idempotent per
+              // operationId, so a rare double-claim of a >5s transaction replays
+              // the stored result instead of duplicating work.
+              OR: [
+                { lastAttemptAt: null },
+                { lastAttemptAt: { lt: new Date(Date.now() - 5_000) } },
+              ],
+            }
+          : { status: currentStatus }),
       },
-      data: { attempts: { increment: 1 }, lastAttemptAt: new Date() },
+      data: {
+        status: 'pending',
+        attempts: { increment: 1 },
+        lastAttemptAt: new Date(),
+        error: null,
+        result: Prisma.JsonNull,
+        appliedAt: null,
+      },
     });
     return claimed.count === 1;
   }
