@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { InvoiceController, PublicInvoiceController } from './invoice.controller';
 import { InvoicePaymentMethod } from './invoice.dto';
 import { ROLES_KEY } from '../../common/auth/roles.decorator';
+import { PATH_METADATA, METHOD_METADATA } from '../../common/http/multipart.constants';
 
 const request = { user: { id: 'user-1' } } as never;
 
@@ -17,6 +18,47 @@ describe('InvoiceController', () => {
     ]);
     expect(Reflect.getMetadata(ROLES_KEY, InvoiceController.prototype.create)).toEqual(['seller']);
     expect(Reflect.getMetadata(ROLES_KEY, InvoiceController.prototype.void)).toEqual(['manager']);
+    // The issue-form customer picker/creator stays seller-only, matching the
+    // customer.create sync operation's role policy.
+    expect(Reflect.getMetadata(ROLES_KEY, InvoiceController.prototype.customers)).toEqual([
+      'seller',
+    ]);
+    expect(Reflect.getMetadata(ROLES_KEY, InvoiceController.prototype.createCustomer)).toEqual([
+      'seller',
+    ]);
+    // The narrow return-sheet read mirrors the POST returns roles: warehouse
+    // may process returns without gaining access to the full invoice detail.
+    expect(Reflect.getMetadata(ROLES_KEY, InvoiceController.prototype.returnContext)).toEqual([
+      'manager',
+      'warehouse',
+      'accountant',
+    ]);
+  });
+
+  it('routes the narrow return-context read for the mobile return sheet', async () => {
+    const returnContext = vi.fn(async () => ({ ok: true, data: { id: 'invoice-1' } }));
+    const controller = new InvoiceController({ returnContext } as never);
+    await expect(controller.returnContext('invoice-1')).resolves.toEqual({
+      ok: true,
+      data: { id: 'invoice-1' },
+    });
+    expect(returnContext).toHaveBeenCalledWith('invoice-1');
+  });
+
+  it('routes the issue-form customer list and creator to the service', async () => {
+    const customers = vi.fn(async () => ({ ok: true, data: [] }));
+    const createCustomer = vi.fn(async () => ({ ok: true, data: { id: 'customer-1' } }));
+    const controller = new InvoiceController({ customers, createCustomer } as never);
+    await controller.customers('حسن');
+    expect(customers).toHaveBeenCalledWith('حسن');
+    const body = {
+      name: 'حسن رضایی',
+      mobile: '09121234567',
+      address: 'تهران، خیابان نمونه، پلاک ۱۲',
+      notes: 'مشتری تعمیرگاه',
+    };
+    await controller.createCustomer(body);
+    expect(createCustomer).toHaveBeenCalledWith(body);
   });
 
   it('routes invoice creation and payment to the service', async () => {
@@ -36,7 +78,7 @@ describe('InvoiceController', () => {
       { items: [{ inventoryItemId: 'item-1', quantity: 1, unitPrice: '100' }] },
       'user-1',
     );
-    expect(pay).toHaveBeenCalledWith('invoice-1', '100', 'cash', 'user-1');
+    expect(pay).toHaveBeenCalledWith('invoice-1', '100', 'cash', 'user-1', undefined);
   });
 
   it('routes the SMS resend with the caller identity and an optional corrected mobile', async () => {
@@ -115,5 +157,54 @@ describe('PublicInvoiceController', () => {
     });
     expect(qr).toHaveBeenCalledWith('ABC123');
     expect(getPublic).toHaveBeenCalledWith('ABC123');
+  });
+});
+
+describe('invoice route ordering', () => {
+  it('declares static GET segments before the :id param route', () => {
+    // NestJS matches routes in declaration order: if @Get(':id') came first,
+    // GET /invoices/customers would be answered by get('customers') and 404.
+    const methodNames = Object.getOwnPropertyNames(InvoiceController.prototype).filter(
+      (name) => name !== 'constructor',
+    );
+    const handler = (prototype: unknown, name: string) =>
+      (prototype as Record<string, unknown>)[name] as object;
+    const getPath = (name: string) => {
+      const paths = Reflect.getMetadata(PATH_METADATA, handler(InvoiceController.prototype, name));
+      const method = Reflect.getMetadata(
+        METHOD_METADATA,
+        handler(InvoiceController.prototype, name),
+      );
+      return { name, paths: Array.isArray(paths) ? paths : [paths], method };
+    };
+    const getRoutes = methodNames.map(getPath).filter((route) => route.method === 0); // 0 = GET
+    const position = (segment: string) =>
+      getRoutes.findIndex((route) => (route.paths as string[]).includes(segment));
+    expect(position('customers')).toBeGreaterThanOrEqual(0);
+    expect(position('options')).toBeGreaterThanOrEqual(0);
+    expect(position(':id')).toBeGreaterThan(position('customers'));
+    expect(position(':id')).toBeGreaterThan(position('options'));
+    // The narrow return-sheet read must also be declared before the :id route.
+    expect(position(':id/return-context')).toBeGreaterThanOrEqual(0);
+    expect(position(':id')).toBeGreaterThan(position(':id/return-context'));
+    // Same guarantee for the public controller's static routes.
+    const publicNames = Object.getOwnPropertyNames(PublicInvoiceController.prototype).filter(
+      (name) => name !== 'constructor',
+    );
+    const publicGets = publicNames
+      .map((name) => ({
+        paths: Reflect.getMetadata(PATH_METADATA, handler(PublicInvoiceController.prototype, name)),
+        method: Reflect.getMetadata(
+          METHOD_METADATA,
+          handler(PublicInvoiceController.prototype, name),
+        ),
+      }))
+      .filter((route) => route.method === 0);
+    const publicPosition = (segment: string) =>
+      publicGets.findIndex((route) =>
+        (Array.isArray(route.paths) ? route.paths : [route.paths]).includes(segment),
+      );
+    expect(publicPosition('qr/:shortCode')).toBeGreaterThanOrEqual(0);
+    expect(publicPosition(':token')).toBeGreaterThan(publicPosition('qr/:shortCode'));
   });
 });

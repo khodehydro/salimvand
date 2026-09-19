@@ -35,6 +35,7 @@ const MM_PX = 96 / 25.4;
 const SIZE_MM: Record<LabelSize, { w: number; h: number }> = {
   '50x30': { w: 50, h: 30 },
   '60x40': { w: 60, h: 40 },
+  '40x60': { w: 40, h: 60 },
   '38x22': { w: 38, h: 22 },
 };
 
@@ -46,6 +47,8 @@ export function LabelsPage() {
   /** Site identity from settings: logo + store name go on every label. */
   const [logoUrl, setLogoUrl] = useState('');
   const [storeName, setStoreName] = useState('');
+  const [labelHeader, setLabelHeader] = useState(() => localStorage.getItem('salimvand.labelHeader') || 'فروشگاه سلیم وند');
+  const [labelFooter, setLabelFooter] = useState(() => localStorage.getItem('salimvand.labelFooter') || 'اصالت کالا');
   const [filter, setFilter] = useState('');
   const [selectedId, setSelectedId] = useState('');
 
@@ -55,14 +58,14 @@ export function LabelsPage() {
   const [category, setCategory] = useState('');
   const [cars, setCars] = useState('');
 
-  const [size, setSize] = useState<LabelSize>('50x30');
+  const [size, setSize] = useState<LabelSize>('40x60');
   const [style, setStyle] = useState<LabelStyle>('brand');
   const [barcodeType, setBarcodeType] = useState<BarcodeType>('ean13');
   const [zoom, setZoom] = useState<number>(3);
   const [showSku, setShowSku] = useState(true);
-  const [showMeta, setShowMeta] = useState(true);
+  const [showMeta, setShowMeta] = useState(false);
   const [showFoot, setShowFoot] = useState(true);
-  const [count, setCount] = useState('24');
+  const [count, setCount] = useState('18');
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   // Keeps the hashchange listener fresh without re-subscribing per keystroke.
   const itemsRef = useRef<LabelItem[]>([]);
@@ -140,7 +143,8 @@ export function LabelsPage() {
     showSku,
     showMeta,
     showFoot,
-    storeName: storeName || undefined,
+    storeName: labelHeader || storeName || undefined,
+    footerText: labelFooter || undefined,
     logoUrl: logoUrl || undefined,
   };
   const currentHTML = renderLabelHTML(options);
@@ -322,6 +326,8 @@ export function LabelsPage() {
               </div>
 
               <hr className="lbl-hr" />
+              <div className="lbl-field"><label>عنوان سربرگ برچسب</label><input value={labelHeader} onChange={(e) => { setLabelHeader(e.target.value); localStorage.setItem('salimvand.labelHeader', e.target.value); }} placeholder="فروشگاه سلیم وند" /></div>
+              <div className="lbl-field"><label>متن پانویس برچسب</label><input value={labelFooter} onChange={(e) => { setLabelFooter(e.target.value); localStorage.setItem('salimvand.labelFooter', e.target.value); }} placeholder="اصالت کالا" /></div>
 
               <label className="lbl-chk">
                 <input

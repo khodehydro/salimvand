@@ -7,6 +7,29 @@ export class ApiExceptionFilter implements ExceptionFilter {
     const context = host.switchToHttp();
     const response = context.getResponse<Response>();
     const request = context.getRequest<Request>();
+    // Unique violations (Prisma P2002) are user-input conflicts, not server
+    // faults: answer with a readable 409 naming the duplicated column(s) so
+    // operators can tell slug/code/barcode collisions apart instead of an
+    // opaque 500 «خطای داخلی سرور».
+    if (typeof exception === 'object' && exception !== null && 'code' in exception) {
+      const prismaError = exception as { code?: unknown; meta?: { target?: unknown } };
+      if (prismaError.code === 'P2002') {
+        const target = Array.isArray(prismaError.meta?.target)
+          ? prismaError.meta.target.map(String).join('، ')
+          : prismaError.meta?.target
+            ? String(prismaError.meta.target)
+            : '';
+        response.status(HttpStatus.CONFLICT).json({
+          ok: false,
+          error: {
+            code: 'CONFLICT',
+            message: `مقدار تکراری${target ? ` برای ${target}` : ''}؛ رکوردی با این مشخصات از قبل ثبت شده است`,
+            detail: 'P2002',
+          },
+        });
+        return;
+      }
+    }
     const status =
       exception instanceof HttpException ? exception.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
     const raw = exception instanceof HttpException ? exception.getResponse() : undefined;

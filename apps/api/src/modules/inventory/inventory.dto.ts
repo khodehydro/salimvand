@@ -3,7 +3,7 @@ import { IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-
 
 export class CreateInventoryItemDto {
   @IsUUID() productId!: string;
-  @IsUUID() brandId!: string;
+  @IsOptional() @IsUUID() brandId?: string;
   @IsOptional() @IsString() @MaxLength(20) barcode?: string;
   @IsOptional()
   @Type(() => Number)

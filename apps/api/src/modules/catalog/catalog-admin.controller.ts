@@ -16,9 +16,18 @@ export class CatalogAdminController {
     private readonly catalog: CatalogAdminService,
     private readonly social: SocialPublisherService,
   ) {}
+  @Get('wholesale') @Roles('super_admin', 'manager', 'wholesale') wholesale() {
+    return this.catalog.wholesale();
+  }
   @Get() list() {
     return this.catalog.list();
   }
+  @Roles('manager')
+  @Post('seo-keywords/regenerate')
+  regenerateKeywords() {
+    return this.catalog.regenerateKeywords();
+  }
+
   @Get(':id') get(@Param('id') id: string) {
     return this.catalog.get(id);
   }

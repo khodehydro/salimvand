@@ -2,15 +2,42 @@ import { describe, expect, it, vi } from 'vitest';
 import { BadRequestException } from '@nestjs/common';
 import { InventoryService } from './inventory.service';
 
-function makeService(item = { id: 'i1', quantity: 10 }) {
+const FULL_ITEM = {
+  id: 'i1',
+  productId: 'p1',
+  brandId: 'b1',
+  barcode: '6260000000123',
+  quantity: 10,
+  purchasePrice: 1000000n,
+  salePrice: 1200000n,
+  minStock: 2,
+  locationId: 'shelf-1',
+  isActive: true,
+};
+
+function makeService(item = FULL_ITEM) {
+  const inventoryItem = {
+    findUnique: vi.fn().mockResolvedValue(item),
+    update: vi.fn().mockResolvedValue({ ...item, quantity: 7 }),
+    findFirst: vi.fn().mockResolvedValue(null),
+  };
   const tx = {
-    inventoryItem: {
-      findUnique: vi.fn().mockResolvedValue(item),
-      update: vi.fn().mockResolvedValue({ ...item, quantity: 7 }),
+    inventoryItem,
+    inventoryTransaction: {
+      create: vi.fn().mockResolvedValue({ id: 't1', quantityAfter: 7 }),
+      findUnique: vi.fn().mockResolvedValue(null),
     },
-    inventoryTransaction: { create: vi.fn().mockResolvedValue({ id: 't1', quantityAfter: 7 }) },
+    inventoryOperation: {
+      create: vi.fn(),
+      findUnique: vi.fn().mockResolvedValue(null),
+      findFirst: vi.fn().mockResolvedValue(null),
+    },
+    inventoryPriceHistory: { create: vi.fn().mockResolvedValue({ id: 1n }) },
+    brand: { findUnique: vi.fn().mockResolvedValue({ id: 'b1', isActive: true }) },
+    location: { findUnique: vi.fn().mockResolvedValue({ id: 'shelf-2' }) },
   };
   const prisma = {
+    inventoryItem,
     $transaction: vi.fn(async (callback: (value: typeof tx) => unknown) => callback(tx)),
   };
   return { service: new InventoryService(prisma as never), prisma, tx };
@@ -194,18 +221,278 @@ describe('InventoryService', () => {
     const findMany = vi.fn().mockResolvedValue([{ id: 'i1', quantity: 3, minStock: null }]);
     const prisma = { inventoryItem: { findMany } };
     const result = await new InventoryService(prisma as never).list({ q: '  ' });
-    const args = findMany.mock.calls[0][0] as { where: Record<string, unknown> };
-    expect(args.where).toEqual({ isActive: true });
+    const args = findMany.mock.calls[0][0] as {
+      where: Record<string, unknown>;
+      take: number;
+    };
+    expect(args.where).toEqual({ isActive: true, product: { deletedAt: null } });
+    expect(args.take).toBe(201);
     expect(result.data).toHaveLength(1);
+    expect(result.hasMore).toBe(false);
+    expect(result.nextCursor).toBeNull();
+  });
+
+  it('paginates the live list with an id keyset and reports the next cursor', async () => {
+    const findMany = vi.fn().mockResolvedValue([{ id: 'i3' }, { id: 'i2' }, { id: 'i1' }]);
+    const prisma = { inventoryItem: { findMany } };
+    const result = await new InventoryService(prisma as never).list({ limit: '2' });
+    const args = findMany.mock.calls[0][0] as { take: number };
+    expect(args.take).toBe(3);
+    expect(result.data.map((item: { id: string }) => item.id)).toEqual(['i3', 'i2']);
+    expect(result.hasMore).toBe(true);
+    expect(result.nextCursor).toBe('i2');
+    await new InventoryService(prisma as never).list({ cursor: 'i2' });
+    expect(findMany.mock.calls[1][0].where).toEqual({
+      isActive: true,
+      product: { deletedAt: null },
+      id: { lt: 'i2' },
+    });
   });
 
   it('filters the list to out-of-stock rows with status=out', async () => {
-    const findMany = vi.fn().mockResolvedValue([
-      { id: 'ok', quantity: 5, minStock: 2 },
-      { id: 'zero', quantity: 0, minStock: null },
-    ]);
-    const prisma = { inventoryItem: { findMany } };
+    // The quantity <= 0 condition runs in SQL (Prisma cannot compare two
+    // columns), so the status views fetch a raw id universe first.
+    const queryRaw = vi.fn().mockResolvedValue([{ id: 'zero' }]);
+    const findMany = vi.fn().mockResolvedValue([{ id: 'zero', quantity: 0 }]);
+    const prisma = { $queryRaw: queryRaw, inventoryItem: { findMany } };
     const result = await new InventoryService(prisma as never).list({ status: 'out' });
     expect(result.data.map((item: { id: string }) => item.id)).toEqual(['zero']);
+    expect(findMany.mock.calls[0][0].where).toEqual({
+      isActive: true,
+      product: { deletedAt: null },
+      id: { in: ['zero'] },
+    });
+  });
+});
+
+describe('InventoryService.summary and low-stock (SQL aggregates)', () => {
+  it('computes the summary with a single SQL aggregate instead of loading rows', async () => {
+    const queryRaw = vi.fn().mockResolvedValue([
+      {
+        itemCount: 4,
+        totalQuantity: 90n,
+        purchaseValue: 1_000n,
+        saleValue: 1_400n,
+        lowStockCount: 2,
+        outOfStockCount: 1,
+      },
+    ]);
+    const prisma = { $queryRaw: queryRaw };
+    const result = await new InventoryService(prisma as never).summary();
+    expect(result.data).toEqual({
+      itemCount: 4,
+      totalQuantity: '90',
+      purchaseValue: '1000',
+      saleValue: '1400',
+      lowStockCount: 2,
+      outOfStockCount: 1,
+    });
+    const sql = String(queryRaw.mock.calls[0][0][0]);
+    expect(sql).toContain('SUM(i.quantity * i."purchasePrice")');
+    expect(sql).toContain('COALESCE(i."minStock", 0)');
+    expect(sql).toContain('p."deletedAt" IS NULL');
+  });
+
+  it('low-stock rows are filtered in SQL and keep their quantity order', async () => {
+    const queryRaw = vi.fn().mockResolvedValue([{ id: 'a' }, { id: 'b' }]);
+    const findMany = vi.fn().mockResolvedValue([{ id: 'b' }, { id: 'a' }]);
+    const prisma = { $queryRaw: queryRaw, inventoryItem: { findMany } };
+    const result = await new InventoryService(prisma as never).lowStock();
+    expect(result.data.map((item: { id: string }) => item.id)).toEqual(['a', 'b']);
+    expect(String(queryRaw.mock.calls[0][0][0])).toContain('quantity <= COALESCE("minStock", 0)');
+    expect(findMany.mock.calls[0][0].where).toEqual({ id: { in: ['a', 'b'] } });
+  });
+
+  it('low-stock with no matches short-circuits without the hydration query', async () => {
+    const queryRaw = vi.fn().mockResolvedValue([]);
+    const findMany = vi.fn();
+    const prisma = { $queryRaw: queryRaw, inventoryItem: { findMany } };
+    const result = await new InventoryService(prisma as never).lowStock();
+    expect(result.data).toEqual([]);
+    expect(findMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('InventoryService.updateMetadata (offline command inventory.update_metadata)', () => {
+  it('updates prices, shelf and barcode atomically without touching quantity', async () => {
+    const { service, tx } = makeService();
+    const result = await service.updateMetadata(
+      {
+        itemId: 'i1',
+        purchasePrice: '1500000',
+        salePrice: '1900000',
+        minStock: 5,
+        locationId: 'shelf-2',
+        barcode: '6261111222333',
+      },
+      'u1',
+      'android-meta-0001',
+    );
+    expect(result).toMatchObject({ ok: true, duplicate: false });
+    const update = tx.inventoryItem.update.mock.calls[0][0] as { data: Record<string, unknown> };
+    expect(update.data).toEqual({
+      purchasePrice: 1500000n,
+      salePrice: 1900000n,
+      minStock: 5,
+      locationId: 'shelf-2',
+      barcode: '6261111222333',
+      priceUpdatedAt: expect.any(Date),
+    });
+    expect(update.data).not.toHaveProperty('quantity');
+    expect(tx.inventoryOperation.create).toHaveBeenCalledWith({
+      data: { operationId: 'android-meta-0001', itemId: 'i1', type: 'inventory.update_metadata' },
+    });
+    // The sale-price change is stamped into the price history ledger.
+    expect(tx.inventoryPriceHistory.create).toHaveBeenCalledWith({
+      data: {
+        itemId: 'i1',
+        oldSalePrice: 1200000n,
+        newSalePrice: 1900000n,
+        userId: 'u1',
+        source: 'android',
+        operationId: 'android-meta-0001',
+      },
+    });
+  });
+
+  it('records no price history when the sale price is unchanged', async () => {
+    const { service, tx } = makeService();
+    await service.updateMetadata({ itemId: 'i1', minStock: 9 }, 'u1', 'android-meta-0006');
+    const update = tx.inventoryItem.update.mock.calls[0][0] as { data: Record<string, unknown> };
+    expect(update.data).not.toHaveProperty('priceUpdatedAt');
+    expect(tx.inventoryPriceHistory.create).not.toHaveBeenCalled();
+  });
+
+  it('records the panel PATCH path (updateItem) in the price history', async () => {
+    const { service, tx } = makeService();
+    tx.inventoryItem.update.mockResolvedValue({ ...FULL_ITEM, salePrice: 1500000n });
+    await service.updateItem('i1', { salePrice: 1500000 }, 'u2');
+    const update = tx.inventoryItem.update.mock.calls[0][0] as { data: Record<string, unknown> };
+    expect(update.data).toEqual(
+      expect.objectContaining({ salePrice: 1500000n, priceUpdatedAt: expect.any(Date) }),
+    );
+    expect(tx.inventoryPriceHistory.create).toHaveBeenCalledWith({
+      data: {
+        itemId: 'i1',
+        oldSalePrice: 1200000n,
+        newSalePrice: 1500000n,
+        userId: 'u2',
+        source: 'panel',
+        operationId: null,
+      },
+    });
+  });
+
+  it('records a bulk reprice per item with source=bulk', async () => {
+    const { service, prisma } = makeService();
+    const findMany = vi.fn().mockResolvedValue([
+      { id: 'i1', purchasePrice: 1000000n, salePrice: 1200000n },
+      { id: 'i2', purchasePrice: 2000000n, salePrice: 2400000n },
+    ]);
+    const update = vi.fn().mockImplementation(async ({ data }) => ({
+      id: 'i1',
+      ...data,
+    }));
+    const historyCreate = vi.fn();
+    (prisma as unknown as Record<string, unknown>).inventoryItem = { findMany, update };
+    (prisma as unknown as Record<string, unknown>).inventoryPriceHistory = {
+      create: historyCreate,
+    };
+    const result = await service.bulkUpdatePrices({
+      brandId: 'b1',
+      salePercent: 10,
+      roundTo: 1000,
+    });
+    expect(result.data).toEqual({ updated: 2 });
+    expect(update).toHaveBeenCalledTimes(2);
+    expect(historyCreate).toHaveBeenCalledTimes(2);
+    expect(historyCreate).toHaveBeenNthCalledWith(1, {
+      data: {
+        itemId: 'i1',
+        oldSalePrice: 1200000n,
+        newSalePrice: 1320000n,
+        userId: null,
+        source: 'bulk',
+        operationId: null,
+      },
+    });
+    const firstUpdate = update.mock.calls[0][0] as { data: Record<string, unknown> };
+    expect(firstUpdate.data.priceUpdatedAt).toBeInstanceOf(Date);
+  });
+
+  it('serializes the price history with Shamsi dates for the panel and app', async () => {
+    const { service, prisma } = makeService();
+    const changedAt = new Date('2026-09-18T08:30:00.000Z');
+    (prisma as unknown as Record<string, unknown>).inventoryPriceHistory = {
+      findMany: vi.fn().mockResolvedValue([
+        {
+          id: 2n,
+          itemId: 'i1',
+          oldSalePrice: 1200000n,
+          newSalePrice: 1900000n,
+          source: 'android',
+          createdAt: changedAt,
+          user: { name: 'سلیم‌وند' },
+        },
+        {
+          id: 1n,
+          itemId: 'i1',
+          oldSalePrice: null,
+          newSalePrice: 1200000n,
+          source: 'panel',
+          createdAt: new Date('2026-09-01T10:00:00.000Z'),
+          user: null,
+        },
+      ]),
+    };
+    const result = await service.priceHistory('i1');
+    expect(result.ok).toBe(true);
+    expect(result.data[0]).toMatchObject({
+      id: '2',
+      oldSalePrice: '1200000',
+      newSalePrice: '1900000',
+      source: 'android',
+      userName: 'سلیم‌وند',
+      changedAt: '2026-09-18T08:30:00.000Z',
+    });
+    expect(result.data[0].changedAtJalali).toMatch(/[\u06F0-\u06F9]/);
+    expect(result.data[1]).toMatchObject({ id: '1', oldSalePrice: null, userName: null });
+  });
+
+  it('is idempotent per operationId and replays the stored line', async () => {
+    const { service, tx } = makeService();
+    tx.inventoryOperation.findFirst.mockResolvedValue({
+      operationId: 'android-meta-0002',
+      itemId: 'i1',
+      type: 'inventory.update_metadata',
+    });
+    tx.inventoryItem.findUnique.mockResolvedValue(FULL_ITEM);
+    const result = await service.updateMetadata(
+      { itemId: 'i1', salePrice: '1900000' },
+      'u1',
+      'android-meta-0002',
+    );
+    expect(result).toMatchObject({ ok: true, duplicate: true, data: { id: 'i1' } });
+    expect(tx.inventoryItem.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects brand duplicates on the same product and unknown locations', async () => {
+    const { service, tx } = makeService();
+    tx.inventoryItem.findFirst.mockResolvedValue({ id: 'other' });
+    await expect(
+      service.updateMetadata({ itemId: 'i1', brandId: 'b1' }, 'u1', 'android-meta-0003'),
+    ).rejects.toThrow('این برند قبلاً برای همین محصول ثبت شده است');
+    tx.inventoryItem.findFirst.mockResolvedValue(null);
+    tx.location.findUnique.mockResolvedValue(null);
+    await expect(
+      service.updateMetadata({ itemId: 'i1', locationId: 'void' }, 'u1', 'android-meta-0004'),
+    ).rejects.toThrow('موقعیت انبار نامعتبر است');
+  });
+
+  it('rejects an empty metadata payload instead of writing a no-op', async () => {
+    const { service } = makeService();
+    await expect(
+      service.updateMetadata({ itemId: 'i1' }, 'u1', 'android-meta-0005'),
+    ).rejects.toThrow('تغییری ارسال نشده است');
   });
 });

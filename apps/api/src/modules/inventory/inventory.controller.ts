@@ -1,4 +1,15 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import type { Request } from 'express';
 type AuthenticatedRequest = Request & { user?: { id: string } };
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
@@ -18,23 +29,45 @@ import {
 @Roles('warehouse')
 export class InventoryController {
   constructor(private readonly inventory: InventoryService) {}
+  @Get('summary') @Roles('manager', 'warehouse', 'accountant') summary() {
+    return this.inventory.summary();
+  }
   @Get('items') @Roles('warehouse', 'accountant') list(
     @Query('q') q?: string,
     @Query('brandId') brandId?: string,
     @Query('locationId') locationId?: string,
     @Query('status') status?: 'low' | 'out',
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
   ) {
-    return this.inventory.list({ q, brandId, locationId, status });
+    return this.inventory.list({ q, brandId, locationId, status, cursor, limit });
   }
   /** Flat label rows for the product-label studio page (برچسب محصولات). */
   @Get('labels') @Roles('warehouse', 'accountant') labels(@Query('q') q?: string) {
     return this.inventory.labelItems(q);
+  }
+  @Post('bulk-prices') @Roles('manager', 'warehouse') bulkPrices(
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.inventory.bulkUpdatePrices({
+      brandId: typeof body.brandId === 'string' ? body.brandId : undefined,
+      categoryId: typeof body.categoryId === 'string' ? body.categoryId : undefined,
+      salePercent: Number(body.salePercent ?? 0),
+      purchasePercent: Number(body.purchasePercent ?? 0),
+      roundTo: Number(body.roundTo ?? 0),
+    });
   }
   @Post('items') create(
     @Body() body: CreateInventoryItemDto,
     @Req() request: AuthenticatedRequest,
   ) {
     return this.inventory.create({ ...body, userId: request.user?.id });
+  }
+  @Delete('items/:id') async removeItem(
+    @Param('id') id: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.inventory.removeItem(id, request.user?.id);
   }
   @Patch('items/:id') updateItem(
     @Param('id') id: string,
@@ -87,5 +120,11 @@ export class InventoryController {
   }
   @Get('items/:id/transactions') transactions(@Param('id') itemId: string) {
     return this.inventory.transactions(itemId);
+  }
+  /** Sale-price timeline of a stock line (Shamsi dates) — the inflation view. */
+  @Get('items/:id/price-history')
+  @Roles('warehouse', 'manager', 'accountant')
+  priceHistory(@Param('id') itemId: string) {
+    return this.inventory.priceHistory(itemId);
   }
 }

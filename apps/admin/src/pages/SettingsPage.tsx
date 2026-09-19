@@ -41,6 +41,10 @@ type Settings = {
       navCatalog?: string;
       navVideo?: string;
       navContact?: string;
+      heroHeadline?: string;
+      heroSubheadline?: string;
+      experienceYears?: string;
+      experienceLabel?: string;
     };
   };
   'store.trust_video'?: string;
@@ -70,7 +74,7 @@ const initial: Settings = {
     navLng: '',
     navApp: 'both',
     instagram: '',
-    header: { tagline: '', cta: '', navCatalog: '', navVideo: '', navContact: '' },
+    header: { tagline: '', cta: '', navCatalog: '', navVideo: '', navContact: '', heroHeadline: '', heroSubheadline: '', experienceYears: '', experienceLabel: '' },
   },
   'store.trust_video': '',
   'store.pricing': { showPrices: false },
@@ -87,6 +91,10 @@ export function SettingsPage() {
   const [testSending, setTestSending] = useState(false);
   const [backupJobs, setBackupJobs] = useState<BackupJob[]>([]);
   const [backupRunning, setBackupRunning] = useState(false);
+  const [importInspecting, setImportInspecting] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importRestoring, setImportRestoring] = useState(false);
+  const [importPreview, setImportPreview] = useState<{ filename: string; sizeBytes: number; entries: number; version: number | null; mediaIncluded: boolean } | null>(null);
   const [backupStatus, setBackupStatus] = useState<{
     status: string;
     createdAt: string;
@@ -218,6 +226,29 @@ export function SettingsPage() {
     } finally {
       setBackupRunning(false);
     }
+  };
+  const inspectImport = async (file: File) => {
+    setImportInspecting(true);
+    setImportPreview(null);
+    try {
+      const body = new FormData();
+      body.append('file', file);
+      const result = await api<{ data: { filename: string; sizeBytes: number; entries: number; version: number | null; mediaIncluded: boolean } }>('/settings/backup/inspect', { method: 'POST', body });
+      setImportPreview(result.data);
+      setMessage('فایل Backup معتبر است؛ قبل از Restore باید Preview بررسی شود.');
+    } catch (error) { setMessage((error as Error).message); }
+    finally { setImportInspecting(false); }
+  };
+  const restoreImport = async () => {
+    if (!importFile || !importPreview || !window.confirm('این عملیات اطلاعات فعلی را جایگزین می‌کند. ادامه می‌دهید؟')) return;
+    setImportRestoring(true);
+    try {
+      const body = new FormData(); body.append('file', importFile);
+      await api('/settings/backup/restore', { method: 'POST', body });
+      setMessage('Restore با موفقیت انجام شد. برای امنیت، دوباره وارد پنل شوید.');
+      setImportFile(null); setImportPreview(null);
+    } catch (error) { setMessage((error as Error).message); }
+    finally { setImportRestoring(false); }
   };
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -438,6 +469,26 @@ export function SettingsPage() {
                       onChange={(e) => updateHeaderText('navVideo', e.target.value)}
                       placeholder="ویدئوی فروشگاه"
                     />
+                  </label>
+                </div>
+                <div className="two-fields">
+                  <label>
+                    تیتر اصلی هدر
+                    <input value={settings['store.profile']?.header?.heroHeadline ?? ''} onChange={(e) => updateHeaderText('heroHeadline', e.target.value)} placeholder="قطعهٔ ماشینت رو پیدا کن، بقیه‌اش با ماست" />
+                  </label>
+                  <label>
+                    توضیح زیر تیتر هدر
+                    <input value={settings['store.profile']?.header?.heroSubheadline ?? ''} onChange={(e) => updateHeaderText('heroSubheadline', e.target.value)} placeholder="کاتالوگ قطعات یدکی خودرو" />
+                  </label>
+                </div>
+                <div className="two-fields">
+                  <label>
+                    عدد سابقه
+                    <input value={settings['store.profile']?.header?.experienceYears ?? ''} onChange={(e) => updateHeaderText('experienceYears', e.target.value)} placeholder="۱۸ سال" />
+                  </label>
+                  <label>
+                    توضیح سابقه
+                    <input value={settings['store.profile']?.header?.experienceLabel ?? ''} onChange={(e) => updateHeaderText('experienceLabel', e.target.value)} placeholder="سابقهٔ تأمین قطعات یدکی" />
                   </label>
                 </div>
                 <div className="two-fields">
@@ -938,6 +989,11 @@ export function SettingsPage() {
             >
               {backupRunning ? 'در حال آغاز…' : 'اجرای پشتیبان‌گیری اکنون'}
             </button>
+            <label className="outline" style={{ display: 'inline-flex', cursor: 'pointer' }}>
+              {importInspecting ? 'در حال بررسی فایل…' : 'واردکردن فایل پشتیبان'}
+              <input type="file" accept=".tar.gz,.gpg" hidden disabled={importInspecting} onChange={(event) => { const file = event.target.files?.[0]; if (file) { setImportFile(file); void inspectImport(file); } event.currentTarget.value = ''; }} />
+            </label>
+            {importPreview && <div className="backup-status"><b className="status-chip">Backup معتبر</b><span>{importPreview.filename}</span><small>{formatPersianNumber(importPreview.entries)} فایل · نسخهٔ {formatPersianNumber(importPreview.version ?? 0)} · {importPreview.mediaIncluded ? 'رسانه دارد' : 'بدون رسانه'}</small><p className="settings-help">Restore واقعی فقط با فعال‌سازی امن روی سرور اجرا می‌شود.</p><button type="button" className="outline" disabled={importRestoring} onClick={() => void restoreImport()}>{importRestoring ? 'در حال Restore…' : 'تأیید و Restore اطلاعات'}</button></div>}
             <label className="switch-row">
               <input
                 type="checkbox"

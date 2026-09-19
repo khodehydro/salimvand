@@ -174,14 +174,9 @@ export default async function HomePage({
         <div className="hero-copy">
           <span className="eyebrow">{STORE_BRAND} · میاندوآب</span>
           <h1>
-            قطعهٔ ماشینت رو <em>پیدا کن</em>،<br />
-            بقیه‌اش با ماست.
+            {info.header.heroHeadline}
           </h1>
-          <p>
-            {info.pricing.showPrices
-              ? 'کاتالوگ زندهٔ قطعات یدکی خودرو با قیمت روز، وضعیت موجودی و برندهای موجود در انبار.'
-              : 'کاتالوگ زندهٔ قطعات یدکی خودرو با اعلام وضعیت موجودی و برندهای موجود در انبار. قیمت‌ها به‌دلیل نوسان بازار فقط با استعلام اعلام می‌شوند.'}
-          </p>
+          <p>{info.header.heroSubheadline}</p>
           <div className="hero-actions">
             <a className="button button-light" href="#catalog">
               جست‌وجوی قطعه <span>←</span>
@@ -191,8 +186,8 @@ export default async function HomePage({
             </a>
           </div>
           <div className="hero-trust">
-            <b>۱۸ سال</b>
-            <span>سابقهٔ تأمین قطعات یدکی</span>
+            <b>{info.header.experienceYears}</b>
+            <span>{info.header.experienceLabel}</span>
           </div>
         </div>
         <div className="hero-visual">

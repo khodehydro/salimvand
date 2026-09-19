@@ -206,6 +206,14 @@ export class DashboardService {
       stockComposition,
       categoryComposition,
       recentTransactions,
+      unpaidInvoices,
+      productsWithoutImages,
+      productsWithoutPartNumber,
+      productsWithoutVehicles,
+      productsWithoutBrand,
+      inventoryWithoutLocation,
+      productsWithoutSalePrice,
+      pendingPurchases,
     ] = await Promise.all([
       this.prisma.product.count({ where: { deletedAt: null, status: 'active' } }),
       this.prisma.inventoryItem.count({ where: { isActive: true } }),
@@ -239,8 +247,32 @@ export class DashboardService {
         take: 8,
         include: { item: { include: { product: true, brand: true } } },
       }),
+      this.prisma.invoice.count({ where: { status: 'issued', paymentStatus: { in: ['unpaid', 'partial'] } } }),
+      this.prisma.product.count({ where: { deletedAt: null, status: 'active', images: { none: {} } } }),
+      this.prisma.product.count({ where: { deletedAt: null, status: 'active', OR: [{ partNumber: null }, { partNumber: '' }] } }),
+      this.prisma.product.count({ where: { deletedAt: null, status: 'active', compatibilities: { none: {} } } }),
+      this.prisma.product.count({ where: { deletedAt: null, status: 'active', inventoryItems: { none: { isActive: true } } } }),
+      this.prisma.inventoryItem.count({ where: { isActive: true, locationId: null } }),
+      this.prisma.inventoryItem.count({ where: { isActive: true, salePrice: 0 } }),
+      this.prisma.purchaseInvoice.count({ where: { status: 'issued' } }),
     ]);
-    const lowStock = lowStockItems.filter((item) => item.quantity <= (item.minStock ?? 0));
+    const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
+    const startOfTomorrow = new Date(startOfToday); startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
+    const [todayInvoices, todayPayments] = await Promise.all([
+      this.prisma.invoice.findMany({ where: { status: 'issued', issuedAt: { gte: startOfToday, lt: startOfTomorrow } }, select: { total: true } }),
+      this.prisma.payment.findMany({ where: { receivedAt: { gte: startOfToday, lt: startOfTomorrow } }, select: { amount: true } }),
+    ]);
+    const todaySales = todayInvoices.reduce((sum, row) => sum + row.total, 0n);
+    const todayReceived = todayPayments.reduce((sum, row) => sum + row.amount, 0n);
+    const dayAfterTomorrow = new Date(startOfToday); dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 3);
+    const dueChecks = await this.prisma.paymentCheck.findMany({
+      where: { status: 'pending', dueDate: { gte: new Date(new Date(startOfToday).setDate(startOfToday.getDate() + 1)), lt: dayAfterTomorrow } },
+      orderBy: { dueDate: 'asc' },
+      include: { payment: { include: { invoice: { select: { id: true, number: true, customerName: true } } } } },
+    });
+    const lowStock = lowStockItems.filter(
+      (item: { quantity: number; minStock: number | null }) => item.quantity <= (item.minStock ?? 0),
+    );
     return {
       ok: true,
       data: {
@@ -251,6 +283,18 @@ export class DashboardService {
         stockComposition,
         categoryComposition,
         recentTransactions,
+        unpaidInvoices,
+        productsWithoutImages,
+        productsWithoutPartNumber,
+        productsWithoutVehicles,
+        productsWithoutBrand,
+        inventoryWithoutLocation,
+        productsWithoutSalePrice,
+        pendingPurchases,
+        todaySales: todaySales.toString(),
+        todayReceived: todayReceived.toString(),
+        todayInvoiceCount: todayInvoices.length,
+        dueChecks: dueChecks.map((check) => ({ id: check.id, checkNumber: check.checkNumber, bank: check.bank, amount: check.amount.toString(), dueDate: check.dueDate, invoice: check.payment.invoice })),
       },
     };
   }

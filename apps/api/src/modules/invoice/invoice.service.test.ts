@@ -153,6 +153,8 @@ describe('InvoiceService', () => {
   it('rejects a payment that would exceed the invoice total', async () => {
     const update = vi.fn();
     const tx = {
+      // Row lock taken by returnItems before the over-return aggregate.
+      $queryRaw: vi.fn(async () => [{ id: 'invoice-1' }]),
       invoice: {
         findUnique: vi.fn(async () => ({
           id: 'invoice-1',
@@ -185,6 +187,8 @@ describe('InvoiceService', () => {
     }));
     const paymentCreate = vi.fn(async () => ({}));
     const tx = {
+      // Row lock taken by returnItems before the over-return aggregate.
+      $queryRaw: vi.fn(async () => [{ id: 'invoice-1' }]),
       invoice: {
         findUnique: vi.fn(async () => ({
           id: 'invoice-1',
@@ -211,7 +215,7 @@ describe('InvoiceService', () => {
       'card',
       'user-1',
     );
-    expect(result.data.paymentStatus).toBe('partial');
+    expect((result.data as { paymentStatus?: string }).paymentStatus).toBe('partial');
     expect(update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -233,6 +237,8 @@ describe('InvoiceService', () => {
 
   it('rejects a return greater than the purchased quantity', async () => {
     const tx = {
+      // Row lock taken by returnItems before the over-return aggregate.
+      $queryRaw: vi.fn(async () => [{ id: 'invoice-1' }]),
       invoice: {
         findUnique: vi.fn(async () => ({
           status: 'issued',
@@ -262,6 +268,8 @@ describe('InvoiceService', () => {
     const returnCreate = vi.fn(async () => ({ id: 'return-1', quantity: 1, refundAmount: 100n }));
     const invoiceUpdate = vi.fn();
     const tx = {
+      // Row lock taken by returnItems before the over-return aggregate.
+      $queryRaw: vi.fn(async () => [{ id: 'invoice-1' }]),
       invoice: {
         findUnique: vi.fn(async () => ({
           id: 'invoice-1',
@@ -300,6 +308,72 @@ describe('InvoiceService', () => {
     expect(invoiceUpdate).not.toHaveBeenCalled();
   });
 
+  it('locks the invoice row before reading previous returns (race safety)', async () => {
+    const queryRaw = vi.fn(async () => [{ id: 'invoice-1' }]);
+    const aggregate = vi.fn(async () => ({ _sum: { quantity: 0, refundAmount: 0n } }));
+    const tx = {
+      $queryRaw: queryRaw,
+      invoice: {
+        findUnique: vi.fn(async () => ({
+          id: 'invoice-1',
+          status: 'issued',
+          total: 200n,
+          paidAmount: 0n,
+          paymentStatus: 'unpaid',
+          paidAt: null,
+          items: [{ id: 'line-1', quantity: 2, unitPrice: 100n, inventoryItemId: 'item-1' }],
+        })),
+        update: vi.fn(),
+      },
+      returnRecord: { aggregate, create: vi.fn(async () => ({ id: 'return-9' })) },
+      inventoryItem: { update: vi.fn(async () => ({ quantity: 6 })) },
+      inventoryTransaction: { create: vi.fn() },
+    };
+    const prisma = {
+      $transaction: vi.fn(async (callback: (client: typeof tx) => Promise<unknown>) =>
+        callback(tx),
+      ),
+    };
+    await new InvoiceService(prisma as never).returnItems(
+      'invoice-1',
+      { invoiceItemId: 'line-1', quantity: 1, reason: 'تعویض' },
+      'user-1',
+    );
+    // The FOR UPDATE row lock is the first statement of the transaction, so a
+    // concurrent return of the same invoice waits and then sees this one's
+    // rows in its aggregate — two "return the last item" requests can never
+    // both apply.
+    const call = queryRaw.mock.calls[0] as unknown as [TemplateStringsArray, string];
+    expect(String(call[0])).toContain('FOR UPDATE');
+    // One parameterized id: the template has a string before and after it.
+    expect(call[0]).toHaveLength(2);
+    expect(call[1]).toBe('invoice-1');
+    expect(aggregate.mock.invocationCallOrder[0]).toBeGreaterThan(
+      queryRaw.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('rejects a return on a voided invoice', async () => {
+    const tx = {
+      $queryRaw: vi.fn(async () => [{ id: 'invoice-1' }]),
+      invoice: { findUnique: vi.fn(async () => ({ status: 'voided', items: [] })) },
+      returnRecord: { aggregate: vi.fn(), create: vi.fn() },
+    };
+    const prisma = {
+      $transaction: vi.fn(async (callback: (client: typeof tx) => Promise<unknown>) =>
+        callback(tx),
+      ),
+    };
+    await expect(
+      new InvoiceService(prisma as never).returnItems(
+        'invoice-1',
+        { invoiceItemId: 'line-1', quantity: 1, reason: 'تعویض' },
+        'user-1',
+      ),
+    ).rejects.toThrow('فاکتور فعال پیدا نشد');
+    expect(tx.returnRecord.create).not.toHaveBeenCalled();
+  });
+
   it('settles the payment status when a return covers the remaining debt', async () => {
     const invoiceUpdate = vi.fn(async () => ({ id: 'invoice-1' }));
     const returnCreate = vi.fn(async () => ({ id: 'return-3', quantity: 1, refundAmount: 100n }));
@@ -310,6 +384,8 @@ describe('InvoiceService', () => {
       .mockResolvedValueOnce({ _sum: { quantity: 0, refundAmount: 0n } })
       .mockResolvedValueOnce({ _sum: { quantity: 1, refundAmount: 100n } });
     const tx = {
+      // Row lock taken by returnItems before the over-return aggregate.
+      $queryRaw: vi.fn(async () => [{ id: 'invoice-1' }]),
       invoice: {
         findUnique: vi.fn(async () => ({
           id: 'invoice-1',
@@ -398,6 +474,8 @@ describe('InvoiceService', () => {
   it('caps new payments at the net amount after returns', async () => {
     const update = vi.fn();
     const tx = {
+      // Row lock taken by returnItems before the over-return aggregate.
+      $queryRaw: vi.fn(async () => [{ id: 'invoice-1' }]),
       invoice: {
         findUnique: vi.fn(async () => ({
           id: 'invoice-1',
@@ -428,6 +506,8 @@ describe('InvoiceService', () => {
     const inventoryUpdate = vi.fn();
     const returnCreate = vi.fn(async () => ({ id: 'return-2', quantity: 1, refundAmount: 100n }));
     const tx = {
+      // Row lock taken by returnItems before the over-return aggregate.
+      $queryRaw: vi.fn(async () => [{ id: 'invoice-1' }]),
       invoice: {
         findUnique: vi.fn(async () => ({
           id: 'invoice-1',
@@ -498,6 +578,146 @@ describe('InvoiceService', () => {
       expect.objectContaining({ data: expect.objectContaining({ status: 'voided' }) }),
     );
   });
+
+  it('creates a customer from the issue flow with address and notes', async () => {
+    const upsert = vi.fn(async () => ({ id: 'customer-1' }));
+    const prisma = { customer: { upsert } };
+    await new InvoiceService(prisma as never).createCustomer({
+      name: 'حسن رضایی',
+      mobile: '09121234567',
+      address: 'تهران، خیابان نمونه، پلاک ۱۲',
+      notes: 'مشتری تعمیرگاه',
+    });
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { mobile: '09121234567' },
+        create: {
+          name: 'حسن رضایی',
+          mobile: '09121234567',
+          address: 'تهران، خیابان نمونه، پلاک ۱۲',
+          notes: 'مشتری تعمیرگاه',
+        },
+      }),
+    );
+  });
+
+  it('keeps an existing customer address unless the request carries one', async () => {
+    // Duplicate mobiles upsert into the same row — never a second customer.
+    const upsert = vi.fn(
+      async (_args: {
+        where: { mobile: string };
+        create: { name: string; mobile: string; address?: string; notes?: string };
+        update: { name: string; address?: string | null; notes?: string | null };
+      }) => ({ id: 'customer-1' }),
+    );
+    const prisma = { customer: { upsert } };
+    // No address/notes in the request → the saved profile stays untouched.
+    await new InvoiceService(prisma as never).createCustomer({
+      name: 'حسن رضایی',
+      mobile: '09121234567',
+    });
+    expect(upsert.mock.calls[0]?.[0].update).toEqual({ name: 'حسن رضایی' });
+    // An explicit (even empty) value is applied — empty clears the field.
+    await new InvoiceService(prisma as never).createCustomer({
+      name: 'حسن رضایی',
+      mobile: '09121234567',
+      address: '',
+      notes: 'مشتری تعمیرگاه',
+    });
+    expect(upsert.mock.calls[1]?.[0].update).toEqual({
+      name: 'حسن رضایی',
+      address: null,
+      notes: 'مشتری تعمیرگاه',
+    });
+  });
+
+  it('returns the customer address in the issue-form customer list', async () => {
+    const rows = [
+      {
+        id: 'customer-1',
+        name: 'حسن رضایی',
+        mobile: '09121234567',
+        address: 'تهران، خیابان نمونه، پلاک ۱۲',
+        notes: null,
+        isActive: true,
+        createdAt: new Date('2026-09-18T12:00:00Z'),
+      },
+    ];
+    const queryRawUnsafe = vi.fn(async (_query: string, _pattern: string) => rows);
+    const prisma = { $queryRawUnsafe: queryRawUnsafe };
+    const result = await new InvoiceService(prisma as never).customers('');
+    expect(result.data[0].address).toBe('تهران، خیابان نمونه، پلاک ۱۲');
+    const [sql] = queryRawUnsafe.mock.calls[0] ?? [];
+    expect(sql).toContain('"address"');
+    // An empty search still lists the latest customers for the picker.
+    expect(sql).toContain('LIMIT 100');
+    expect(queryRawUnsafe.mock.calls[0]?.[1]).toBe('%');
+  });
+
+  it('snapshots the invoice address and links the customer without rewriting the profile', async () => {
+    const invoiceCreate = vi.fn(async () => ({
+      id: 'invoice-1',
+      number: 'INV-000001',
+      items: [],
+    }));
+    const invoiceUpdate = vi.fn(async () => ({}));
+    const customerUpsert = vi.fn(async () => ({ id: 'customer-1' }));
+    const tx = {
+      counter: { upsert: vi.fn(async () => ({ lastValue: 1 })) },
+      inventoryItem: {
+        updateMany: vi.fn(async () => ({ count: 1 })),
+        findUniqueOrThrow: vi.fn(async () => ({ quantity: 3 })),
+      },
+      invoice: { create: invoiceCreate, update: invoiceUpdate },
+      customer: { upsert: customerUpsert },
+      inventoryTransaction: { create: vi.fn(), updateMany: vi.fn() },
+      auditLog: { create: vi.fn() },
+      syncChange: { create: vi.fn() },
+    };
+    const prisma = {
+      inventoryItem: {
+        findMany: vi.fn(async () => [{ id: 'item-1', product: { name: 'لنت' } }]),
+      },
+      $transaction: vi.fn(async (callback: (client: typeof tx) => Promise<unknown>) =>
+        callback(tx),
+      ),
+    };
+    await new InvoiceService(prisma as never).create(
+      {
+        items: [{ inventoryItemId: 'item-1', quantity: 1, unitPrice: 100 }],
+        customerName: 'حسن رضایی',
+        customerMobile: '09121234567',
+        // One-off delivery address for this invoice only.
+        customerAddress: 'تهران، تحویل کارخانه، درب ۳',
+      },
+      'user-1',
+    );
+    // The invoice keeps its own address snapshot.
+    expect(invoiceCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          customerName: 'حسن رضایی',
+          customerMobile: '09121234567',
+          customerAddress: 'تهران، تحویل کارخانه، درب ۳',
+        }),
+      }),
+    );
+    // A brand-new inline customer also gets the address on its profile…
+    expect(customerUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { mobile: '09121234567' },
+        create: expect.objectContaining({
+          address: 'تهران، تحویل کارخانه، درب ۳',
+        }),
+        // …but an existing customer's profile is never rewritten by a sale:
+        // the update branch carries the name only.
+        update: { name: 'حسن رضایی' },
+      }),
+    );
+    expect(invoiceUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { customerId: 'customer-1' } }),
+    );
+  });
 });
 
 describe('InvoiceService.resendSms', () => {
@@ -514,7 +734,10 @@ describe('InvoiceService.resendSms', () => {
     const prisma = {
       invoice: { findUnique: async () => record, update },
       $transaction: async (run: (tx: unknown) => Promise<unknown>) =>
-        run({ invoice: { update }, auditLog: { create: async () => undefined } }),
+        run({
+          invoice: { update, findUnique: async () => ({ ...record, items: [] }) },
+          auditLog: { create: async () => undefined },
+        }),
     };
     const service = new InvoiceService(prisma as never, { enqueue } as never);
     return { service, update, enqueue };
@@ -636,48 +859,95 @@ describe('InvoiceService.getPublic document payload', () => {
 });
 
 describe('InvoiceService.list and panel link/pdf actions', () => {
-  it('lists invoices without leaking token hashes', async () => {
-    const rows = [
-      {
-        id: 'inv-1',
-        number: 'INV-000001',
-        status: 'issued',
-        customerName: 'علی',
-        customerMobile: '09123456789',
-        subtotal: 100n,
-        discount: 0n,
-        total: 100n,
-        paidAmount: 50n,
-        paymentStatus: 'partial',
-        paymentMethod: null,
-        paidAt: null,
-        issuedAt: new Date(),
-        voidedAt: null,
-        publicTokenExpiresAt: null,
-        items: [
-          {
-            productName: 'لنت ترمز',
-            quantity: 1,
-            unitPrice: 100n,
-            lineTotal: 100n,
-            inventoryItem: { brand: { name: 'ایساکو' } },
-          },
-        ],
-      },
-    ];
-    const prisma = {
-      invoice: {
-        findMany: vi.fn(async () => rows),
-        findUnique: vi.fn(),
-      },
-    };
+  const pageRows = (count: number) =>
+    Array.from({ length: count }, (_, index) => ({
+      id: `inv-${count - index}`,
+      number: `INV-00000${count - index}`,
+      status: 'issued',
+      customerName: 'علی',
+      customerMobile: '09123456789',
+      subtotal: 100n,
+      discount: 0n,
+      total: 100n,
+      paidAmount: 50n,
+      paymentStatus: 'partial',
+      paymentMethod: null,
+      paidAt: null,
+      issuedAt: new Date(`2026-09-18T10:0${index}:00Z`),
+      voidedAt: null,
+      publicTokenExpiresAt: null,
+    }));
+  const listHarness = (rows: unknown[], aggregates = {}) => ({
+    invoice: { findMany: vi.fn(async (_args: unknown) => rows), findUnique: vi.fn() },
+    invoiceItem: {
+      groupBy: vi.fn(async () => [
+        { invoiceId: 'inv-2', _count: { _all: 3 } },
+        { invoiceId: 'inv-1', _count: { _all: 2 } },
+      ]),
+    },
+    returnRecord: {
+      groupBy: vi.fn(async () => [{ invoiceId: 'inv-1', _sum: { refundAmount: 30n } }]),
+    },
+    ...aggregates,
+  });
+
+  it('lists paginated summary rows without leaking token hashes or line data', async () => {
+    const prisma = listHarness(pageRows(2));
     const result = await new InvoiceService(prisma as never).list();
+    expect(prisma.invoice.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderBy: [{ issuedAt: 'desc' }, { id: 'desc' }],
+        take: 101,
+      }),
+    );
     const serialized = JSON.stringify(result, (_key, value) =>
       typeof value === 'bigint' ? String(value) : value,
     );
     expect(serialized).not.toContain('publicTokenHash');
     expect(serialized).not.toContain('publicShortCodeHash');
-    expect(result.data[0].items[0].inventoryItem.brand.name).toBe('ایساکو');
+    // The archive is summary-only: no items/returns join per invoice.
+    expect(serialized).not.toContain('"items"');
+    expect(serialized).not.toContain('"returns"');
+    expect(result.data[0].itemCount).toBe(3);
+    expect(result.data[1].itemCount).toBe(2);
+    expect(result.data[1].returnedTotal).toBe(30n);
+    expect(result.data[1].netTotal).toBe(70n);
+    expect(result.hasMore).toBe(false);
+    expect(result.nextCursor).toBeNull();
+  });
+
+  it('reports the next cursor when another page exists', async () => {
+    const prisma = listHarness(pageRows(3));
+    const result = await new InvoiceService(prisma as never).list(undefined, '2');
+    const listArgs = prisma.invoice.findMany.mock.calls[0]?.[0] as { take: number };
+    expect(listArgs.take).toBe(3);
+    expect(result.data).toHaveLength(2);
+    expect(result.hasMore).toBe(true);
+    expect(result.nextCursor).toBe(`2026-09-18T10:01:00.000Z|inv-2`);
+  });
+
+  it('continues from the cursor with a stable (issuedAt, id) keyset', async () => {
+    const prisma = listHarness(pageRows(1));
+    await new InvoiceService(prisma as never).list('2026-09-18T10:01:00.000Z|inv-2', '50');
+    expect(prisma.invoice.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          OR: [
+            { issuedAt: { lt: new Date('2026-09-18T10:01:00.000Z') } },
+            { issuedAt: new Date('2026-09-18T10:01:00.000Z'), id: { lt: 'inv-2' } },
+          ],
+        },
+        take: 51,
+      }),
+    );
+  });
+
+  it('rejects a malformed cursor instead of silently repeating the page', async () => {
+    const prisma = listHarness([]);
+    await expect(new InvoiceService(prisma as never).list('not-a-cursor')).rejects.toThrow(
+      'کرسر فهرست فاکتورها نامعتبر است',
+    );
+    expect(prisma.invoice.findMany).not.toHaveBeenCalled();
   });
 
   it('rotates the public link for panel viewing with an audit trail', async () => {
@@ -828,7 +1098,11 @@ describe('InvoiceService.list and panel link/pdf actions', () => {
       PDFDocument.prototype.font = originalFont;
     }
     // presentation forms (FB50–FEFF) are outside the base Arabic block
-    const persianLines = drawn.filter((line) => /[\u0600-\u06FF\uFB50-\uFEFF]/.test(line));
+    // Numeric-only table cells contain Persian digits but no letters to shape.
+    // Assert shaping only on lines that actually contain Arabic/Persian letters.
+    const persianLines = drawn.filter((line) =>
+      /[\u0621-\u063A\u063F-\u064A\u067E\u0686\u0698\u06A9\u06AF\u06CC\uFB50-\uFEFF]/.test(line),
+    );
     expect(persianLines.length).toBeGreaterThan(8);
     // No line may carry unshaped Persian LETTERS (digits/punctuation are fine).
     const unshapedLetter = /[\u0621-\u063A\u063F-\u064A\u067E\u0686\u0698\u06A9\u06AF\u06CC]/;
@@ -854,5 +1128,113 @@ describe('InvoiceService.list and panel link/pdf actions', () => {
     expect(drawnText).toContain('۰۴۱-۱۲۳۴۵۶۷');
     // No ASCII digit runs survive in the drawn lines.
     expect(drawnText).not.toMatch(/\d{3,}/);
+  });
+});
+
+describe('InvoiceService.returnContext (mobile return sheet)', () => {
+  const createdAt = new Date('2026-09-18T10:15:00.000Z');
+  const invoiceRow = {
+    id: 'invoice-9',
+    number: 'INV-1001',
+    status: 'issued',
+    paymentStatus: 'partial',
+    total: 250000000n,
+    paidAmount: 100000000n,
+    items: [
+      { id: 'line-1', productName: 'لنت ترمز جلو', quantity: 4, unitPrice: 10000000n },
+      { id: 'line-2', productName: 'فیلتر روغن', quantity: 5, unitPrice: 30000000n },
+    ],
+    returns: [
+      {
+        id: 'ret-1',
+        invoiceItemId: 'line-1',
+        quantity: 1,
+        refundAmount: 10000000n,
+        reason: 'ناسازگاری با خودرو',
+        restock: true,
+        createdAt,
+      },
+    ],
+  };
+  const makePrisma = (
+    invoice: unknown,
+    aggregate = { _sum: { refundAmount: 10000000n } },
+    perLine = [{ invoiceItemId: 'line-1', _sum: { quantity: 1 } }],
+  ) => ({
+    invoice: { findUnique: vi.fn(async () => invoice) },
+    returnRecord: {
+      aggregate: vi.fn(async () => aggregate),
+      groupBy: vi.fn(async () => perLine),
+    },
+  });
+
+  it('returns the narrow return-sheet payload with net totals and per-line return counts', async () => {
+    const prisma = makePrisma(invoiceRow);
+    const result = await new InvoiceService(prisma as never).returnContext('invoice-9');
+    expect(result.ok).toBe(true);
+    expect(result.data).toEqual({
+      id: 'invoice-9',
+      number: 'INV-1001',
+      status: 'issued',
+      paymentStatus: 'partial',
+      total: '250000000',
+      paidAmount: '100000000',
+      returnedTotal: '10000000',
+      netTotal: '240000000',
+      items: [
+        {
+          id: 'line-1',
+          productName: 'لنت ترمز جلو',
+          quantity: 4,
+          unitPrice: '10000000',
+          returnedQuantity: 1,
+        },
+        {
+          id: 'line-2',
+          productName: 'فیلتر روغن',
+          quantity: 5,
+          unitPrice: '30000000',
+          returnedQuantity: 0,
+        },
+      ],
+      returns: [
+        {
+          id: 'ret-1',
+          invoiceItemId: 'line-1',
+          quantity: 1,
+          refundAmount: '10000000',
+          reason: 'ناسازگاری با خودرو',
+          restock: true,
+          createdAt: createdAt.toISOString(),
+        },
+      ],
+    });
+    // The narrow read must never leak customer PII or payment history.
+    const serialized = JSON.stringify(result.data);
+    expect(serialized).not.toContain('customerMobile');
+    expect(serialized).not.toContain('customerAddress');
+    expect(serialized).not.toContain('customerName');
+    expect(serialized).not.toContain('payments');
+  });
+
+  it('treats an invoice without returns as zero returned', async () => {
+    const prisma = makePrisma(
+      { ...invoiceRow, returns: [] },
+      // Prisma returns null for SUM over zero rows.
+      { _sum: { refundAmount: null } } as unknown as { _sum: { refundAmount: bigint } },
+      [],
+    );
+    const result = await new InvoiceService(prisma as never).returnContext('invoice-9');
+    expect(result.data.returnedTotal).toBe('0');
+    expect(result.data.netTotal).toBe('250000000');
+    expect(result.data.items.every((item) => item.returnedQuantity === 0)).toBe(true);
+    expect(result.data.returns).toEqual([]);
+  });
+
+  it('404s for an unknown invoice', async () => {
+    const prisma = makePrisma(null);
+    await expect(new InvoiceService(prisma as never).returnContext('unknown')).rejects.toThrow(
+      'فاکتور پیدا نشد',
+    );
   });
 });

@@ -69,7 +69,7 @@ describe('AuthController', () => {
   it('clears refresh cookie on logout', () => {
     const { controller } = makeController();
     const res = response();
-    expect(controller.logout({ cookies: {} } as never, res as never)).toEqual({
+    expect(controller.logout(undefined, { cookies: {} } as never, res as never)).toEqual({
       ok: true,
       data: null,
     });

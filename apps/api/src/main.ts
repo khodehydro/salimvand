@@ -6,6 +6,7 @@ import cookieParser = require('cookie-parser');
 import helmet from 'helmet';
 import { dirname, join } from 'node:path';
 import { ApiExceptionFilter } from './common/http/api-exception.filter';
+import { ResponseTimeInterceptor } from './common/http/response-time.interceptor';
 import { AppModule } from './app.module';
 import { corsOrigins, validateRuntimeConfig } from './common/config/runtime-config';
 
@@ -35,6 +36,10 @@ async function bootstrap() {
   // the storefront; allow them to load cross-origin (API domain direct links).
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
   app.useGlobalFilters(new ApiExceptionFilter());
+  // Server-side handling time on every response (X-Response-Time header +
+  // a console.warn line for slow routes) so latency can be attributed to
+  // the network or the server without guessing.
+  app.useGlobalInterceptors(new ResponseTimeInterceptor());
   app.enableCors({ origin: corsOrigins(process.env.CORS_ORIGINS), credentials: true });
   app.useGlobalPipes(
     new ValidationPipe({

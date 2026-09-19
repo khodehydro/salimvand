@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service';
 import { Prisma } from '@prisma/client';
+import { buildProductKeywords } from '@salimvand/shared';
 
 @Injectable()
 export class CompatibilityService {
@@ -24,10 +25,23 @@ export class CompatibilityService {
             trimId: row.trimId ?? null,
           })),
         });
-      return tx.productVehicleCompat.findMany({
+      const result = await tx.productVehicleCompat.findMany({
         where: { productId },
         include: { model: { include: { make: true } }, trim: true },
       });
+      await tx.product.update({
+        where: { id: productId },
+        data: {
+          seoKeywords: buildProductKeywords(
+            product.name,
+            result.map(
+              (row: { model: { make: { name: string }; name: string } }) =>
+                `${row.model.make.name} ${row.model.name}`,
+            ),
+          ),
+        },
+      });
+      return result;
     });
     return { ok: true, data: result };
   }

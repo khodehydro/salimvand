@@ -11,8 +11,8 @@ export const SECRET_MASK_PREFIX = '••••';
 
 export type MessagingConfig = {
   sms?: { apiKey?: string; lineNumber?: string };
-  telegram?: { botToken?: string; chatId?: string; apiBase?: string; proxySecret?: string };
-  bale?: { botToken?: string; chatId?: string };
+  telegram?: { botToken?: string; chatId?: string; passwordRecoveryChatId?: string; apiBase?: string; proxySecret?: string };
+  bale?: { botToken?: string; chatId?: string; botId?: string; apiAccessKey?: string };
 };
 
 function asString(value: unknown): string | undefined {
@@ -35,10 +35,16 @@ export function asMessagingConfig(value: unknown): MessagingConfig {
     telegram: {
       botToken: asString(telegram.botToken),
       chatId: asString(telegram.chatId),
+      passwordRecoveryChatId: asString(telegram.passwordRecoveryChatId),
       apiBase: asString(telegram.apiBase),
       proxySecret: asString(telegram.proxySecret),
     },
-    bale: { botToken: asString(bale.botToken), chatId: asString(bale.chatId) },
+    bale: {
+      botToken: asString(bale.botToken),
+      chatId: asString(bale.chatId),
+      botId: asString(bale.botId),
+      apiAccessKey: asString(bale.apiAccessKey),
+    },
   };
 }
 
@@ -51,10 +57,16 @@ export function maskMessagingSecrets(value: unknown): MessagingConfig {
     telegram: {
       botToken: mask(config.telegram?.botToken),
       chatId: config.telegram?.chatId,
+      passwordRecoveryChatId: config.telegram?.passwordRecoveryChatId,
       apiBase: config.telegram?.apiBase,
       proxySecret: mask(config.telegram?.proxySecret),
     },
-    bale: { botToken: mask(config.bale?.botToken), chatId: config.bale?.chatId },
+    bale: {
+      botToken: mask(config.bale?.botToken),
+      chatId: config.bale?.chatId,
+      botId: config.bale?.botId,
+      apiAccessKey: mask(config.bale?.apiAccessKey),
+    },
   };
 }
 
@@ -76,12 +88,15 @@ export function mergeMessagingSecrets(incoming: unknown, existing: unknown): Mes
     telegram: {
       botToken: secret(next.telegram?.botToken, current.telegram?.botToken),
       chatId: next.telegram?.chatId ?? current.telegram?.chatId,
+      passwordRecoveryChatId: next.telegram?.passwordRecoveryChatId ?? current.telegram?.passwordRecoveryChatId,
       apiBase: next.telegram?.apiBase ?? current.telegram?.apiBase,
       proxySecret: secret(next.telegram?.proxySecret, current.telegram?.proxySecret),
     },
     bale: {
       botToken: secret(next.bale?.botToken, current.bale?.botToken),
       chatId: next.bale?.chatId ?? current.bale?.chatId,
+      botId: next.bale?.botId ?? current.bale?.botId,
+      apiAccessKey: secret(next.bale?.apiAccessKey, current.bale?.apiAccessKey),
     },
   };
 }
@@ -107,13 +122,15 @@ export async function resolveMessagingEnv(
     if (config.sms?.apiKey) env.SMS_API_KEY = config.sms.apiKey;
     if (config.sms?.lineNumber) env.SMS_LINE_NUMBER = config.sms.lineNumber;
     if (config.telegram?.botToken) env.TELEGRAM_BOT_TOKEN = config.telegram.botToken;
-    if (config.telegram?.chatId) env.TELEGRAM_CHAT_ID = config.telegram.chatId;
+    if (config.telegram?.chatId || config.telegram?.passwordRecoveryChatId) env.TELEGRAM_CHAT_ID = config.telegram.chatId ?? config.telegram.passwordRecoveryChatId;
     // Channel publishing routes Telegram through the Cloudflare Worker proxy
     // (api.telegram.org is filtered in Iran); both values are panel-managed.
     if (config.telegram?.apiBase) env.TELEGRAM_API_BASE = config.telegram.apiBase;
     if (config.telegram?.proxySecret) env.TELEGRAM_PROXY_SECRET = config.telegram.proxySecret;
     if (config.bale?.botToken) env.BALE_BOT_TOKEN = config.bale.botToken;
     if (config.bale?.chatId) env.BALE_CHAT_ID = config.bale.chatId;
+    if (config.bale?.botId) env.BALE_BOT_ID = config.bale.botId;
+    if (config.bale?.apiAccessKey) env.BALE_API_ACCESS_KEY = config.bale.apiAccessKey;
   } catch {
     // The settings lookup is best-effort; `.env` remains the fallback.
   }

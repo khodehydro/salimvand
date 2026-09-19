@@ -12,6 +12,12 @@ export type NotificationJob = {
   testChannel?: Channel;
   /** Channels that already succeeded; BullMQ retries skip them (no duplicate SMS). */
   channelsDone?: Channel[];
+  invoicePreview?: {
+    number: string;
+    shortCode: string;
+    total: string;
+    items: Array<{ name: string; quantity: number }>;
+  };
 };
 type Channel = 'sms' | 'telegram' | 'bale';
 
@@ -23,11 +29,10 @@ export function integrationConfigured(
   env: NodeJS.ProcessEnv = process.env,
 ): boolean {
   // sms.ir bulk send: the panel API key (X-API-KEY) plus the store's
-  // subscription line number. Without both, SMS stays disabled and the
-  // invoice queue simply runs its other channels (telegram/bale) or dry-runs.
+  // subscription line number. Without both, SMS stays disabled.
   if (channel === 'sms') return Boolean(env.SMS_API_KEY && env.SMS_LINE_NUMBER);
   if (channel === 'telegram') return Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID);
-  return Boolean(env.BALE_BOT_TOKEN && env.BALE_CHAT_ID);
+  return Boolean(env.BALE_BOT_TOKEN && env.BALE_CHAT_ID) || baleSafirConfigured(env);
 }
 
 /** POST target for one invoice SMS: the sms.ir «ارسال گروهی» endpoint. */
@@ -40,11 +45,14 @@ export function smsIrPayload(
   mobile: string,
   message: string,
   env: NodeJS.ProcessEnv = process.env,
-): { lineNumber: number; messageText: string; mobiles: string[] } {
+): { lineNumber: number; messageText: string; mobiles: string[]; sendDateTime: null } {
   return {
     lineNumber: Number(env.SMS_LINE_NUMBER),
     messageText: message,
     mobiles: [mobile],
+    // Explicitly request immediate delivery. sms.ir documents null as the
+    // non-scheduled/immediate mode; omitting it leaves behavior to defaults.
+    sendDateTime: null,
   };
 }
 
@@ -65,12 +73,27 @@ export function integrationUrl(
   env: NodeJS.ProcessEnv = process.env,
 ): string {
   if (channel === 'telegram') {
-    // TELEGRAM_API_BASE can point at the Cloudflare Worker proxy (Telegram is
-    // filtered inside Iran); it defaults to the official API.
     const base = (env.TELEGRAM_API_BASE ?? 'https://api.telegram.org').replace(/\/+$/, '');
     return `${base}/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`;
   }
   return `https://tapi.bale.ai/bot${env.BALE_BOT_TOKEN}/sendMessage`;
+}
+
+export function normalizeBalePhone(value: string): string {
+  const digits = value.replace(/\D/g, '');
+  if (digits.startsWith('98') && digits.length === 12) return digits;
+  if (digits.startsWith('09') && digits.length === 11) return `98${digits.slice(1)}`;
+  return digits;
+}
+
+export function baleSafirConfigured(env: NodeJS.ProcessEnv = process.env): boolean {
+  return Boolean(env.BALE_BOT_ID && env.BALE_API_ACCESS_KEY);
+}
+
+export function buildBaleInvoiceMessage(preview: NonNullable<NotificationJob['invoicePreview']>): string {
+  const lines = preview.items.slice(0, 5).map((item) => `• ${item.name} × ${item.quantity}`).join('\\n');
+  const more = preview.items.length > 5 ? `\\n• و ${preview.items.length - 5} قلم دیگر` : '';
+  return `فروشگاه سلیم وند\\n\\nفاکتور شماره ${preview.number} صادر شد.\\nمبلغ نهایی: ${preview.total} ریال\\n\\nاقلام خرید:\\n${lines}${more}`;
 }
 
 /**
@@ -107,12 +130,24 @@ export function notificationChannels(
   env: NodeJS.ProcessEnv = process.env,
 ): Channel[] {
   const channels: Channel[] = [];
+  const isInvoiceNotification = job.type === 'invoice.issued' || job.type === 'invoice.paid';
+
   if (
     job.mobile &&
     (!job.testChannel || job.testChannel === 'sms') &&
     integrationConfigured('sms', env)
   )
     channels.push('sms');
+  if (
+    isInvoiceNotification &&
+    job.mobile &&
+    job.invoicePreview &&
+    (!job.testChannel || job.testChannel === 'bale') &&
+    baleSafirConfigured(env)
+  )
+    channels.push('bale');
+  if (isInvoiceNotification) return channels;
+
   for (const channel of ['telegram', 'bale'] as const) {
     if ((!job.testChannel || job.testChannel === channel) && integrationConfigured(channel, env))
       channels.push(channel);
@@ -161,7 +196,10 @@ export function buildInvoiceMessage(
     link,
     store: 'سلیم‌وند',
   });
-  if (rendered) return rendered;
+  // Operators often write «{customer_name} عزیز» in the template while
+  // customer_name already carries the polite suffix. Collapse that accidental
+  // duplication without changing the rest of the custom SMS text.
+  if (rendered) return rendered.replace(/عزیز(?:\s+عزیز)+/g, 'عزیز');
   if (paid) return `پرداخت فاکتور ${number} ثبت شد. مبلغ پرداختی: ${total} ریال\n${link}`;
   return `${greeting}\n\nفاکتور شماره ${number} شما صادر شد\n\nمشاهده:\n${link}\n\nبا تشکر از خرید شما\nفروشگاه سلیم وند`;
 }
@@ -205,7 +243,10 @@ export class NotificationsService implements OnModuleDestroy {
       this.worker = new Worker<NotificationJob>(
         'salimvand-notifications',
         async (job) => this.process(job),
-        { connection: this.connection, concurrency: 4 },
+        // Keep invoice SMS responsive even when a channel provider is slow.
+        // Bale/Telegram calls can take several seconds, so avoid letting a
+        // small worker pool serialize customer notifications behind them.
+        { connection: this.connection, concurrency: 10 },
       );
     }
   }
@@ -230,7 +271,12 @@ export class NotificationsService implements OnModuleDestroy {
       return await this.queue.add(
         payload.type as NotificationName,
         payload,
-        notificationJobOptions,
+        {
+          ...notificationJobOptions,
+          // Invoice messages jump ahead of low-stock/broadcast jobs. BullMQ
+          // uses a lower number as a higher priority.
+          priority: payload.type === 'invoice.issued' || payload.type === 'invoice.paid' ? 1 : 10,
+        },
       );
     } catch (error) {
       console.error(
@@ -271,6 +317,13 @@ export class NotificationsService implements OnModuleDestroy {
       },
       queue: counts,
     };
+  }
+
+  async dueChecksToday() {
+    if (!this.prisma) return [];
+    const start = new Date(); start.setHours(0, 0, 0, 0);
+    const end = new Date(start); end.setDate(end.getDate() + 1);
+    return this.prisma.paymentCheck.findMany({ where: { status: 'pending', dueDate: { gte: start, lt: end } }, orderBy: { dueDate: 'asc' }, include: { payment: { include: { invoice: { select: { number: true, customerName: true } } } } } });
   }
 
   async failed(limit = 50) {
@@ -492,20 +545,40 @@ export class NotificationsService implements OnModuleDestroy {
         }
         await this.logSms(job.data, 'sent');
       } else {
+        const isSafirInvoice = channel === 'bale' && Boolean(job.data.invoicePreview && baleSafirConfigured(env));
         const chatId = channel === 'telegram' ? env.TELEGRAM_CHAT_ID! : env.BALE_CHAT_ID!;
+        const url = isSafirInvoice
+          ? 'https://safir.bale.ai/api/v3/send_message'
+          : integrationUrl(channel, env);
+        const headers = isSafirInvoice
+          ? { 'content-type': 'application/json', 'api-access-key': env.BALE_API_ACCESS_KEY! }
+          : channel === 'telegram'
+            ? telegramApiHeaders(env)
+            : { 'content-type': 'application/json' };
+        const body = isSafirInvoice
+          ? {
+              request_id: `${job.data.invoiceId ?? 'invoice'}-${job.id}`,
+              bot_id: Number(env.BALE_BOT_ID),
+              phone_number: normalizeBalePhone(job.data.mobile!),
+              message_data: {
+                message: {
+                  text: buildBaleInvoiceMessage(job.data.invoicePreview!),
+                  reply_markup: {
+                    inline_keyboard: [[{
+                      text: 'مشاهده فاکتور کامل',
+                      url: `${env.PUBLIC_SITE_URL ?? 'https://salimvand.ir'}/i/${job.data.invoicePreview!.shortCode}`,
+                    }]],
+                  },
+                },
+              },
+            }
+          : { chat_id: chatId, text: job.data.message, disable_web_page_preview: true };
         let response: Response;
         try {
-          response = await fetch(integrationUrl(channel, env), {
+          response = await fetch(url, {
             method: 'POST',
-            headers:
-              channel === 'telegram'
-                ? telegramApiHeaders(env)
-                : { 'content-type': 'application/json' },
-            body: JSON.stringify({
-              chat_id: chatId,
-              text: job.data.message,
-              disable_web_page_preview: true,
-            }),
+            headers,
+            body: JSON.stringify(body),
             signal: AbortSignal.timeout(NotificationsService.providerTimeoutMs),
           });
         } catch (error) {
@@ -520,16 +593,17 @@ export class NotificationsService implements OnModuleDestroy {
           if (done.has('sms')) continue;
           throw new Error(reason);
         }
-        if (!response.ok) {
-          await this.logChannel(
-            channel,
-            job.data.message,
-            'failed',
-            `provider ${response.status}`,
-            chatId,
-          );
+        const providerBody = (await response.json().catch(() => null)) as
+          | { error_data?: Array<{ code?: number; description?: string }> }
+          | null;
+        const safirError = providerBody?.error_data?.[0];
+        if (!response.ok || safirError) {
+          const reason = safirError?.description
+            ? `بله: ${safirError.description} (${safirError.code ?? 'خطا'})`
+            : `${channel} provider returned ${response.status}`;
+          await this.logChannel(channel, job.data.message, 'failed', reason, chatId);
           if (done.has('sms')) continue;
-          throw new Error(`${channel} provider returned ${response.status}`);
+          throw new Error(reason);
         }
         await this.logChannel(channel, job.data.message, 'sent', undefined, chatId);
       }
