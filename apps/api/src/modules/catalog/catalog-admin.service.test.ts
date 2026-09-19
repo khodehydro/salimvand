@@ -52,7 +52,7 @@ function makeService() {
       findMany: vi.fn().mockResolvedValue([]),
     },
     productOperation: { create: vi.fn(), findUnique: vi.fn().mockResolvedValue(null) },
-    counter: { upsert: vi.fn().mockResolvedValue({ lastValue: 12 }) },
+    counter: { upsert: vi.fn().mockResolvedValue({ lastValue: 12 }), update: vi.fn() },
     $transaction: vi.fn(async (callback: (tx: unknown) => unknown) => callback(prisma)),
   };
   return { service: new CatalogAdminService(prisma as never), prisma };
@@ -477,13 +477,54 @@ describe('atomic product + inventory creation (mobile contract)', () => {
     expect(prisma.inventoryTransaction.create).not.toHaveBeenCalled();
   });
 
+  it('resyncs a stale product code counter past existing codes instead of colliding', async () => {
+    const { service, prisma } = makeService();
+    // The counter thinks the next code is PRODUCT-00001, but codes up to
+    // PRODUCT-00047 already exist (restored backup / manual import).
+    prisma.counter.upsert.mockResolvedValue({ lastValue: 1 });
+    prisma.counter.update.mockResolvedValue({ lastValue: 48 });
+    prisma.product.findUnique.mockImplementation(
+      async (args: { where?: { code?: string; slug?: string } }) =>
+        args?.where?.code === 'PRODUCT-00001' ? { id: 'existing' } : null,
+    );
+    prisma.product.findFirst.mockResolvedValue({ code: 'PRODUCT-00047' });
+    prisma.product.create.mockResolvedValue({ id: PRODUCT_ID });
+    await service.create({ name: 'دستهٔ کلاچ', categoryId: CATEGORY_ID });
+    expect(prisma.counter.update).toHaveBeenCalledWith({
+      where: { key: 'product' },
+      data: { lastValue: 48 },
+    });
+    expect(prisma.product.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ code: 'PRODUCT-00048' }) }),
+    );
+  });
+
+  it('draws a fresh auto barcode when the first candidate is already taken', async () => {
+    const { service, prisma } = makeService();
+    prisma.product.create.mockResolvedValue({ id: PRODUCT_ID });
+    // First random candidate collides with an existing line; the next is free.
+    prisma.inventoryItem.findUnique.mockResolvedValueOnce({ id: ITEM_ID });
+    const result = await service.create(
+      { name: 'هواکش', categoryId: CATEGORY_ID, inventory: { salePrice: '500000' } },
+      'user-1',
+    );
+    expect(prisma.inventoryItem.create).toHaveBeenCalledTimes(1);
+    expect(result.ok).toBe(true);
+    const barcode = (
+      prisma.inventoryItem.create.mock.calls[0]?.[0] as {
+        data: { barcode: string };
+      }
+    ).data.barcode;
+    expect(barcode).toMatch(/^626\d{10}$/);
+  });
+
   it('suffixes the auto slug instead of failing when the name is already taken', async () => {
     const { service, prisma } = makeService();
     prisma.product.create.mockResolvedValue({ id: PRODUCT_ID, name: 'هواکش' });
     // 'هواکش' is taken by an earlier product; 'هواکش-2' is free.
-    prisma.product.findUnique
-      .mockResolvedValueOnce({ id: 'other-product' })
-      .mockResolvedValueOnce(null);
+    prisma.product.findUnique.mockImplementation(async (args: { where?: { slug?: string } }) =>
+      args?.where?.slug === 'هواکش' ? { id: 'other-product' } : null,
+    );
     const result = await service.create(
       { name: 'هواکش', categoryId: CATEGORY_ID, inventory: { salePrice: '50000000' } },
       'user-1',
@@ -498,7 +539,9 @@ describe('atomic product + inventory creation (mobile contract)', () => {
 
   it('rejects a manual slug that belongs to another product with a readable 400', async () => {
     const { service, prisma } = makeService();
-    prisma.product.findUnique.mockResolvedValue({ id: 'other-product' });
+    prisma.product.findUnique.mockImplementation(async (args: { where?: { slug?: string } }) =>
+      args?.where?.slug ? { id: 'other-product' } : null,
+    );
     await expect(
       service.create({ name: 'هواکش ۲', categoryId: CATEGORY_ID, slug: 'هواکش' }, 'user-1'),
     ).rejects.toThrow('این نامک (slug) قبلاً برای محصول دیگری ثبت شده است');
@@ -591,7 +634,9 @@ describe('product.update with a nested inventory object', () => {
   it('rejects a manual slug change that collides with another product', async () => {
     const { service, prisma } = makeService();
     prisma.product.findFirst.mockResolvedValue({ id: PRODUCT_ID, name: 'لنت' });
-    prisma.product.findUnique.mockResolvedValue({ id: 'other-product' });
+    prisma.product.findUnique.mockImplementation(async (args: { where?: { slug?: string } }) =>
+      args?.where?.slug ? { id: 'other-product' } : null,
+    );
     await expect(service.update(PRODUCT_ID, { slug: 'هواکش' }, 'user-1')).rejects.toThrow(
       'این نامک (slug) قبلاً برای محصول دیگری ثبت شده است',
     );

@@ -211,7 +211,7 @@ export class CatalogAdminService {
         barcode: string;
       }> = [];
       const explicitBarcodes = new Set<string>();
-      for (const [index, item] of itemsInput.entries()) {
+      for (const item of itemsInput) {
         let brandId: string | null = null;
         if (item.brandId) {
           const brand = await tx.brand.findUnique({ where: { id: item.brandId } });
@@ -234,9 +234,7 @@ export class CatalogAdminService {
           const taken = await tx.inventoryItem.findUnique({ where: { barcode } });
           if (taken) throw new BadRequestException('این بارکد قبلاً برای قلم دیگری ثبت شده است');
         } else {
-          // The index keeps auto-generated barcodes unique inside the same
-          // transaction (same millisecond + same category).
-          barcode = createEan13(`${Date.now()}${categoryId.replace(/-/g, '')}${index}`.slice(-9));
+          barcode = await this.uniqueBarcode(tx);
         }
         resolvedItems.push({ input: item, brandId, locationId, barcode });
       }
@@ -314,7 +312,7 @@ export class CatalogAdminService {
           const neutral = await tx.inventoryItem.create({
             data: {
               productId: created.id,
-              barcode: createEan13(`${Date.now()}${created.id.replace(/-/g, '')}`.slice(-9)),
+              barcode: await this.uniqueBarcode(tx),
               purchasePrice: 0n,
               salePrice: 0n,
               quantity: 0,
@@ -838,12 +836,50 @@ export class CatalogAdminService {
    * increment commits (or rolls back) atomically with the row that consumes
    * the code, so retries can never diverge from the counter. */
   private async nextCodeInTx(tx: Prisma.TransactionClient | typeof this.prisma, prefix: string) {
+    const upper = prefix.toUpperCase();
     const counter = await tx.counter.upsert({
       where: { key: prefix },
       update: { lastValue: { increment: 1 } },
       create: { key: prefix, lastValue: 1 },
     });
-    return `${prefix.toUpperCase()}-${String(counter.lastValue).padStart(5, '0')}`;
+    let code = `${upper}-${String(counter.lastValue).padStart(5, '0')}`;
+    // A stale counter row (restored backup, manual import) must never 500
+    // the next create with a P2002 on products.code: when the minted code
+    // already exists, resync one past the highest existing code of this
+    // prefix and hand that out instead.
+    if (await tx.product.findUnique({ where: { code }, select: { id: true } })) {
+      const last = await tx.product.findFirst({
+        where: { code: { startsWith: `${upper}-` } },
+        orderBy: { code: 'desc' },
+        select: { code: true },
+      });
+      const lastValue = last ? Number(last.code.slice(upper.length + 1)) || 0 : 0;
+      const resynced = await tx.counter.update({
+        where: { key: prefix },
+        data: { lastValue: Math.max(lastValue + 1, Number(counter.lastValue) + 1) },
+      });
+      code = `${upper}-${String(resynced.lastValue).padStart(5, '0')}`;
+    }
+    return code;
+  }
+
+  /** Auto barcodes carry real entropy: createEan13 keeps only the LAST 9
+   * digits of its seed, so the old `Date.now()+categoryId+index` seed lost
+   * its timestamp entirely and every no-barcode item of the same category
+   * collided on inventory_items.barcode (P2002). Draw random bases until
+   * one is free inside the caller's transaction. */
+  private async uniqueBarcode(tx: Prisma.TransactionClient | typeof this.prisma) {
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const barcode = createEan13(
+        String(Math.floor(Math.random() * 1_000_000_000)).padStart(9, '0'),
+      );
+      const taken = await tx.inventoryItem.findUnique({
+        where: { barcode },
+        select: { id: true },
+      });
+      if (!taken) return barcode;
+    }
+    throw new BadRequestException('تولید بارکد یکتا ناموفق بود؛ دوباره تلاش کنید');
   }
   private priceDisplayValue(value: unknown): 'inherit' | 'show' | 'hide' | null {
     if (value === undefined || value === null || value === '') return null;
