@@ -59,6 +59,12 @@ POST /sync/conflicts/{conflictId}/resolve
 
 `GET /sync/operations` وجود ندارد و نباید صدا زده شود. `POST /sync/operations/recover` فقط برای مدیران Backend است (`super_admin` و `manager`) و Android هرگز آن را اجرا نمی‌کند؛ بازیابی عملیاتهای معلق توسط تایمر خود سرور انجام می‌شود.
 
+نقش‌های مجاز برای عملیات‌های sync: `product.*` → `manager`، `super_admin`، `seller`، `warehouse`؛
+`inventory.*` → `manager`، `super_admin`، `warehouse`، `seller`؛ `invoice.create`/`invoice.pay` →
+`manager`، `super_admin`، `seller` (و `accountant` برای pay)؛ `customer.create` → `manager`،
+`super_admin`، `seller`. عملیات pending بعد از ۵ ثانیه دوباره claim می‌شود؛ retry با همان
+`operationId` بی‌خطر است.
+
 وضعیت Operation:
 
 ```json
@@ -454,6 +460,14 @@ GET /products/{productId}
 
 `product.create` اختیاریاً زیرشیء `inventory` دارد؛ در این صورت Product، دقیقاً یک InventoryItem و در صورت `initialQuantity > 0` یک ردیف ledger با `type=initial` در **یک تراکنش** ساخته می‌شوند و قلم خنثیِ بدون برند ساخته نمی‌شود. `categoryId` و در صورت ارسال `brandId`/`locationId` باید شناسهٔ واقعی و موجود باشند؛ نام آزاد برند پذیرفته نیست. تعداد فقط از طریق ledger ثبت می‌شود.
 
+**چند برند در یک عملیات (فرم جدید):** به‌جای `inventory` می‌توانید آرایهٔ `items` بفرستید — هر عضو همان ساختار `inventory` را دارد و همهٔ اقلام در همان تراکنشِ محصول به‌صورت اتمیک ساخته می‌شوند (اگر یکی رد شود، هیچ‌چیز ثبت نمی‌شود). قواعد:
+
+- `inventory` و `items` را همزمان نفرستید (خطای 400).
+- هر `brandId` (از جمله بدون برند) فقط یک‌بار می‌تواند تکرار شود — هر برند یک قلم.
+- حداکثر ۵۰ قلم در هر عملیات.
+- اگر `barcode` خالی باشد، سرور برای هر قلم بارکد یکتا تولید می‌کند.
+- پاسخ `result.inventoryItems` آرایهٔ همهٔ اقلام ساخته‌شده است (`inventoryItem` = قلم اول، برای سازگاری قبلی).
+
 ```http
 POST /sync/operations
 ```
@@ -469,15 +483,23 @@ POST /sync/operations
     "partNumber": "PN-206",
     "description": "توضیح محصول",
     "status": "active",
-    "inventory": {
-      "brandId": "brand-id-or-null",
-      "barcode": "6261234567890",
-      "purchasePrice": "1850000",
-      "salePrice": "2450000",
-      "minStock": 3,
-      "locationId": "location-id-or-null",
-      "initialQuantity": 10
-    }
+    "items": [
+      {
+        "brandId": "brand-id-or-null",
+        "barcode": "6261234567890",
+        "purchasePrice": "1850000",
+        "salePrice": "2450000",
+        "minStock": 3,
+        "locationId": "location-id-or-null",
+        "initialQuantity": 10
+      },
+      {
+        "brandId": "brand-id-2",
+        "purchasePrice": "1900000",
+        "salePrice": "2550000",
+        "initialQuantity": 4
+      }
+    ]
   }
 }
 ```
@@ -498,7 +520,11 @@ POST /sync/operations
         "purchasePrice": "1850000",
         "salePrice": "2450000",
         "quantity": 10
-      }
+      },
+      "inventoryItems": [
+        { "id": "inventory-item-id-1", "barcode": "6261234567890", "quantity": 10 },
+        { "id": "inventory-item-id-2", "barcode": "6261234567891", "quantity": 4 }
+      ]
     },
     "duplicate": false
   }

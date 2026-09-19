@@ -82,11 +82,39 @@ describe('SyncService.queueOperation', () => {
 
   it('verifies the role before the operation row is created', async () => {
     const { service, prisma } = makeService();
-    prisma.user.findUnique.mockResolvedValue({ role: 'seller' });
+    // Accountants never touch stock operations; sellers and warehouse staff
+    // are now allowed (the mobile app is their workflow).
+    prisma.user.findUnique.mockResolvedValue({ role: 'accountant' });
     await expect(service.queueOperation(USER_ID, OPERATION)).rejects.toBeInstanceOf(
       BadRequestException,
     );
     expect(prisma.syncOperation.create).not.toHaveBeenCalled();
+  });
+
+  it('lets sellers and warehouse staff run catalog and inventory operations from the app', async () => {
+    const { service, prisma, inventory, catalog } = makeService();
+    prisma.user.findUnique.mockResolvedValue({ role: 'seller' });
+    inventory.receive.mockResolvedValue({ ok: true, data: { item: { id: 'i1' } } });
+    await service.queueOperation(USER_ID, OPERATION);
+    expect(inventory.receive).toHaveBeenCalled();
+
+    catalog.create.mockResolvedValue({ ok: true, data: { id: 'p1', inventoryItems: [] } });
+    await service.queueOperation(USER_ID, {
+      operationId: 'android-device-product-000099',
+      deviceId: 'android-device',
+      type: 'product.create',
+      payload: { name: 'لنت', categoryId: 'c1', items: [] },
+    });
+    expect(catalog.create).toHaveBeenCalled();
+
+    prisma.user.findUnique.mockResolvedValue({ role: 'warehouse' });
+    await service.queueOperation(USER_ID, {
+      operationId: 'android-device-product-000098',
+      deviceId: 'android-device',
+      type: 'product.create',
+      payload: { name: 'فیلتر', categoryId: 'c1', items: [] },
+    });
+    expect(catalog.create).toHaveBeenCalledTimes(2);
   });
 
   it('re-applies a duplicate pending operation so a revived retry actually runs', async () => {
@@ -105,6 +133,28 @@ describe('SyncService.queueOperation', () => {
       duplicate: true,
     });
     expect(inventory.receive).toHaveBeenCalled();
+  });
+
+  it('re-claims a pending operation after the 5-second stale window', async () => {
+    const { service, prisma, inventory } = makeService();
+    prisma.syncOperation.findUnique.mockResolvedValue({
+      ...OPERATION,
+      userId: USER_ID,
+      status: 'pending',
+      payload: OPERATION.payload,
+    });
+    inventory.receive.mockResolvedValue({ ok: true, data: { item: { id: 'i1' } } });
+    await service.queueOperation(USER_ID, OPERATION);
+    const claim = prisma.syncOperation.updateMany.mock.calls
+      .map((call) => call[0] as { where?: { OR?: Array<{ lastAttemptAt?: { lt: Date } }> } })
+      .find((args) => args.where?.OR?.[1]?.lastAttemptAt);
+    // The claim window dropped from 30s to 5s so a crashed apply no longer
+    // leaves the mobile client looping on duplicate/pending for half a minute.
+    const staleBefore = claim?.where?.OR?.[1]?.lastAttemptAt?.lt;
+    expect(staleBefore).toBeInstanceOf(Date);
+    const staleFor = Date.now() - (staleBefore as Date).getTime();
+    expect(staleFor).toBeGreaterThanOrEqual(4_000);
+    expect(staleFor).toBeLessThanOrEqual(6_000);
   });
 
   it('keeps a duplicate applied operation read-only', async () => {

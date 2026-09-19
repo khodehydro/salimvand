@@ -149,9 +149,22 @@ export class CatalogAdminService {
     const name = this.stringValue(input.name);
     const categoryId = this.stringValue(input.categoryId);
     if (!name || !categoryId) throw new BadRequestException('نام محصول و دسته‌بندی الزامی است');
-    const inventoryInput = this.parseCreateInventory(input.inventory);
-    if (inventoryInput && inventoryInput.initialQuantity > 0 && !userId)
+    // Multi-brand form: items[] creates one stock line per brand atomically;
+    // the legacy single `inventory` object is translated into a one-element
+    // list so old mobile builds keep working unchanged.
+    const itemsInput = this.parseCreateItems(input);
+    if (itemsInput.some((item) => item.initialQuantity > 0) && !userId)
       throw new BadRequestException('کاربر ثبت‌کنندهٔ موجودی الزامی است');
+    // Postgres treats NULLs as distinct in @@unique([productId, brandId]),
+    // so the "one line per brand" rule is enforced here in code — including
+    // the no-brand (brandId: null) case.
+    const brandKeys = new Set<string>();
+    for (const item of itemsInput) {
+      const key = item.brandId ?? '__no_brand__';
+      if (brandKeys.has(key))
+        throw new BadRequestException('هر برند برای یک محصول فقط یک قلم می‌تواند داشته باشد');
+      brandKeys.add(key);
+    }
     const code = await this.nextCode('product');
     const seo = buildProductSeo({ name, slug: this.optionalString(input.slug) ?? undefined });
     const createProduct = async (tx: Prisma.TransactionClient | typeof this.prisma) => {
@@ -161,29 +174,45 @@ export class CatalogAdminService {
       }
       // Reference integrity is checked explicitly (not left to the database
       // FK error) so a mobile payload with a stale categoryId/brandId gets a
-      // readable 400 instead of a 500.
+      // readable 400 instead of a 500 — and nothing is written at all before
+      // every line of the request has been validated.
       const category = await tx.category.findUnique({ where: { id: categoryId } });
       if (!category || !category.isActive) throw new BadRequestException('دسته‌بندی نامعتبر است');
-      let brandId: string | null = null;
-      if (inventoryInput?.brandId) {
-        const brand = await tx.brand.findUnique({ where: { id: inventoryInput.brandId } });
-        if (!brand || !brand.isActive) throw new BadRequestException('برند نامعتبر است');
-        brandId = brand.id;
-      }
-      let locationId: string | null = null;
-      if (inventoryInput?.locationId) {
-        const location = await tx.location.findUnique({ where: { id: inventoryInput.locationId } });
-        if (!location) throw new BadRequestException('موقعیت انبار نامعتبر است');
-        locationId = location.id;
-      }
-      let barcode = inventoryInput?.barcode?.trim() ?? '';
-      if (barcode) {
-        if (!/^\d{4,20}$/.test(barcode))
-          throw new BadRequestException('بارکد باید ۴ تا ۲۰ رقم باشد');
-        const taken = await tx.inventoryItem.findUnique({ where: { barcode } });
-        if (taken) throw new BadRequestException('این بارکد قبلاً برای قلم دیگری ثبت شده است');
-      } else {
-        barcode = createEan13(`${Date.now()}${categoryId.replace(/-/g, '')}`.slice(-9));
+      const resolvedItems: Array<{
+        input: ProductCreateInventoryInput;
+        brandId: string | null;
+        locationId: string | null;
+        barcode: string;
+      }> = [];
+      const explicitBarcodes = new Set<string>();
+      for (const [index, item] of itemsInput.entries()) {
+        let brandId: string | null = null;
+        if (item.brandId) {
+          const brand = await tx.brand.findUnique({ where: { id: item.brandId } });
+          if (!brand || !brand.isActive) throw new BadRequestException('برند نامعتبر است');
+          brandId = brand.id;
+        }
+        let locationId: string | null = null;
+        if (item.locationId) {
+          const location = await tx.location.findUnique({ where: { id: item.locationId } });
+          if (!location) throw new BadRequestException('موقعیت انبار نامعتبر است');
+          locationId = location.id;
+        }
+        let barcode = item.barcode?.trim() ?? '';
+        if (barcode) {
+          if (!/^\d{4,20}$/.test(barcode))
+            throw new BadRequestException('بارکد باید ۴ تا ۲۰ رقم باشد');
+          if (explicitBarcodes.has(barcode))
+            throw new BadRequestException('بارکد تکراری در اقلام ارسالی است');
+          explicitBarcodes.add(barcode);
+          const taken = await tx.inventoryItem.findUnique({ where: { barcode } });
+          if (taken) throw new BadRequestException('این بارکد قبلاً برای قلم دیگری ثبت شده است');
+        } else {
+          // The index keeps auto-generated barcodes unique inside the same
+          // transaction (same millisecond + same category).
+          barcode = createEan13(`${Date.now()}${categoryId.replace(/-/g, '')}${index}`.slice(-9));
+        }
+        resolvedItems.push({ input: item, brandId, locationId, barcode });
       }
       const created = await tx.product.create({
         data: {
@@ -203,64 +232,69 @@ export class CatalogAdminService {
           seoKeywords: seo.seoKeywords,
         },
       });
-      let inventoryItem = null;
-      if (inventoryInput) {
-        // One product, exactly one inventory line, and the opening stock is
-        // recorded as a type=initial ledger entry — quantity is never set
-        // outside the ledger.
-        inventoryItem = await tx.inventoryItem.create({
+      const inventoryItems = [];
+      for (const resolved of resolvedItems) {
+        const item = resolved.input;
+        // One stock line per brand, and the opening stock is recorded as a
+        // type=initial ledger entry — quantity is never set outside the ledger.
+        const inventoryItem = await tx.inventoryItem.create({
           data: {
             productId: created.id,
-            brandId,
-            barcode,
-            quantity: inventoryInput.initialQuantity,
-            purchasePrice: inventoryInput.purchasePrice,
-            salePrice: inventoryInput.salePrice,
-            minStock: inventoryInput.minStock,
-            locationId,
+            brandId: resolved.brandId,
+            barcode: resolved.barcode,
+            quantity: item.initialQuantity,
+            purchasePrice: item.purchasePrice,
+            salePrice: item.salePrice,
+            minStock: item.minStock,
+            locationId: resolved.locationId,
             // Opening price entry — only when a price was actually set.
-            ...(inventoryInput.salePrice && inventoryInput.salePrice > 0n
-              ? { priceUpdatedAt: new Date() }
-              : {}),
+            ...(item.salePrice && item.salePrice > 0n ? { priceUpdatedAt: new Date() } : {}),
           },
         });
+        inventoryItems.push(inventoryItem);
         await recordSalePriceChange(tx, {
           itemId: inventoryItem.id,
           oldSalePrice: null,
-          newSalePrice: inventoryInput.salePrice ?? 0n,
+          newSalePrice: item.salePrice ?? 0n,
           userId,
           source: operationId ? 'android' : 'panel',
           operationId,
         });
-        if (inventoryInput.initialQuantity > 0)
+        if (item.initialQuantity > 0)
           await tx.inventoryTransaction.create({
             data: {
               itemId: inventoryItem.id,
               type: 'initial',
-              quantityChange: inventoryInput.initialQuantity,
-              quantityAfter: inventoryInput.initialQuantity,
+              quantityChange: item.initialQuantity,
+              quantityAfter: item.initialQuantity,
               userId: userId!,
               reason: 'موجودی اولیه',
               operationId,
             },
           });
+        // One idempotency row per line — a replayed operation recognizes
+        // every item it already created.
         if (operationId)
           await tx.inventoryOperation.create({
             data: { operationId, itemId: inventoryItem.id, type: 'product.create' },
           });
-      } else if (!Array.isArray(input.inventoryBrandIds) || input.inventoryBrandIds.length === 0) {
+      }
+      if (!resolvedItems.length) {
         // InventoryItem requires a brand for barcode, stock and shelf tracking.
         // Keep catalog-only product creation consistent by creating one neutral
         // inventory line when the operator did not provide a brand yet.
-        inventoryItem = await tx.inventoryItem.create({
-          data: {
-            productId: created.id,
-            barcode: createEan13(`${Date.now()}${created.id.replace(/-/g, '')}`.slice(-9)),
-            purchasePrice: 0n,
-            salePrice: 0n,
-            quantity: 0,
-          },
-        });
+        if (!Array.isArray(input.inventoryBrandIds) || input.inventoryBrandIds.length === 0) {
+          const neutral = await tx.inventoryItem.create({
+            data: {
+              productId: created.id,
+              barcode: createEan13(`${Date.now()}${created.id.replace(/-/g, '')}`.slice(-9)),
+              purchasePrice: 0n,
+              salePrice: 0n,
+              quantity: 0,
+            },
+          });
+          inventoryItems.push(neutral);
+        }
       }
       if (operationId) {
         await tx.productOperation.create({
@@ -277,21 +311,31 @@ export class CatalogAdminService {
           after: { name: created.name, code: created.code },
           syncPayload: buildProductSyncPayload(created),
         });
-      if (inventoryItem && 'auditLog' in tx)
-        await writeAudit(tx as Prisma.TransactionClient, {
-          userId,
-          ip,
-          action: 'create',
-          entityType: 'inventory_item',
-          entityId: inventoryItem.id,
-          syncPayload: buildInventoryItemSyncPayload(inventoryItem),
-        });
-      return { product: created, inventoryItem };
+      if ('auditLog' in tx)
+        for (const inventoryItem of inventoryItems)
+          await writeAudit(tx as Prisma.TransactionClient, {
+            userId,
+            ip,
+            action: 'create',
+            entityType: 'inventory_item',
+            entityId: inventoryItem.id,
+            syncPayload: buildInventoryItemSyncPayload(inventoryItem),
+          });
+      return { product: created, inventoryItems };
     };
     const result = this.prisma.$transaction
       ? await this.prisma.$transaction(createProduct)
       : await createProduct(this.prisma);
-    return { ok: true, data: { ...result.product, inventoryItem: result.inventoryItem } };
+    // `inventoryItem` (the first line) is kept for the single-line callers;
+    // multi-line consumers read `inventoryItems`.
+    return {
+      ok: true,
+      data: {
+        ...result.product,
+        inventoryItem: result.inventoryItems[0] ?? null,
+        inventoryItems: result.inventoryItems,
+      },
+    };
   }
 
   async update(
@@ -513,6 +557,26 @@ export class CatalogAdminService {
     return input;
   }
 
+  /** Parses the multi-line `items` array of product.create. The legacy single
+   * `inventory` object is accepted as a one-element list; sending both forms
+   * at once is rejected so the intent is never ambiguous. */
+  private parseCreateItems(input: Record<string, unknown>): ProductCreateInventoryInput[] {
+    const legacy = this.parseCreateInventory(input.inventory);
+    const rawItems = input.items;
+    if (rawItems === undefined || rawItems === null) return legacy ? [legacy] : [];
+    if (!Array.isArray(rawItems)) throw new BadRequestException('ساختار items نامعتبر است');
+    if (legacy && rawItems.length)
+      throw new BadRequestException('فقط یکی از inventory یا items را ارسال کنید');
+    if (rawItems.length > 50)
+      throw new BadRequestException('حداکثر ۵۰ قلم موجودی در هر ثبت محصول مجاز است');
+    return rawItems.map((value, index) => {
+      const parsed = this.parseCreateInventory(value);
+      if (!parsed)
+        throw new BadRequestException(`ساختار قلم موجودی شمارهٔ ${index + 1} نامعتبر است`);
+      return parsed;
+    });
+  }
+
   /** Parses the nested `inventory` object of product.update: metadata only,
    * bound to one explicit itemId that must belong to the product. */
   private parseUpdateInventory(
@@ -627,21 +691,24 @@ export class CatalogAdminService {
   }
 
   /** Idempotent replay of product.create: rebuilds the exact result (product
-   * + the inventory line this operation created) without writing anything. */
+   * + every inventory line this operation created) without writing anything. */
   private async loadCreateResult(
     tx: Prisma.TransactionClient | typeof this.prisma,
     productId: string,
     operationId: string,
   ) {
     const product = await tx.product.findUniqueOrThrow({ where: { id: productId } });
-    const operation = await this.findInventoryOperation(tx, operationId);
-    const inventoryItem = operation
-      ? await tx.inventoryItem.findUnique({ where: { id: operation.itemId } })
-      : await tx.inventoryItem.findFirst({
+    const operations = await this.findInventoryOperations(tx, operationId);
+    const inventoryItems = operations.length
+      ? await tx.inventoryItem.findMany({
+          where: { id: { in: operations.map((operation) => operation.itemId) } },
+          orderBy: { id: 'asc' },
+        })
+      : await tx.inventoryItem.findMany({
           where: { productId, isActive: true },
           orderBy: { id: 'asc' },
         });
-    return { product, inventoryItem };
+    return { product, inventoryItems, inventoryItem: inventoryItems[0] ?? null };
   }
 
   /** Idempotent replay of product.update. */
@@ -662,13 +729,31 @@ export class CatalogAdminService {
     tx: Prisma.TransactionClient | typeof this.prisma,
     operationId: string,
   ) {
+    const rows = await this.findInventoryOperations(tx, operationId);
+    return rows[0] ?? null;
+  }
+
+  /** Every inventory row recorded under one operationId — a multi-line
+   * product.create writes one per created stock line. */
+  private async findInventoryOperations(
+    tx: Prisma.TransactionClient | typeof this.prisma,
+    operationId: string,
+  ) {
     const delegate = (
       tx as unknown as {
-        inventoryOperation?: { findUnique: (args: unknown) => Promise<{ itemId: string } | null> };
+        inventoryOperation?: {
+          findFirst?: (args: unknown) => Promise<{ itemId: string } | null>;
+          findMany?: (args: unknown) => Promise<Array<{ itemId: string }>>;
+        };
       }
     ).inventoryOperation;
-    if (!delegate?.findUnique) return null;
-    return delegate.findUnique({ where: { operationId } }).catch(() => null);
+    if (delegate?.findMany) {
+      const rows = await delegate.findMany({ where: { operationId } }).catch(() => []);
+      if (rows.length) return rows;
+    }
+    if (!delegate?.findFirst) return [];
+    const single = await delegate.findFirst({ where: { operationId } }).catch(() => null);
+    return single ? [single] : [];
   }
 
   private uuidValue(value: string) {

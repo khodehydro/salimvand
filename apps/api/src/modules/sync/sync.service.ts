@@ -90,7 +90,8 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
 
   onModuleInit() {
     // A stale pending operation is eligible only after 30 seconds, so this
-    // interval cannot race a request that is still applying its transaction.
+    // interval cannot race a request that is still applying its transaction
+    // (interactive retries use the tighter 5s claim window instead).
     this.recoveryTimer = setInterval(() => {
       void this.recoverPending(50).catch((error: unknown) => {
         console.error('[sync] pending operation recovery failed', error);
@@ -395,7 +396,12 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
       where: {
         operationId,
         status: 'pending',
-        OR: [{ lastAttemptAt: null }, { lastAttemptAt: { lt: new Date(Date.now() - 30_000) } }],
+        // Interactive retries may re-claim after 5 seconds: a crashed apply
+        // used to leave the row pending for 30s, which mobile clients hit as
+        // an endless duplicate/pending loop. Applies are idempotent per
+        // operationId, so a rare double-claim of a >5s transaction replays
+        // the stored result instead of duplicating work.
+        OR: [{ lastAttemptAt: null }, { lastAttemptAt: { lt: new Date(Date.now() - 5_000) } }],
       },
       data: { attempts: { increment: 1 }, lastAttemptAt: new Date() },
     });
@@ -411,8 +417,16 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
     const inventoryOperation = type.startsWith('inventory.');
     const productOperation = type.startsWith('product.');
     const customerOperation = type === 'customer.create';
+    // Operational roles can create catalog entries and move stock from the
+    // mobile app the moment they need them — the web panel stays limited to
+    // managers, but sync is the field workflow (same rationale as
+    // invoice.create being open to sellers). Sellers may also edit item
+    // metadata (e.g. fix a price right after creating the product).
     const allowed = inventoryOperation
-      ? user.role === 'manager' || user.role === 'super_admin' || user.role === 'warehouse'
+      ? user.role === 'manager' ||
+        user.role === 'super_admin' ||
+        user.role === 'warehouse' ||
+        user.role === 'seller'
       : type === 'invoice.create'
         ? user.role === 'manager' || user.role === 'super_admin' || user.role === 'seller'
         : type === 'purchase.create'
@@ -425,7 +439,10 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
                 user.role === 'seller' ||
                 user.role === 'accountant'
               : productOperation
-                ? user.role === 'manager' || user.role === 'super_admin'
+                ? user.role === 'manager' ||
+                  user.role === 'super_admin' ||
+                  user.role === 'seller' ||
+                  user.role === 'warehouse'
                 : customerOperation
                   ? user.role === 'seller' || user.role === 'manager' || user.role === 'super_admin'
                   : false;

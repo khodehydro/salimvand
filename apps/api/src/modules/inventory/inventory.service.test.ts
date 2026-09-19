@@ -27,7 +27,11 @@ function makeService(item = FULL_ITEM) {
       create: vi.fn().mockResolvedValue({ id: 't1', quantityAfter: 7 }),
       findUnique: vi.fn().mockResolvedValue(null),
     },
-    inventoryOperation: { create: vi.fn(), findUnique: vi.fn().mockResolvedValue(null) },
+    inventoryOperation: {
+      create: vi.fn(),
+      findUnique: vi.fn().mockResolvedValue(null),
+      findFirst: vi.fn().mockResolvedValue(null),
+    },
     inventoryPriceHistory: { create: vi.fn().mockResolvedValue({ id: 1n }) },
     brand: { findUnique: vi.fn().mockResolvedValue({ id: 'b1', isActive: true }) },
     location: { findUnique: vi.fn().mockResolvedValue({ id: 'shelf-2' }) },
@@ -457,7 +461,7 @@ describe('InventoryService.updateMetadata (offline command inventory.update_meta
 
   it('is idempotent per operationId and replays the stored line', async () => {
     const { service, tx } = makeService();
-    tx.inventoryOperation.findUnique.mockResolvedValue({
+    tx.inventoryOperation.findFirst.mockResolvedValue({
       operationId: 'android-meta-0002',
       itemId: 'i1',
       type: 'inventory.update_metadata',

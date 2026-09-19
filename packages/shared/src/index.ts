@@ -308,7 +308,12 @@ export interface ProductCreatePayload {
   partNumber?: string;
   description?: string;
   status?: 'active' | 'hidden';
+  /** Legacy single-line form (Android <= 1.x and the web panel): exactly one
+   * inventory item — kept for back-compat, translated into items[0]. */
   inventory?: ProductCreateInventoryPayload;
+  /** Multi-brand form: every line is created atomically in the same
+   * transaction as the product; brandId must be unique within the list. */
+  items?: ProductCreateInventoryPayload[];
 }
 export interface ProductUpdatePayload {
   productId: string;

@@ -372,7 +372,9 @@ export class InventoryService {
     if (!input.itemId) throw new BadRequestException('itemId عملیات الزامی است');
     return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       if (operationId) {
-        const previous = await tx.inventoryOperation.findUnique({ where: { operationId } });
+        // operationId is no longer globally unique (a multi-line
+        // product.create writes one row per item), so look up the first.
+        const previous = await tx.inventoryOperation.findFirst({ where: { operationId } });
         if (previous) {
           const item = await tx.inventoryItem.findUnique({ where: { id: previous.itemId } });
           return { ok: true, data: item, duplicate: true };

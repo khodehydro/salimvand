@@ -45,7 +45,12 @@ function makeService() {
     },
     inventoryPriceHistory: { create: vi.fn().mockResolvedValue({ id: 1n }) },
     inventoryTransaction: { create: vi.fn() },
-    inventoryOperation: { create: vi.fn(), findUnique: vi.fn().mockResolvedValue(null) },
+    inventoryOperation: {
+      create: vi.fn(),
+      findUnique: vi.fn().mockResolvedValue(null),
+      findFirst: vi.fn().mockResolvedValue(null),
+      findMany: vi.fn().mockResolvedValue([]),
+    },
     productOperation: { create: vi.fn(), findUnique: vi.fn().mockResolvedValue(null) },
     counter: { upsert: vi.fn().mockResolvedValue({ lastValue: 12 }) },
     $transaction: vi.fn(async (callback: (tx: unknown) => unknown) => callback(prisma)),
@@ -64,7 +69,10 @@ describe('CatalogAdminService', () => {
       seoTitle: 'عنوان اختصاصی',
       seoDescription: 'توضیح اختصاصی',
     });
-    expect(result).toEqual({ ok: true, data: { id: 'p1', inventoryItem: INVENTORY_ITEM } });
+    expect(result).toEqual({
+      ok: true,
+      data: { id: 'p1', inventoryItem: INVENTORY_ITEM, inventoryItems: [INVENTORY_ITEM] },
+    });
     expect(prisma.product.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         code: 'PRODUCT-00012',
@@ -305,6 +313,102 @@ describe('atomic product + inventory creation (mobile contract)', () => {
     ).rejects.toThrow('موجودی اولیه باید عدد صحیح و غیرمنفی باشد');
   });
 
+  it('creates one stock line per brand from items[] in a single transaction', async () => {
+    const { service, prisma } = makeService();
+    prisma.product.create.mockResolvedValue({ id: PRODUCT_ID, name: 'لنت ترمز جلو پژو ۲۰۶' });
+    const secondItem = { ...INVENTORY_ITEM, id: '27a0e000-0000-4000-8000-000000000002' };
+    prisma.inventoryItem.create
+      .mockResolvedValueOnce(INVENTORY_ITEM)
+      .mockResolvedValueOnce(secondItem);
+    const result = await service.create(
+      {
+        name: 'لنت ترمز جلو پژو ۲۰۶',
+        categoryId: CATEGORY_ID,
+        items: [
+          {
+            brandId: BRAND_ID,
+            purchasePrice: '1850000',
+            salePrice: '2450000',
+            initialQuantity: 10,
+            locationId: LOCATION_ID,
+          },
+          {
+            // No brand is a valid line too — but only once per product.
+            purchasePrice: '1900000',
+            salePrice: '2550000',
+            initialQuantity: 4,
+          },
+        ],
+      },
+      'user-1',
+      undefined,
+      'android-op-multi-0001',
+    );
+    expect(prisma.inventoryItem.create).toHaveBeenCalledTimes(2);
+    expect(result.data.inventoryItems).toHaveLength(2);
+    expect(result.data.inventoryItem.id).toBe(ITEM_ID);
+    // Auto-generated barcodes must differ inside the same transaction.
+    const barcodes = prisma.inventoryItem.create.mock.calls.map(
+      (call) => (call[0] as { data: { barcode: string } }).data.barcode,
+    );
+    expect(new Set(barcodes).size).toBe(2);
+    // Per-line opening ledger + idempotency rows.
+    expect(prisma.inventoryTransaction.create).toHaveBeenCalledTimes(2);
+    expect(prisma.inventoryOperation.create).toHaveBeenCalledTimes(2);
+    expect(prisma.inventoryOperation.create).toHaveBeenCalledWith({
+      data: { operationId: 'android-op-multi-0001', itemId: secondItem.id, type: 'product.create' },
+    });
+    expect(prisma.inventoryPriceHistory.create).toHaveBeenCalledTimes(2);
+    // No neutral line is created when explicit lines exist.
+    expect(prisma.productOperation.create).toHaveBeenCalledWith({
+      data: {
+        operationId: 'android-op-multi-0001',
+        productId: PRODUCT_ID,
+        type: 'product.create',
+      },
+    });
+  });
+
+  it('rejects a duplicate brand inside items[] before writing the product', async () => {
+    const { service, prisma } = makeService();
+    await expect(
+      service.create(
+        {
+          name: 'لنت',
+          categoryId: CATEGORY_ID,
+          items: [
+            { brandId: BRAND_ID, salePrice: '100' },
+            { brandId: BRAND_ID, salePrice: '200' },
+          ],
+        },
+        'user-1',
+      ),
+    ).rejects.toThrow('هر برند برای یک محصول فقط یک قلم می‌تواند داشته باشد');
+    expect(prisma.product.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects mixing the legacy inventory object with the items array', async () => {
+    const { service } = makeService();
+    await expect(
+      service.create(
+        {
+          name: 'لنت',
+          categoryId: CATEGORY_ID,
+          inventory: { salePrice: '100' },
+          items: [{ salePrice: '200' }],
+        },
+        'user-1',
+      ),
+    ).rejects.toThrow('فقط یکی از inventory یا items را ارسال کنید');
+  });
+
+  it('rejects a malformed entry inside items[]', async () => {
+    const { service } = makeService();
+    await expect(
+      service.create({ name: 'لنت', categoryId: CATEGORY_ID, items: [null] }, 'user-1'),
+    ).rejects.toThrow('ساختار قلم موجودی شمارهٔ 1 نامعتبر است');
+  });
+
   it('is idempotent per operationId: a retried product.create replays the stored result', async () => {
     const { service, prisma } = makeService();
     prisma.product.create.mockResolvedValue({ id: PRODUCT_ID, name: 'لنت' });
@@ -314,12 +418,10 @@ describe('atomic product + inventory creation (mobile contract)', () => {
       type: 'product.create',
     });
     prisma.product.findUniqueOrThrow.mockResolvedValue({ id: PRODUCT_ID, name: 'لنت' });
-    prisma.inventoryOperation.findUnique.mockResolvedValue({
-      operationId: 'android-op-0002',
-      itemId: ITEM_ID,
-      type: 'product.create',
-    });
-    prisma.inventoryItem.findUnique.mockResolvedValue(INVENTORY_ITEM);
+    prisma.inventoryOperation.findMany.mockResolvedValue([
+      { operationId: 'android-op-0002', itemId: ITEM_ID, type: 'product.create' },
+    ]);
+    prisma.inventoryItem.findMany.mockResolvedValue([INVENTORY_ITEM]);
     const result = await service.create(
       {
         name: 'لنت',
@@ -333,6 +435,7 @@ describe('atomic product + inventory creation (mobile contract)', () => {
     expect(result.data).toMatchObject({
       id: PRODUCT_ID,
       inventoryItem: { id: ITEM_ID, quantity: 10 },
+      inventoryItems: [{ id: ITEM_ID, quantity: 10 }],
     });
     expect(prisma.product.create).not.toHaveBeenCalled();
     expect(prisma.inventoryTransaction.create).not.toHaveBeenCalled();
