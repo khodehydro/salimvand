@@ -264,12 +264,18 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
       // outcome — error included — without re-running any side effects
       // (a conflict stays terminal until resolved through its endpoints).
       if (existing.status === 'applied' || existing.status === 'conflict') {
+        // Replays of an applied operation get the same enriched ack (changes
+        // + cursor) as the original response, so a retried request can
+        // refresh the cache without a pull.
+        const ack =
+          existing.status === 'applied' ? await this.ackChanges(existing.operationId) : null;
         return {
           ok: true,
           data: {
             operationId: existing.operationId,
             status: existing.status,
             result: existing.result,
+            ...(ack ?? {}),
             duplicate: true,
             error: existing.error ?? undefined,
           },
@@ -294,6 +300,7 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
             operationId: existing.operationId,
             status: 'applied',
             result: outcome.result,
+            ...(await this.ackChanges(existing.operationId)),
             duplicate: true,
           },
         };
@@ -327,6 +334,7 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
         operationId: normalizedInput.operationId,
         status: 'applied',
         result: outcome.result,
+        ...(await this.ackChanges(normalizedInput.operationId)),
         duplicate: false,
       },
     };
@@ -401,6 +409,27 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
   private throwOutcome(outcome: ApplyOutcome): never {
     if (outcome.originalError) throw outcome.originalError;
     throw new BadRequestException(outcome.error ?? 'عملیات ناموفق بود');
+  }
+
+  /** Enriched-ack payload: the SyncChange rows this operation published
+   * (full upsert snapshots in the exact shape GET /sync/pull returns) plus
+   * the revision they landed on. A client that applies `changes` into its
+   * cache and stores `cursor` needs NO post-operation pull and no full
+   * refetch — that extra round trip after every write was the main
+   * perceived slowness on mobile. */
+  private async ackChanges(operationId: string) {
+    const changes = await this.prisma.syncChange.findMany({
+      where: { operationId },
+      orderBy: { revision: 'asc' },
+    });
+    if (!changes.length) {
+      // Nothing was published for this operation (e.g. a type whose changes
+      // are metadata-only invalidations the client ignores): hand back the
+      // global watermark so the next pull still starts from the tip.
+      const latest = await this.prisma.syncChange.aggregate({ _max: { revision: true } });
+      return { changes, cursor: String(latest._max.revision ?? 0n) };
+    }
+    return { changes, cursor: String(changes[changes.length - 1].revision) };
   }
 
   /** Atomic claim so a replaying operation can only ever be applied by one

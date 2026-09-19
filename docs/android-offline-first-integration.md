@@ -336,6 +336,50 @@ purchase.create
 purchase.pay
 ```
 
+### پاسخ applied و Ack غنی‌شده (فاز ۲ بهینه‌سازی)
+
+هر ack با `status: "applied"` — هم برای عملیات تازه و هم برای replay یک عملیات applied — دو فیلد اضافه دارد:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "operationId": "android-550e8400-...-000001",
+    "status": "applied",
+    "duplicate": false,
+    "result": { "..." : "خروجی دامنه، بدون تغییر نسبت به قبل" },
+    "changes": [
+      {
+        "revision": "125",
+        "entityType": "inventory_item",
+        "entityId": "inventory-item-id",
+        "action": "updated",
+        "payload": { "...": "snapshot کامل، همان شکل pull" },
+        "operationId": "android-550e8400-...-000001",
+        "createdAt": "2026-09-19T10:00:00.000Z"
+      }
+    ],
+    "cursor": "125"
+  }
+}
+```
+
+- `changes` **دقیقاً همان شکل `GET /sync/pull`** است — همان parser و همان قواعت upsert/delete روی Cache.
+- `cursor` آخرین revision ای است که این عملیات منتشر کرده؛ فقط بعد از اعمال موفق همهٔ `changes` روی Cache ذخیره‌اش کن.
+- اگر `changes` خالی بود (نوع عملیاتی که Cache نمی‌شناسد)، فقط `cursor` را جلو ببر.
+
+**الگوریتم پس از apply — دیگر هیچ Pull یا refetch کامل بعد از عملیات لازم نیست:**
+
+```text
+on 200 applied:
+  mark applied
+  save server result
+  apply data.changes to Cache (همان کد pull)
+  set local cursor = data.cursor (پس از اعمال موفق تغییرات)
+```
+
+با این ack، رفتار «بعد از هر ثبت، کل انبار را دوباره بگیر» حذف می‌شود؛ `fetchInventoryItems` فقط برای Pull دوره‌ای/بازیابی خطا باقی می‌ماند، نه بعد از هر عملیات.
+
 ---
 
 ## 9. Payload عملیات موجودی
@@ -555,7 +599,9 @@ Worker start
   on 200:
     mark applied
     save server result
-    refresh affected entities
+    apply data.changes to Cache (همان کد pull)
+    advance local cursor to data.cursor
+    (هیچ Pull/refetch اضافی بعد از عملیات لازم نیست)
   on 401:
     mark waiting_auth
   on conflict:

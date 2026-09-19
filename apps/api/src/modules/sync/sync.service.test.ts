@@ -25,6 +25,10 @@ function makeService(overrides: Record<string, unknown> = {}) {
       update: vi.fn().mockResolvedValue({}),
       findMany: vi.fn().mockResolvedValue([]),
     },
+    syncChange: {
+      findMany: vi.fn().mockResolvedValue([]),
+      aggregate: vi.fn().mockResolvedValue({ _max: { revision: 500n } }),
+    },
     user: { findUnique: vi.fn().mockResolvedValue({ role: 'manager' }) },
     inventoryItem: {
       findUnique: vi.fn().mockResolvedValue(null),
@@ -73,6 +77,10 @@ describe('SyncService.queueOperation', () => {
         operationId: 'android-device-op-000001',
         status: 'applied',
         result: { item: { id: 'i1', quantity: '5' } },
+        // Enriched ack: this operation published no syncChange rows in the
+        // mock, so the cursor falls back to the global watermark.
+        changes: [],
+        cursor: '500',
         duplicate: false,
       },
     });
@@ -218,6 +226,61 @@ describe('SyncService.queueOperation', () => {
     const result = await service.queueOperation(USER_ID, OPERATION);
     expect(result.data).toMatchObject({ status: 'pending', duplicate: true });
     expect(result.data.error).toBeUndefined();
+  });
+
+  it('enriches an applied ack with the changes the operation published and their cursor', async () => {
+    const { service, prisma, inventory } = makeService();
+    inventory.receive.mockResolvedValue({ ok: true, data: { item: { id: 'i1', quantity: 5n } } });
+    prisma.syncChange.findMany.mockResolvedValue([
+      {
+        revision: 125n,
+        entityType: 'inventory_item',
+        entityId: 'i1',
+        action: 'updated',
+        payload: { id: 'i1', quantity: 5, salePrice: '2450000' },
+        operationId: 'android-device-op-000001',
+        createdAt: new Date('2026-09-19T10:00:00.000Z'),
+      },
+    ]);
+    const result = await service.queueOperation(USER_ID, OPERATION);
+    // Same change shape GET /sync/pull returns — the client upserts these
+    // into its cache and stores the cursor, with no post-operation pull.
+    const ack = result.data as { changes: Array<Record<string, unknown>>; cursor: string };
+    expect(ack.changes).toHaveLength(1);
+    expect(ack.changes[0]).toMatchObject({
+      entityType: 'inventory_item',
+      entityId: 'i1',
+      action: 'updated',
+      payload: { id: 'i1', quantity: 5, salePrice: '2450000' },
+    });
+    expect(ack.cursor).toBe('125');
+  });
+
+  it('replays an applied operation with the same enriched ack so a retry can skip the pull', async () => {
+    const { service, prisma, inventory } = makeService();
+    prisma.syncOperation.findUnique.mockResolvedValue({
+      ...OPERATION,
+      userId: USER_ID,
+      status: 'applied',
+      result: { item: { id: 'i1' } },
+    });
+    prisma.syncChange.findMany.mockResolvedValue([
+      {
+        revision: 125n,
+        entityType: 'inventory_item',
+        entityId: 'i1',
+        action: 'updated',
+        payload: { id: 'i1', quantity: 5 },
+        operationId: 'android-device-op-000001',
+        createdAt: new Date('2026-09-19T10:00:00.000Z'),
+      },
+    ]);
+    const result = await service.queueOperation(USER_ID, OPERATION);
+    expect(result.data).toMatchObject({ status: 'applied', duplicate: true });
+    const ack = result.data as { changes: Array<Record<string, unknown>>; cursor: string };
+    expect(ack.changes).toHaveLength(1);
+    expect(ack.cursor).toBe('125');
+    expect(inventory.receive).not.toHaveBeenCalled();
   });
 
   it('keeps a duplicate applied operation read-only', async () => {
