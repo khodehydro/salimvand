@@ -174,16 +174,30 @@ NGINXPY
 fi
 if [[ -n "$NGINX_CONF" ]] && command -v nginx >/dev/null 2>&1; then
   # Phase-1 performance patch for the LIVE vhost. Certbot owns its 443
-  # blocks, so only additive, idempotent changes are ever made:
-  #  1) gzip for proxied responses (the API/website are reverse-proxied and
-  #     nginx skips compressing those unless gzip_proxied is set),
-  #  2) HTTP/2 on every `listen 443 ssl` line certbot wrote (mobile keeps
-  #     one multiplexed connection instead of one per request).
+  # blocks, so only additive, idempotent changes are ever made — and the
+  # vhost is backed up first, with a listener canary that rolls the whole
+  # patch back if nginx ends up listening on fewer ports than before.
+  VHOST_BACKUP="/root/salimvand-vhost-$(date -u +%Y%m%dT%H%M%SZ).conf"
+  cp -a "$NGINX_CONF" "$VHOST_BACKUP"
+  listeners() {
+    ss -ltnH 2>/dev/null | awk '{print $4}' | grep -oE ':[0-9]+$' | sort -u | tr '\n' ' '
+  }
+  LISTENERS_BEFORE="$(listeners)"
+  rollback_vhost() {
+    cp -a "$VHOST_BACKUP" "$NGINX_CONF"
+    nginx -t && systemctl reload nginx
+    echo "nginx patch failed; vhost restored from $VHOST_BACKUP." >&2
+    exit 1
+  }
   if ! grep -q 'gzip_proxied' "$NGINX_CONF"; then
     python3 - "$NGINX_CONF" <<'GZIP_PY'
 import sys
 
 path = sys.argv[1]
+# Read BEFORE opening for write — open(path, 'w') truncates the file, so
+# reading after it would wipe the whole vhost (that exact bug took
+# production down once; this line order is load-bearing).
+raw = open(path).read()
 block = """# Compress proxied JSON/asset responses (mobile sync payloads shrink
 # 80-90%). gzip_proxied is mandatory: nginx skips proxied responses otherwise.
 gzip on;
@@ -194,13 +208,19 @@ gzip_comp_level 5;
 gzip_types application/json application/javascript application/xml text/css text/plain text/xml image/svg+xml;
 
 """
-open(path, 'w').write(block + open(path).read())
+open(path, 'w').write(block + raw)
 print('Patched the live vhost: gzip enabled for proxied responses.')
 GZIP_PY
   fi
   sed -i '/^[[:space:]]*listen/ { /http2/! s/443 ssl;/443 ssl http2;/ }' "$NGINX_CONF"
-  nginx -t
+  nginx -t || rollback_vhost
   systemctl reload nginx
+  sleep 1
+  LISTENERS_AFTER="$(listeners)"
+  if [[ -n "$LISTENERS_BEFORE" && "$LISTENERS_BEFORE" != "$LISTENERS_AFTER" ]]; then
+    echo "nginx listener set changed ($LISTENERS_BEFORE -> $LISTENERS_AFTER)." >&2
+    rollback_vhost
+  fi
 fi
 install -m 0644 deploy/systemd/salimvand-api.service /etc/systemd/system/salimvand-api.service
 # Enforce the private API bind even when an older /opt/salimvand/.env contains
