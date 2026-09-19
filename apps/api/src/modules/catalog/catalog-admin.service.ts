@@ -176,6 +176,28 @@ export class CatalogAdminService {
       // collides on) a product code, and a replayed operation — which returns
       // above — never takes a new one.
       const code = await this.nextCodeInTx(tx, 'product');
+      // Slug uniqueness: several parts can legitimately share a Persian name,
+      // so an auto-generated slug gets a numeric suffix instead of a P2002
+      // 500; a manual slug is the operator's explicit choice and fails with
+      // a readable 400 when it is already taken.
+      const manualSlug = this.optionalString(input.slug);
+      let slug = seo.slug;
+      if (manualSlug) {
+        const taken = await tx.product.findUnique({ where: { slug }, select: { id: true } });
+        if (taken)
+          throw new BadRequestException('این نامک (slug) قبلاً برای محصول دیگری ثبت شده است');
+      } else {
+        // -2, -3, … — name collisions are rare, so this loop almost never runs.
+        let suffix = 1;
+        while (suffix < 50) {
+          const taken = await tx.product.findUnique({ where: { slug }, select: { id: true } });
+          if (!taken) break;
+          suffix += 1;
+          slug = `${seo.slug}-${suffix}`;
+        }
+        // Pathological fallback: the fresh product code is unique by design.
+        if (suffix >= 50) slug = `${seo.slug}-${code}`;
+      }
       // Reference integrity is checked explicitly (not left to the database
       // FK error) so a mobile payload with a stale categoryId/brandId gets a
       // readable 400 instead of a 500 — and nothing is written at all before
@@ -224,6 +246,7 @@ export class CatalogAdminService {
           categoryId,
           code,
           ...seo,
+          slug,
           seoTitle: this.optionalString(input.seoTitle) ?? seo.seoTitle,
           seoDescription: this.optionalString(input.seoDescription) ?? seo.seoDescription,
           description: this.optionalString(input.description),
@@ -383,6 +406,32 @@ export class CatalogAdminService {
       for (const key of ['slug', 'seoTitle', 'seoDescription', 'seoKeywords'])
         if (data[key] === undefined) data[key] = seo[key as keyof typeof seo];
     } else if (typeof input.slug === 'string' && input.slug.trim()) data.slug = input.slug.trim();
+    // Slug uniqueness on rename — same rules as create: an auto-regenerated
+    // slug gets a numeric suffix, a manual one fails with a readable 400.
+    // The check ignores this row itself (a rename may keep its own slug).
+    const nextSlug = typeof data.slug === 'string' ? data.slug : undefined;
+    if (nextSlug) {
+      const clash = await this.prisma.product.findUnique({
+        where: { slug: nextSlug },
+        select: { id: true },
+      });
+      if (clash && clash.id !== id) {
+        if (typeof input.slug === 'string' && input.slug.trim())
+          throw new BadRequestException('این نامک (slug) قبلاً برای محصول دیگری ثبت شده است');
+        let slug = nextSlug;
+        let suffix = 1;
+        while (suffix < 50) {
+          const taken = await this.prisma.product.findUnique({
+            where: { slug },
+            select: { id: true },
+          });
+          if (!taken || taken.id === id) break;
+          suffix += 1;
+          slug = `${nextSlug}-${suffix}`;
+        }
+        data.slug = slug;
+      }
+    }
     if (input.categoryId !== undefined) {
       const categoryId = this.stringValue(input.categoryId);
       if (!categoryId) throw new BadRequestException('دسته‌بندی نامعتبر است');

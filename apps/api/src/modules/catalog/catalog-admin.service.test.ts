@@ -477,6 +477,34 @@ describe('atomic product + inventory creation (mobile contract)', () => {
     expect(prisma.inventoryTransaction.create).not.toHaveBeenCalled();
   });
 
+  it('suffixes the auto slug instead of failing when the name is already taken', async () => {
+    const { service, prisma } = makeService();
+    prisma.product.create.mockResolvedValue({ id: PRODUCT_ID, name: 'هواکش' });
+    // 'هواکش' is taken by an earlier product; 'هواکش-2' is free.
+    prisma.product.findUnique
+      .mockResolvedValueOnce({ id: 'other-product' })
+      .mockResolvedValueOnce(null);
+    const result = await service.create(
+      { name: 'هواکش', categoryId: CATEGORY_ID, inventory: { salePrice: '50000000' } },
+      'user-1',
+      undefined,
+      'android-op-slug-0001',
+    );
+    expect(prisma.product.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ slug: 'هواکش-2' }),
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it('rejects a manual slug that belongs to another product with a readable 400', async () => {
+    const { service, prisma } = makeService();
+    prisma.product.findUnique.mockResolvedValue({ id: 'other-product' });
+    await expect(
+      service.create({ name: 'هواکش ۲', categoryId: CATEGORY_ID, slug: 'هواکش' }, 'user-1'),
+    ).rejects.toThrow('این نامک (slug) قبلاً برای محصول دیگری ثبت شده است');
+    expect(prisma.product.create).not.toHaveBeenCalled();
+  });
+
   it('keeps the legacy neutral line for panel-only creation without an inventory object', async () => {
     const { service, prisma } = makeService();
     prisma.product.create.mockResolvedValue({ id: 'p1' });
@@ -544,6 +572,30 @@ describe('product.update with a nested inventory object', () => {
         operationId: 'android-op-0003',
       },
     });
+  });
+
+  it('suffixes the slug on a rename that collides with another product', async () => {
+    const { service, prisma } = makeService();
+    prisma.product.findFirst.mockResolvedValue({ id: PRODUCT_ID, name: 'هواکش قدیمی' });
+    prisma.product.update.mockResolvedValue({ id: PRODUCT_ID, name: 'هواکش' });
+    // The regenerated 'هواکش' slug belongs to another row; 'هواکش-2' is free.
+    prisma.product.findUnique.mockImplementation(async (args: { where?: { slug?: string } }) =>
+      args?.where?.slug === 'هواکش' ? { id: 'other-product' } : null,
+    );
+    await service.update(PRODUCT_ID, { name: 'هواکش' }, 'user-1');
+    expect(prisma.product.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ slug: 'هواکش-2' }) }),
+    );
+  });
+
+  it('rejects a manual slug change that collides with another product', async () => {
+    const { service, prisma } = makeService();
+    prisma.product.findFirst.mockResolvedValue({ id: PRODUCT_ID, name: 'لنت' });
+    prisma.product.findUnique.mockResolvedValue({ id: 'other-product' });
+    await expect(service.update(PRODUCT_ID, { slug: 'هواکش' }, 'user-1')).rejects.toThrow(
+      'این نامک (slug) قبلاً برای محصول دیگری ثبت شده است',
+    );
+    expect(prisma.product.update).not.toHaveBeenCalled();
   });
 
   it('writes no price history when the nested inventory edit keeps the price', async () => {
