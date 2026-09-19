@@ -43,6 +43,13 @@ export class SyncController {
     return this.sync.queueOperation(request.user?.id ?? '', body);
   }
 
+  /** Queue drain in one round trip: same per-item contract and ordering as
+   * the single endpoint, up to 50 operations per request. */
+  @Post('operations/batch')
+  queueBatch(@Req() request: AuthenticatedRequest, @Body() body: Record<string, unknown>) {
+    return this.sync.queueOperations(request.user?.id ?? '', body as { operations?: unknown });
+  }
+
   @Post('operations/status') statuses(
     @Body() body: SyncOperationIdsDto,
     @Req() request: AuthenticatedRequest,

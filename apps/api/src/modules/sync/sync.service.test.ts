@@ -283,6 +283,73 @@ describe('SyncService.queueOperation', () => {
     expect(inventory.receive).not.toHaveBeenCalled();
   });
 
+  it('drains a queue batch in order with the same enriched per-item acks', async () => {
+    const { service, inventory } = makeService();
+    inventory.receive.mockResolvedValue({ ok: true, data: { item: { id: 'i1' } } });
+    const result = await service.queueOperations(USER_ID, {
+      operations: [
+        { ...OPERATION, operationId: 'android-device-op-000001' },
+        { ...OPERATION, operationId: 'android-device-op-000002' },
+      ],
+    });
+    expect(result.data.results).toHaveLength(2);
+    for (const [index, entry] of result.data.results.entries()) {
+      expect(entry).toMatchObject({
+        operationId: `android-device-op-00000${index + 1}`,
+        status: 'applied',
+        duplicate: false,
+      });
+      // Phase-2 enriched fields are present on every batch entry too.
+      expect(entry.changes).toEqual([]);
+      expect(entry.cursor).toBe('500');
+    }
+    // Strictly sequential: the second apply starts after the first resolves.
+    expect(inventory.receive).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps draining a batch when one item fails, reporting its outcome inline', async () => {
+    const { service, prisma, inventory } = makeService();
+    inventory.receive.mockResolvedValue({ ok: true, data: { item: { id: 'i1' } } });
+    // Unknown type: the row is created, then the apply fails and is recorded.
+    prisma.syncOperation.findUnique.mockImplementation(
+      async ({ where }: { where: { operationId: string } }) =>
+        where.operationId === 'android-device-op-000002'
+          ? {
+              operationId: where.operationId,
+              status: 'failed',
+              error: 'نوع عملیات پشتیبانی نمی‌شود',
+              result: null,
+            }
+          : null,
+    );
+    const result = await service.queueOperations(USER_ID, {
+      operations: [
+        { ...OPERATION, operationId: 'android-device-op-000001' },
+        { ...OPERATION, operationId: 'android-device-op-000002', type: 'bogus.type' },
+        { ...OPERATION, operationId: 'android-device-op-000003' },
+      ],
+    });
+    expect(result.data.results).toHaveLength(3);
+    expect(result.data.results[0]).toMatchObject({ status: 'applied' });
+    expect(result.data.results[1]).toMatchObject({
+      operationId: 'android-device-op-000002',
+      status: 'failed',
+      error: 'نوع عملیات پشتیبانی نمی‌شود',
+    });
+    expect(result.data.results[2]).toMatchObject({ status: 'applied' });
+  });
+
+  it('rejects empty or oversized batches without touching the database', async () => {
+    const { service, prisma } = makeService();
+    await expect(service.queueOperations(USER_ID, { operations: [] })).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    await expect(
+      service.queueOperations(USER_ID, { operations: Array.from({ length: 51 }, () => OPERATION) }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.syncOperation.create).not.toHaveBeenCalled();
+  });
+
   it('keeps a duplicate applied operation read-only', async () => {
     const { service, prisma, inventory } = makeService();
     prisma.syncOperation.findUnique.mockResolvedValue({
@@ -676,5 +743,40 @@ describe('SyncService.bootstrap', () => {
       },
     ]);
     expect(result.data.cursor).toBe('42');
+  });
+
+  it('serves product images with a 400px thumbUrl for mobile lists', async () => {
+    const made = makeService({
+      category: { findMany: vi.fn().mockResolvedValue([]) },
+      brand: { findMany: vi.fn().mockResolvedValue([]) },
+      location: { findMany: vi.fn().mockResolvedValue([]) },
+      product: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: 'p1',
+            code: 'PRODUCT-00001',
+            slug: 'lent',
+            name: 'لنت',
+            categoryId: 'c1',
+            status: 'active',
+            availabilityOverride: null,
+            updatedAt: new Date('2026-09-19T10:00:00Z'),
+            images: [{ id: 'img-1', path: '/uploads/products/img-1/large.webp', alt: 'لنت' }],
+          },
+        ]),
+      },
+      customer: {
+        findMany: vi.fn().mockResolvedValue([]),
+        findUnique: vi.fn().mockResolvedValue(null),
+      },
+      syncChange: { aggregate: vi.fn().mockResolvedValue({ _max: { revision: 42n } }) },
+    });
+    const result = await made.service.bootstrap(USER_ID, 'android-device');
+    expect(result.data.products[0].imageUrl).toBe(
+      'https://salimvand.ir/uploads/products/img-1/large.webp',
+    );
+    expect(result.data.products[0].thumbUrl).toBe(
+      'https://salimvand.ir/uploads/products/img-1/small.webp',
+    );
   });
 });

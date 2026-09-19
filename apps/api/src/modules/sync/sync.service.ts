@@ -18,6 +18,8 @@ import {
   buildInventoryItemSyncPayload,
   buildInvoiceSyncPayload,
   buildProductSyncPayload,
+  productImageUrl,
+  productThumbUrl,
 } from '../../common/sync/sync-payloads';
 
 const parseCursor = (value?: string) => {
@@ -189,18 +191,11 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
         }),
         this.prisma.syncChange.aggregate({ _max: { revision: true } }),
       ]);
-    const publicSiteUrl = (
-      process.env.PUBLIC_SITE_URL ??
-      process.env.APP_URL ??
-      'https://salimvand.ir'
-    ).replace(/\/$/, '');
     const productsWithImageUrls = products.map((product) => ({
       ...product,
-      imageUrl: product.images[0]
-        ? /^https?:\/\//i.test(product.images[0].path)
-          ? product.images[0].path
-          : `${publicSiteUrl}${product.images[0].path}`
-        : null,
+      imageUrl: product.images[0] ? productImageUrl(product.images[0].path) : null,
+      // Mobile lists render the 400px variant (~10x lighter than large.webp).
+      thumbUrl: product.images[0] ? productThumbUrl(product.images[0].path) : null,
     }));
     return {
       ok: true,
@@ -338,6 +333,52 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
         duplicate: false,
       },
     };
+  }
+
+  /** Drains a mobile queue in ONE round trip: operations apply strictly in
+   * order (the same FIFO-per-entity guarantee as the single endpoint) and
+   * every entry gets the same enriched ack as POST /sync/operations. One
+   * bad item never aborts the rest — its recorded outcome (or its
+   * validation error, when no operation row could even be created) is
+   * reported inline instead of throwing. */
+  async queueOperations(userId: string, input: { operations?: unknown }) {
+    const operations = input?.operations;
+    if (!Array.isArray(operations) || operations.length === 0)
+      throw new BadRequestException('دستهٔ عملیات باید آرایه‌ای غیرخالی باشد');
+    if (operations.length > 50)
+      throw new BadRequestException('حداکثر ۵۰ عملیات در هر دسته مجاز است');
+    const results: Array<Record<string, unknown>> = [];
+    for (const operation of operations) {
+      const operationId =
+        typeof (operation as { operationId?: unknown })?.operationId === 'string'
+          ? (operation as { operationId: string }).operationId
+          : '';
+      try {
+        const ack = await this.queueOperation(
+          userId,
+          operation as {
+            operationId: string;
+            deviceId: string;
+            type: string;
+            payload: Record<string, unknown>;
+          },
+        );
+        results.push({ ...ack.data });
+      } catch (error) {
+        const message = error instanceof Error ? error.message.slice(0, 500) : 'عملیات ناموفق بود';
+        // Envelope/role failures happen before any row exists; apply-time
+        // failures leave the recorded terminal state on the row.
+        const row = operationId
+          ? await this.prisma.syncOperation.findUnique({ where: { operationId } })
+          : null;
+        results.push(
+          row
+            ? { operationId, status: row.status, duplicate: true, error: row.error ?? message }
+            : { operationId: operationId || '(بدون شناسه)', status: 'failed', error: message },
+        );
+      }
+    }
+    return { ok: true, data: { results } };
   }
 
   /** Applies the domain operation and records the terminal operation state

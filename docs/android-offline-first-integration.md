@@ -222,11 +222,22 @@ x-device-id: <deviceId>
 }
 ```
 
+هر محصول این فیلدهای تصویر را دارد:
+
+```json
+{
+  "imageUrl": "https://salimvand.ir/uploads/products/<id>/large.webp",
+  "thumbUrl": "https://salimvand.ir/uploads/products/<id>/small.webp"
+}
+```
+
+`thumbUrl` نسخهٔ ۴۰۰ پیکسلی WebP است (~۱۰ برابر سبک‌تر) — در لیست‌ها و گرید حتماً همان را لود کن (Coil با `imageUrl` فقط برای صفحهٔ جزئیات). اگر تصویری `thumbUrl: null` بود، تصویری برای نمایش نیست.
+
 Bootstrap را در یک Transaction محلی Room اعمال کن:
 
 1. داده‌های دریافتی را در جدول‌های Cache بنویس.
 2. Cursor را فقط بعد از موفقیت همهٔ Insertها ذخیره کن.
-3. اگر Transaction محلی شکست خورد، Cursor تغییر نکند.
+3. اگر Transaction محلی شکست خورد، Cursor تغییر نکن.
 4. Bootstrap مجدد باید Idempotent باشد؛ از `REPLACE` یا Upsert استفاده کن.
 
 ---
@@ -585,6 +596,36 @@ credit
 ## 13. ارسال صف محلی
 
 صف را FIFO پردازش کن، اما Operationهای منابع مستقل می‌توانند با احتیاط موازی شوند. برای موجودی یک کالا یا یک فاکتور، ترتیب را حفظ کن.
+
+### ارسال دسته‌ای (فاز ۳ بهینه‌سازی)
+
+به‌جای یک Request به‌ازای هر Operation، صف را در یک رفت‌وبرگشت تخلیه کن:
+
+```http
+POST /api/v1/sync/operations/batch
+Authorization: Bearer <token>
+```
+
+```json
+{ "operations": [ { "operationId": "...", "deviceId": "...", "type": "inventory.receive", "payload": {} } ] }
+```
+
+قواعد:
+
+```text
+حداکثر ۵۰ عملیات در هر دسته
+ترتیب اعمال = ترتیب آرایه (FIFO تضمین‌شده)
+هر آیتم همان ack تک‌عملیاتی را می‌گیرد (شامل changes و cursor فاز ۲)
+یک آیتم خراب بقیه را متوقف نمی‌کند؛ نتیجهٔ همان آیتم با status: failed|conflict در results می‌آید
+```
+
+پاسخ:
+
+```json
+{ "ok": true, "data": { "results": [ { "operationId": "...", "status": "applied", "duplicate": false, "result": {}, "changes": [], "cursor": "125" } ] } }
+```
+
+الگوریتم پیشنهادی: صف‌های با بیش از یک آیتم را با batch بفرست؛ cursor محلی را روی آخرین `cursor` موفقِ آیتم‌های applied جلو ببر.
 
 الگوریتم پیشنهادی:
 

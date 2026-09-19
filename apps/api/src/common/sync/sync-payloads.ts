@@ -34,6 +34,14 @@ const publicSiteUrl = () =>
 export const productImageUrl = (path: string) =>
   /^https?:\/\//i.test(path) ? path : `${publicSiteUrl()}${path}`;
 
+/** Lists want the 400px variant the media service already generates next to
+ * every large.webp upload (small.webp); remote https URLs have no variant
+ * and are returned unchanged, and legacy paths simply keep their path. */
+export const productThumbUrl = (path: string) =>
+  /^https?:\/\//i.test(path)
+    ? path
+    : `${publicSiteUrl()}${path.replace(/\/large\.webp$/, '/small.webp')}`;
+
 /** Mirrors the product shape of GET /sync/bootstrap so a pulled change can be
  * upserted into the Android cache without any shape translation. */
 export function buildProductSyncPayload(
@@ -67,6 +75,7 @@ export function buildProductSyncPayload(
       product.updatedAt instanceof Date ? product.updatedAt.toISOString() : product.updatedAt,
     image: image ? { id: image.id, path: image.path, alt: image.alt } : null,
     imageUrl: image ? productImageUrl(image.path) : null,
+    thumbUrl: image ? productThumbUrl(image.path) : null,
   };
 }
 

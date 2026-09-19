@@ -44,8 +44,29 @@ describe('sync payload builders (Android pull contract)', () => {
       updatedAt: '2026-09-17T10:00:00.000Z',
       image: { id: 'img-1', path: '/uploads/products/img-1/large.webp', alt: 'لنت' },
       imageUrl: 'https://salimvand.ir/uploads/products/img-1/large.webp',
+      thumbUrl: 'https://salimvand.ir/uploads/products/img-1/small.webp',
     });
     expect(buildProductSyncPayload(product, null).imageUrl).toBeNull();
+    expect(buildProductSyncPayload(product, null).thumbUrl).toBeNull();
+  });
+
+  it('thumbUrl falls back gracefully for remote and legacy image paths', () => {
+    // Remote URLs have no small.webp variant — keep the original.
+    expect(
+      buildProductSyncPayload(product, {
+        id: 'img-2',
+        path: 'https://cdn.example.com/x/large.webp',
+        alt: null,
+      }).thumbUrl,
+    ).toBe('https://cdn.example.com/x/large.webp');
+    // Legacy pre-webp paths stay untouched instead of breaking.
+    expect(
+      buildProductSyncPayload(product, {
+        id: 'img-3',
+        path: '/uploads/products/old.jpg',
+        alt: null,
+      }).thumbUrl,
+    ).toBe('https://salimvand.ir/uploads/products/old.jpg');
   });
 
   it('keeps inventory money string-exact and includes isActive', () => {
