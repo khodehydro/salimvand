@@ -173,6 +173,32 @@ if inserted:
 NGINXPY
 fi
 if [[ -n "$NGINX_CONF" ]] && command -v nginx >/dev/null 2>&1; then
+  # Phase-1 performance patch for the LIVE vhost. Certbot owns its 443
+  # blocks, so only additive, idempotent changes are ever made:
+  #  1) gzip for proxied responses (the API/website are reverse-proxied and
+  #     nginx skips compressing those unless gzip_proxied is set),
+  #  2) HTTP/2 on every `listen 443 ssl` line certbot wrote (mobile keeps
+  #     one multiplexed connection instead of one per request).
+  if ! grep -q 'gzip_proxied' "$NGINX_CONF"; then
+    python3 - "$NGINX_CONF" <<'GZIP_PY'
+import sys
+
+path = sys.argv[1]
+block = """# Compress proxied JSON/asset responses (mobile sync payloads shrink
+# 80-90%). gzip_proxied is mandatory: nginx skips proxied responses otherwise.
+gzip on;
+gzip_proxied any;
+gzip_vary on;
+gzip_min_length 1024;
+gzip_comp_level 5;
+gzip_types application/json application/javascript application/xml text/css text/plain text/xml image/svg+xml;
+
+"""
+open(path, 'w').write(block + open(path).read())
+print('Patched the live vhost: gzip enabled for proxied responses.')
+GZIP_PY
+  fi
+  sed -i '/^[[:space:]]*listen/ { /http2/! s/443 ssl;/443 ssl http2;/ }' "$NGINX_CONF"
   nginx -t
   systemctl reload nginx
 fi
