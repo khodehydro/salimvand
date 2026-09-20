@@ -10,6 +10,7 @@ import { Component, useEffect, useState, type ReactNode } from 'react';
 import { APP_NAME, type UserRole } from '@salimvand/shared';
 import { MediaPage } from './pages/MediaPage';
 import { api, downloadFile } from './lib/api';
+import { applyStoreFavicon } from './lib/favicon';
 import { LoginPage } from './pages/LoginPage';
 import { ProductsPage } from './pages/ProductsPage';
 import { WholesalePage } from './pages/WholesalePage';
@@ -284,6 +285,9 @@ function App() {
     api<{ data?: Record<string, { logoUrl?: string }> }>('/settings')
       .then((result) => setStoreLogoUrl(result.data?.['store.profile']?.logoUrl ?? ''))
       .catch(() => undefined);
+    // Browser tab icon: the same operator-configured favicon as the storefront.
+    // /public/meta needs no token, so it is also applied on the login screen.
+    void applyStoreFavicon();
     api<{ data?: { release?: string } }>('/health')
       .then((result) => setRelease(result.data?.release ?? ''))
       .catch(() => undefined);
