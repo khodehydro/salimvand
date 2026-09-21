@@ -161,15 +161,19 @@ export function ProductsPage() {
 
   const visible = products.filter((product) => {
     const normalizedFilter = filter.trim().toLocaleLowerCase('fa');
-    const queryMatch = `${product.name} ${product.code} ${product.partNumber ?? ''} ${(product.seoKeywords ?? []).join(' ')} ${
-      product.compatibilities?.map((entry) => `${entry.model.make.name} ${entry.model.name}`).join(' ') ?? ''
-    }`
-      .toLocaleLowerCase('fa')
-      .includes(normalizedFilter);
+    const queryMatch =
+      `${product.name} ${product.code} ${product.partNumber ?? ''} ${(product.seoKeywords ?? []).join(' ')} ${
+        product.compatibilities
+          ?.map((entry) => `${entry.model.make.name} ${entry.model.name}`)
+          .join(' ') ?? ''
+      }`
+        .toLocaleLowerCase('fa')
+        .includes(normalizedFilter);
     const categoryMatch = !categoryFilter || product.category?.name === categoryFilter;
     const statusMatch = !statusFilter || product.status === statusFilter;
     const brandMatch =
-      !brandFilter || product.inventoryItems?.some((entry) => (entry.brand?.name ?? 'بدون برند') === brandFilter);
+      !brandFilter ||
+      product.inventoryItems?.some((entry) => (entry.brand?.name ?? 'بدون برند') === brandFilter);
     const vehicleMatch =
       !vehicleFilter ||
       product.compatibilities?.some(
@@ -182,7 +186,8 @@ export function ProductsPage() {
     ...new Set(
       products.flatMap(
         (product) =>
-          product.compatibilities?.map((entry) => `${entry.model.make.name} ${entry.model.name}`) ?? [],
+          product.compatibilities?.map((entry) => `${entry.model.make.name} ${entry.model.name}`) ??
+          [],
       ),
     ),
   ];
@@ -209,8 +214,11 @@ export function ProductsPage() {
                 await api('/products/seo-keywords/regenerate', { method: 'POST' });
                 setMessage('کلیدواژه‌های محصولات بازسازی شد.');
                 await load();
-              } catch (error) { setMessage((error as Error).message); }
-              finally { setKeywordBusy(false); }
+              } catch (error) {
+                setMessage((error as Error).message);
+              } finally {
+                setKeywordBusy(false);
+              }
             }}
           >
             {keywordBusy ? 'در حال ساخت…' : 'بازسازی کلیدواژه‌ها'}
@@ -226,45 +234,108 @@ export function ProductsPage() {
             value={filter}
             onChange={(event) => setFilter(event.target.value)}
           />
-          {filter && <button type="button" className="search-clear" onClick={() => setFilter('')} aria-label="پاک کردن جست‌وجو">✕</button>}
+          {filter && (
+            <button
+              type="button"
+              className="search-clear"
+              onClick={() => setFilter('')}
+              aria-label="پاک کردن جست‌وجو"
+            >
+              ✕
+            </button>
+          )}
         </div>
-        <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} aria-label="فیلتر دسته‌بندی">
+        <select
+          value={categoryFilter}
+          onChange={(event) => setCategoryFilter(event.target.value)}
+          aria-label="فیلتر دسته‌بندی"
+        >
           <option value="">همه دسته‌ها</option>
-          {[...new Set(products.map((product) => product.category?.name).filter(Boolean))].map((category) => <option key={category} value={category}>{category}</option>)}
+          {[...new Set(products.map((product) => product.category?.name).filter(Boolean))].map(
+            (category) => (
+              <option key={category} value={category}>
+                {category}
+              </option>
+            ),
+          )}
         </select>
-        <select value={brandFilter} onChange={(event) => setBrandFilter(event.target.value)} aria-label="فیلتر برند">
+        <select
+          value={brandFilter}
+          onChange={(event) => setBrandFilter(event.target.value)}
+          aria-label="فیلتر برند"
+        >
           <option value="">همه برندها</option>
-          {brands.map((brand) => <option key={brand.id} value={brand.name}>{brand.name}</option>)}
+          {brands.map((brand) => (
+            <option key={brand.id} value={brand.name}>
+              {brand.name}
+            </option>
+          ))}
         </select>
-        <select value={vehicleFilter} onChange={(event) => setVehicleFilter(event.target.value)} aria-label="فیلتر خودرو">
+        <select
+          value={vehicleFilter}
+          onChange={(event) => setVehicleFilter(event.target.value)}
+          aria-label="فیلتر خودرو"
+        >
           <option value="">همه خودروها</option>
-          {vehicleOptions.map((vehicle) => <option key={vehicle} value={vehicle}>{vehicle}</option>)}
+          {vehicleOptions.map((vehicle) => (
+            <option key={vehicle} value={vehicle}>
+              {vehicle}
+            </option>
+          ))}
         </select>
-        <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} aria-label="فیلتر وضعیت">
+        <select
+          value={statusFilter}
+          onChange={(event) => setStatusFilter(event.target.value)}
+          aria-label="فیلتر وضعیت"
+        >
           <option value="">همه وضعیت‌ها</option>
           <option value="active">فعال</option>
           <option value="hidden">مخفی</option>
         </select>
         {(filter || categoryFilter || brandFilter || vehicleFilter || statusFilter) && (
-          <button className="outline product-clear-filters" onClick={() => { setFilter(''); setCategoryFilter(''); setBrandFilter(''); setVehicleFilter(''); setStatusFilter(''); }}>پاک کردن فیلترها</button>
+          <button
+            className="outline product-clear-filters"
+            onClick={() => {
+              setFilter('');
+              setCategoryFilter('');
+              setBrandFilter('');
+              setVehicleFilter('');
+              setStatusFilter('');
+            }}
+          >
+            پاک کردن فیلترها
+          </button>
         )}
       </div>
 
       {message && <div className="notice">{message}</div>}
 
       <div className="product-list product-list-table">
-        <div className="product-list-head" aria-hidden="true"><span>محصول</span><span>وضعیت و دسته</span><span>برندها و موجودی</span><span>عملیات</span></div>
+        <div className="product-list-head" aria-hidden="true">
+          <span>محصول</span>
+          <span>وضعیت و دسته</span>
+          <span>برندها و موجودی</span>
+          <span>عملیات</span>
+        </div>
         {visible.map((product) => (
           <article className="product-list-card product-row" key={product.id}>
             <div className="product-cell product-main-cell">
               <span className="product-thumb">
                 {product.images?.[0] ? (
-                  <MediaImage src={product.images[0].path} alt={product.images[0].alt ?? product.name} />
-                ) : <span>قطعه</span>}
+                  <MediaImage
+                    src={product.images[0].path}
+                    alt={product.images[0].alt ?? product.name}
+                  />
+                ) : (
+                  <span>قطعه</span>
+                )}
               </span>
               <div className="plc-info">
                 <b>{product.name}</b>
-                <small dir="ltr">{product.code}{product.partNumber ? ` · ${product.partNumber}` : ''}</small>
+                <small dir="ltr">
+                  {product.code}
+                  {product.partNumber ? ` · ${product.partNumber}` : ''}
+                </small>
               </div>
             </div>
             <div className="product-cell product-status-cell">
@@ -278,12 +349,25 @@ export function ProductsPage() {
                   title="نمایش محصول برای کاربران عمومی سایت"
                   onClick={async () => {
                     try {
-                      await api(`/products/${product.id}`, { method: 'PATCH', body: JSON.stringify({ status: product.status === 'active' ? 'hidden' : 'active' }) });
-                      setMessage(product.status === 'active' ? 'نمایش محصول در سایت غیرفعال شد.' : 'نمایش محصول در سایت فعال شد.');
+                      await api(`/products/${product.id}`, {
+                        method: 'PATCH',
+                        body: JSON.stringify({
+                          status: product.status === 'active' ? 'hidden' : 'active',
+                        }),
+                      });
+                      setMessage(
+                        product.status === 'active'
+                          ? 'نمایش محصول در سایت غیرفعال شد.'
+                          : 'نمایش محصول در سایت فعال شد.',
+                      );
                       await load();
-                    } catch (error) { setMessage((error as Error).message); }
+                    } catch (error) {
+                      setMessage((error as Error).message);
+                    }
                   }}
-                ><span /> {product.status === 'active' ? 'نمایش در سایت' : 'مخفی از سایت'}</button>
+                >
+                  <span /> {product.status === 'active' ? 'نمایش در سایت' : 'مخفی از سایت'}
+                </button>
                 {vehicleOptions.length > 0 && product.compatibilities?.length ? (
                   <span className="chip vehicle-chip">
                     {product.compatibilities.length.toLocaleString('fa-IR')} خودرو
@@ -295,25 +379,69 @@ export function ProductsPage() {
               {product.inventoryItems?.length ? (
                 product.inventoryItems.map((entry) => (
                   <div className="plc-brand" key={entry.id}>
-                    <span className="brand-name" title={entry.location ? locationChip(entry.location) : undefined}>
+                    <span
+                      className="brand-name"
+                      title={entry.location ? locationChip(entry.location) : undefined}
+                    >
                       {entry.brand?.name ?? 'بدون برند'} · {formatRial(Number(entry.salePrice))}
                       {entry.location ? <small> · {locationChip(entry.location)}</small> : null}
                     </span>
-                    <StockStepper itemId={entry.id} quantity={entry.quantity} onMessage={setMessage} onSaved={() => void load()} />
+                    <StockStepper
+                      itemId={entry.id}
+                      quantity={entry.quantity}
+                      onMessage={setMessage}
+                      onSaved={() => void load()}
+                    />
                   </div>
                 ))
-              ) : <span className="muted">قلم انباری ثبت نشده</span>}
-              <span className="plc-total">جمع قطعات: <b>{totalStock(product).toLocaleString('fa-IR')}</b></span>
+              ) : (
+                <span className="muted">قلم انباری ثبت نشده</span>
+              )}
+              <span className="plc-total">
+                جمع قطعات: <b>{totalStock(product).toLocaleString('fa-IR')}</b>
+              </span>
             </div>
             <div className="product-cell product-actions-cell">
-              <button className="row-action" onClick={() => { void refresh(product.id).then(() => setTab('basic')); }}>ویرایش</button>
-              <a className="row-action" href={`${publicSiteUrl}/product/${encodeURIComponent(product.slug)}`} target="_blank" rel="noreferrer">سایت</a>
-              <button className="row-action" title="ساخت برچسب برای این محصول" onClick={() => { window.location.hash = hashForPage('labels', { product: product.id }); }}>برچسب</button>
-              <button className="row-action danger-text" onClick={async () => {
-                if (!window.confirm('محصول حذف نرم شود؟ از سایت پنهان می‌شود.')) return;
-                try { await api(`/products/${product.id}`, { method: 'DELETE' }); setMessage('محصول حذف نرم شد.'); await load(); }
-                catch (error) { setMessage((error as Error).message); }
-              }}>حذف</button>
+              <button
+                className="row-action"
+                onClick={() => {
+                  void refresh(product.id).then(() => setTab('basic'));
+                }}
+              >
+                ویرایش
+              </button>
+              <a
+                className="row-action"
+                href={`${publicSiteUrl}/product/${encodeURIComponent(product.slug)}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                سایت
+              </a>
+              <button
+                className="row-action"
+                title="ساخت برچسب برای این محصول"
+                onClick={() => {
+                  window.location.hash = hashForPage('labels', { product: product.id });
+                }}
+              >
+                برچسب
+              </button>
+              <button
+                className="row-action danger-text"
+                onClick={async () => {
+                  if (!window.confirm('محصول حذف نرم شود؟ از سایت پنهان می‌شود.')) return;
+                  try {
+                    await api(`/products/${product.id}`, { method: 'DELETE' });
+                    setMessage('محصول حذف نرم شد.');
+                    await load();
+                  } catch (error) {
+                    setMessage((error as Error).message);
+                  }
+                }}
+              >
+                حذف
+              </button>
             </div>
           </article>
         ))}
@@ -460,10 +588,15 @@ function ProductEditor({
 
   const reorderImages = async (imageIds: string[]) => {
     try {
-      await api(`/media/products/${product.id}/reorder`, { method: 'PATCH', body: JSON.stringify({ imageIds }) });
+      await api(`/media/products/${product.id}/reorder`, {
+        method: 'PATCH',
+        body: JSON.stringify({ imageIds }),
+      });
       notify('ترتیب تصاویر ذخیره شد');
       onRefresh();
-    } catch (error) { notify((error as Error).message); }
+    } catch (error) {
+      notify((error as Error).message);
+    }
   };
 
   const upload = async () => {
@@ -749,14 +882,19 @@ function ProductEditor({
                   title="کلیدواژه‌ها خودکار از نام محصول و خودروهای سازگار ساخته می‌شوند"
                   placeholder="پس از ذخیره خودکار تولید می‌شود"
                 />
-                <small className="field-hint">تک‌واژه‌ها و ترکیب‌های دوکلمه‌ای، سه‌کلمه‌ای و بیشتر به‌صورت خودکار ساخته می‌شوند.</small>
+                <small className="field-hint">
+                  تک‌واژه‌ها و ترکیب‌های دوکلمه‌ای، سه‌کلمه‌ای و بیشتر به‌صورت خودکار ساخته می‌شوند.
+                </small>
               </label>
             </form>
           )}
 
           {tab === 'images' && (
             <div>
-              <p className="media-reorder-hint">برای تغییر ترتیب، تصویر را بگیرید و روی تصویر مقصد رها کنید. تصویر اصلی در سایت و پیش‌نمایش لینک نمایش داده می‌شود.</p>
+              <p className="media-reorder-hint">
+                برای تغییر ترتیب، تصویر را بگیرید و روی تصویر مقصد رها کنید. تصویر اصلی در سایت و
+                پیش‌نمایش لینک نمایش داده می‌شود.
+              </p>
               <div className="image-grid">
                 {(product.images ?? []).map((image) => (
                   <div
