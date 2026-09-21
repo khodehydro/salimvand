@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { createEan13 } from '@salimvand/shared';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { createEan13, formatPersianNumber } from '@salimvand/shared';
 import { FaNumberInput } from './FaNumberInput';
 import { locationLabel } from '../lib/location-label';
 import { api } from '../lib/api';
@@ -10,9 +10,16 @@ import { MediaPicker, type PickerItem } from './MediaPicker';
  * Unified product registration window: catalog entry, inventory item and
  * vehicle compatibility are filled in one place and saved once — registering
  * a product in the warehouse IS registering it in the catalog IS publishing
- * it to the website. The save button stays pinned in the footer while the
- * tabs switch above it, unlike the old «register at the top, continue from
- * the list» flow.
+ * it to the website.
+ *
+ * Redesigned layout (pc-* classes, owned by this file only):
+ *  - calm single-page flow: numbered cards instead of the old fake step bar;
+ *  - SEO fields folded into a collapsible <details> so the required fields
+ *    own the visual focus;
+ *  - wide screens get a sticky «خلاصهٔ ثبت» aside: live identity preview +
+ *    completion checklist derived from the same form state (display only —
+ *    no extra submit logic);
+ *  - the save bar stays pinned in the footer in both modal and inline modes.
  */
 type Option = { id: string; name: string };
 type Location = { id: string; name: string; code: string; parent?: { name: string } | null };
@@ -21,13 +28,6 @@ type VehicleMake = {
   name: string;
   models: Array<{ id: string; name: string; trims: Array<{ id: string; name: string }> }>;
 };
-
-const tabs = [
-  { id: 'basic', label: 'مشخصات و سئو' },
-  { id: 'item', label: 'قلم انبار و قیمت' },
-  { id: 'vehicles', label: 'سازگاری خودرو' },
-] as const;
-type Tab = (typeof tabs)[number]['id'];
 
 const emptyBasic = {
   name: '',
@@ -69,11 +69,12 @@ export function ProductCreateModal({
   vehicles: VehicleMake[];
   inline?: boolean;
 }) {
-  const [tab, setTab] = useState<Tab>('basic');
   const [basic, setBasic] = useState(emptyBasic);
   const [items, setItems] = useState([emptyItem]);
   const updateItem = (index: number, patch: Partial<typeof emptyItem>) =>
-    setItems((current) => current.map((entry, i) => (i === index ? { ...entry, ...patch } : entry)));
+    setItems((current) =>
+      current.map((entry, i) => (i === index ? { ...entry, ...patch } : entry)),
+    );
   const [compat, setCompat] = useState<Array<{ modelId: string; trimId: string }>>([]);
   const [pickModel, setPickModel] = useState('');
   const [pickTrim, setPickTrim] = useState('');
@@ -82,9 +83,14 @@ export function ProductCreateModal({
   const [imageUrl, setImageUrl] = useState('');
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [selectedImages, setSelectedImages] = useState<PickerItem[]>([]);
-  const imageUrlList = imageUrl.split(/[\n,]/).map((value) => value.trim()).filter(Boolean);
-  const removeImageUrl = (url: string) => setImageUrl(imageUrlList.filter((value) => value !== url).join('\n'));
+  const imageUrlList = imageUrl
+    .split(/[\n,]/)
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const removeImageUrl = (url: string) =>
+    setImageUrl(imageUrlList.filter((value) => value !== url).join('\n'));
   const [pickerOpen, setPickerOpen] = useState(false);
+  const nameRef = useRef<HTMLInputElement>(null);
 
   const models = useMemo(
     () => vehicles.flatMap((make) => make.models.map((model) => ({ ...model, make: make.name }))),
@@ -96,10 +102,33 @@ export function ProductCreateModal({
     [vehicles, pickModel],
   );
 
+  // Display-only derivations for the live summary aside + footer status pill.
+  const validImageUrlList = imageUrlList.filter((url) => /^https:\/\//i.test(url));
+  const imageCount = imageFiles.length + selectedImages.length + validImageUrlList.length;
+  const activeItems = items.filter((entry) => entry.brandId);
+  const hasBasic = Boolean(basic.name.trim() && basic.categoryId);
+  const categoryName = categories.find((category) => category.id === basic.categoryId)?.name ?? '';
+
+  // Object URLs for local file previews are created once per file list (the
+  // old inline URL.createObjectURL leaked a fresh URL on every render) and
+  // revoked when the list changes or the modal unmounts.
+  const filePreviews = useMemo(
+    () => imageFiles.map((file) => ({ file, url: URL.createObjectURL(file) })),
+    [imageFiles],
+  );
+  useEffect(
+    () => () => {
+      for (const entry of filePreviews) URL.revokeObjectURL(entry.url);
+    },
+    [filePreviews],
+  );
+
+  const summaryThumb =
+    filePreviews[0]?.url ?? selectedImages[0]?.path ?? validImageUrlList[0] ?? '';
+
   if (!open) return null;
 
   const reset = () => {
-    setTab('basic');
     setBasic(emptyBasic);
     setItems([{ ...emptyItem, barcode: '' }]);
     setCompat([]);
@@ -115,8 +144,10 @@ export function ProductCreateModal({
   const submit = async () => {
     setError('');
     if (!basic.name.trim() || !basic.categoryId) {
-      setTab('basic');
-      return setError('نام محصول و دسته‌بندی در تب «مشخصات و سئو» الزامی است.');
+      setError('نام محصول و دسته‌بندی برای ثبت الزامی است.');
+      nameRef.current?.focus();
+      nameRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      return;
     }
     setBusy(true);
     // Which step failed, if any — the error message tells the operator what
@@ -144,8 +175,14 @@ export function ProductCreateModal({
       });
       const productId = created.data.id;
       stage = 'تصویر محصول';
-      for (const url of imageUrl.split(/[\n,]/).map((value) => value.trim()).filter(Boolean)) {
-        await api(`/media/products/${productId}/url`, { method: 'POST', body: JSON.stringify({ url, alt: basic.name }) });
+      for (const url of imageUrl
+        .split(/[\n,]/)
+        .map((value) => value.trim())
+        .filter(Boolean)) {
+        await api(`/media/products/${productId}/url`, {
+          method: 'POST',
+          body: JSON.stringify({ url, alt: basic.name }),
+        });
       }
       for (const file of imageFiles) {
         const form = new FormData();
@@ -154,7 +191,10 @@ export function ProductCreateModal({
         await api(`/media/products/${productId}/upload`, { method: 'POST', body: form });
       }
       for (const image of selectedImages) {
-        await api(`/media/products/${productId}/select`, { method: 'POST', body: JSON.stringify({ imageId: image.id, alt: image.alt ?? basic.name }) });
+        await api(`/media/products/${productId}/select`, {
+          method: 'POST',
+          body: JSON.stringify({ imageId: image.id, alt: image.alt ?? basic.name }),
+        });
       }
       stage = 'قلم انبار';
       // 2) Inventory item — brand, prices and the opening stock, all optional
@@ -207,6 +247,12 @@ export function ProductCreateModal({
     }
   };
 
+  const footerStats = [
+    imageCount ? `${formatPersianNumber(imageCount)} تصویر` : '',
+    activeItems.length ? `${formatPersianNumber(activeItems.length)} قلم انبار` : '',
+    compat.length ? `${formatPersianNumber(compat.length)} خودرو` : '',
+  ].filter(Boolean);
+
   return (
     <div
       className={inline ? 'product-create-inline' : 'modal-backdrop'}
@@ -214,320 +260,573 @@ export function ProductCreateModal({
       onClick={inline ? undefined : onClose}
     >
       <div
-        className={inline ? 'product-create-inline-editor product-create-one-page' : 'editor product-create-modal product-create-one-page'}
+        className={
+          inline ? 'product-create-inline-editor pc-shell' : 'editor product-create-modal pc-shell'
+        }
         role="dialog"
         aria-modal={inline ? undefined : true}
         aria-label="ثبت محصول جدید"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="editor-head">
-          <h2>ثبت محصول جدید</h2>
+        <header className="editor-head pc-head">
+          <div className="pc-head-titles">
+            <h2>ثبت محصول جدید</h2>
+            <p>یک بار ذخیره می‌کنید؛ محصول هم‌زمان در انبار، کاتالوگ و سایت ثبت می‌شود.</p>
+          </div>
+          <span className="pc-head-badge">ثبت یکجا</span>
           <button className="close" onClick={onClose} aria-label="بستن">
             ✕
           </button>
-        </div>
-        <p className="modal-hint">
-          ثبت در انبار = ثبت در کاتالوگ = نمایش در سایت. هر سه بخش را در همین پنجره پر کنید و یک بار
-          ذخیره کنید.
-        </p>
-        <div className="create-flow-summary">
-          <span className="create-step active"><b>۱</b> اطلاعات محصول</span>
-          <span className="create-step"><b>۲</b> تصاویر و رسانه</span>
-          <span className="create-step"><b>۳</b> برندها و انبار</span>
-          <span className="create-step"><b>۴</b> خودروهای سازگار</span>
-        </div>
+        </header>
 
-        <div className="editor-body">
-          {true && (
-            <>
-              <section className="create-form-section">
-                <div className="create-section-heading"><span className="create-section-icon">۱</span><div><h3>اطلاعات اصلی محصول</h3><p>نام، دسته‌بندی و مشخصات پایه را وارد کنید.</p></div></div>
-              <div className="form-grid">
-              <label>
-                نام محصول *
-                <input
-                  value={basic.name}
-                  onChange={(event) => setBasic({ ...basic, name: event.target.value })}
-                  placeholder="مثلاً قاب ستون بالای پژو ۲۰۶"
-                />
-              </label>
-              <label>
-                دسته‌بندی *
-                <select
-                  value={basic.categoryId}
-                  onChange={(event) => setBasic({ ...basic, categoryId: event.target.value })}
-                >
-                  <option value="">انتخاب دسته‌بندی</option>
-                  {categories.map((category) => (
-                    <option value={category.id} key={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                شماره فنی
-                <input
-                  dir="ltr"
-                  value={basic.partNumber}
-                  onChange={(event) => setBasic({ ...basic, partNumber: event.target.value })}
-                  placeholder="Part Number"
-                />
-              </label>
-              <label>
-                وضعیت
-                <select
-                  value={basic.status}
-                  onChange={(event) => setBasic({ ...basic, status: event.target.value })}
-                >
-                  <option value="active">فعال</option>
-                  <option value="hidden">مخفی</option>
-                </select>
-              </label>
-              <label>
-                نمایش قیمت در سایت
-                <select
-                  value={basic.priceDisplay}
-                  onChange={(event) => setBasic({ ...basic, priceDisplay: event.target.value })}
-                >
-                  <option value="inherit">مطابق تنظیم سایت</option>
-                  <option value="show">همیشه نمایش بده</option>
-                  <option value="hide">همیشه پنهان (استعلام)</option>
-                </select>
-              </label>
-              <label>
-                توضیحات
-                <input
-                  value={basic.description}
-                  onChange={(event) => setBasic({ ...basic, description: event.target.value })}
-                  placeholder="توضیح واقعی و کاربردی قطعه"
-                />
-              </label>
-              <label>
-                عنوان سئو
-                <input
-                  value={basic.seoTitle}
-                  onChange={(event) => setBasic({ ...basic, seoTitle: event.target.value })}
-                  placeholder="خالی = تولید خودکار"
-                />
-              </label>
-              <label>
-                توضیح سئو
-                <input
-                  value={basic.seoDescription}
-                  onChange={(event) => setBasic({ ...basic, seoDescription: event.target.value })}
-                  placeholder="خالی = تولید خودکار"
-                />
-              </label>
-              <label>
-                کلیدواژه‌ها
-                <input
-                  value={basic.seoKeywords}
-                  onChange={(event) => setBasic({ ...basic, seoKeywords: event.target.value })}
-                  placeholder="لنت، ترمز، پژو ۲۰۶"
-                />
-              </label>
-            </div>
-            <div className="create-image-panel">
-              <div className="create-image-heading">
-                <b>تصویر محصول</b>
-                <small>اختیاری · لینک، آپلود یا انتخاب از رسانه‌ها</small>
-              </div>
-              <div className="create-image-actions">
-                <label className="create-image-url">
-                  لینک تصویر
-                  <textarea
-                    dir="ltr"
-                    value={imageUrl}
-                    onChange={(event) => {
-                      setImageUrl(event.target.value);
-                      setImageFiles([]);
-                      setSelectedImages([]);
-                    }}
-                    placeholder="هر لینک در یک خط"
-                    rows={2}
-                  />
-                </label>
-                <label className="create-image-upload">
-                  آپلود تصویر
-                  <input
-                    type="file"
-                    multiple
-                    accept="image/jpeg,image/png,image/webp"
-                    onChange={(event) => {
-                      setImageFiles(Array.from(event.target.files ?? []));
-                      setImageUrl('');
-                      setSelectedImages([]);
-                    }}
-                  />
-                </label>
-                <button type="button" className="outline" onClick={() => setPickerOpen(true)}>
-                  انتخاب از رسانه‌ها
-                </button>
-              </div>
-              {(imageFiles.length > 0 || selectedImages.length > 0 || imageUrl) && (
-                <div className="create-image-preview-grid">
-                  {imageFiles.map((file) => (
-                    <figure className="create-image-preview" key={`${file.name}-${file.lastModified}`}>
-                      <img src={URL.createObjectURL(file)} alt={file.name} />
-                      <figcaption>{file.name}<button type="button" onClick={() => setImageFiles((current) => current.filter((entry) => entry !== file))} aria-label="حذف تصویر">×</button></figcaption>
-                    </figure>
-                  ))}
-                  {selectedImages.map((image) => (
-                    <figure className="create-image-preview" key={image.id}>
-                      <img src={image.path} alt={image.alt ?? basic.name} />
-                      <figcaption>{image.alt ?? 'رسانه انتخاب‌شده'}<button type="button" onClick={() => setSelectedImages((current) => current.filter((entry) => entry.id !== image.id))} aria-label="حذف تصویر">×</button></figcaption>
-                    </figure>
-                  ))}
-                  {imageUrl.split(/[\n,]/).map((url) => url.trim()).filter((url) => /^https:\/\//i.test(url)).map((url) => (
-                    <figure className="create-image-preview" key={url}>
-                      <img src={url} alt={basic.name} />
-                      <figcaption>تصویر لینک‌شده<button type="button" onClick={() => removeImageUrl(url)} aria-label="حذف تصویر">×</button></figcaption>
-                    </figure>
-                  ))}
-                </div>
-              )}
-              </div>
-              </section>
-            </>
-          )}
-
-          {true && (
-            <section className="create-form-section">
-              <div className="create-section-heading"><span className="create-section-icon">۲</span><div><h3>برندها و اطلاعات انبار</h3><p>برای هر برند، قیمت، بارکد، قفسه و موجودی مستقل ثبت کنید.</p></div></div>
-              <div>
-              <p className="muted">یک محصول را بسازید و برای هر برند، قفسه، بارکد و قیمت مستقل ثبت کنید.</p>
-              {items.map((item, index) => (
-                <div className="create-inventory-item" key={index}>
-                  <div className="create-inventory-item-heading">
-                    <b>قلم {index + 1}</b>
-                    {items.length > 1 && <button type="button" className="row-action danger-text" onClick={() => setItems((current) => current.filter((_, i) => i !== index))}>حذف</button>}
-                  </div>
-                  <div className="form-grid">
-                    <label>برند قطعه<select value={item.brandId} onChange={(event) => updateItem(index, { brandId: event.target.value })}>
-                      <option value="">بدون قلم انبار</option>{brands.map((brand) => <option value={brand.id} key={brand.id}>{brand.name}</option>)}
-                    </select></label>
-                    <label>بارکد EAN-13<input dir="ltr" value={item.barcode} onChange={(event) => updateItem(index, { barcode: event.target.value })} placeholder="خالی = تولید خودکار" /></label>
-                    <label>قیمت فروش (ریال) — اختیاری<FaNumberInput value={item.salePrice} onChange={(plain) => updateItem(index, { salePrice: plain })} /></label>
-                    <label>قیمت خرید (ریال) — اختیاری<FaNumberInput value={item.purchasePrice} onChange={(plain) => updateItem(index, { purchasePrice: plain })} /></label>
-                    <label>موجودی اولیه<FaNumberInput group={false} value={item.initialQuantity} onChange={(plain) => updateItem(index, { initialQuantity: plain })} placeholder="۰" /></label>
-                    <label>آستانهٔ هشدار<FaNumberInput group={false} value={item.minStock} onChange={(plain) => updateItem(index, { minStock: plain })} placeholder="مثلاً ۳" /></label>
-                    <label>قفسه<select value={item.locationId} onChange={(event) => updateItem(index, { locationId: event.target.value })}><option value="">بدون قفسه</option>{locations.map((location) => <option value={location.id} key={location.id}>{locationLabel(location)}</option>)}</select></label>
+        <div className="editor-body pc-body">
+          <div className="pc-workspace">
+            <div className="pc-main">
+              {/* ── ۱ · مشخصات محصول ─────────────────────────── */}
+              <section className="pc-section">
+                <div className="pc-section-head">
+                  <span className="pc-step-n" aria-hidden="true">
+                    ۱
+                  </span>
+                  <div>
+                    <h3>مشخصات محصول</h3>
+                    <p>نام و دسته‌بندی الزامی‌اند؛ سایر فیلدها اختیاری‌اند.</p>
                   </div>
                 </div>
-              ))}
-              <button type="button" className="outline" onClick={() => setItems((current) => [...current, { ...emptyItem }])}>＋ افزودن برند دیگر</button>
-              <p className="muted">قیمت خرید فقط داخلی است و هرگز در سایت یا فاکتور مشتری نمایش داده نمی‌شود.</p>
-              </div>
-            </section>
-          )}
-          {true && (
-            <section className="create-form-section">
-              <div className="create-section-heading"><span className="create-section-icon">۳</span><div><h3>خودروهای سازگار</h3><p>محصول را برای جست‌وجوی دقیق‌تر به خودروهای سازگار متصل کنید.</p></div></div>
-              <div>
-              <div className="invoice-product-picker">
-                <select
-                  aria-label="مدل خودرو"
-                  value={pickModel}
-                  onChange={(event) => {
-                    setPickModel(event.target.value);
-                    setPickTrim('');
-                  }}
-                >
-                  <option value="">انتخاب مدل</option>
-                  {models.map((model) => (
-                    <option value={model.id} key={model.id}>
-                      {model.make} — {model.name}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  aria-label="تیپ خودرو"
-                  value={pickTrim}
-                  onChange={(event) => setPickTrim(event.target.value)}
-                >
-                  <option value="">همهٔ تیپ‌ها</option>
-                  {trims.map((trim) => (
-                    <option value={trim.id} key={trim.id}>
-                      {trim.name}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  disabled={!pickModel}
-                  onClick={() =>
-                    setCompat((current) =>
-                      current.some(
-                        (entry) => entry.modelId === pickModel && entry.trimId === pickTrim,
-                      )
-                        ? current
-                        : [...current, { modelId: pickModel, trimId: pickTrim }],
-                    )
-                  }
-                >
-                  افزودن
-                </button>
-              </div>
-              <div className="invoice-lines">
-                {compat.length ? (
-                  compat.map((entry, index) => (
-                    <div className="invoice-line" key={`${entry.modelId}-${entry.trimId}-${index}`}>
-                      <span>
-                        <b>
-                          {models.find((model) => model.id === entry.modelId)?.make}{' '}
-                          {models.find((model) => model.id === entry.modelId)?.name}
-                        </b>
-                        <small>
-                          {models
-                            .find((model) => model.id === entry.modelId)
-                            ?.trims.find((trim) => trim.id === entry.trimId)?.name ?? 'همهٔ تیپ‌ها'}
-                        </small>
-                      </span>
-                      <button
-                        type="button"
-                        aria-label="حذف سازگاری"
-                        onClick={() =>
-                          setCompat((current) => current.filter((_, i) => i !== index))
+                <div className="pc-grid">
+                  <label className="pc-s6 pc-field-name is-req">
+                    نام محصول
+                    <input
+                      ref={nameRef}
+                      value={basic.name}
+                      onChange={(event) => setBasic({ ...basic, name: event.target.value })}
+                      placeholder="مثلاً قاب ستون بالای پژو ۲۰۶"
+                    />
+                  </label>
+                  <label className="pc-s3 is-req">
+                    دسته‌بندی
+                    <select
+                      value={basic.categoryId}
+                      onChange={(event) => setBasic({ ...basic, categoryId: event.target.value })}
+                    >
+                      <option value="">انتخاب دسته‌بندی</option>
+                      {categories.map((category) => (
+                        <option value={category.id} key={category.id}>
+                          {category.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="pc-s3">
+                    شماره فنی
+                    <input
+                      dir="ltr"
+                      value={basic.partNumber}
+                      onChange={(event) => setBasic({ ...basic, partNumber: event.target.value })}
+                      placeholder="Part Number"
+                    />
+                  </label>
+                  <label className="pc-s3">
+                    وضعیت
+                    <select
+                      value={basic.status}
+                      onChange={(event) => setBasic({ ...basic, status: event.target.value })}
+                    >
+                      <option value="active">فعال</option>
+                      <option value="hidden">مخفی</option>
+                    </select>
+                  </label>
+                  <label className="pc-s3">
+                    نمایش قیمت در سایت
+                    <select
+                      value={basic.priceDisplay}
+                      onChange={(event) => setBasic({ ...basic, priceDisplay: event.target.value })}
+                    >
+                      <option value="inherit">مطابق تنظیم سایت</option>
+                      <option value="show">همیشه نمایش بده</option>
+                      <option value="hide">همیشه پنهان (استعلام)</option>
+                    </select>
+                  </label>
+                  <label className="pc-s6">
+                    توضیحات
+                    <input
+                      value={basic.description}
+                      onChange={(event) => setBasic({ ...basic, description: event.target.value })}
+                      placeholder="توضیح واقعی و کاربردی قطعه"
+                    />
+                  </label>
+                </div>
+
+                <details className="pc-seo">
+                  <summary>
+                    <span className="pc-seo-title">تنظیمات سئو</span>
+                    <small>اختیاری — خالی بماند تا خودکار ساخته شود</small>
+                  </summary>
+                  <div className="pc-seo-body pc-grid">
+                    <label className="pc-s3">
+                      عنوان سئو
+                      <input
+                        value={basic.seoTitle}
+                        onChange={(event) => setBasic({ ...basic, seoTitle: event.target.value })}
+                        placeholder="خالی = تولید خودکار"
+                      />
+                    </label>
+                    <label className="pc-s3">
+                      توضیح سئو
+                      <input
+                        value={basic.seoDescription}
+                        onChange={(event) =>
+                          setBasic({ ...basic, seoDescription: event.target.value })
                         }
+                        placeholder="خالی = تولید خودکار"
+                      />
+                    </label>
+                    <label className="pc-s6">
+                      کلیدواژه‌ها
+                      <input
+                        value={basic.seoKeywords}
+                        onChange={(event) =>
+                          setBasic({ ...basic, seoKeywords: event.target.value })
+                        }
+                        placeholder="لنت، ترمز، پژو ۲۰۶"
+                      />
+                    </label>
+                  </div>
+                </details>
+              </section>
+
+              {/* ── ۲ · تصاویر محصول ─────────────────────────── */}
+              <section className="pc-section">
+                <div className="pc-section-head">
+                  <span className="pc-step-n" aria-hidden="true">
+                    ۲
+                  </span>
+                  <div>
+                    <h3>تصاویر محصول</h3>
+                    <p>اختیاری — با لینک، آپلود فایل یا انتخاب از کتابخانهٔ رسانه‌ها.</p>
+                  </div>
+                  {imageCount > 0 && (
+                    <span className="pc-section-count">
+                      {formatPersianNumber(imageCount)} تصویر
+                    </span>
+                  )}
+                </div>
+                <div className="pc-image-sources">
+                  <label className="pc-image-src">
+                    لینک تصویر
+                    <textarea
+                      dir="ltr"
+                      value={imageUrl}
+                      onChange={(event) => {
+                        setImageUrl(event.target.value);
+                        setImageFiles([]);
+                        setSelectedImages([]);
+                      }}
+                      placeholder="هر لینک https در یک خط"
+                      rows={2}
+                    />
+                  </label>
+                  <label className="pc-image-src">
+                    آپلود از سیستم
+                    <input
+                      type="file"
+                      multiple
+                      accept="image/jpeg,image/png,image/webp"
+                      onChange={(event) => {
+                        setImageFiles(Array.from(event.target.files ?? []));
+                        setImageUrl('');
+                        setSelectedImages([]);
+                      }}
+                    />
+                  </label>
+                  <div className="pc-image-src">
+                    کتابخانهٔ رسانه
+                    <button type="button" className="outline" onClick={() => setPickerOpen(true)}>
+                      انتخاب از رسانه‌ها
+                    </button>
+                  </div>
+                </div>
+                {imageCount > 0 && (
+                  <div className="pc-previews">
+                    {filePreviews.map((entry) => (
+                      <figure
+                        className="pc-preview"
+                        key={`${entry.file.name}-${entry.file.lastModified}`}
                       >
-                        ×
-                      </button>
-                    </div>
-                  ))
+                        <img src={entry.url} alt={entry.file.name} />
+                        <figcaption>{entry.file.name}</figcaption>
+                        <button
+                          type="button"
+                          className="pc-preview-x"
+                          onClick={() =>
+                            setImageFiles((current) =>
+                              current.filter((file) => file !== entry.file),
+                            )
+                          }
+                          aria-label={`حذف ${entry.file.name}`}
+                        >
+                          ×
+                        </button>
+                      </figure>
+                    ))}
+                    {selectedImages.map((image) => (
+                      <figure className="pc-preview" key={image.id}>
+                        <img src={image.path} alt={image.alt ?? basic.name} />
+                        <figcaption>{image.alt ?? 'رسانهٔ انتخاب‌شده'}</figcaption>
+                        <button
+                          type="button"
+                          className="pc-preview-x"
+                          onClick={() =>
+                            setSelectedImages((current) =>
+                              current.filter((entry) => entry.id !== image.id),
+                            )
+                          }
+                          aria-label="حذف تصویر"
+                        >
+                          ×
+                        </button>
+                      </figure>
+                    ))}
+                    {validImageUrlList.map((url) => (
+                      <figure className="pc-preview" key={url}>
+                        <img src={url} alt={basic.name} />
+                        <figcaption>تصویر لینک‌شده</figcaption>
+                        <button
+                          type="button"
+                          className="pc-preview-x"
+                          onClick={() => removeImageUrl(url)}
+                          aria-label="حذف تصویر"
+                        >
+                          ×
+                        </button>
+                      </figure>
+                    ))}
+                  </div>
+                )}
+                <p className="pc-image-note">
+                  هر بار یکی از سه روش فعال می‌شود؛ انتخاب روش تازه، تصاویر روش قبلی را پاک می‌کند.
+                </p>
+              </section>
+
+              {/* ── ۳ · برندها و انبار ────────────────────────── */}
+              <section className="pc-section">
+                <div className="pc-section-head">
+                  <span className="pc-step-n" aria-hidden="true">
+                    ۳
+                  </span>
+                  <div>
+                    <h3>برندها و انبار</h3>
+                    <p>برای هر برند، قیمت، بارکد، قفسه و موجودی مستقل ثبت کنید.</p>
+                  </div>
+                  <span className="pc-section-count">{formatPersianNumber(items.length)} قلم</span>
+                </div>
+                <div className="pc-items">
+                  {items.map((item, index) => {
+                    const brandName =
+                      brands.find((brand) => brand.id === item.brandId)?.name ?? 'بدون برند';
+                    return (
+                      <div className="pc-item" key={index}>
+                        <div className="pc-item-head">
+                          <b>قلم {formatPersianNumber(index + 1)}</b>
+                          <span className="pc-item-brand">{brandName}</span>
+                          {items.length > 1 && (
+                            <button
+                              type="button"
+                              className="pc-item-remove"
+                              onClick={() =>
+                                setItems((current) => current.filter((_, i) => i !== index))
+                              }
+                            >
+                              حذف قلم
+                            </button>
+                          )}
+                        </div>
+                        <div className="pc-grid">
+                          <label className="pc-s2">
+                            برند قطعه
+                            <select
+                              value={item.brandId}
+                              onChange={(event) =>
+                                updateItem(index, { brandId: event.target.value })
+                              }
+                            >
+                              <option value="">بدون قلم انبار</option>
+                              {brands.map((brand) => (
+                                <option value={brand.id} key={brand.id}>
+                                  {brand.name}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="pc-s2">
+                            بارکد EAN-13
+                            <input
+                              dir="ltr"
+                              value={item.barcode}
+                              onChange={(event) =>
+                                updateItem(index, { barcode: event.target.value })
+                              }
+                              placeholder="خالی = تولید خودکار"
+                            />
+                          </label>
+                          <label className="pc-s2">
+                            قفسه
+                            <select
+                              value={item.locationId}
+                              onChange={(event) =>
+                                updateItem(index, { locationId: event.target.value })
+                              }
+                            >
+                              <option value="">بدون قفسه</option>
+                              {locations.map((location) => (
+                                <option value={location.id} key={location.id}>
+                                  {locationLabel(location)}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="pc-s2">
+                            <span>
+                              قیمت فروش (ریال) <small>اختیاری</small>
+                            </span>
+                            <FaNumberInput
+                              value={item.salePrice}
+                              onChange={(plain) => updateItem(index, { salePrice: plain })}
+                            />
+                          </label>
+                          <label className="pc-s2">
+                            <span>
+                              قیمت خرید (ریال) <small>اختیاری</small>
+                            </span>
+                            <FaNumberInput
+                              value={item.purchasePrice}
+                              onChange={(plain) => updateItem(index, { purchasePrice: plain })}
+                            />
+                          </label>
+                          <label className="pc-s1">
+                            موجودی اولیه
+                            <FaNumberInput
+                              group={false}
+                              value={item.initialQuantity}
+                              onChange={(plain) => updateItem(index, { initialQuantity: plain })}
+                              placeholder="۰"
+                            />
+                          </label>
+                          <label className="pc-s1">
+                            آستانهٔ هشدار
+                            <FaNumberInput
+                              group={false}
+                              value={item.minStock}
+                              onChange={(plain) => updateItem(index, { minStock: plain })}
+                              placeholder="مثلاً ۳"
+                            />
+                          </label>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    className="pc-item-add"
+                    onClick={() => setItems((current) => [...current, { ...emptyItem }])}
+                  >
+                    ＋ افزودن برند دیگر
+                  </button>
+                </div>
+                <p className="pc-item-note">
+                  🔒 قیمت خرید فقط داخلی است و هرگز در سایت یا فاکتور مشتری نمایش داده نمی‌شود.
+                </p>
+              </section>
+
+              {/* ── ۴ · خودروهای سازگار ───────────────────────── */}
+              <section className="pc-section">
+                <div className="pc-section-head">
+                  <span className="pc-step-n" aria-hidden="true">
+                    ۴
+                  </span>
+                  <div>
+                    <h3>خودروهای سازگار</h3>
+                    <p>برای دیده‌شدن در فیلتر خودروهای سایت، مدل‌های سازگار را اضافه کنید.</p>
+                  </div>
+                  {compat.length > 0 && (
+                    <span className="pc-section-count">
+                      {formatPersianNumber(compat.length)} خودرو
+                    </span>
+                  )}
+                </div>
+                <div className="pc-vehicle-picker">
+                  <select
+                    aria-label="مدل خودرو"
+                    value={pickModel}
+                    onChange={(event) => {
+                      setPickModel(event.target.value);
+                      setPickTrim('');
+                    }}
+                  >
+                    <option value="">انتخاب مدل</option>
+                    {models.map((model) => (
+                      <option value={model.id} key={model.id}>
+                        {model.make} — {model.name}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    aria-label="تیپ خودرو"
+                    value={pickTrim}
+                    onChange={(event) => setPickTrim(event.target.value)}
+                  >
+                    <option value="">همهٔ تیپ‌ها</option>
+                    {trims.map((trim) => (
+                      <option value={trim.id} key={trim.id}>
+                        {trim.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="outline"
+                    disabled={!pickModel}
+                    onClick={() =>
+                      setCompat((current) =>
+                        current.some(
+                          (entry) => entry.modelId === pickModel && entry.trimId === pickTrim,
+                        )
+                          ? current
+                          : [...current, { modelId: pickModel, trimId: pickTrim }],
+                      )
+                    }
+                  >
+                    افزودن
+                  </button>
+                </div>
+                {compat.length ? (
+                  <div className="pc-compat-list">
+                    {compat.map((entry, index) => {
+                      const model = models.find((candidate) => candidate.id === entry.modelId);
+                      const trim =
+                        model?.trims.find((candidate) => candidate.id === entry.trimId)?.name ??
+                        'همهٔ تیپ‌ها';
+                      return (
+                        <span
+                          className="pc-compat-chip"
+                          key={`${entry.modelId}-${entry.trimId}-${index}`}
+                        >
+                          <b>
+                            {model?.make} {model?.name}
+                          </b>
+                          <small>{trim}</small>
+                          <button
+                            type="button"
+                            aria-label="حذف سازگاری"
+                            onClick={() =>
+                              setCompat((current) => current.filter((_, i) => i !== index))
+                            }
+                          >
+                            ×
+                          </button>
+                        </span>
+                      );
+                    })}
+                  </div>
                 ) : (
-                  <p className="muted">
+                  <p className="pc-compat-empty">
                     اختیاری است؛ بدون خودروی سازگار، محصول در فیلتر خودروهای سایت نمایش داده
                     نمی‌شود.
                   </p>
                 )}
+              </section>
+            </div>
+
+            {/* ── خلاصهٔ ثبت (فقط نمایشی؛ از همان state فرم مشتق می‌شود) ── */}
+            <aside className="pc-aside" aria-label="خلاصهٔ ثبت محصول">
+              <div className="pc-aside-card">
+                <h4>خلاصهٔ ثبت</h4>
+                <div className="pc-id">
+                  <span className="pc-id-thumb" aria-hidden="true">
+                    {summaryThumb ? <img src={summaryThumb} alt="" /> : '📦'}
+                  </span>
+                  <div className="pc-id-meta">
+                    <b>{basic.name.trim() || 'نام محصول…'}</b>
+                    <span>{categoryName || 'بدون دسته‌بندی'}</span>
+                  </div>
+                </div>
+                <ul className="pc-checklist">
+                  <li className={hasBasic ? 'ok' : ''}>
+                    <i aria-hidden="true" />
+                    <span>نام و دسته‌بندی</span>
+                    <b>{hasBasic ? 'آماده' : 'الزامی'}</b>
+                  </li>
+                  <li className={imageCount ? 'ok' : ''}>
+                    <i aria-hidden="true" />
+                    <span>تصاویر</span>
+                    <b>{imageCount ? `${formatPersianNumber(imageCount)} تصویر` : 'اختیاری'}</b>
+                  </li>
+                  <li className={activeItems.length ? 'ok' : ''}>
+                    <i aria-hidden="true" />
+                    <span>اقلام انبار</span>
+                    <b>
+                      {activeItems.length
+                        ? `${formatPersianNumber(activeItems.length)} قلم`
+                        : 'اختیاری'}
+                    </b>
+                  </li>
+                  <li className={compat.length ? 'ok' : ''}>
+                    <i aria-hidden="true" />
+                    <span>خودروهای سازگار</span>
+                    <b>
+                      {compat.length ? `${formatPersianNumber(compat.length)} خودرو` : 'اختیاری'}
+                    </b>
+                  </li>
+                </ul>
+                <p className="pc-aside-note">
+                  با یک ذخیره، محصول در انبار ثبت و هم‌زمان در کاتالوگ و سایت منتشر می‌شود.
+                </p>
               </div>
-              </div>
-            </section>
-          )}
+            </aside>
+          </div>
         </div>
 
-        {error && <div className="notice field-error">{error}</div>}
-        <div className="editor-footer">
-          <button type="button" className="outline" onClick={onClose} disabled={busy}>
-            انصراف
-          </button>
-          <button
-            type="button"
-            className="button-primary"
-            disabled={busy}
-            onClick={() => void submit()}
-          >
-            {busy ? 'در حال ثبت…' : '✓ ثبت محصول (انبار + کاتالوگ + سایت)'}
-          </button>
-        </div>
+        {error && (
+          <div className="pc-error" role="alert">
+            {error}
+          </div>
+        )}
+
+        <footer className="editor-footer pc-footer">
+          <div className="pc-footer-status">
+            {footerStats.length ? (
+              footerStats.map((stat) => (
+                <span className="pc-stat" key={stat}>
+                  {stat}
+                </span>
+              ))
+            ) : (
+              <span className="pc-footer-hint">فقط «نام محصول» و «دسته‌بندی» الزامی‌اند.</span>
+            )}
+          </div>
+          <div className="pc-footer-actions">
+            <button type="button" className="outline" onClick={onClose} disabled={busy}>
+              انصراف
+            </button>
+            <button
+              type="button"
+              className="button-primary"
+              disabled={busy}
+              onClick={() => void submit()}
+            >
+              {busy ? 'در حال ثبت…' : 'ثبت نهایی محصول'}
+            </button>
+          </div>
+        </footer>
       </div>
       <MediaPicker
         open={pickerOpen}
         title="انتخاب تصویر محصول از رسانه‌ها"
         onClose={() => setPickerOpen(false)}
         onSelect={(image) => {
-          setSelectedImages((current) => current.some((entry) => entry.id === image.id) ? current : [...current, image]);
+          setSelectedImages((current) =>
+            current.some((entry) => entry.id === image.id) ? current : [...current, image],
+          );
           setImageFiles([]);
           setImageUrl('');
         }}

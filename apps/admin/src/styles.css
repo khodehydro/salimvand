@@ -5785,16 +5785,12 @@ button.btn-primary-lg:hover:not(:disabled) {
   border: 1px solid var(--sv-border);
   border-radius: var(--sv-radius-card);
   box-shadow: var(--sv-shadow-1);
-  overflow: hidden;
+  /* clip (not hidden) keeps the rounded corners while letting the sticky
+     summary aside track the page scroll instead of a dead scroll box. */
+  overflow: clip;
 }
 .product-create-inline-editor .editor-head {
   padding: 16px 18px 4px;
-}
-.product-create-inline-editor .modal-hint {
-  margin-inline: 18px;
-}
-.product-create-inline-editor .tabs {
-  margin-inline: 18px;
 }
 .product-create-inline-editor .editor-body {
   min-height: 0;
@@ -5810,78 +5806,17 @@ button.btn-primary-lg:hover:not(:disabled) {
   border-top: 1px solid var(--sv-border);
   background: var(--sv-surface-2);
 }
-.create-image-panel {
-  display: grid;
-  gap: 10px;
-  margin-top: 14px;
-  padding: 14px;
-  background: var(--sv-surface-2);
-  border: 1px solid var(--sv-border);
-  border-radius: 12px;
-}
-.create-image-heading {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-}
-.create-image-heading small {
-  color: var(--sv-text-3);
-  font-size: 11px;
-}
-.create-image-actions {
-  display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(180px, 1fr) auto;
-  gap: 10px;
-  align-items: end;
-}
-.create-image-actions label {
-  display: grid;
-  gap: 6px;
-  color: var(--sv-text-2);
-  font-size: 12px;
-}
-.create-image-actions input[type='text'],
-.create-image-actions input:not([type]) {
-  min-width: 0;
-}
-.create-image-upload input {
-  width: 100%;
-  min-height: 40px;
-  padding: 7px;
-  border: 1px solid var(--sv-border-2);
-  border-radius: var(--sv-radius-button);
-  background: var(--sv-surface);
-  color: var(--sv-text);
-  font: 11px Vazirmatn;
-}
-.create-image-selected {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-  padding: 7px 9px;
-  color: var(--sv-ok);
-  background: var(--sv-ok-soft);
-  border-radius: 8px;
-  font-size: 11px;
-  direction: ltr;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.create-image-selected span {
-  direction: rtl;
-  font-weight: 700;
-}
+/* Product create (ثبت محصول) visual system now lives in the pc-* block at the
+   end of this file — the old create-image-* rules were replaced by it. */
 @media (max-width: 760px) {
-  .create-image-actions {
-    grid-template-columns: 1fr;
+  .product-create-inline-editor .pc-footer {
+    flex-direction: column;
+    align-items: stretch;
   }
-  .product-create-inline-editor .editor-footer {
+  .product-create-inline-editor .pc-footer-actions {
     flex-direction: column-reverse;
   }
-  .product-create-inline-editor .editor-footer button {
+  .product-create-inline-editor .pc-footer-actions button {
     width: 100%;
   }
 }
@@ -6756,9 +6691,6 @@ button.btn-primary-lg:hover:not(:disabled) {
 .customer-products { display: grid; gap: 6px; margin: 8px 0 18px; }
 .customer-products > span { padding: 8px 10px; border: 1px solid var(--sv-border); border-radius: 8px; font-size: 12px; }
 
-.create-inventory-item { margin: 10px 0; padding: 12px; border: 1px solid var(--sv-border); border-radius: 10px; }
-.create-inventory-item-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-
 /* Bulk price controls: compact, token-based controls instead of browser defaults. */
 .bulk-price-toolbar {
   min-height: 78px;
@@ -6820,67 +6752,6 @@ button.btn-primary-lg:hover:not(:disabled) {
 .image-item[draggable='true'] { cursor: grab; }
 .image-item[draggable='true']:active { cursor: grabbing; opacity: .7; }
 
-.product-create-one-page .editor-body { display: grid; gap: 18px; padding: 20px; }
-.create-form-section { padding: 18px; border: 1px solid var(--sv-border); border-radius: 14px; background: var(--sv-surface); box-shadow: 0 3px 12px rgba(24,48,78,.04); }
-.create-section-heading { display: flex; align-items: flex-start; gap: 11px; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--sv-border); }
-.create-section-heading h3 { margin: 0 0 3px; font-size: 15px; }
-.create-section-heading p { margin: 0; color: var(--sv-text-2); font-size: 11px; }
-.create-section-icon { display: grid; place-items: center; width: 28px; height: 28px; flex: 0 0 28px; border-radius: 9px; background: var(--sv-primary); color: var(--sv-primary-fg); font-weight: 800; }
-.create-flow-summary { display: flex; gap: 8px; padding: 12px 20px 0; flex-wrap: wrap; }
-.create-step { padding: 7px 11px; border-radius: 8px; color: var(--sv-text-2); background: var(--sv-surface-2); font-size: 11px; }
-.create-step b { margin-inline-end: 5px; color: var(--sv-primary); }
-.create-step.active { color: var(--sv-text); }
-@media (max-width: 700px) { .product-create-one-page .editor-body { padding: 12px; } .create-form-section { padding: 13px; } .create-flow-summary { padding-inline: 12px; } }
-
-.create-image-preview-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  gap: 10px;
-  margin-top: 12px;
-}
-.create-image-preview {
-  min-width: 0;
-  margin: 0;
-  overflow: hidden;
-  border: 1px solid var(--sv-border);
-  border-radius: 10px;
-  background: var(--sv-surface-2);
-}
-.create-image-preview img {
-  display: block;
-  width: 100%;
-  height: 92px;
-  object-fit: cover;
-  background: var(--sv-bg);
-}
-.create-image-preview figcaption {
-  overflow: hidden;
-  padding: 6px 8px;
-  color: var(--sv-text-2);
-  font-size: 10px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.create-image-url { flex: 1 1 100%; }
-.create-image-url textarea {
-  width: 100%;
-  min-height: 76px;
-  resize: vertical;
-  padding: 11px 13px;
-  border: 1px solid var(--sv-border-2);
-  border-radius: 10px;
-  background: var(--sv-surface-2);
-  color: var(--sv-text);
-  font: inherit;
-  font-size: 12px;
-  line-height: 1.8;
-  direction: ltr;
-  transition: border-color .18s ease, box-shadow .18s ease;
-}
-.create-image-url textarea:focus { outline: 0; border-color: var(--sv-primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--sv-primary) 15%, transparent); }
-.create-image-preview figcaption { display: flex; align-items: center; justify-content: space-between; gap: 5px; }
-.create-image-preview figcaption button { border: 0; padding: 0 4px; color: var(--sv-danger); background: transparent; cursor: pointer; font-size: 16px; line-height: 1; }
 .image-item[draggable='true']::before { content: '⋮⋮'; position: absolute; z-index: 1; margin: 7px; padding: 2px 5px; border-radius: 5px; background: rgba(255,255,255,.9); color: var(--sv-text-2); font-size: 14px; }
 .image-item[draggable='true'] { position: relative; }
 
@@ -7189,4 +7060,633 @@ button.btn-primary-lg:hover:not(:disabled) {
 [data-theme='dark'] .admin .row-action:hover {
   background: var(--sv-surface-2);
   border-color: var(--sv-border-2);
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   Product create (ثبت محصول) — pc-* classes are owned exclusively by
+   ProductCreateModal. One-page flow: numbered section cards on the main
+   column, a sticky live-summary aside on wide screens, and a pinned save
+   bar. Everything consumes --sv-* tokens so both themes stay correct.
+   ════════════════════════════════════════════════════════════════════ */
+
+/* ── Head: title + «ثبت یکجا» badge + close ── */
+.pc-shell .pc-head {
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--sv-border);
+  background: linear-gradient(180deg, var(--sv-surface-2), var(--sv-surface));
+}
+.pc-head-titles {
+  flex: 1;
+  min-width: 0;
+}
+.pc-head-titles h2 {
+  margin: 0;
+  font-size: 16px;
+}
+.pc-head-titles p {
+  margin: 3px 0 0;
+  color: var(--sv-text-2);
+  font-size: 11.5px;
+}
+.pc-head-badge {
+  flex: 0 0 auto;
+  padding: 6px 12px;
+  border-radius: var(--sv-radius-pill);
+  background: color-mix(in srgb, var(--sv-link) 12%, transparent);
+  color: var(--sv-link);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* ── Workspace: form column + sticky summary aside ── */
+.pc-shell .pc-body {
+  padding: 18px 20px 10px;
+}
+.pc-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+.pc-main {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+/* Hidden below 1120px — the footer status pills carry the same counts on
+   narrow screens. This rule MUST stay before the media query: media queries
+   add no specificity, so a later .pc-aside rule would win over it. */
+.pc-aside {
+  display: none;
+}
+@media (min-width: 1120px) {
+  .pc-workspace {
+    grid-template-columns: minmax(0, 1fr) 296px;
+  }
+  .pc-aside {
+    display: block;
+    position: sticky;
+    top: 8px;
+  }
+}
+
+/* ── Section cards ── */
+.pc-section {
+  padding: 18px;
+  border: 1px solid var(--sv-border);
+  border-radius: var(--sv-radius-card);
+  background: var(--sv-surface);
+  box-shadow: var(--sv-shadow-1);
+}
+.pc-section-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.pc-section-head h3 {
+  margin: 0 0 2px;
+  font-size: 14.5px;
+}
+.pc-section-head p {
+  margin: 0;
+  color: var(--sv-text-3);
+  font-size: 11px;
+}
+.pc-step-n {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--sv-link) 14%, transparent);
+  color: var(--sv-link);
+  font-weight: 800;
+  font-size: 13px;
+}
+.pc-section-count {
+  margin-inline-start: auto;
+  padding: 4px 11px;
+  border-radius: var(--sv-radius-pill);
+  background: var(--sv-surface-3);
+  color: var(--sv-text-2);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* ── Form grid: 6-column canvas, pc-sN sets the column span ── */
+.pc-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+}
+.pc-grid label {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  color: var(--sv-text-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+.pc-grid label small {
+  font-weight: 400;
+  color: var(--sv-text-3);
+  font-size: 10px;
+}
+.pc-grid label.is-req::before {
+  content: '* ';
+  color: var(--sv-danger);
+  font-weight: 800;
+}
+.pc-s1 { grid-column: span 1; }
+.pc-s2 { grid-column: span 2; }
+.pc-s3 { grid-column: span 3; }
+.pc-s4 { grid-column: span 4; }
+.pc-s6 { grid-column: span 6; }
+.pc-grid input,
+.pc-grid select,
+.pc-grid textarea,
+.pc-vehicle-picker select {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  padding: 9px 11px;
+  border: 1px solid var(--sv-border-2);
+  border-radius: var(--sv-radius-button);
+  background: var(--sv-surface-2);
+  color: var(--sv-text);
+  font: inherit;
+  font-size: 13px;
+  transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+}
+.pc-grid input:focus,
+.pc-grid select:focus,
+.pc-grid textarea:focus,
+.pc-vehicle-picker select:focus {
+  outline: 0;
+  border-color: var(--sv-primary);
+  background: var(--sv-surface);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sv-primary) 14%, transparent);
+}
+.pc-grid input::placeholder,
+.pc-grid textarea::placeholder {
+  color: var(--sv-text-3);
+  opacity: 1;
+}
+.pc-field-name input {
+  min-height: 48px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+/* ── SEO fold: advanced fields collapsed by default ── */
+.pc-seo {
+  margin-top: 14px;
+  border: 1px dashed var(--sv-border-2);
+  border-radius: var(--sv-radius-button);
+  background: var(--sv-surface-2);
+}
+.pc-seo > summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 11px 14px;
+  color: var(--sv-text-2);
+  font-size: 12.5px;
+  font-weight: 700;
+  list-style: none;
+  cursor: pointer;
+}
+.pc-seo > summary::-webkit-details-marker {
+  display: none;
+}
+.pc-seo > summary::after {
+  content: '◂';
+  margin-inline-start: auto;
+  color: var(--sv-text-3);
+  transition: transform .15s ease;
+}
+.pc-seo[open] > summary::after {
+  transform: rotate(-90deg);
+}
+.pc-seo > summary small {
+  color: var(--sv-text-3);
+  font-weight: 400;
+  font-size: 10.5px;
+}
+.pc-seo-body {
+  padding: 4px 14px 14px;
+}
+
+/* ── Image sources + previews ── */
+.pc-image-sources {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+.pc-image-src {
+  display: grid;
+  gap: 7px;
+  align-content: start;
+  padding: 12px;
+  border: 1px solid var(--sv-border);
+  border-radius: 12px;
+  background: var(--sv-surface-2);
+  color: var(--sv-text-2);
+  font-size: 12px;
+  font-weight: 700;
+}
+.pc-image-src textarea {
+  width: 100%;
+  min-height: 62px;
+  resize: vertical;
+  padding: 9px 11px;
+  border: 1px solid var(--sv-border-2);
+  border-radius: var(--sv-radius-button);
+  background: var(--sv-surface);
+  color: var(--sv-text);
+  font: inherit;
+  font-size: 11.5px;
+  line-height: 1.8;
+  direction: ltr;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.pc-image-src textarea:focus {
+  outline: 0;
+  border-color: var(--sv-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sv-primary) 14%, transparent);
+}
+.pc-image-src input[type='file'] {
+  width: 100%;
+  min-height: 40px;
+  padding: 7px;
+  border: 1px solid var(--sv-border-2);
+  border-radius: var(--sv-radius-button);
+  background: var(--sv-surface);
+  color: var(--sv-text);
+  font: 11px Vazirmatn;
+}
+.pc-image-note {
+  margin: 10px 0 0;
+  color: var(--sv-text-3);
+  font-size: 10.5px;
+}
+.pc-previews {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+.pc-preview {
+  position: relative;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--sv-border);
+  border-radius: 10px;
+  background: var(--sv-surface-2);
+}
+.pc-preview img {
+  display: block;
+  width: 100%;
+  height: 88px;
+  object-fit: cover;
+  background: var(--sv-bg);
+}
+.pc-preview figcaption {
+  overflow: hidden;
+  padding: 6px 8px;
+  color: var(--sv-text-2);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pc-preview-x {
+  position: absolute;
+  top: 5px;
+  inset-inline-start: 5px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 7px;
+  background: var(--sv-scrim);
+  color: var(--sv-primary-fg);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+}
+.pc-preview-x:hover {
+  background: var(--sv-danger);
+}
+
+/* ── Inventory item cards ── */
+.pc-items {
+  display: grid;
+  gap: 12px;
+}
+.pc-item {
+  padding: 14px;
+  border: 1px solid var(--sv-border);
+  border-radius: 12px;
+  background: var(--sv-surface-2);
+}
+.pc-item-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.pc-item-head b {
+  font-size: 12.5px;
+}
+.pc-item-brand {
+  color: var(--sv-link);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.pc-item-remove {
+  margin-inline-start: auto;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--sv-danger-soft);
+  color: var(--sv-danger);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.pc-item-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 46px;
+  border: 1.5px dashed var(--sv-border-2);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--sv-link);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color .15s ease, background .15s ease;
+}
+.pc-item-add:hover {
+  border-color: var(--sv-link);
+  background: color-mix(in srgb, var(--sv-link) 7%, transparent);
+}
+.pc-item-note {
+  margin: 10px 0 0;
+  color: var(--sv-text-3);
+  font-size: 10.5px;
+}
+
+/* ── Vehicle compatibility picker + chips ── */
+.pc-vehicle-picker {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto;
+  gap: 10px;
+}
+.pc-compat-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.pc-compat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border: 1px solid var(--sv-border);
+  border-radius: var(--sv-radius-pill);
+  background: var(--sv-surface-2);
+  font-size: 12px;
+}
+.pc-compat-chip b {
+  font-weight: 700;
+}
+.pc-compat-chip small {
+  color: var(--sv-text-3);
+}
+.pc-compat-chip button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--sv-danger);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+}
+.pc-compat-empty {
+  margin: 12px 0 0;
+  color: var(--sv-text-3);
+  font-size: 11.5px;
+}
+
+/* ── Sticky summary aside (wide screens only) ── */
+.pc-aside-card {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--sv-border);
+  border-radius: var(--sv-radius-card);
+  background: var(--sv-surface-2);
+  box-shadow: var(--sv-shadow-1);
+}
+.pc-aside-card h4 {
+  margin: 0;
+  color: var(--sv-text-2);
+  font-size: 12.5px;
+}
+.pc-id {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pc-id-thumb {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  flex: 0 0 52px;
+  overflow: hidden;
+  border: 1px solid var(--sv-border);
+  border-radius: 12px;
+  background: var(--sv-surface);
+  color: var(--sv-text-3);
+  font-size: 20px;
+}
+.pc-id-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.pc-id-meta {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.pc-id-meta b {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pc-id-meta span {
+  color: var(--sv-text-3);
+  font-size: 11px;
+}
+.pc-checklist {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.pc-checklist li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 11px;
+  border: 1px solid var(--sv-border);
+  border-radius: 10px;
+  background: var(--sv-surface);
+  color: var(--sv-text-2);
+  font-size: 12px;
+}
+.pc-checklist li i {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 9px;
+  border-radius: 50%;
+  background: var(--sv-border-2);
+}
+.pc-checklist li b {
+  margin-inline-start: auto;
+  color: var(--sv-text-3);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.pc-checklist li.ok {
+  border-color: color-mix(in srgb, var(--sv-ok) 35%, transparent);
+  background: var(--sv-ok-soft);
+  color: var(--sv-text);
+}
+.pc-checklist li.ok i {
+  background: var(--sv-ok);
+}
+.pc-checklist li.ok b {
+  color: var(--sv-ok);
+}
+.pc-aside-note {
+  margin: 0;
+  padding-top: 10px;
+  border-top: 1px dashed var(--sv-border);
+  color: var(--sv-text-3);
+  font-size: 10.5px;
+  line-height: 1.9;
+}
+
+/* ── Pinned save bar ── */
+.pc-footer {
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.pc-footer-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+.pc-footer-status .pc-stat {
+  padding: 4px 10px;
+  border-radius: var(--sv-radius-pill);
+  background: var(--sv-surface-3);
+  color: var(--sv-text-2);
+  font-size: 11px;
+  font-weight: 600;
+}
+.pc-footer-hint {
+  color: var(--sv-text-3);
+  font-size: 11px;
+}
+.pc-footer-actions {
+  display: flex;
+  gap: 10px;
+}
+
+/* ── Inline error strip ── */
+.pc-error {
+  margin: 12px 20px 0;
+  padding: 11px 14px;
+  border: 1px solid color-mix(in srgb, var(--sv-danger) 35%, transparent);
+  border-radius: 10px;
+  background: var(--sv-danger-soft);
+  color: var(--sv-danger);
+  font-size: 12px;
+  line-height: 1.9;
+}
+
+/* ── Modal variant gets a wider dialog so the aside fits ── */
+.modal-backdrop .product-create-modal {
+  width: min(1140px, 96vw);
+}
+
+/* ── Responsive: fold the canvas down ── */
+@media (max-width: 900px) {
+  .pc-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .pc-s1, .pc-s2, .pc-s3, .pc-s4 { grid-column: span 1; }
+  .pc-s6 { grid-column: span 2; }
+  .pc-image-sources {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .pc-image-sources .pc-image-src:first-child {
+    grid-column: span 2;
+  }
+  .pc-vehicle-picker {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .pc-vehicle-picker button {
+    grid-column: span 2;
+  }
+  .pc-head-badge {
+    display: none;
+  }
+}
+@media (max-width: 560px) {
+  .pc-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pc-s1, .pc-s2, .pc-s3, .pc-s4, .pc-s6 { grid-column: span 1; }
+  .pc-image-sources {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pc-image-sources .pc-image-src:first-child {
+    grid-column: span 1;
+  }
+  .pc-vehicle-picker {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pc-vehicle-picker button {
+    grid-column: span 1;
+  }
+  .pc-shell .pc-body {
+    padding: 12px 12px 6px;
+  }
+  .pc-section {
+    padding: 13px;
+  }
 }
