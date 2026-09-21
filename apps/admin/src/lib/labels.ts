@@ -352,20 +352,15 @@ export function renderLabelHTML(o: LabelOptions): string {
   </div>`;
 }
 
-/* ============ برچسب قفسه — نام قهرمان، کد خوانا و بارکد Code 128 ============ */
+/* ============ برچسب قفسه — نام قهرمان، بزرگ و وسط‌چین ============ */
 
 export type ShelfLabelOptions = {
   /** Display name of the shelf («قفسه جلو») — the hero of the label. */
   name: string;
-  /** Shelf code («A-03») — shown large and encoded as Code 128. */
-  code: string;
-  /** Owning warehouse («انبار اصلی») — chip beside the code; '' when none. */
+  /** Owning warehouse («انبار اصلی») — small chip under the name; '' when none. */
   warehouse: string;
   size: LabelSize;
   style: LabelStyle;
-  /** Draw the Code 128 barcode of the code (shelf codes are free-form text,
-   * so EAN-13 does not apply here). */
-  showBarcode: boolean;
   /** Store name from settings (falls back to فروشگاه سلیم‌وند). */
   storeName?: string;
   logoUrl?: string;
@@ -373,16 +368,12 @@ export type ShelfLabelOptions = {
 
 export function renderShelfLabelHTML(o: ShelfLabelOptions): string {
   const sty = o.style === 'brand' ? '' : o.style;
-  const enc = o.showBarcode && o.code.trim() ? code128Bits(o.code.trim().toUpperCase()) : null;
-  const bh = o.size === '60x40' || o.size === '40x60' ? 34 : o.size === '38x22' ? 20 : 26;
-  const bcStyle = `height:${o.size === '60x40' || o.size === '40x60' ? '8mm' : o.size === '38x22' ? '4.6mm' : '5.4mm'}`;
   const mark = o.logoUrl
     ? `<img class="lb-logo" src="${esc(o.logoUrl)}" alt="" />`
     : '<div class="mk">س</div>';
   const warehouseChip = o.warehouse.trim()
     ? `<span class="lb-chip">${esc(o.warehouse)}</span>`
     : '';
-  const codeText = o.code.trim() ? `<span class="sl-code">${esc(o.code)}</span>` : '';
   return `
   <div class="lb s-${o.size} ${sty} sl">
     <div class="lb-h">
@@ -393,18 +384,9 @@ export function renderShelfLabelHTML(o: ShelfLabelOptions): string {
     <div class="sl-b">
       <div class="sl-name">${esc(o.name)}</div>
       ${
-        warehouseChip || codeText
+        warehouseChip
           ? `
-      <div class="sl-sub">${warehouseChip}${codeText}</div>`
-          : ''
-      }
-      ${
-        enc
-          ? `
-      <div class="lb-bc">
-        <div style="${bcStyle};width:100%;color:inherit">${barcodeSVG(enc.bits, bh)}</div>
-        <div class="lb-digits">${esc(enc.code)}</div>
-      </div>`
+      <div class="sl-sub">${warehouseChip}</div>`
           : ''
       }
     </div>
@@ -502,7 +484,7 @@ export const LABEL_CSS = `
 .lb.s-38x22 .lb-digits{font-size:1.7mm;letter-spacing:.1em}
 .lb.s-38x22 .lb-foot{display:none}
 
-/* — برچسب قفسه: نام بزرگ وسط‌چین، کد خوانا، بارکد پایین — */
+/* — برچسب قفسه: نام بزرگ وسط‌چین + چیپ انبار — */
 .sl-b{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;
   text-align:center;gap:.7mm;
   padding:1.4mm 1.8mm 1.2mm;min-height:0;overflow:hidden}
@@ -510,26 +492,18 @@ export const LABEL_CSS = `
   -webkit-box-orient:vertical;overflow:hidden}
 .sl-sub{display:flex;align-items:center;justify-content:center;gap:1.2mm;color:#4a5f79;min-height:0;
   flex-wrap:nowrap;overflow:hidden}
-.sl-code{direction:ltr;font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:700;
-  color:#0d2b4b;letter-spacing:.05em;white-space:nowrap}
 .lb.mono .sl-name{color:#000}
 .lb.mono .sl-sub{color:#333}
-.lb.mono .sl-code{color:#000}
 .lb.navy .sl-name{color:#fff}
 .lb.navy .sl-sub{color:#bcd7f5}
-.lb.navy .sl-code{color:#e0ecfa}
 
-.lb.s-50x30 .sl-name{font-size:3.3mm}
-.lb.s-50x30 .sl-code{font-size:2.7mm}
+.lb.s-50x30 .sl-name{font-size:5mm}
 .lb.s-50x30 .sl-sub{font-size:1.9mm}
-.lb.s-60x40 .sl-name{font-size:4.2mm}
-.lb.s-60x40 .sl-code{font-size:3.4mm}
+.lb.s-60x40 .sl-name{font-size:6.5mm}
 .lb.s-60x40 .sl-sub{font-size:2.2mm}
-.lb.s-40x60 .sl-name{font-size:3.6mm}
-.lb.s-40x60 .sl-code{font-size:2.9mm}
+.lb.s-40x60 .sl-name{font-size:5.2mm}
 .lb.s-40x60 .sl-sub{font-size:2mm}
-.lb.s-38x22 .sl-name{font-size:2.7mm;-webkit-line-clamp:1}
-.lb.s-38x22 .sl-code{font-size:2.3mm}
+.lb.s-38x22 .sl-name{font-size:3.6mm;-webkit-line-clamp:1}
 .lb.s-38x22 .sl-sub{font-size:1.5mm}
 `;
 

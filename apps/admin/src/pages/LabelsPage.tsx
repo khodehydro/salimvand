@@ -102,11 +102,9 @@ export function LabelsPage() {
   const [shelfFilter, setShelfFilter] = useState('');
   const [selectedShelfId, setSelectedShelfId] = useState('');
   const [shelfName, setShelfName] = useState('');
-  const [shelfCode, setShelfCode] = useState('');
   const [shelfWarehouse, setShelfWarehouse] = useState('');
   const [shelfSize, setShelfSize] = useState<LabelSize>('50x30');
   const [shelfStyle, setShelfStyle] = useState<LabelStyle>('brand');
-  const [shelfBarcode, setShelfBarcode] = useState(true);
   /** Batch selection for «یک برچسب برای هر قفسه» — starts with every shelf. */
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
@@ -203,7 +201,6 @@ export function LabelsPage() {
   const loadShelf = (row: ShelfRow) => {
     setSelectedShelfId(row.id);
     setShelfName(row.name);
-    setShelfCode(row.code);
     setShelfWarehouse(row.warehouse);
   };
 
@@ -272,11 +269,9 @@ export function LabelsPage() {
   const selectedShelf = shelves.find((row) => row.id === selectedShelfId);
   const shelfOptions: ShelfLabelOptions = {
     name: shelfName,
-    code: shelfCode,
     warehouse: shelfWarehouse,
     size: shelfSize,
     style: shelfStyle,
-    showBarcode: shelfBarcode,
     storeName: labelHeader || storeName || undefined,
     logoUrl: logoUrl || undefined,
   };
@@ -295,7 +290,6 @@ export function LabelsPage() {
         renderShelfLabelHTML({
           ...shelfOptions,
           name: row.name,
-          code: row.code,
           warehouse: row.warehouse,
         }),
       ),
@@ -333,7 +327,7 @@ export function LabelsPage() {
           <h1>{tab === 'shelves' ? 'برچسب قفسه‌ها' : 'برچسب محصولات'}</h1>
           <p className="muted">
             {tab === 'shelves'
-              ? 'برچسب نام و کد هر قفسه بر اساس انبارها و قفسه‌های تعریف‌شده — چاپ کنید و روی قفسه نصب کنید.'
+              ? 'برچسب نام هر قفسه بر اساس انبارها و قفسه‌های تعریف‌شده — چاپ کنید و روی قفسه نصب کنید.'
               : 'برچسب آماده برای هر کالای انبار — با بارکد قابل اسکن، در سه اندازه و سه سبک؛ انتخاب محصول، تعداد و چاپ برگهٔ A4.'}
           </p>
         </div>
@@ -723,18 +717,6 @@ export function LabelsPage() {
                   <input value={shelfName} onChange={(event) => setShelfName(event.target.value)} />
                 </div>
                 <div className="lbl-field">
-                  <label>کد قفسه</label>
-                  <input
-                    dir="ltr"
-                    className="lbl-latin"
-                    value={shelfCode}
-                    onChange={(event) => setShelfCode(event.target.value)}
-                  />
-                  {shelfBarcode && (
-                    <small className="lbl-hint">این کد به‌صورت Code 128 بارکد می‌شود.</small>
-                  )}
-                </div>
-                <div className="lbl-field">
                   <label>انبار / گروه</label>
                   <input
                     value={shelfWarehouse}
@@ -779,15 +761,6 @@ export function LabelsPage() {
                   </div>
                 </div>
 
-                <label className="lbl-chk">
-                  <input
-                    type="checkbox"
-                    checked={shelfBarcode}
-                    onChange={(event) => setShelfBarcode(event.target.checked)}
-                  />
-                  نمایش بارکد کد قفسه (Code 128)
-                </label>
-
                 <hr className="lbl-hr" />
 
                 <div className="lbl-field">
@@ -831,7 +804,7 @@ export function LabelsPage() {
                   </div>
                   <small className="lbl-hint">
                     هر قفسه فقط یک برچسب می‌گیرد (برخلاف کالاها، نسخهٔ تکراری ندارد)؛ برچسب‌ها از
-                    نام و کد خود قفسه‌ها ساخته می‌شوند.
+                    نام و انبار خود قفسه‌ها ساخته می‌شوند.
                   </small>
                   <button
                     className="button-primary lbl-print-inline"
@@ -881,8 +854,8 @@ export function LabelsPage() {
                     </div>
                     <small className="lbl-spec">
                       {labelSizes.find((entry) => entry.id === shelfSize)?.label} میلی‌متر ·
-                      بزرگ‌نمایی {persianDigits(zoom)}× · {shelfBarcode ? 'Code 128' : 'بدون بارکد'}{' '}
-                      · {labelStyles.find((entry) => entry.id === shelfStyle)?.label}
+                      بزرگ‌نمایی {persianDigits(zoom)}× ·{' '}
+                      {labelStyles.find((entry) => entry.id === shelfStyle)?.label}
                     </small>
                   </div>
                 </div>
@@ -933,7 +906,7 @@ export function LabelsPage() {
 
             <p className="lbl-foot-note">
               برچسب قفسه از همان قفسه‌هایی ساخته می‌شود که در «انبار و موجودی ← قفسه‌ها» تعریف
-              کرده‌اید؛ کد قفسه با Code 128 بارکد می‌شود تا با اسکنر هم خوانده شود. آدرس{' '}
+              کرده‌اید — فقط نام قفسه و انبار آن، با درشت‌ترین فونت ممکن. آدرس{' '}
               <span dir="ltr">{STORE_SITE}</span> روی همهٔ برچسب‌ها درج می‌شود.
             </p>
           </main>
