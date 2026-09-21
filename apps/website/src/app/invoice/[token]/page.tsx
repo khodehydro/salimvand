@@ -4,7 +4,7 @@ import { InvoiceDocument, InvoiceUnavailable, type PublicInvoice } from '../../I
 type Props = { params: Promise<{ token: string }> };
 
 export const metadata: Metadata = {
-  title: 'فاکتور آنلاین | فروشگاه سلیم وند',
+  title: 'فاکتور آنلاین',
   robots: { index: false, follow: false },
 };
 

@@ -44,11 +44,21 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const data = await getCategory((await params).slug);
   return {
-    title: data ? `${data.category.name} | لوازم یدکی سلیم وند` : 'دسته‌بندی پیدا نشد',
-    description: data ? `خرید و استعلام قیمت ${data.category.name} و قطعات خودرو از فروشگاه سلیم وند در میاندوآب.` : undefined,
-    keywords: data ? [data.category.name, `لوازم یدکی ${data.category.name}`, 'قطعات خودرو میاندوآب'] : undefined,
+    title: data ? data.category.name : 'دسته‌بندی پیدا نشد',
+    description: data
+      ? `خرید و استعلام قیمت ${data.category.name} و قطعات خودرو از فروشگاه سلیم وند در میاندوآب.`
+      : undefined,
+    keywords: data
+      ? [data.category.name, `لوازم یدکی ${data.category.name}`, 'قطعات خودرو میاندوآب']
+      : undefined,
     alternates: data ? { canonical: `/category/${data.category.slug}` } : undefined,
-    openGraph: data ? { type: 'website', title: data.category.name, description: `کاتالوگ ${data.category.name} و قطعات خودرو` } : undefined,
+    openGraph: data
+      ? {
+          type: 'website',
+          title: data.category.name,
+          description: `کاتالوگ ${data.category.name} و قطعات خودرو`,
+        }
+      : undefined,
   };
 }
 export default async function CategoryPage({ params }: { params: Promise<{ slug: string }> }) {

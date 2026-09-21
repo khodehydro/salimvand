@@ -99,9 +99,11 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const product = await getProduct((await params).slug);
-  if (!product) return { title: 'محصول پیدا نشد | فروشگاه سلیم وند' };
+  if (!product) return { title: 'محصول پیدا نشد' };
   return {
-    title: product.seoTitle ?? `${product.name} | فروشگاه سلیم وند`,
+    // The root layout template appends «| فروشگاه سلیم وند» once — don't
+    // repeat it here or every SERP title shows the brand twice.
+    title: product.seoTitle ?? product.name,
     description:
       product.seoDescription ??
       product.description ??
@@ -112,7 +114,9 @@ export async function generateMetadata({
       title: product.seoTitle ?? product.name,
       description: product.seoDescription ?? product.description ?? '',
       url: `/product/${product.slug}`,
-      images: product.images?.[0]?.path ? [{ url: product.images[0].path, alt: product.name }] : undefined,
+      images: product.images?.[0]?.path
+        ? [{ url: product.images[0].path, alt: product.name }]
+        : undefined,
     },
     twitter: {
       card: 'summary_large_image',
@@ -121,7 +125,11 @@ export async function generateMetadata({
       images: product.images?.[0]?.path ? [product.images[0].path] : undefined,
     },
     robots: { index: true, follow: true },
-    keywords: [product.name, product.partNumber ?? '', ...product.brands.map((brand) => brand.name)].filter(Boolean),
+    keywords: [
+      product.name,
+      product.partNumber ?? '',
+      ...product.brands.map((brand) => brand.name),
+    ].filter(Boolean),
   };
 }
 
@@ -132,7 +140,11 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   const compatibilities = product.compatibilities ?? [];
   const siteUrl = process.env.PUBLIC_SITE_URL ?? 'https://salimvand.ir';
   const shareUrl = `${siteUrl}/p/${encodeURIComponent(product.slug)}`;
-  const qrDataUrl = await QRCode.toDataURL(shareUrl, { width: 180, margin: 1, errorCorrectionLevel: 'M' });
+  const qrDataUrl = await QRCode.toDataURL(shareUrl, {
+    width: 180,
+    margin: 1,
+    errorCorrectionLevel: 'M',
+  });
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'Product',
@@ -143,14 +155,19 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
     brand: product.brands?.length ? { '@type': 'Brand', name: product.brands[0].name } : undefined,
     category: product.category?.name,
     mpn: product.partNumber ?? undefined,
-    offers: product.price != null ? {
-      '@type': 'Offer',
-      url: shareUrl,
-      priceCurrency: 'IRR',
-      price: product.price,
-      availability: product.availability === 'in_stock' || product.availability === 'low_stock'
-        ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
-    } : undefined,
+    offers:
+      product.price != null
+        ? {
+            '@type': 'Offer',
+            url: shareUrl,
+            priceCurrency: 'IRR',
+            price: product.price,
+            availability:
+              product.availability === 'in_stock' || product.availability === 'low_stock'
+                ? 'https://schema.org/InStock'
+                : 'https://schema.org/OutOfStock',
+          }
+        : undefined,
   };
   const breadcrumb = {
     '@context': 'https://schema.org',
@@ -303,7 +320,12 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
               <ProductShareActions url={shareUrl} title={product.name} />
               <details>
                 <summary>نمایش QR Code</summary>
-                <img src={qrDataUrl} width={180} height={180} alt={`QR Code لینک ${product.name}`} />
+                <img
+                  src={qrDataUrl}
+                  width={180}
+                  height={180}
+                  alt={`QR Code لینک ${product.name}`}
+                />
               </details>
             </div>
             <p className="price-note-inline">

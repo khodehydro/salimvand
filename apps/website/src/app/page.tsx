@@ -118,7 +118,7 @@ const getMeta = async (): Promise<StoreMeta> => {
 
 export async function generateMetadata() {
   return {
-    title: 'قطعات یدکی خودرو | فروشگاه سلیم وند',
+    title: 'قطعات یدکی خودرو',
     description: 'کاتالوگ قطعات یدکی خودرو با اعلام وضعیت موجودی و برندهای موجود در میاندوآب.',
   };
 }
@@ -173,9 +173,7 @@ export default async function HomePage({
       <section className="hero-section">
         <div className="hero-copy">
           <span className="eyebrow">{STORE_BRAND} · میاندوآب</span>
-          <h1>
-            {info.header.heroHeadline}
-          </h1>
+          <h1>{info.header.heroHeadline}</h1>
           <p>{info.header.heroSubheadline}</p>
           <div className="hero-actions">
             <a className="button button-light" href="#catalog">
