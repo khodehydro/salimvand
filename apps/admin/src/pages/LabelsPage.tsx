@@ -107,7 +107,6 @@ export function LabelsPage() {
   const [shelfSize, setShelfSize] = useState<LabelSize>('50x30');
   const [shelfStyle, setShelfStyle] = useState<LabelStyle>('brand');
   const [shelfBarcode, setShelfBarcode] = useState(true);
-  const [shelfCount, setShelfCount] = useState('1');
   /** Batch selection for «یک برچسب برای هر قفسه» — starts with every shelf. */
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
@@ -283,15 +282,8 @@ export function LabelsPage() {
   };
   const currentShelfHTML = renderShelfLabelHTML(shelfOptions);
 
-  const shelfPrintCount = Math.max(1, Math.min(200, Number(shelfCount) || 1));
-  const printShelfSheet = () => {
-    const sheet = buildSheetHTML(Array.from({ length: shelfPrintCount }, () => currentShelfHTML));
-    const frame = iframeRef.current;
-    if (!frame) return;
-    frame.srcdoc = sheet;
-  };
-
-  /** One label per picked shelf — the «چاپ کن بزنم روی همهٔ قفسه‌ها» flow. */
+  /** One label per picked shelf — هر آدرس یک قفسه است، پس خروجی کلی یعنی
+   * یک برچسب از هر قفسهٔ انتخابی، بدون نسخه‌های تکراری. */
   const pickedShelves = useMemo(
     () => shelves.filter((row) => picked.has(row.id)),
     [shelves, picked],
@@ -354,7 +346,7 @@ export function LabelsPage() {
                 onClick={printShelfBatch}
                 disabled={!pickedShelves.length}
               >
-                ⎙ چاپ برگهٔ قفسه‌ها ({persianDigits(pickedShelves.length)} قفسه)
+                ⎙ خروجی PDF قفسه‌ها ({persianDigits(pickedShelves.length)} قفسه)
               </button>
             </>
           ) : (
@@ -796,27 +788,10 @@ export function LabelsPage() {
                   نمایش بارکد کد قفسه (Code 128)
                 </label>
 
-                <div className="lbl-field">
-                  <label>تعداد در برگهٔ چاپ</label>
-                  <FaNumberInput
-                    className="lbl-latin"
-                    group={false}
-                    value={shelfCount}
-                    onChange={(plain) => setShelfCount(plain)}
-                  />
-                  <small className="lbl-hint">
-                    فقط همین قفسه چند بار چاپ می‌شود؛ برای چاپ یک‌جا برای چند قفسه از «چاپ گروهی»
-                    پایین استفاده کنید.
-                  </small>
-                </div>
-                <button className="button-primary lbl-print-inline" onClick={printShelfSheet}>
-                  ⎙ چاپ برگهٔ A4 ({persianDigits(shelfPrintCount)} برچسب)
-                </button>
-
                 <hr className="lbl-hr" />
 
                 <div className="lbl-field">
-                  <label>چاپ گروهی — یک برچسب برای هر قفسه</label>
+                  <label>خروجی کلی — یک برچسب برای هر قفسه</label>
                   <div className="sl-pick-head">
                     <button
                       type="button"
@@ -854,6 +829,17 @@ export function LabelsPage() {
                       </small>
                     )}
                   </div>
+                  <small className="lbl-hint">
+                    هر قفسه فقط یک برچسب می‌گیرد (برخلاف کالاها، نسخهٔ تکراری ندارد)؛ برچسب‌ها از
+                    نام و کد خود قفسه‌ها ساخته می‌شوند.
+                  </small>
+                  <button
+                    className="button-primary lbl-print-inline"
+                    onClick={printShelfBatch}
+                    disabled={!pickedShelves.length}
+                  >
+                    ⎙ خروجی PDF قفسه‌ها ({persianDigits(pickedShelves.length)} برچسب)
+                  </button>
                 </div>
               </div>
             </div>

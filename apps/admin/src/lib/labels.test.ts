@@ -197,6 +197,14 @@ describe('renderShelfLabelHTML (برچسب قفسه‌ها)', () => {
     expect(LABEL_CSS).toContain('.sl-code');
     expect(LABEL_CSS).toContain('.lb.s-38x22 .sl-name');
   });
+  it('center-aligns the shelf name and code', () => {
+    // نام و کد قفسه وسط چین‌اند: ستون sl-b و ردیف کد هر دو وسط‌چین.
+    const slb = LABEL_CSS.match(/\.sl-b\{[^}]*\}/)?.[0] ?? '';
+    const slsub = LABEL_CSS.match(/\.sl-sub\{[^}]*\}/)?.[0] ?? '';
+    expect(slb).toContain('text-align:center');
+    expect(slb).toContain('align-items:center');
+    expect(slsub).toContain('justify-content:center');
+  });
   it('tiles one shelf label per shelf on the same A4 sheet builder', () => {
     const rows = [
       { ...shelf, name: 'قفسه جلو', code: 'A-01' },

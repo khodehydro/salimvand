@@ -502,12 +502,13 @@ export const LABEL_CSS = `
 .lb.s-38x22 .lb-digits{font-size:1.7mm;letter-spacing:.1em}
 .lb.s-38x22 .lb-foot{display:none}
 
-/* — برچسب قفسه: نام بزرگ، کد خوانا، بارکد پایین — */
-.sl-b{flex:1;display:flex;flex-direction:column;justify-content:center;gap:.7mm;
+/* — برچسب قفسه: نام بزرگ وسط‌چین، کد خوانا، بارکد پایین — */
+.sl-b{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;
+  text-align:center;gap:.7mm;
   padding:1.4mm 1.8mm 1.2mm;min-height:0;overflow:hidden}
 .sl-name{font-weight:800;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;
   -webkit-box-orient:vertical;overflow:hidden}
-.sl-sub{display:flex;align-items:center;gap:1.2mm;color:#4a5f79;min-height:0;
+.sl-sub{display:flex;align-items:center;justify-content:center;gap:1.2mm;color:#4a5f79;min-height:0;
   flex-wrap:nowrap;overflow:hidden}
 .sl-code{direction:ltr;font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:700;
   color:#0d2b4b;letter-spacing:.05em;white-space:nowrap}
