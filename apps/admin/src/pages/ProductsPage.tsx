@@ -152,7 +152,17 @@ export function ProductsPage() {
       .then((result) => setBrands(result.data))
       .catch(() => undefined);
     void api<{ data: Location[] }>('/locations')
-      .then((result) => setLocations(result.data))
+      // Warehouses first, then shelves in numeric code order (۱.۱ … ۱۰.۱ … ۲۰.۷)
+      // — mirrors the inventory page's ordering for the shelf pickers.
+      .then((result) =>
+        setLocations(
+          [...result.data].sort(
+            (a, b) =>
+              Number(b.type === 'warehouse') - Number(a.type === 'warehouse') ||
+              a.code.localeCompare(b.code, 'en', { numeric: true }),
+          ),
+        ),
+      )
       .catch(() => undefined);
     void api<{ data: VehicleMake[] }>('/vehicles/tree')
       .then((result) => setVehicles(result.data))

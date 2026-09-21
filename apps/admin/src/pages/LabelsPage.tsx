@@ -161,12 +161,13 @@ export function LabelsPage() {
         walk(result.data, '');
         // Real warehouses first (alphabetically), legacy warehouse-less
         // shelves last — so the first preview and the first optgroup are a
-        // proper shelf, not pre-grouping leftovers.
+        // proper shelf, not pre-grouping leftovers. numeric:true keeps the
+        // shelf.row codes in human order (۱.۱ … ۲.۷ … ۱۰.۱ … ۲۰.۷).
         rows.sort(
           (a, b) =>
             Number(Boolean(b.warehouse)) - Number(Boolean(a.warehouse)) ||
             a.warehouse.localeCompare(b.warehouse, 'fa') ||
-            a.code.localeCompare(b.code, 'en'),
+            a.code.localeCompare(b.code, 'en', { numeric: true }),
         );
         setShelves(rows);
         setPicked(new Set(rows.map((row) => row.id)));

@@ -153,7 +153,17 @@ export function InventoryPage() {
       .catch((e: Error) => setMessage(e.message));
   const loadLocations = () =>
     api<{ data: Location[] }>('/locations')
-      .then((r) => setLocations(r.data))
+      // Warehouses first, then shelves in numeric code order (۱.۱ … ۱۰.۱ … ۲۰.۷)
+      // — the API's plain string sort would push shelf 10-19 between 1 and 2.
+      .then((r) =>
+        setLocations(
+          [...r.data].sort(
+            (a, b) =>
+              Number(b.type === 'warehouse') - Number(a.type === 'warehouse') ||
+              a.code.localeCompare(b.code, 'en', { numeric: true }),
+          ),
+        ),
+      )
       .catch(() => undefined);
 
   useEffect(() => {
