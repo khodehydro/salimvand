@@ -8,7 +8,9 @@ import {
   ean13CheckDigit,
   ean13FromSku,
   renderLabelHTML,
+  renderShelfLabelHTML,
   type LabelOptions,
+  type ShelfLabelOptions,
 } from './labels';
 
 const base: LabelOptions = {
@@ -136,5 +138,74 @@ describe('buildSheetHTML', () => {
     expect(doc).toContain('gap:2mm');
     expect(doc).toContain("@font-face{font-family:'Vazirmatn'");
     expect(doc).toContain('woff2');
+  });
+});
+
+const shelf: ShelfLabelOptions = {
+  name: 'قفسه جلو',
+  code: 'A-03',
+  warehouse: 'انبار اصلی',
+  size: '50x30',
+  style: 'brand',
+  showBarcode: true,
+};
+
+describe('renderShelfLabelHTML (برچسب قفسه‌ها)', () => {
+  it('puts the shelf name, warehouse chip and code on the label', () => {
+    const html = renderShelfLabelHTML(shelf);
+    expect(html).toContain('قفسه جلو');
+    expect(html).toContain('انبار اصلی');
+    expect(html).toContain('>A-03<');
+    expect(html).toContain('sl-name');
+    expect(html).toContain('فروشگاه سلیم‌وند');
+    expect(html).toContain('>salimvand.ir<');
+  });
+  it('encodes the code as Code 128 (uppercase) with the same SVG engine', () => {
+    const html = renderShelfLabelHTML(shelf);
+    expect(html).toContain(barcodeSVG(code128Bits('A-03').bits, 26));
+    expect(html).toContain('lb-digits');
+  });
+  it('uppercases lowercase shelf codes before encoding', () => {
+    const html = renderShelfLabelHTML({ ...shelf, code: 'a-03' });
+    // barcode block carries the normalized code; the visible text keeps the original
+    expect(html).toContain(barcodeSVG(code128Bits('A-03').bits, 26));
+    expect(html).toContain('>a-03<');
+  });
+  it('drops the barcode block when the toggle is off', () => {
+    const html = renderShelfLabelHTML({ ...shelf, showBarcode: false });
+    expect(html).not.toContain('lb-bc');
+    expect(html).not.toContain('<svg');
+  });
+  it('omits the warehouse chip for legacy shelves without a warehouse', () => {
+    const html = renderShelfLabelHTML({ ...shelf, warehouse: '' });
+    expect(html).not.toContain('lb-chip');
+    expect(html).toContain('>A-03<');
+  });
+  it('escapes operator-entered shelf data', () => {
+    const html = renderShelfLabelHTML({ ...shelf, name: '<script>قفسه</script>' });
+    expect(html).not.toContain('<script>');
+    expect(html).toContain('&lt;script&gt;قفسه&lt;/script&gt;');
+  });
+  it('applies size and style classes like product labels', () => {
+    const html = renderShelfLabelHTML({ ...shelf, size: '60x40', style: 'mono' });
+    expect(html).toContain('lb s-60x40 mono');
+  });
+  it('ships shelf-label CSS in the single-source stylesheet', () => {
+    // The print sheet and the live preview share LABEL_CSS; the shelf block
+    // must be there or the printed shelf label loses all of its styling.
+    expect(LABEL_CSS).toContain('.sl-name');
+    expect(LABEL_CSS).toContain('.sl-code');
+    expect(LABEL_CSS).toContain('.lb.s-38x22 .sl-name');
+  });
+  it('tiles one shelf label per shelf on the same A4 sheet builder', () => {
+    const rows = [
+      { ...shelf, name: 'قفسه جلو', code: 'A-01' },
+      { ...shelf, name: 'قفسه عقب', code: 'A-02' },
+      { ...shelf, name: 'باکس ابزار', code: 'BX-1', warehouse: '' },
+    ];
+    const doc = buildSheetHTML(rows.map((row) => renderShelfLabelHTML(row)));
+    expect((doc.match(/class="lb /g) ?? []).length).toBe(3);
+    expect(doc).toContain('قفسه عقب');
+    expect(doc).toContain('BX-1');
   });
 });
