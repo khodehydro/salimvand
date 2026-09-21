@@ -143,10 +143,17 @@ export function LabelsPage() {
     api<{ data: LocationNode[] }>('/locations')
       .then((result) => {
         const rows: ShelfRow[] = [];
-        const walk = (nodes: LocationNode[], warehouse: string) => {
+        const walk = (nodes: LocationNode[], warehouse: string, nested: boolean) => {
           for (const node of nodes) {
-            if (node.type === 'warehouse') walk(node.children ?? [], node.name);
-            else {
+            if (node.type === 'warehouse') {
+              walk(node.children ?? [], node.name, true);
+              continue;
+            }
+            // The API returns every location flat at the top level too — a
+            // shelf that already has a parent is counted through its
+            // warehouse's children; pushing it again here would print every
+            // label twice. Only nested shelves and parentless legacy rows count.
+            if (nested || !node.parent) {
               rows.push({
                 id: node.id,
                 name: node.name,
@@ -154,11 +161,11 @@ export function LabelsPage() {
                 warehouse,
                 items: node._count?.items ?? 0,
               });
-              walk(node.children ?? [], warehouse);
             }
+            walk(node.children ?? [], warehouse, true);
           }
         };
-        walk(result.data, '');
+        walk(result.data, '', false);
         // Real warehouses first (alphabetically), legacy warehouse-less
         // shelves last — so the first preview and the first optgroup are a
         // proper shelf, not pre-grouping leftovers. numeric:true keeps the
