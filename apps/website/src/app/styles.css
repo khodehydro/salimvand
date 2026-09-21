@@ -791,8 +791,15 @@ p {
   .hero-section h1 {
     font-size: 35px;
   }
-  .hero-copy > p {
-    font-size: 14px;
+  /* Mobile hero keeps only the headline and trust badge — the subheadline
+     and the two CTA buttons are phone-only clutter; the page-bottom call
+     CTA still covers contact. */
+  .hero-copy > p,
+  .hero-actions {
+    display: none;
+  }
+  .hero-trust {
+    margin-top: 22px;
   }
   .trust-strip {
     gap: 15px;
