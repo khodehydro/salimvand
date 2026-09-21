@@ -875,6 +875,21 @@ p {
     box-shadow: var(--shadow-card);
     font-size: 13px;
   }
+  /* Both fixed bars slide in only after the first scroll (html.is-scrolled,
+     set by the layout bootstrap script): on the initial viewport the sticky
+     catalog search sits exactly where these bars would be, and they used to
+     end up hidden underneath it. */
+  .mobile-contact-bar,
+  .mobile-quick-nav {
+    /* px, not %: percentage translates against the bar's own (short) height
+       and barely moves it; 140px clears both stacked bars below the fold. */
+    transform: translateY(140px);
+    transition: transform 0.28s ease;
+  }
+  html.is-scrolled .mobile-contact-bar,
+  html.is-scrolled .mobile-quick-nav {
+    transform: none;
+  }
   .mobile-contact-bar span {
     color: var(--brand-200);
     font-size: 10px;
@@ -903,6 +918,10 @@ p {
     text-decoration: none;
     box-shadow: var(--shadow-card);
     font-size: 13px;
+    /* Slide in only after the first scroll (html.is-scrolled, set by the
+       layout bootstrap script): on the initial viewport the sticky catalog
+       search sits exactly where these bars would be, and they used to end
+       up hidden underneath it. */
     font-weight: 700;
   }
   .mobile-quick-nav span {
