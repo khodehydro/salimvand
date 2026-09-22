@@ -134,6 +134,9 @@ export function InvoicesPage({
   /** The customer picked from the lookup — drives the customer bar chip. */
   const [pickedCustomer, setPickedCustomer] = useState<CustomerOption | null>(null);
   const [customerQuery, setCustomerQuery] = useState('');
+  // Inline customer registration (issue tab): the operator should never have
+  // to leave the invoice draft to file a new customer.
+  const [customerBusy, setCustomerBusy] = useState(false);
   /** True once the debounced lookup finished with zero matches — drives the
    * "will be issued as a walk-in" hint under the name/mobile inputs. */
   const [noCustomerMatch, setNoCustomerMatch] = useState(false);
@@ -307,6 +310,65 @@ export function InvoicesPage({
     }, 250);
     return () => window.clearTimeout(handle);
   }, [canCreate, customerQuery]);
+
+  /** Files the typed-in customer right here in the issue tab. If the mobile
+   *  already belongs to a saved customer, that profile is picked instead of
+   *  creating a duplicate — and is never overwritten from the invoice draft. */
+  const registerCustomer = async () => {
+    const name = customerName.trim();
+    if (!name) return setMessage('نام مشتری را وارد کنید.');
+    if (!isValidIranMobile(mobile))
+      return setMessage('شماره موبایل باید با ۰۹ شروع شود و ۱۱ رقم باشد.');
+    setCustomerBusy(true);
+    try {
+      const found = await api<{ data: CustomerOption[] }>(
+        `/customers?search=${encodeURIComponent(mobile)}`,
+      );
+      const exact = found.data.find((entry) => entry.mobile === mobile);
+      if (exact) {
+        pickCustomer(exact);
+        setMessage('این شماره قبلاً ثبت شده بود؛ همان پروندهٔ مشتری انتخاب شد.');
+        return;
+      }
+      const created = await api<{
+        data: { id: string; name: string; mobile: string; address?: string | null };
+      }>('/customers', {
+        method: 'POST',
+        body: JSON.stringify({ name, mobile, address: customerAddress.trim() || undefined }),
+      });
+      pickCustomer({ ...created.data, debt: '0', invoiceCount: 0 });
+      setMessage(`مشتری «${name}» ثبت شد و به فاکتور متصل گردید.`);
+    } catch (error) {
+      // A duplicate race (someone else saved this mobile a moment ago): pick
+      // the existing profile instead of failing the draft.
+      try {
+        const again = await api<{ data: CustomerOption[] }>(
+          `/customers?search=${encodeURIComponent(mobile)}`,
+        );
+        const exact = again.data.find((entry) => entry.mobile === mobile);
+        if (exact) {
+          pickCustomer(exact);
+          setMessage('این شماره هم‌اکنون ثبت شد؛ پروندهٔ مشتری انتخاب گردید.');
+          return;
+        }
+      } catch {
+        /* fall through to the original error */
+      }
+      setMessage((error as Error).message);
+    } finally {
+      setCustomerBusy(false);
+    }
+  };
+
+  const pickCustomer = (customer: CustomerOption) => {
+    setPickedCustomer(customer);
+    setCustomerName(customer.name);
+    setMobile(customer.mobile);
+    if (customer.address) setCustomerAddress(customer.address);
+    setCustomerQuery('');
+    setCustomers([]);
+    setNoCustomerMatch(false);
+  };
 
   const candidates = useMemo(() => {
     const query = search.trim().toLocaleLowerCase();
@@ -920,15 +982,7 @@ export function InvoicesPage({
                       <button
                         type="button"
                         key={customer.id}
-                        onClick={() => {
-                          setPickedCustomer(customer);
-                          setCustomerName(customer.name);
-                          setMobile(customer.mobile);
-                          setCustomerAddress(customer.address ?? '');
-                          setCustomerQuery('');
-                          setCustomers([]);
-                          setNoCustomerMatch(false);
-                        }}
+                        onClick={() => pickCustomer(customer)}
                       >
                         <b>{customer.name}</b>
                         <span>
@@ -941,15 +995,28 @@ export function InvoicesPage({
                 )}
                 {!pickedCustomer && noCustomerMatch && (
                   <small className="walkin-hint">
-                    مشتری ثبت‌شده‌ای با این مشخصات نیست؛ فاکتور با همین نام به‌صورت حضوری صادر
-                    می‌شود.
+                    مشتری جدید است؟ با دکمهٔ «ثبت مشتری جدید» همین‌جا (بدون خروج از صفحه) پرونده‌اش
+                    ساخته می‌شود. اگر موبایل را وارد کنید ولی ثبت نکنید، هنگام صدور فاکتور خودکار
+                    ثبت می‌شود؛ بدون موبایل، فاکتور حضوری صادر می‌شود.
                   </small>
                 )}
               </div>
             )}
-            <a className="btn-soft-sm" href="#/customers">
-              + مشتری جدید
-            </a>
+            {!pickedCustomer ? (
+              <button
+                type="button"
+                className="btn-soft-sm"
+                disabled={customerBusy}
+                title="ساخت پروندهٔ مشتری بدون خروج از صفحهٔ صدور فاکتور"
+                onClick={() => void registerCustomer()}
+              >
+                {customerBusy ? 'در حال ثبت…' : '+ ثبت مشتری جدید'}
+              </button>
+            ) : (
+              <a className="btn-ghost-sm" href="#/customers" title="مدیریت مشتری‌ها">
+                پروندهٔ مشتری‌ها ↗
+              </a>
+            )}
           </div>
 
           {/* Store contact (auto from settings) + customer address */}
