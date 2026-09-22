@@ -8201,9 +8201,27 @@ html[data-theme='dark'] {
   color: var(--sv-primary-fg);
   box-shadow: none;
 }
+/* قانون نشتیِ سراسری «.active { color: var(--sv-on-brand) !important }»
+   (خط ~۲۳۸، بخش مدیا) رنگ متن هر عنصر active را تحمیل می‌کند؛ در دارک مود
+   on-brand سفید است و روی primary آبیِ روشن کنتراست خراب می‌شود (و متنِ
+   دکمه‌های بدون b مثل تب‌های داده‌های پایه را می‌بلعد). با هم‌سطحِ
+   !important و دیرتر در فایل، این قوانین scoped می‌برند. */
+.seg-tabs button.active,
+.seg-tabs button.active b,
+.seg-tabs button.active small,
+.seg-tabs button.active:hover,
+.seg-tabs button.active:hover b,
+.seg-tabs button.active:hover small {
+  color: var(--sv-primary-fg) !important;
+}
 .seg-tabs button.active small {
-  color: var(--sv-primary-fg);
   opacity: 0.75;
+}
+/* همین مشکل برای سگمنت‌های نوار فیلتر (tp-options) و وضعیت پرداخت
+   فاکتورها (stf-options) — هم‌خانوادهٔ همین طرح. */
+.tp-options button.active,
+.stf-options button.active {
+  color: var(--sv-primary-fg) !important;
 }
 @media (max-width: 720px) {
   .seg-tabs {
