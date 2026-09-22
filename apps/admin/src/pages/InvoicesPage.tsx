@@ -1002,6 +1002,15 @@ export function InvoicesPage({
                 )}
               </div>
             )}
+            <input
+              className="cust-addr-in"
+              aria-label="آدرس مشتری"
+              placeholder="آدرس مشتری (اختیاری)…"
+              title="با انتخاب مشتری از پرونده‌اش پر می‌شود؛ تغییرش فقط روی همین فاکتور اعمال می‌شود"
+              autoComplete="off"
+              value={customerAddress}
+              onChange={(event) => setCustomerAddress(event.target.value)}
+            />
             {!pickedCustomer ? (
               <button
                 type="button"
@@ -1034,12 +1043,6 @@ export function InvoicesPage({
                 </span>
               )}
             </div>
-            <input
-              aria-label="آدرس مشتری"
-              placeholder="آدرس مشتری (اختیاری — با انتخاب مشتری از پرونده‌اش پر می‌شود)"
-              value={customerAddress}
-              onChange={(event) => setCustomerAddress(event.target.value)}
-            />
           </div>
 
           <div className="inv-grid">
