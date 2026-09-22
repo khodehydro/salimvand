@@ -132,18 +132,20 @@ export function ProductsPage() {
     await load();
     return fresh.data;
   };
+  /** Opens the editor for a product — refresh() alone only updates an
+   *  already-open draft, so every entry point (row button, deep link) must
+   *  set the draft explicitly. */
+  const openEditor = (id: string) =>
+    void refresh(id).then((fresh) => {
+      setTab('basic');
+      setDraft(fresh);
+    });
 
   // Deep link from the global palette (#/products?edit=<id>) opens the editor.
   useEffect(() => {
     const openFromHash = () => {
       const editId = paramsFromHash(window.location.hash).edit;
-      // Deep links open the editor explicitly — refresh() itself only
-      // refreshes an already-open draft.
-      if (editId)
-        void refresh(editId).then((fresh) => {
-          setTab('basic');
-          setDraft(fresh);
-        });
+      if (editId) openEditor(editId);
     };
     openFromHash();
     window.addEventListener('hashchange', openFromHash);
@@ -420,12 +422,7 @@ export function ProductsPage() {
               </span>
             </div>
             <div className="product-cell product-actions-cell">
-              <button
-                className="row-action"
-                onClick={() => {
-                  void refresh(product.id).then(() => setTab('basic'));
-                }}
-              >
+              <button className="row-action" onClick={() => openEditor(product.id)}>
                 ویرایش
               </button>
               <a
