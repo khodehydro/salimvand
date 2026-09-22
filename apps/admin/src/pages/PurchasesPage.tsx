@@ -9,7 +9,8 @@ type Item = {
   id: string;
   barcode: string;
   product: { name: string; code: string };
-  brand: { name: string };
+  /** brandId is nullable in the DB — legacy items can exist without a brand. */
+  brand: { name: string } | null;
   quantity: number;
 };
 type Line = { inventoryItemId: string; productName: string; quantity: number; unitPrice: string };
@@ -113,7 +114,7 @@ export function PurchasesPage({ canCreate = true }: { canCreate?: boolean }) {
     const query = itemQuery.trim().toLocaleLowerCase('fa');
     return query
       ? items.filter((item) =>
-          `${item.product.name} ${item.product.code} ${item.brand.name} ${item.barcode}`
+          `${item.product.name} ${item.product.code} ${item.brand?.name ?? ''} ${item.barcode}`
             .toLocaleLowerCase('fa')
             .includes(query),
         )
@@ -146,7 +147,7 @@ export function PurchasesPage({ canCreate = true }: { canCreate?: boolean }) {
             ...lines,
             {
               inventoryItemId: item.id,
-              productName: `${item.product.name} · ${item.brand.name}`,
+              productName: `${item.product.name} · ${item.brand?.name ?? 'بدون برند'}`,
               quantity: count,
               unitPrice,
             },
@@ -273,7 +274,7 @@ export function PurchasesPage({ canCreate = true }: { canCreate?: boolean }) {
                       ? (() => {
                           const selected = items.find((item) => item.id === itemId);
                           return selected
-                            ? `${selected.product.name} · ${selected.brand.name}`
+                            ? `${selected.product.name} · ${selected.brand?.name ?? 'بدون برند'}`
                             : itemQuery;
                         })()
                       : itemQuery
@@ -305,8 +306,8 @@ export function PurchasesPage({ canCreate = true }: { canCreate?: boolean }) {
                       >
                         <strong>{item.product.name}</strong>
                         <span>
-                          {item.brand.name} · کد {item.product.code || item.barcode} · موجودی{' '}
-                          {formatPersianNumber(item.quantity)}
+                          {item.brand?.name ?? 'بدون برند'} · کد {item.product.code || item.barcode}{' '}
+                          · موجودی {formatPersianNumber(item.quantity)}
                         </span>
                       </button>
                     ))}

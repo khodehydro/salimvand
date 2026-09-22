@@ -54,7 +54,8 @@ type StockOption = {
   salePrice: string;
   location?: { code: string; name: string } | null;
   product: { name: string; code: string };
-  brand: { name: string };
+  /** brandId is nullable in the DB — legacy items can exist without a brand. */
+  brand: { name: string } | null;
 };
 type CustomerOption = {
   id: string;
@@ -71,7 +72,7 @@ type InvoiceItemRow = {
   returnedQuantity?: number;
   unitPrice: string;
   lineTotal: string;
-  inventoryItem?: { brand: { name: string } } | null;
+  inventoryItem?: { brand: { name: string } | null } | null;
 };
 type ReturnRow = {
   id: string;
@@ -378,7 +379,7 @@ export function InvoicesPage({
           item.quantity > 0 &&
           !lines.some((line) => line.item.id === item.id) &&
           (!query ||
-            `${item.product.name} ${item.product.code} ${item.barcode} ${item.brand.name}`
+            `${item.product.name} ${item.product.code} ${item.barcode} ${item.brand?.name ?? ''}`
               .toLocaleLowerCase()
               .includes(query)),
       )
@@ -1090,7 +1091,8 @@ export function InvoicesPage({
                                   key={option.id}
                                   onClick={() => addLine(option)}
                                 >
-                                  {option.brand.name} <b>{money(option.salePrice)}</b>{' '}
+                                  {option.brand?.name ?? 'بدون برند'}{' '}
+                                  <b>{money(option.salePrice)}</b>{' '}
                                   <span className="mut3">
                                     {option.location?.code ?? '—'} ·{' '}
                                     {persianNumber(option.quantity)} عدد
@@ -1131,7 +1133,9 @@ export function InvoicesPage({
                         </div>
                       </div>
                       <div>
-                        <span className="badge b-brand">{line.item.brand.name}</span>
+                        <span className="badge b-brand">
+                          {line.item.brand?.name ?? 'بدون برند'}
+                        </span>
                       </div>
                       <div className="qty">
                         <button
