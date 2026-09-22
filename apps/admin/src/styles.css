@@ -7781,17 +7781,111 @@ button.btn-primary-lg:hover:not(:disabled) {
 }
 
 /* — لیست فاکتورها: ستون تاریخ/ساعت + فیلتر بازهٔ شمسی — */
-.inv-when { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.inv-when b { font-size: 12px; font-weight: 600; white-space: nowrap; }
-.inv-when small { color: var(--sv-text-3, #8095ad); font-size: 11px; letter-spacing: 0.3px; }
-.date-range-filters { display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; }
-.date-range-filters label {
-  display: flex; flex-direction: column; gap: 4px;
-  font-size: 11px; color: var(--sv-text-3, #8095ad); white-space: nowrap;
+/* ستون تاریخ و ساعت: تاریخ و ساعت هر دو وسط‌چین، ساعت زیر تاریخ */
+.inv-when {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  text-align: center;
 }
-.date-range-filters input { width: 118px; min-height: 38px; }
-.date-range-filters button { min-height: 38px; }
-@media (max-width: 900px) {
-  .date-range-filters { width: 100%; }
-  .date-range-filters input { flex: 1; width: auto; }
+.inv-when b { font-size: 12px; font-weight: 600; white-space: nowrap; }
+.inv-when small {
+  color: var(--sv-text-3, #8095ad);
+  font-size: 11px;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+.invoice-head span.inv-when-head { text-align: center; }
+
+/* فیلتر بازهٔ تاریخ: گروه قرصی‌شکل هم‌خانوادهٔ pill-filters با آیکن تقویم */
+.date-range-filters {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 4px;
+  background: var(--sv-surface);
+  border: 1px solid var(--sv-border);
+  border-radius: 999px;
+  box-shadow: 0 1px 2px rgb(13 43 75 / 5%);
+}
+.date-range-filters.is-active {
+  border-color: var(--sv-primary);
+  box-shadow: 0 0 0 3px rgb(13 43 75 / 8%);
+}
+.drf-lead {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin-inline: 3px;
+  border-radius: 50%;
+  background: var(--sv-primary);
+  color: var(--sv-primary-fg);
+  flex: none;
+}
+.drf-lead svg { width: 13px; height: 13px; }
+.drf-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: 999px;
+  padding: 2px 4px;
+}
+.drf-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--sv-text-2);
+  white-space: nowrap;
+  padding-inline-start: 5px;
+}
+.drf-field input {
+  width: 104px;
+  min-height: 30px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--sv-text);
+  font-family: Vazirmatn, Tahoma, sans-serif;
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: center;
+  padding: 0 6px;
+}
+.drf-field input::placeholder { color: var(--sv-text-3); font-weight: 400; }
+.drf-field input:focus {
+  outline: 2px solid var(--sv-primary);
+  outline-offset: -2px;
+  background: var(--sv-surface);
+}
+.drf-sep {
+  width: 1px;
+  height: 20px;
+  background: var(--sv-border);
+  margin: 0 6px;
+  flex: none;
+}
+.drf-x {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--sv-surface-3);
+  color: var(--sv-text-2);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  flex: none;
+}
+.drf-x:hover { background: var(--sv-danger, #dc2626); color: #fff; }
+@media (max-width: 720px) {
+  .date-range-filters { width: 100%; border-radius: 14px; }
+  .drf-field { flex: 1; }
+  .drf-field input { flex: 1; width: auto; min-width: 0; }
 }

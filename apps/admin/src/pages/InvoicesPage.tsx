@@ -1595,37 +1595,80 @@ export function InvoicesPage({
                 </button>
               ))}
             </div>
-            <div className="date-range-filters" aria-label="فیلتر بازهٔ تاریخ شمسی">
-              <label>
-                از تاریخ
+            <div
+              className={`date-range-filters${dateFrom || dateTo ? ' is-active' : ''}`}
+              aria-label="فیلتر بازهٔ تاریخ شمسی"
+            >
+              <span className="drf-lead" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <rect x="3" y="4" width="18" height="18" rx="2" />
+                  <path d="M16 2v4M8 2v4M3 10h18" />
+                </svg>
+              </span>
+              <label className="drf-field">
+                <span className="drf-label">از تاریخ</span>
                 <JalaliDateInput
                   value={dateFrom}
                   onChange={setDateFrom}
                   aria-label="از تاریخ (شمسی)"
+                  placeholder="۱۴۰۵/۰۱/۰۱"
                 />
+                {dateFrom && (
+                  <button
+                    type="button"
+                    className="drf-x"
+                    aria-label="پاک کردن از تاریخ"
+                    onClick={() => setDateFrom('')}
+                  >
+                    ×
+                  </button>
+                )}
               </label>
-              <label>
-                تا تاریخ
-                <JalaliDateInput value={dateTo} onChange={setDateTo} aria-label="تا تاریخ (شمسی)" />
+              <span className="drf-sep" aria-hidden="true" />
+              <label className="drf-field">
+                <span className="drf-label">تا تاریخ</span>
+                <JalaliDateInput
+                  value={dateTo}
+                  onChange={setDateTo}
+                  aria-label="تا تاریخ (شمسی)"
+                  placeholder="۱۴۰۵/۰۱/۰۱"
+                />
+                {dateTo && (
+                  <button
+                    type="button"
+                    className="drf-x"
+                    aria-label="پاک کردن تا تاریخ"
+                    onClick={() => setDateTo('')}
+                  >
+                    ×
+                  </button>
+                )}
               </label>
-              {(dateFrom || dateTo) && (
-                <button
-                  type="button"
-                  className="outline"
-                  onClick={() => {
-                    setDateFrom('');
-                    setDateTo('');
-                  }}
-                >
-                  پاک کردن بازه
-                </button>
-              )}
             </div>
+            {(dateFrom || dateTo) && (
+              <button
+                type="button"
+                className="pill"
+                onClick={() => {
+                  setDateFrom('');
+                  setDateTo('');
+                }}
+              >
+                × پاک کردن بازه
+              </button>
+            )}
           </div>
           <div className="product-table">
             <div className="table-head invoice-head">
               <span>شماره</span>
-              <span>تاریخ و ساعت</span>
+              <span className="inv-when-head">تاریخ و ساعت</span>
               <span>مشتری</span>
               <span>اقلام</span>
               <span>مبلغ</span>
