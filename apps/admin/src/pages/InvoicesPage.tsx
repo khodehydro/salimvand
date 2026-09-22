@@ -1573,7 +1573,7 @@ export function InvoicesPage({
 
       {tab === 'list' && (
         <>
-          <div className="list-toolbar">
+          <div className="list-toolbar invoices-toolbar">
             <div className="search-field">
               <span className="search-icon">⌕</span>
               <input
@@ -1592,125 +1592,147 @@ export function InvoicesPage({
                 </button>
               )}
             </div>
-            <div className="pill-filters" role="tablist" aria-label="فیلتر وضعیت پرداخت">
-              {(
-                [
-                  { id: 'all', label: 'همه' },
-                  { id: 'unpaid', label: 'پرداخت‌نشده' },
-                  { id: 'partial', label: 'پرداخت بخشی' },
-                  { id: 'paid', label: 'تسویه‌شده' },
-                ] as const
-              ).map((entry) => (
+            <div className="invoice-filter-row">
+              <div
+                className={`date-range-filters${dateFrom || dateTo ? ' is-active' : ''}`}
+                aria-label="فیلتر بازهٔ تاریخ شمسی"
+              >
+                <span className="drf-lead" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <rect x="3" y="4" width="18" height="18" rx="2" />
+                    <path d="M16 2v4M8 2v4M3 10h18" />
+                  </svg>
+                </span>
+                <label className="drf-field">
+                  <span className="drf-label">از تاریخ</span>
+                  <JalaliDateInput
+                    value={dateFrom}
+                    onChange={setDateFrom}
+                    aria-label="از تاریخ (شمسی)"
+                    placeholder="۱۴۰۵/۰۱/۰۱"
+                  />
+                  {dateFrom && (
+                    <button
+                      type="button"
+                      className="drf-x"
+                      aria-label="پاک کردن از تاریخ"
+                      onClick={() => setDateFrom('')}
+                    >
+                      ×
+                    </button>
+                  )}
+                </label>
+                <span className="drf-sep" aria-hidden="true" />
+                <label className="drf-field">
+                  <span className="drf-label">تا تاریخ</span>
+                  <JalaliDateInput
+                    value={dateTo}
+                    onChange={setDateTo}
+                    aria-label="تا تاریخ (شمسی)"
+                    placeholder="۱۴۰۵/۰۱/۰۱"
+                  />
+                  {dateTo && (
+                    <button
+                      type="button"
+                      className="drf-x"
+                      aria-label="پاک کردن تا تاریخ"
+                      onClick={() => setDateTo('')}
+                    >
+                      ×
+                    </button>
+                  )}
+                </label>
+              </div>
+              <label
+                className={`issuer-filter${issuerFilter ? ' is-active' : ''}`}
+                aria-label="فیلتر صادرکننده"
+              >
+                <span className="iss-lead" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+                    <circle cx="12" cy="7" r="4" />
+                  </svg>
+                </span>
+                <select
+                  value={issuerFilter}
+                  onChange={(event) => setIssuerFilter(event.target.value)}
+                  aria-label="صادرکنندهٔ فاکتور"
+                >
+                  <option value="">همهٔ صادرکنندگان</option>
+                  {issuers.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div
+                className={`status-filter${statusFilter !== 'all' ? ' is-active' : ''}`}
+                aria-label="فیلتر وضعیت پرداخت"
+              >
+                <span className="stf-lead" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <rect x="2" y="6" width="20" height="12" rx="2" />
+                    <circle cx="12" cy="12" r="2" />
+                    <path d="M6 12h.01M18 12h.01" />
+                  </svg>
+                </span>
+                <div className="stf-options" role="tablist" aria-label="وضعیت پرداخت">
+                  {(
+                    [
+                      { id: 'all', label: 'همه' },
+                      { id: 'unpaid', label: 'پرداخت‌نشده' },
+                      { id: 'partial', label: 'پرداخت بخشی' },
+                      { id: 'paid', label: 'تسویه‌شده' },
+                    ] as const
+                  ).map((entry) => (
+                    <button
+                      key={entry.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={statusFilter === entry.id}
+                      className={statusFilter === entry.id ? 'active' : ''}
+                      onClick={() => setStatusFilter(entry.id)}
+                    >
+                      {entry.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {(dateFrom || dateTo) && (
                 <button
-                  key={entry.id}
-                  role="tab"
-                  aria-selected={statusFilter === entry.id}
-                  className={statusFilter === entry.id ? 'pill active' : 'pill'}
-                  onClick={() => setStatusFilter(entry.id)}
+                  type="button"
+                  className="pill"
+                  onClick={() => {
+                    setDateFrom('');
+                    setDateTo('');
+                  }}
                 >
-                  {entry.label}
+                  × پاک کردن بازه
                 </button>
-              ))}
+              )}
             </div>
-            <div
-              className={`date-range-filters${dateFrom || dateTo ? ' is-active' : ''}`}
-              aria-label="فیلتر بازهٔ تاریخ شمسی"
-            >
-              <span className="drf-lead" aria-hidden="true">
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <rect x="3" y="4" width="18" height="18" rx="2" />
-                  <path d="M16 2v4M8 2v4M3 10h18" />
-                </svg>
-              </span>
-              <label className="drf-field">
-                <span className="drf-label">از تاریخ</span>
-                <JalaliDateInput
-                  value={dateFrom}
-                  onChange={setDateFrom}
-                  aria-label="از تاریخ (شمسی)"
-                  placeholder="۱۴۰۵/۰۱/۰۱"
-                />
-                {dateFrom && (
-                  <button
-                    type="button"
-                    className="drf-x"
-                    aria-label="پاک کردن از تاریخ"
-                    onClick={() => setDateFrom('')}
-                  >
-                    ×
-                  </button>
-                )}
-              </label>
-              <span className="drf-sep" aria-hidden="true" />
-              <label className="drf-field">
-                <span className="drf-label">تا تاریخ</span>
-                <JalaliDateInput
-                  value={dateTo}
-                  onChange={setDateTo}
-                  aria-label="تا تاریخ (شمسی)"
-                  placeholder="۱۴۰۵/۰۱/۰۱"
-                />
-                {dateTo && (
-                  <button
-                    type="button"
-                    className="drf-x"
-                    aria-label="پاک کردن تا تاریخ"
-                    onClick={() => setDateTo('')}
-                  >
-                    ×
-                  </button>
-                )}
-              </label>
-            </div>
-            <label
-              className={`issuer-filter${issuerFilter ? ' is-active' : ''}`}
-              aria-label="فیلتر صادرکننده"
-            >
-              <span className="iss-lead" aria-hidden="true">
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
-                  <circle cx="12" cy="7" r="4" />
-                </svg>
-              </span>
-              <select
-                value={issuerFilter}
-                onChange={(event) => setIssuerFilter(event.target.value)}
-                aria-label="صادرکنندهٔ فاکتور"
-              >
-                <option value="">همهٔ صادرکنندگان</option>
-                {issuers.map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {(dateFrom || dateTo) && (
-              <button
-                type="button"
-                className="pill"
-                onClick={() => {
-                  setDateFrom('');
-                  setDateTo('');
-                }}
-              >
-                × پاک کردن بازه
-              </button>
-            )}
           </div>
           <div className="product-table">
             <div className="table-head invoice-head">

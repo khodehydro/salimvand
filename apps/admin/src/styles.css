@@ -7894,6 +7894,20 @@ button.btn-primary-lg:hover:not(:disabled) {
   min-width: 0;
 }
 
+/* چینش نوار فیلترها: سرچ تمام‌عرض در ردیف اول، سه گروه فیلتر زیر آن */
+.invoices-toolbar .search-field {
+  flex: 1 1 100%;
+  width: 100%;
+  max-width: none;
+}
+.invoice-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  flex: 1 1 100%;
+}
+
 /* فیلتر صادرکننده: قرص هم‌خانوادهٔ گروه تاریخ با آیکن کاربر */
 .issuer-filter {
   display: inline-flex;
@@ -7941,10 +7955,62 @@ button.btn-primary-lg:hover:not(:disabled) {
 }
 .issuer-filter option { text-align: right; }
 
+/* فیلتر وضعیت پرداخت: قرص همانند دو گروه دیگر با آیکن اسکناس */
+.status-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  background: var(--sv-surface);
+  border: 1px solid var(--sv-border);
+  border-radius: 999px;
+  box-shadow: 0 1px 2px rgb(13 43 75 / 5%);
+}
+.status-filter.is-active {
+  border-color: var(--sv-primary);
+  box-shadow: 0 0 0 3px rgb(13 43 75 / 8%);
+}
+.stf-lead {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin-inline: 3px;
+  border-radius: 50%;
+  background: var(--sv-primary);
+  color: var(--sv-primary-fg);
+  flex: none;
+}
+.stf-lead svg { width: 13px; height: 13px; }
+.stf-options {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-wrap: wrap;
+}
+.stf-options button {
+  border: 0;
+  background: transparent;
+  color: var(--sv-text-2);
+  font-family: Vazirmatn, Tahoma, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 0 13px;
+  min-height: 30px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.stf-options button:hover { background: var(--sv-surface-2); color: var(--sv-text); }
+.stf-options button.active { background: var(--sv-primary); color: var(--sv-primary-fg); }
+
 @media (max-width: 720px) {
   .date-range-filters { width: 100%; border-radius: 14px; }
   .drf-field { flex: 1; }
   .drf-field input { flex: 1; width: auto; min-width: 0; }
   .issuer-filter { width: 100%; border-radius: 14px; }
   .issuer-filter select { flex: 1; max-width: none; }
+  .status-filter { width: 100%; border-radius: 14px; }
+  .stf-options { flex: 1; }
+  .stf-options button { flex: 1; min-width: 0; padding: 0 6px; }
 }
