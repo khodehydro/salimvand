@@ -686,76 +686,137 @@ export function InventoryPage() {
             </p>
           </div>
           <div className="bulk-price-toolbar">
-            <b>مدیریت گروهی قیمت</b>
-            <select value={bulkBrand} onChange={(event) => setBulkBrand(event.target.value)}>
-              <option value="">همه برندها</option>
-              {brands.map((brand) => (
-                <option key={brand.id} value={brand.id}>
-                  {brand.name}
-                </option>
-              ))}
-            </select>
-            <select value={bulkCategory} onChange={(event) => setBulkCategory(event.target.value)}>
-              <option value="">همه دسته‌ها</option>
-              {categories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.name}
-                </option>
-              ))}
-            </select>
-            <input
-              dir="ltr"
-              inputMode="decimal"
-              placeholder="٪ فروش"
-              value={bulkSalePercent}
-              onChange={(event) => setBulkSalePercent(event.target.value)}
-            />
-            <input
-              dir="ltr"
-              inputMode="decimal"
-              placeholder="٪ خرید"
-              value={bulkPurchasePercent}
-              onChange={(event) => setBulkPurchasePercent(event.target.value)}
-            />
-            <input
-              dir="ltr"
-              inputMode="numeric"
-              placeholder="گرد کردن"
-              value={bulkRoundTo}
-              onChange={(event) => setBulkRoundTo(event.target.value)}
-            />
-            <button
-              className="outline"
-              disabled={bulkBusy}
-              onClick={async () => {
-                if (!bulkBrand && !bulkCategory)
-                  return setMessage('برای تغییر گروهی، برند یا دسته را انتخاب کنید.');
-                setBulkBusy(true);
-                try {
-                  const result = await api<{ data: { updated: number } }>(
-                    '/inventory/bulk-prices',
-                    {
-                      method: 'POST',
-                      body: JSON.stringify({
-                        brandId: bulkBrand || undefined,
-                        categoryId: bulkCategory || undefined,
-                        salePercent: Number(bulkSalePercent || 0),
-                        purchasePercent: Number(bulkPurchasePercent || 0),
-                        roundTo: Number(bulkRoundTo || 0),
-                      }),
-                    },
-                  );
-                  setMessage(`${result.data.updated.toLocaleString('fa-IR')} قلم بروزرسانی شد.`);
-                  await load();
-                } catch (error) {
-                  setMessage((error as Error).message);
-                } finally {
-                  setBulkBusy(false);
-                }
-              }}
-            >
-              {bulkBusy ? 'در حال بروزرسانی…' : 'اعمال تغییر قیمت'}
-            </button>
+            <b className="bulk-price-title">مدیریت گروهی قیمت</b>
+            <div className="toolbar-filter-row">
+              <label
+                className={`toolbar-pill${bulkBrand ? ' is-active' : ''}`}
+                aria-label="برند تغییر گروهی"
+              >
+                <span className="tp-lead" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <circle cx="12" cy="8" r="6" />
+                    <path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11" />
+                  </svg>
+                </span>
+                <select value={bulkBrand} onChange={(event) => setBulkBrand(event.target.value)}>
+                  <option value="">همه برندها</option>
+                  {brands.map((brand) => (
+                    <option key={brand.id} value={brand.id}>
+                      {brand.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label
+                className={`toolbar-pill${bulkCategory ? ' is-active' : ''}`}
+                aria-label="دستهٔ تغییر گروهی"
+              >
+                <span className="tp-lead" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
+                  </svg>
+                </span>
+                <select
+                  value={bulkCategory}
+                  onChange={(event) => setBulkCategory(event.target.value)}
+                >
+                  <option value="">همه دسته‌ها</option>
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div
+                className={`toolbar-pill${bulkSalePercent || bulkPurchasePercent ? ' is-active' : ''}`}
+                aria-label="درصد تغییر و گرد کردن"
+              >
+                <span className="tp-lead" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M19 5 5 19" />
+                    <circle cx="6.5" cy="6.5" r="2.5" />
+                    <circle cx="17.5" cy="17.5" r="2.5" />
+                  </svg>
+                </span>
+                <input
+                  dir="ltr"
+                  inputMode="decimal"
+                  placeholder="٪ فروش"
+                  value={bulkSalePercent}
+                  onChange={(event) => setBulkSalePercent(event.target.value)}
+                />
+                <span className="drf-sep" aria-hidden="true" />
+                <input
+                  dir="ltr"
+                  inputMode="decimal"
+                  placeholder="٪ خرید"
+                  value={bulkPurchasePercent}
+                  onChange={(event) => setBulkPurchasePercent(event.target.value)}
+                />
+                <span className="drf-sep" aria-hidden="true" />
+                <input
+                  dir="ltr"
+                  inputMode="numeric"
+                  placeholder="گرد کردن"
+                  value={bulkRoundTo}
+                  onChange={(event) => setBulkRoundTo(event.target.value)}
+                />
+              </div>
+              <button
+                className="bulk-apply"
+                disabled={bulkBusy}
+                onClick={async () => {
+                  if (!bulkBrand && !bulkCategory)
+                    return setMessage('برای تغییر گروهی، برند یا دسته را انتخاب کنید.');
+                  setBulkBusy(true);
+                  try {
+                    const result = await api<{ data: { updated: number } }>(
+                      '/inventory/bulk-prices',
+                      {
+                        method: 'POST',
+                        body: JSON.stringify({
+                          brandId: bulkBrand || undefined,
+                          categoryId: bulkCategory || undefined,
+                          salePercent: Number(bulkSalePercent || 0),
+                          purchasePercent: Number(bulkPurchasePercent || 0),
+                          roundTo: Number(bulkRoundTo || 0),
+                        }),
+                      },
+                    );
+                    setMessage(`${result.data.updated.toLocaleString('fa-IR')} قلم بروزرسانی شد.`);
+                    await load();
+                  } catch (error) {
+                    setMessage((error as Error).message);
+                  } finally {
+                    setBulkBusy(false);
+                  }
+                }}
+              >
+                {bulkBusy ? 'در حال بروزرسانی…' : 'اعمال تغییر قیمت'}
+              </button>
+            </div>
           </div>
           <div className="inventory-table-head inventory-list-head" aria-hidden="true">
             <span>محصول</span>
