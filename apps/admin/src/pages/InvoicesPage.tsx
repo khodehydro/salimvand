@@ -154,6 +154,9 @@ export function InvoicesPage({
   } | null>(null);
   const [linkBusy, setLinkBusy] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'all' | 'paid' | 'partial' | 'unpaid'>('all');
+  // Jalali date-range filter — JalaliDateInput hands back Gregorian yyyy-mm-dd.
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [invoiceQuery, setInvoiceQuery] = useState('');
   const [created, setCreated] = useState<CreatedInvoice | null>(null);
   // Two tabs: issuing lives apart from the issued-invoices register so sellers
@@ -673,11 +676,19 @@ export function InvoicesPage({
     }
   };
 
-  // The archive is searchable the moment you type — number, name or mobile.
+  // The archive is searchable the moment you type — number, name or mobile —
+  // and narrows by a Jalali date range (whole days, inclusive).
   const filteredRows = useMemo(() => {
     const query = invoiceQuery.trim().toLocaleLowerCase();
+    const fromTime = dateFrom ? new Date(`${dateFrom}T00:00:00`).getTime() : null;
+    const toTime = dateTo ? new Date(`${dateTo}T23:59:59.999`).getTime() : null;
     return rows
       .filter((invoice) => statusFilter === 'all' || invoice.paymentStatus === statusFilter)
+      .filter((invoice) => {
+        if (fromTime == null && toTime == null) return true;
+        const issued = new Date(invoice.issuedAt).getTime();
+        return (fromTime == null || issued >= fromTime) && (toTime == null || issued <= toTime);
+      })
       .filter(
         (invoice) =>
           !query ||
@@ -685,10 +696,20 @@ export function InvoicesPage({
             .toLocaleLowerCase()
             .includes(query),
       );
-  }, [rows, statusFilter, invoiceQuery]);
+  }, [rows, statusFilter, invoiceQuery, dateFrom, dateTo]);
 
   const net = (invoice: Invoice) => netInvoiceAmount(invoice.total, invoice.netTotal);
   const returnedOf = (invoice: Invoice) => Number(invoice.returnedTotal ?? 0);
+
+  /** Shamsi date + HH:mm for the list column — Persian digits via fa-IR. */
+  const jalaliDateTime = (iso: string) => {
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return { date: '—', time: '' };
+    return {
+      date: date.toLocaleDateString('fa-IR'),
+      time: date.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }),
+    };
+  };
 
   return (
     <section className="invoices-page">
@@ -1574,10 +1595,37 @@ export function InvoicesPage({
                 </button>
               ))}
             </div>
+            <div className="date-range-filters" aria-label="فیلتر بازهٔ تاریخ شمسی">
+              <label>
+                از تاریخ
+                <JalaliDateInput
+                  value={dateFrom}
+                  onChange={setDateFrom}
+                  aria-label="از تاریخ (شمسی)"
+                />
+              </label>
+              <label>
+                تا تاریخ
+                <JalaliDateInput value={dateTo} onChange={setDateTo} aria-label="تا تاریخ (شمسی)" />
+              </label>
+              {(dateFrom || dateTo) && (
+                <button
+                  type="button"
+                  className="outline"
+                  onClick={() => {
+                    setDateFrom('');
+                    setDateTo('');
+                  }}
+                >
+                  پاک کردن بازه
+                </button>
+              )}
+            </div>
           </div>
           <div className="product-table">
             <div className="table-head invoice-head">
               <span>شماره</span>
+              <span>تاریخ و ساعت</span>
               <span>مشتری</span>
               <span>اقلام</span>
               <span>مبلغ</span>
@@ -1588,9 +1636,14 @@ export function InvoicesPage({
             {filteredRows.map((invoice) => {
               const debt = Math.max(0, net(invoice) - Number(invoice.paidAmount));
               const returned = returnedOf(invoice);
+              const when = jalaliDateTime(invoice.issuedAt);
               return (
                 <div className="table-row invoice-row" key={invoice.id}>
                   <code>{formatPersianNumber(invoice.number)}</code>
+                  <span className="inv-when">
+                    <b>{when.date}</b>
+                    {when.time && <small dir="ltr">{when.time}</small>}
+                  </span>
                   <span>{invoice.customerName ?? 'مشتری حضوری'}</span>
                   <span>
                     {persianNumber(invoice.itemCount ?? invoice.items?.length ?? 0)}

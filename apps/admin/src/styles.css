@@ -682,10 +682,10 @@ button.danger:hover:not(:disabled) {
 
 .invoice-head,
 .invoice-row {
-  grid-template-columns: 1.1fr 1.4fr 0.6fr 1.3fr 1.2fr 1fr 1.9fr;
+  grid-template-columns: 1.05fr 1.4fr 1.4fr 0.6fr 1.3fr 1.2fr 1fr 1.9fr;
 }
 .invoice-row {
-  min-width: 900px;
+  min-width: 1000px;
 }
 body,
 .admin,
@@ -7778,4 +7778,20 @@ button.btn-primary-lg:hover:not(:disabled) {
   height: 15px;
   flex: 0 0 auto;
   accent-color: var(--sv-ok);
+}
+
+/* — لیست فاکتورها: ستون تاریخ/ساعت + فیلتر بازهٔ شمسی — */
+.inv-when { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.inv-when b { font-size: 12px; font-weight: 600; white-space: nowrap; }
+.inv-when small { color: var(--sv-text-3, #8095ad); font-size: 11px; letter-spacing: 0.3px; }
+.date-range-filters { display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; }
+.date-range-filters label {
+  display: flex; flex-direction: column; gap: 4px;
+  font-size: 11px; color: var(--sv-text-3, #8095ad); white-space: nowrap;
+}
+.date-range-filters input { width: 118px; min-height: 38px; }
+.date-range-filters button { min-height: 38px; }
+@media (max-width: 900px) {
+  .date-range-filters { width: 100%; }
+  .date-range-filters input { flex: 1; width: auto; }
 }
