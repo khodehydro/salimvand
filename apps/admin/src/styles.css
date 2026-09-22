@@ -8154,3 +8154,67 @@ html[data-theme='dark'] {
 .inventory-flat-row.is-out:hover {
   background: color-mix(in srgb, var(--sv-danger-soft) 70%, var(--sv-surface-2));
 }
+
+/* — تب‌های انبار: نوار سگمنتِ کپسولی تمام‌عرض، متمایز از کارت‌های KPI پایین —
+   settings-tabs مشترک (صفحهٔ تنظیمات/لیبل‌ها) کارتی و ۴ستونه است؛ اینجا سه تب
+   انبار یک سگمنت یکپارچهٔ قرصی می‌سازند: هر تب دقیقاً یک‌سوم عرض (کشیده در
+   کل عرض)، متن وسط‌چین و تب فعال با پرشدن سرمه‌ای — هم‌زبان نوارهای جدید. */
+.inventory-page .settings-tabs {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2px;
+  margin-top: 12px;
+  margin-bottom: 14px;
+  padding: 4px;
+  background: var(--sv-surface);
+  border: 1px solid var(--sv-border);
+  border-radius: 999px;
+  box-shadow: 0 1px 2px rgb(13 43 75 / 5%);
+}
+.inventory-page .settings-tabs button {
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  padding: 9px 10px;
+  text-align: center;
+  gap: 2px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.inventory-page .settings-tabs button b {
+  font-size: 13px;
+  color: var(--sv-text);
+}
+.inventory-page .settings-tabs button small {
+  font-size: 10px;
+  color: var(--sv-text-3);
+}
+.inventory-page .settings-tabs button:hover {
+  background: var(--sv-surface-2);
+  border-color: transparent;
+}
+.inventory-page .settings-tabs button.active {
+  background: var(--sv-primary);
+  border-color: transparent;
+  box-shadow: none;
+}
+.inventory-page .settings-tabs button.active b {
+  color: var(--sv-primary-fg);
+}
+.inventory-page .settings-tabs button.active small {
+  color: var(--sv-primary-fg);
+  opacity: 0.75;
+}
+@media (max-width: 720px) {
+  .inventory-page .settings-tabs {
+    border-radius: 14px;
+  }
+  .inventory-page .settings-tabs button {
+    padding: 8px 4px;
+  }
+  /* در موبایل فقط عنوان تب می‌ماند تا سه تب در یک سطر جا شوند */
+  .inventory-page .settings-tabs button small {
+    display: none;
+  }
+  .inventory-page .settings-tabs button b {
+    font-size: 12px;
+  }
+}
