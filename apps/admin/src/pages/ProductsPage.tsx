@@ -338,7 +338,10 @@ export function ProductsPage() {
           <span>عملیات</span>
         </div>
         {visible.map((product) => (
-          <article className="product-list-card product-row" key={product.id}>
+          <article
+            className={`product-list-card product-row${totalStock(product) === 0 ? ' is-out' : ''}`}
+            key={product.id}
+          >
             <div className="product-cell product-main-cell">
               <span className="product-thumb">
                 {product.images?.[0] ? (

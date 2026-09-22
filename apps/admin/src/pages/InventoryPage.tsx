@@ -741,7 +741,10 @@ export function InventoryPage() {
                   ? (grossProfit / purchasePrice) * 100
                   : null;
               return (
-                <article className="inventory-flat-row" key={item.id}>
+                <article
+                  className={`inventory-flat-row${item.quantity <= 0 ? ' is-out' : ''}`}
+                  key={item.id}
+                >
                   <div className="inventory-product-cell">
                     <span className="product-thumb">
                       {product?.images?.[0]?.path ? (

@@ -8094,3 +8094,14 @@ html[data-theme='dark'] {
 .ier-fields select {
   color: var(--sv-text);
 }
+
+/* — موجودی صفر: پس‌زمینهٔ قرمز ملایم کارت (لیست محصولات و لیست انبار) —
+   از توکن تم استفاده می‌شود تا در دارک مود هم خوانا بماند. */
+.product-list-card.is-out,
+.inventory-flat-row.is-out {
+  background: var(--sv-danger-soft);
+  border-color: color-mix(in srgb, var(--sv-danger) 30%, transparent);
+}
+.inventory-flat-row.is-out:hover {
+  background: color-mix(in srgb, var(--sv-danger-soft) 70%, var(--sv-surface-2));
+}
