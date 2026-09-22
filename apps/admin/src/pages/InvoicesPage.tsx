@@ -1077,7 +1077,18 @@ export function InvoicesPage({
                   <div className="scan-res">
                     {candidateGroups.length ? (
                       candidateGroups.map((group) => (
-                        <div className="sr" key={group.key}>
+                        <div
+                          className={`sr${group.brands.length === 1 ? ' sr-pick' : ''}`}
+                          key={group.key}
+                          title={
+                            group.brands.length === 1
+                              ? 'افزودن به فاکتور (کلیک روی همین ردیف)'
+                              : undefined
+                          }
+                          onClick={
+                            group.brands.length === 1 ? () => addLine(group.brands[0]) : undefined
+                          }
+                        >
                           <span className="thumb">{group.name.slice(0, 2)}</span>
                           <div className="wrap">
                             <div className="nm">
@@ -1089,7 +1100,12 @@ export function InvoicesPage({
                                   type="button"
                                   className="br"
                                   key={option.id}
-                                  onClick={() => addLine(option)}
+                                  onClick={(event) => {
+                                    // Single-brand rows are clickable as a whole —
+                                    // stop the bubble or the row handler adds twice.
+                                    event.stopPropagation();
+                                    addLine(option);
+                                  }}
                                 >
                                   {option.brand?.name ?? 'بدون برند'}{' '}
                                   <b>{money(option.salePrice)}</b>{' '}
@@ -1103,6 +1119,9 @@ export function InvoicesPage({
                           </div>
                           <div className="val">
                             <span className="badge b-ok">موجود</span>
+                            {group.brands.length === 1 && (
+                              <small className="sr-add-hint">+ افزودن</small>
+                            )}
                           </div>
                         </div>
                       ))

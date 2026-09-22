@@ -4783,6 +4783,30 @@ button.btn-primary-lg:hover:not(:disabled) {
 .sr .br:hover {
   border-color: var(--sv-brand-400);
 }
+/* تک‌برند: کل ردیفِ محصول قابل کلیک است و مستقیم به فاکتور اضافه می‌شود */
+.sr.sr-pick {
+  cursor: pointer;
+  transition: background 0.12s ease, box-shadow 0.12s ease;
+}
+.sr.sr-pick:hover {
+  background: var(--sv-surface-2);
+  box-shadow: inset 0 0 0 1px var(--sv-brand-400);
+}
+.sr .val {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex: none;
+}
+.sr .sr-add-hint {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--sv-text-3);
+}
+.sr.sr-pick:hover .sr-add-hint {
+  color: var(--sv-primary);
+}
 .sr .br b {
   font-variant-numeric: tabular-nums;
   color: var(--sv-text-2);
