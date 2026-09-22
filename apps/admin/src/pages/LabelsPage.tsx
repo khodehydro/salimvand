@@ -362,7 +362,7 @@ export function LabelsPage() {
         </div>
       </div>
 
-      <nav className="settings-tabs lbl-page-tabs" aria-label="بخش‌های برچسب">
+      <nav className="settings-tabs lbl-page-tabs seg-tabs" aria-label="بخش‌های برچسب">
         {labelTabs.map((entry) => (
           <button
             key={entry.id}

@@ -807,7 +807,7 @@ export function InvoicesPage({
         <span className="count">{persianNumber(rows.length)} فاکتور</span>
       </div>
 
-      <nav className="settings-tabs" aria-label="بخش‌های فروش">
+      <nav className="settings-tabs seg-tabs" aria-label="بخش‌های فروش">
         {canCreate && (
           <button
             type="button"

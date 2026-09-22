@@ -40,9 +40,25 @@ type Customer = {
     paymentStatus: string;
     issuedAt: string;
     items?: Array<{ productName: string; quantity: number }>;
-    payments?: Array<{ amount: string | number; method: string; checks?: Array<{ id: string; checkNumber?: string | null; bank?: string | null; amount: string | number; dueDate: string; status?: string }> }>;
+    payments?: Array<{
+      amount: string | number;
+      method: string;
+      checks?: Array<{
+        id: string;
+        checkNumber?: string | null;
+        bank?: string | null;
+        amount: string | number;
+        dueDate: string;
+        status?: string;
+      }>;
+    }>;
   }>;
-  payments?: Array<{ amount: string | number; method: string; paidAt: string; notes?: string | null }>;
+  payments?: Array<{
+    amount: string | number;
+    method: string;
+    paidAt: string;
+    notes?: string | null;
+  }>;
 };
 const paymentLabels: Record<string, string> = {
   paid: 'تسویه شده',
@@ -69,10 +85,15 @@ export function CustomersPage({
   const [selected, setSelected] = useState<Customer | null>(null);
   const updateCheckStatus = async (checkId: string, status: string) => {
     try {
-      await api(`/invoices/checks/${checkId}/status`, { method: 'PATCH', body: JSON.stringify({ status }) });
+      await api(`/invoices/checks/${checkId}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status }),
+      });
       if (selected) await loadDetail(selected.id);
       setMessage('وضعیت چک به‌روزرسانی شد');
-    } catch (error) { setMessage((error as Error).message); }
+    } catch (error) {
+      setMessage((error as Error).message);
+    }
   };
   const [paymentFor, setPaymentFor] = useState<Customer | null>(null);
   const [paymentAmount, setPaymentAmount] = useState('');
@@ -264,7 +285,7 @@ export function CustomersPage({
         <span className="count">{formatPersianNumber(rows.length)} مشتری</span>
       </div>
 
-      <nav className="settings-tabs" aria-label="بخش‌های مشتریان">
+      <nav className="settings-tabs seg-tabs" aria-label="بخش‌های مشتریان">
         <button
           type="button"
           className={tab === 'list' ? 'active' : ''}
@@ -379,7 +400,9 @@ export function CustomersPage({
                 <code dir="ltr">{formatPersianNumber(customer.mobile)}</code>
                 <span>{formatRial(Number(customer.totalPurchase ?? 0))}</span>
                 <span>{customer.lastPurchase ? shamsi(customer.lastPurchase) : '—'}</span>
-                <button className="invoice-count-link" onClick={() => void loadDetail(customer.id)}>{formatPersianNumber(customer.invoiceCount)} فاکتور</button>
+                <button className="invoice-count-link" onClick={() => void loadDetail(customer.id)}>
+                  {formatPersianNumber(customer.invoiceCount)} فاکتور
+                </button>
                 <b className={Number(customer.debt) > 0 ? 'low-stock' : 'status-chip'}>
                   {formatRial(Number(customer.debt))}
                 </b>
@@ -587,17 +610,67 @@ export function CustomersPage({
 
               <h3 className="list-subhead">چک‌های مشتری</h3>
               <div className="customer-products customer-check-list">
-                {(selected.invoices ?? []).flatMap((invoice) => (invoice.payments ?? []).flatMap((payment) => (payment.checks ?? []).map((check) => ({ ...check, invoice: invoice.number })))).map((check) => <span key={`${check.invoice}-${check.checkNumber}-${check.dueDate}`}><b>فاکتور {check.invoice}</b> · {check.checkNumber || 'بدون شماره'} · {check.bank || 'بانک نامشخص'} · {formatRial(Number(check.amount))} · سررسید {shamsi(check.dueDate)} · <select className="check-status-select" value={check.status ?? 'pending'} onChange={(event) => void updateCheckStatus(check.id, event.target.value)}><option value="pending">در انتظار</option><option value="cleared">وصول‌شده</option><option value="bounced">برگشتی</option><option value="cancelled">لغوشده</option></select></span>)}
-                {!selected.invoices?.some((invoice) => invoice.payments?.some((payment) => payment.checks?.length)) && <p className="muted">چکی برای این مشتری ثبت نشده است.</p>}
+                {(selected.invoices ?? [])
+                  .flatMap((invoice) =>
+                    (invoice.payments ?? []).flatMap((payment) =>
+                      (payment.checks ?? []).map((check) => ({
+                        ...check,
+                        invoice: invoice.number,
+                      })),
+                    ),
+                  )
+                  .map((check) => (
+                    <span key={`${check.invoice}-${check.checkNumber}-${check.dueDate}`}>
+                      <b>فاکتور {check.invoice}</b> · {check.checkNumber || 'بدون شماره'} ·{' '}
+                      {check.bank || 'بانک نامشخص'} · {formatRial(Number(check.amount))} · سررسید{' '}
+                      {shamsi(check.dueDate)} ·{' '}
+                      <select
+                        className="check-status-select"
+                        value={check.status ?? 'pending'}
+                        onChange={(event) => void updateCheckStatus(check.id, event.target.value)}
+                      >
+                        <option value="pending">در انتظار</option>
+                        <option value="cleared">وصول‌شده</option>
+                        <option value="bounced">برگشتی</option>
+                        <option value="cancelled">لغوشده</option>
+                      </select>
+                    </span>
+                  ))}
+                {!selected.invoices?.some((invoice) =>
+                  invoice.payments?.some((payment) => payment.checks?.length),
+                ) && <p className="muted">چکی برای این مشتری ثبت نشده است.</p>}
               </div>
 
               <h3 className="list-subhead">تاریخچه پیامک‌ها</h3>
-              <div className="customer-products">{selected.smsLogs?.length ? selected.smsLogs.map((sms) => <span key={String(sms.id)}>{shamsi(sms.createdAt)} · {sms.status} · {sms.message}</span>) : <p className="muted">پیامی ثبت نشده است.</p>}</div>
+              <div className="customer-products">
+                {selected.smsLogs?.length ? (
+                  selected.smsLogs.map((sms) => (
+                    <span key={String(sms.id)}>
+                      {shamsi(sms.createdAt)} · {sms.status} · {sms.message}
+                    </span>
+                  ))
+                ) : (
+                  <p className="muted">پیامی ثبت نشده است.</p>
+                )}
+              </div>
 
               <h3 className="list-subhead">کالاهای خریداری‌شده</h3>
               <div className="customer-products">
-                {Object.entries((selected.invoices ?? []).flatMap((invoice) => invoice.items ?? []).reduce<Record<string, number>>((result, item) => { result[item.productName] = (result[item.productName] ?? 0) + item.quantity; return result; }, {})).map(([name, quantity]) => <span key={name}>{name} · {formatPersianNumber(quantity)} عدد</span>)}
-                {!selected.invoices?.some((invoice) => invoice.items?.length) && <p className="muted">کالایی ثبت نشده است.</p>}
+                {Object.entries(
+                  (selected.invoices ?? [])
+                    .flatMap((invoice) => invoice.items ?? [])
+                    .reduce<Record<string, number>>((result, item) => {
+                      result[item.productName] = (result[item.productName] ?? 0) + item.quantity;
+                      return result;
+                    }, {}),
+                ).map(([name, quantity]) => (
+                  <span key={name}>
+                    {name} · {formatPersianNumber(quantity)} عدد
+                  </span>
+                ))}
+                {!selected.invoices?.some((invoice) => invoice.items?.length) && (
+                  <p className="muted">کالایی ثبت نشده است.</p>
+                )}
               </div>
 
               <h3 className="list-subhead">خودروهای مشتری</h3>

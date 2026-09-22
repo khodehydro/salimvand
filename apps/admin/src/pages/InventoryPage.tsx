@@ -479,7 +479,7 @@ export function InventoryPage() {
         </span>
       </div>
 
-      <nav className="settings-tabs" aria-label="بخش‌های انبار">
+      <nav className="settings-tabs seg-tabs" aria-label="بخش‌های انبار">
         {tabs.map((entry) => (
           <button
             type="button"
