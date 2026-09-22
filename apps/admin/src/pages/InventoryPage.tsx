@@ -141,6 +141,8 @@ export function InventoryPage() {
   const [shelfForm, setShelfForm] = useState({ name: '', code: '', parentId: '' });
   const [editingShelf, setEditingShelf] = useState<Location | null>(null);
   const [locationError, setLocationError] = useState('');
+  // نمای فعلی لیست اقلام — برای هایلایت سگمنت «همه اقلام / کم‌موجود»
+  const [stockView, setStockView] = useState<'all' | 'low'>('all');
   const skipFirstSearch = useRef(true);
 
   const load = (q = filter) =>
@@ -308,6 +310,7 @@ export function InventoryPage() {
       const result = await api<{ data: Item[] }>('/inventory/low-stock');
       setItems(result.data);
       setFilter('');
+      setStockView('low');
       setMessage(`${result.data.length} قلم کم‌موجودی`);
     } catch (e) {
       setMessage((e as Error).message);
@@ -598,21 +601,53 @@ export function InventoryPage() {
                 </button>
               )}
             </div>
-            <div className="inventory-quick-filters" aria-label="فیلترهای سریع">
-              <button
-                className="filter-pill active"
-                onClick={() => {
-                  setFilter('');
-                  void load('');
-                }}
+            <div className="toolbar-filter-row">
+              <div
+                className={`toolbar-pill${stockView === 'low' ? ' is-active' : ''}`}
+                aria-label="نمایش اقلام"
               >
-                همه اقلام
-              </button>
-              <button className="filter-pill" onClick={() => void lowStock()}>
-                کم‌موجود
-              </button>
+                <span className="tp-lead" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
+                    <path d="M3.3 7l8.7 5 8.7-5" />
+                    <path d="M12 22V12" />
+                  </svg>
+                </span>
+                <div className="tp-options" role="tablist" aria-label="نمایش اقلام">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={stockView === 'all'}
+                    className={stockView === 'all' ? 'active' : ''}
+                    onClick={() => {
+                      setStockView('all');
+                      setFilter('');
+                      void load('');
+                    }}
+                  >
+                    همه اقلام
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={stockView === 'low'}
+                    className={stockView === 'low' ? 'active' : ''}
+                    onClick={() => void lowStock()}
+                  >
+                    کم‌موجود
+                  </button>
+                </div>
+              </div>
               <button
-                className="filter-pill"
+                type="button"
+                className="pill"
                 onClick={() =>
                   void downloadFile('/reports/inventory/export', 'salimvand-inventory.csv').catch(
                     (e: Error) => setMessage(e.message),
@@ -622,7 +657,8 @@ export function InventoryPage() {
                 خروجی CSV
               </button>
               <button
-                className="filter-pill accounting-export"
+                type="button"
+                className="pill"
                 onClick={() =>
                   void downloadFile(
                     '/reports/inventory/accounting-export',
@@ -632,17 +668,17 @@ export function InventoryPage() {
               >
                 خروجی حسابداری
               </button>
+              <Suspense
+                fallback={<span className="muted scanner-inline-loading">آماده‌سازی اسکنر…</span>}
+              >
+                <BarcodeScanner
+                  onCode={(code) => {
+                    setFilter(code);
+                    void lookupBarcode(code);
+                  }}
+                />
+              </Suspense>
             </div>
-            <Suspense
-              fallback={<span className="muted scanner-inline-loading">آماده‌سازی اسکنر…</span>}
-            >
-              <BarcodeScanner
-                onCode={(code) => {
-                  setFilter(code);
-                  void lookupBarcode(code);
-                }}
-              />
-            </Suspense>
             <p className="stock-search-meta" aria-live="polite">
               {filter
                 ? `${formatPersianNumber(groups.length)} کالا · ${formatPersianNumber(items.length)} قلم برای «${filter}»`

@@ -265,67 +265,154 @@ export function ProductsPage() {
             </button>
           )}
         </div>
-        <select
-          value={categoryFilter}
-          onChange={(event) => setCategoryFilter(event.target.value)}
-          aria-label="فیلتر دسته‌بندی"
-        >
-          <option value="">همه دسته‌ها</option>
-          {[...new Set(products.map((product) => product.category?.name).filter(Boolean))].map(
-            (category) => (
-              <option key={category} value={category}>
-                {category}
-              </option>
-            ),
-          )}
-        </select>
-        <select
-          value={brandFilter}
-          onChange={(event) => setBrandFilter(event.target.value)}
-          aria-label="فیلتر برند"
-        >
-          <option value="">همه برندها</option>
-          {brands.map((brand) => (
-            <option key={brand.id} value={brand.name}>
-              {brand.name}
-            </option>
-          ))}
-        </select>
-        <select
-          value={vehicleFilter}
-          onChange={(event) => setVehicleFilter(event.target.value)}
-          aria-label="فیلتر خودرو"
-        >
-          <option value="">همه خودروها</option>
-          {vehicleOptions.map((vehicle) => (
-            <option key={vehicle} value={vehicle}>
-              {vehicle}
-            </option>
-          ))}
-        </select>
-        <select
-          value={statusFilter}
-          onChange={(event) => setStatusFilter(event.target.value)}
-          aria-label="فیلتر وضعیت"
-        >
-          <option value="">همه وضعیت‌ها</option>
-          <option value="active">فعال</option>
-          <option value="hidden">مخفی</option>
-        </select>
-        {(filter || categoryFilter || brandFilter || vehicleFilter || statusFilter) && (
-          <button
-            className="outline product-clear-filters"
-            onClick={() => {
-              setFilter('');
-              setCategoryFilter('');
-              setBrandFilter('');
-              setVehicleFilter('');
-              setStatusFilter('');
-            }}
+        <div className="toolbar-filter-row">
+          <label
+            className={`toolbar-pill${categoryFilter ? ' is-active' : ''}`}
+            aria-label="فیلتر دسته‌بندی"
           >
-            پاک کردن فیلترها
-          </button>
-        )}
+            <span className="tp-lead" aria-hidden="true">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
+              </svg>
+            </span>
+            <select
+              value={categoryFilter}
+              onChange={(event) => setCategoryFilter(event.target.value)}
+              aria-label="فیلتر دسته‌بندی"
+            >
+              <option value="">همه دسته‌ها</option>
+              {[...new Set(products.map((product) => product.category?.name).filter(Boolean))].map(
+                (category) => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
+                ),
+              )}
+            </select>
+          </label>
+          <label
+            className={`toolbar-pill${brandFilter ? ' is-active' : ''}`}
+            aria-label="فیلتر برند"
+          >
+            <span className="tp-lead" aria-hidden="true">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="12" cy="8" r="6" />
+                <path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11" />
+              </svg>
+            </span>
+            <select
+              value={brandFilter}
+              onChange={(event) => setBrandFilter(event.target.value)}
+              aria-label="فیلتر برند"
+            >
+              <option value="">همه برندها</option>
+              {brands.map((brand) => (
+                <option key={brand.id} value={brand.name}>
+                  {brand.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label
+            className={`toolbar-pill${vehicleFilter ? ' is-active' : ''}`}
+            aria-label="فیلتر خودرو"
+          >
+            <span className="tp-lead" aria-hidden="true">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2" />
+                <circle cx="7" cy="17" r="2" />
+                <path d="M9 17h6" />
+                <circle cx="17" cy="17" r="2" />
+              </svg>
+            </span>
+            <select
+              value={vehicleFilter}
+              onChange={(event) => setVehicleFilter(event.target.value)}
+              aria-label="فیلتر خودرو"
+            >
+              <option value="">همه خودروها</option>
+              {vehicleOptions.map((vehicle) => (
+                <option key={vehicle} value={vehicle}>
+                  {vehicle}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div
+            className={`toolbar-pill${statusFilter ? ' is-active' : ''}`}
+            aria-label="فیلتر وضعیت"
+          >
+            <span className="tp-lead" aria-hidden="true">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            </span>
+            <div className="tp-options" role="tablist" aria-label="وضعیت محصول">
+              {(
+                [
+                  { id: '', label: 'همه' },
+                  { id: 'active', label: 'فعال' },
+                  { id: 'hidden', label: 'مخفی' },
+                ] as const
+              ).map((entry) => (
+                <button
+                  key={entry.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={statusFilter === entry.id}
+                  className={statusFilter === entry.id ? 'active' : ''}
+                  onClick={() => setStatusFilter(entry.id)}
+                >
+                  {entry.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {(filter || categoryFilter || brandFilter || vehicleFilter || statusFilter) && (
+            <button
+              type="button"
+              className="pill"
+              onClick={() => {
+                setFilter('');
+                setCategoryFilter('');
+                setBrandFilter('');
+                setVehicleFilter('');
+                setStatusFilter('');
+              }}
+            >
+              × پاک کردن فیلترها
+            </button>
+          )}
+        </div>
       </div>
 
       {message && <div className="notice">{message}</div>}

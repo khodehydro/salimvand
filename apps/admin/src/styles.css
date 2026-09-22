@@ -3550,43 +3550,11 @@ body,
   border: 1px solid var(--sv-border);
   border-radius: 12px;
 }
-.inventory-search-field {
-  flex: 1 1 320px;
-  width: auto;
-  min-width: 220px;
-  border-color: var(--sv-border);
-  background: var(--sv-surface-2);
-}
-.inventory-search-field input {
-  padding: 9px 0;
-  font-size: 12.5px;
-}
-.inventory-quick-filters {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-wrap: wrap;
-}
-.inventory-quick-filters .filter-pill {
-  padding: 6px 11px;
-  border-radius: 999px;
-  background: var(--sv-surface-3);
-  border: 1px solid transparent;
-  color: var(--sv-text-2);
-  font-size: 11.5px;
-  white-space: nowrap;
-}
-.inventory-quick-filters .filter-pill:hover,
-.inventory-quick-filters .filter-pill.active {
-  background: var(--sv-brand-50);
-  border-color: var(--sv-brand-200);
-  color: var(--sv-link);
-}
-.theme-dark .inventory-quick-filters .filter-pill:hover,
-.theme-dark .inventory-quick-filters .filter-pill.active {
-  background: var(--sv-surface-3);
-  border-color: var(--sv-border-2);
-  color: var(--sv-brand-300);
+/* جست‌وجو تمام‌عرض در سطر اول — دقیقاً مثل نوار لیست فاکتورها */
+.inventory-filter-toolbar .search-field {
+  flex: 1 1 100%;
+  width: 100%;
+  max-width: none;
 }
 .inventory-filter-toolbar .scanner {
   margin-inline-start: auto;
@@ -3597,8 +3565,11 @@ body,
   overflow: hidden;
 }
 .inventory-filter-toolbar .scanner button {
-  padding: 7px 10px;
-  font-size: 11.5px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 999px;
+  white-space: nowrap;
 }
 .inventory-filter-toolbar .stock-search-meta {
   flex: 0 0 100%;
@@ -3608,6 +3579,114 @@ body,
 .scanner-inline-loading {
   font-size: 11px;
   white-space: nowrap;
+}
+
+/* ============================================================
+   قرص‌های فیلتر مشترک به سبک نوار فاکتورها (صفحه انبار + محصولات):
+   قرص گرد با آیکن دایره‌ای برند رنگ، محتوا select یا سگمنت‌دکمه؛
+   حالت فعال با بوردر و هالهٔ هم‌شکل date-range/issuer/status فاکتور.
+   ============================================================ */
+.toolbar-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  flex: 1 1 100%;
+}
+.toolbar-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  background: var(--sv-surface);
+  border: 1px solid var(--sv-border);
+  border-radius: 999px;
+  box-shadow: 0 1px 2px rgb(13 43 75 / 5%);
+}
+.toolbar-pill.is-active {
+  border-color: var(--sv-primary);
+  box-shadow: 0 0 0 3px rgb(13 43 75 / 8%);
+}
+.tp-lead {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin-inline: 3px;
+  border-radius: 50%;
+  background: var(--sv-primary);
+  color: var(--sv-primary-fg);
+  flex: none;
+}
+.tp-lead svg {
+  width: 13px;
+  height: 13px;
+}
+.toolbar-pill select {
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--sv-text);
+  font-family: Vazirmatn, Tahoma, sans-serif;
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: center;
+  min-height: 30px;
+  padding: 0 8px;
+  max-width: 170px;
+  cursor: pointer;
+}
+.toolbar-pill select:focus {
+  outline: 2px solid var(--sv-primary);
+  outline-offset: -2px;
+}
+.toolbar-pill option {
+  text-align: right;
+}
+.tp-options {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-wrap: wrap;
+}
+.tp-options button {
+  border: 0;
+  background: transparent;
+  color: var(--sv-text-2);
+  font-family: Vazirmatn, Tahoma, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 0 13px;
+  min-height: 30px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tp-options button:hover {
+  background: var(--sv-surface-2);
+  color: var(--sv-text);
+}
+.tp-options button.active {
+  background: var(--sv-primary);
+  color: var(--sv-primary-fg);
+}
+@media (max-width: 720px) {
+  .toolbar-pill {
+    width: 100%;
+    border-radius: 14px;
+  }
+  .toolbar-pill select {
+    flex: 1;
+    max-width: none;
+  }
+  .tp-options {
+    flex: 1;
+  }
+  .tp-options button {
+    flex: 1;
+    min-width: 0;
+    padding: 0 6px;
+  }
 }
 
 /* ============================================================
@@ -3894,12 +3973,6 @@ body,
   }
   .inventory-filter-toolbar {
     align-items: stretch;
-  }
-  .inventory-search-field {
-    flex-basis: 100%;
-  }
-  .inventory-quick-filters {
-    flex: 1;
   }
   .inventory-filter-toolbar .scanner {
     margin-inline-start: 0;
@@ -6133,25 +6206,11 @@ button.btn-primary-lg:hover:not(:disabled) {
   border: 1px solid var(--sv-border);
   border-radius: 12px;
 }
-.product-search-field {
-  flex: 1 1 320px;
-  width: auto;
-  min-width: 220px;
-  background: var(--sv-surface-2);
-}
-.product-filter-toolbar > select {
-  min-height: 40px;
-  min-width: 130px;
-  padding: 0 10px;
-  border: 1px solid var(--sv-border);
-  border-radius: var(--sv-radius-button);
-  background: var(--sv-surface-2);
-  color: var(--sv-text);
-  font: 12px Vazirmatn;
-}
-.product-clear-filters {
-  min-height: 40px;
-  white-space: nowrap;
+/* جست‌وجو تمام‌عرض در سطر اول — دقیقاً مثل نوار لیست فاکتورها */
+.product-filter-toolbar .search-field {
+  flex: 1 1 100%;
+  width: 100%;
+  max-width: none;
 }
 .product-list-table {
   display: block;
@@ -6224,14 +6283,6 @@ button.btn-primary-lg:hover:not(:disabled) {
 @media (max-width: 700px) {
   .product-filter-toolbar {
     align-items: stretch;
-  }
-  .product-search-field {
-    flex-basis: 100%;
-  }
-  .product-filter-toolbar > select,
-  .product-clear-filters {
-    flex: 1 1 calc(50% - 8px);
-    min-width: 0;
   }
   .product-list-table .plc-main {
     grid-template-columns: 44px 1fr;
