@@ -8032,3 +8032,20 @@ button.btn-primary-lg:hover:not(:disabled) {
   .editor-head-actions { margin-inline-start: auto; }
   .editor-head .editor-save { padding: 7px 12px; font-size: 12px; }
 }
+
+/* — فیکس نامرئی شدن اعداد اینپوت‌ها در تم لایت با سیستم‌عامل دارک —
+   متای color-scheme «light dark» باعث می‌شود مرورگرِ روی سیستم‌عامل دارک،
+   متن فرم‌ها را سفید رندر کند؛ در تم لایتِ اپ پس‌زمینهٔ اینپوت سفید است و
+   عدد دیده نمی‌شود (در تم دارک چون پس‌زمینه تیره است مشکلی نیست).
+   رنگ‌بندی فرم‌ها باید از تمِ خودِ اپ پیروی کند، نه تنظیم سیستم‌عامل. */
+html[data-theme='light'] {
+  color-scheme: light;
+}
+html[data-theme='dark'] {
+  color-scheme: dark;
+}
+/* و برای مصونیت مطلق: متن فیلدهای قیمت/برند تب اقلام همیشه رنگ متنِ تم */
+.ier-fields input,
+.ier-fields select {
+  color: var(--sv-text);
+}
