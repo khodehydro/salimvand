@@ -21,7 +21,9 @@ BEGIN
     FROM "locations"
     WHERE btrim(coalesce("code", '')) = '' AND btrim(coalesce("name", '')) <> ''
   LOOP
-    candidate := left(r.nm, 20);
+    -- btrim: برشِ نویسهٔ بیستم نباید فاصلهٔ انتهایی جا بگذارد (آرایشی،
+    -- ولی کدِ تمیز در بارکد و لیبل‌ها بهتر چاپ می‌شود).
+    candidate := btrim(left(r.nm, 20));
     n := 1;
     WHILE EXISTS (
       SELECT 1 FROM "locations" x
@@ -30,7 +32,8 @@ BEGIN
         AND x.id <> r.id
     ) LOOP
       n := n + 1;
-      candidate := left(left(r.nm, 17) || '-' || n::text, 20);
+      -- پایه را قبل از چسباندن پسوند بتراش تا «… ‎-2» با فاصله ساخته نشود.
+      candidate := left(btrim(left(r.nm, 17)) || '-' || n::text, 20);
     END LOOP;
     UPDATE "locations" SET "code" = candidate WHERE id = r.id;
   END LOOP;
