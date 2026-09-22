@@ -125,6 +125,20 @@ describe('LocationService', () => {
     });
   });
 
+  it('rejects a blank name or code on update, not just on create', async () => {
+    const { service, prisma } = makeService();
+    prisma.location.findUnique.mockResolvedValue(row());
+    // نام یا کدِ خالی/فقط‌فاصله هرگز نباید به دیتابیس برسد — همین ردیف‌های
+    // «بدون نام» قبلاً از این مسیر ایجاد شده بودند.
+    await expect(service.update('loc-1', { name: '', code: 'A-03' })).rejects.toThrow(
+      new BadRequestException('نام و کد محل الزامی است'),
+    );
+    await expect(service.update('loc-1', { name: 'قفسه جلو', code: '   ' })).rejects.toThrow(
+      new BadRequestException('نام و کد محل الزامی است'),
+    );
+    expect(prisma.location.update).not.toHaveBeenCalled();
+  });
+
   it('detaching a shelf (بدون انبار) sends parentId null', async () => {
     const { service, prisma } = makeService();
     prisma.location.findUnique.mockResolvedValue(row({ parentId: 'wh-1' }));
