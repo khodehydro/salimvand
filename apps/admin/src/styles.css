@@ -8014,3 +8014,21 @@ button.btn-primary-lg:hover:not(:disabled) {
   .stf-options { flex: 1; }
   .stf-options button { flex: 1; min-width: 0; padding: 0 6px; }
 }
+
+/* — ویرایش محصول: دکمهٔ ذخیره در هدر کنار بستن (بدون نیاز به اسکرول) — */
+.editor-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+.editor-head .editor-save {
+  padding: 8px 16px;
+  font-size: 13px;
+}
+@media (max-width: 640px) {
+  .editor-head { flex-wrap: wrap; gap: 8px; }
+  .editor-head h2 { font-size: 15px; min-width: 0; overflow-wrap: anywhere; }
+  .editor-head-actions { margin-inline-start: auto; }
+  .editor-head .editor-save { padding: 7px 12px; font-size: 12px; }
+}

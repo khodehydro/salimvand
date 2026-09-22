@@ -126,7 +126,9 @@ export function ProductsPage() {
       .catch((error: Error) => setMessage(error.message));
   const refresh = async (id: string) => {
     const fresh = await api<{ data: ProductDetail }>(`/products/${id}`);
-    setDraft(fresh.data);
+    // Update the open editor only: the header save closes the editor and a
+    // refresh that was still in flight must never resurrect it.
+    setDraft((current) => (current?.id === id ? fresh.data : current));
     await load();
     return fresh.data;
   };
@@ -135,7 +137,13 @@ export function ProductsPage() {
   useEffect(() => {
     const openFromHash = () => {
       const editId = paramsFromHash(window.location.hash).edit;
-      if (editId) void refresh(editId).then(() => setTab('basic'));
+      // Deep links open the editor explicitly — refresh() itself only
+      // refreshes an already-open draft.
+      if (editId)
+        void refresh(editId).then((fresh) => {
+          setTab('basic');
+          setDraft(fresh);
+        });
     };
     openFromHash();
     window.addEventListener('hashchange', openFromHash);
@@ -565,14 +573,18 @@ function ProductEditor({
     [vehicles, pickModel],
   );
 
+  // Saves report success so the header save button can close the editor
+  // only when the change actually landed (failures keep it open + noticed).
   const patch = async (payload: Record<string, unknown>, success: string) => {
     setBusy(true);
     try {
       await api(`/products/${product.id}`, { method: 'PATCH', body: JSON.stringify(payload) });
       notify(success);
       onRefresh();
+      return true;
     } catch (error) {
       notify((error as Error).message);
+      return false;
     } finally {
       setBusy(false);
     }
@@ -580,8 +592,11 @@ function ProductEditor({
 
   const saveBasic = async (event?: FormEvent) => {
     event?.preventDefault();
-    if (!basic.name.trim() || !basic.categoryId) return notify('نام محصول و دسته‌بندی الزامی است.');
-    await patch(
+    if (!basic.name.trim() || !basic.categoryId) {
+      notify('نام محصول و دسته‌بندی الزامی است.');
+      return false;
+    }
+    return patch(
       {
         name: basic.name,
         categoryId: basic.categoryId,
@@ -610,7 +625,10 @@ function ProductEditor({
   };
 
   const upload = async () => {
-    if (!mediaFile) return notify('ابتدا یک فایل انتخاب کنید');
+    if (!mediaFile) {
+      notify('ابتدا یک فایل انتخاب کنید');
+      return false;
+    }
     setBusy(true);
     try {
       const data = new FormData();
@@ -619,8 +637,10 @@ function ProductEditor({
       setMediaFile(null);
       notify('تصویر آپلود شد');
       onRefresh();
+      return true;
     } catch (error) {
       notify((error as Error).message);
+      return false;
     } finally {
       setBusy(false);
     }
@@ -640,15 +660,20 @@ function ProductEditor({
       });
       notify('سازگاری خودرو ذخیره شد');
       onRefresh();
+      return true;
     } catch (error) {
       notify((error as Error).message);
+      return false;
     } finally {
       setBusy(false);
     }
   };
 
   const createItem = async () => {
-    if (!item.brandId) return notify('برند قلم را انتخاب کنید');
+    if (!item.brandId) {
+      notify('برند قلم را انتخاب کنید');
+      return false;
+    }
     setBusy(true);
     try {
       await api('/inventory/items', {
@@ -674,8 +699,10 @@ function ProductEditor({
         initialQuantity: '',
       });
       onRefresh();
+      return true;
     } catch (error) {
       notify((error as Error).message);
+      return false;
     } finally {
       setBusy(false);
     }
@@ -683,7 +710,7 @@ function ProductEditor({
 
   const saveItemEdit = async (itemId: string) => {
     const edit = itemEdits[itemId];
-    if (!edit) return;
+    if (!edit) return true;
     setBusy(true);
     try {
       await api(`/inventory/items/${itemId}`, {
@@ -702,8 +729,10 @@ function ProductEditor({
       });
       notify('قلم انبار ذخیره شد');
       onRefresh();
+      return true;
     } catch (error) {
       notify((error as Error).message);
+      return false;
     } finally {
       setBusy(false);
     }
@@ -730,27 +759,36 @@ function ProductEditor({
       [entry.id]: { ...itemEditFor(entry), ...changes },
     }));
 
-  // The pinned footer save: each tab maps to its own save action, so the
-  // button never scrolls away while the operator switches tabs.
-  const saveActiveTab = () => {
-    if (tab === 'basic') return void saveBasic();
-    if (tab === 'images') return void upload();
+  // The header save: each tab maps to its own save action, so the button
+  // never scrolls away while the operator switches tabs.
+  const saveActiveTab = async (): Promise<boolean> => {
+    if (tab === 'basic') return saveBasic();
+    if (tab === 'images') return upload();
     if (tab === 'aparat')
-      return void patch(
+      return patch(
         { aparatVideoId: aparatId || null },
         aparatId ? 'ویدیوی آپارات ذخیره شد' : 'ویدیوی آپارات حذف شد',
       );
-    if (tab === 'vehicles') return void saveCompat();
-    return void saveItemsTab();
+    if (tab === 'vehicles') return saveCompat();
+    return saveItemsTab();
+  };
+  /** Header save-and-close: the editor only closes when the active tab's
+   *  save succeeded — a failure keeps it open with the error notice. */
+  const saveAndClose = async () => {
+    if (await saveActiveTab()) onClose();
   };
   /** The items-tab footer button saves everything on the tab: pending row
    *  edits first, then the new-item form when a brand was selected. */
   const saveItemsTab = async () => {
     const dirtyIds = Object.keys(itemEdits);
-    for (const itemId of dirtyIds) await saveItemEdit(itemId);
-    if (item.brandId) await createItem();
-    if (!dirtyIds.length && !item.brandId)
+    let saved = true;
+    for (const itemId of dirtyIds) saved = (await saveItemEdit(itemId)) && saved;
+    if (item.brandId) saved = (await createItem()) && saved;
+    if (!dirtyIds.length && !item.brandId) {
       notify('تغییری برای ذخیره نیست؛ برای افزودن قلم، برند را انتخاب کنید.');
+      return false;
+    }
+    return saved;
   };
   const footerLabel: Record<Tab, string> = {
     basic: 'ذخیرهٔ پایه و سئو',
@@ -773,9 +811,20 @@ function ProductEditor({
           <h2>
             {product.name} <code dir="ltr">{product.code}</code>
           </h2>
-          <button className="close" onClick={onClose} aria-label="بستن">
-            ✕
-          </button>
+          <div className="editor-head-actions">
+            <button
+              type="button"
+              className="button-primary editor-save"
+              disabled={busy}
+              title={footerLabel[tab]}
+              onClick={() => void saveAndClose()}
+            >
+              {busy ? 'در حال ذخیره…' : '✓ ذخیره'}
+            </button>
+            <button className="close" onClick={onClose} aria-label="بستن">
+              ✕
+            </button>
+          </div>
         </div>
         {notice && (
           <div className="notice modal-notice" role="status">
@@ -806,7 +855,13 @@ function ProductEditor({
 
         <div className="editor-body">
           {tab === 'basic' && (
-            <form className="product-form" onSubmit={saveBasic}>
+            <form
+              className="product-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void saveAndClose();
+              }}
+            >
               <label>
                 نام
                 <input
@@ -1297,15 +1352,6 @@ function ProductEditor({
               </p>
             </div>
           )}
-        </div>
-
-        <div className="editor-footer">
-          <button type="button" className="outline" onClick={onClose} disabled={busy}>
-            بستن
-          </button>
-          <button type="button" className="button-primary" disabled={busy} onClick={saveActiveTab}>
-            {busy ? 'در حال ذخیره…' : `✓ ${footerLabel[tab]}`}
-          </button>
         </div>
       </div>
     </div>
