@@ -1425,6 +1425,9 @@ export class InvoiceService {
         paidAt: true,
         issuedAt: true,
         voidedAt: true,
+        // Who issued the invoice — the panel shows an issuer column and lets
+        // staff filter the archive by issuer.
+        issuedBy: { select: { name: true } },
         publicTokenExpiresAt: true,
       },
     });

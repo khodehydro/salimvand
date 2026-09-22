@@ -38,6 +38,8 @@ type Invoice = {
   paymentStatus: string;
   status: string;
   issuedAt: string;
+  /** Staff member who issued the invoice (summary rows carry their name). */
+  issuedBy?: { name: string } | null;
   /** Archive rows are paginated summaries — line data only arrives with the
    * detail view (fetchInvoiceDetail). */
   items?: InvoiceItemRow[];
@@ -157,6 +159,8 @@ export function InvoicesPage({
   // Jalali date-range filter — JalaliDateInput hands back Gregorian yyyy-mm-dd.
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  // Issuer filter: names come from the loaded archive rows, no extra endpoint.
+  const [issuerFilter, setIssuerFilter] = useState('');
   const [invoiceQuery, setInvoiceQuery] = useState('');
   const [created, setCreated] = useState<CreatedInvoice | null>(null);
   // Two tabs: issuing lives apart from the issued-invoices register so sellers
@@ -684,6 +688,7 @@ export function InvoicesPage({
     const toTime = dateTo ? new Date(`${dateTo}T23:59:59.999`).getTime() : null;
     return rows
       .filter((invoice) => statusFilter === 'all' || invoice.paymentStatus === statusFilter)
+      .filter((invoice) => !issuerFilter || (invoice.issuedBy?.name ?? '') === issuerFilter)
       .filter((invoice) => {
         if (fromTime == null && toTime == null) return true;
         const issued = new Date(invoice.issuedAt).getTime();
@@ -696,7 +701,19 @@ export function InvoicesPage({
             .toLocaleLowerCase()
             .includes(query),
       );
-  }, [rows, statusFilter, invoiceQuery, dateFrom, dateTo]);
+  }, [rows, statusFilter, invoiceQuery, dateFrom, dateTo, issuerFilter]);
+
+  // Unique issuer names across the whole loaded archive (not the filtered
+  // subset, so picking a filter never shrinks the option list).
+  const issuers = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          rows.map((invoice) => invoice.issuedBy?.name).filter((name): name is string => !!name),
+        ),
+      ).sort((a, b) => a.localeCompare(b, 'fa')),
+    [rows],
+  );
 
   const net = (invoice: Invoice) => netInvoiceAmount(invoice.total, invoice.netTotal);
   const returnedOf = (invoice: Invoice) => Number(invoice.returnedTotal ?? 0);
@@ -1652,6 +1669,36 @@ export function InvoicesPage({
                 )}
               </label>
             </div>
+            <label
+              className={`issuer-filter${issuerFilter ? ' is-active' : ''}`}
+              aria-label="فیلتر صادرکننده"
+            >
+              <span className="iss-lead" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+                  <circle cx="12" cy="7" r="4" />
+                </svg>
+              </span>
+              <select
+                value={issuerFilter}
+                onChange={(event) => setIssuerFilter(event.target.value)}
+                aria-label="صادرکنندهٔ فاکتور"
+              >
+                <option value="">همهٔ صادرکنندگان</option>
+                {issuers.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </label>
             {(dateFrom || dateTo) && (
               <button
                 type="button"
@@ -1670,6 +1717,7 @@ export function InvoicesPage({
               <span>شماره</span>
               <span className="inv-when-head">تاریخ و ساعت</span>
               <span>مشتری</span>
+              <span>صادرکننده</span>
               <span>اقلام</span>
               <span>مبلغ</span>
               <span>پرداخت</span>
@@ -1688,6 +1736,9 @@ export function InvoicesPage({
                     {when.time && <small dir="ltr">{when.time}</small>}
                   </span>
                   <span>{invoice.customerName ?? 'مشتری حضوری'}</span>
+                  <span className="inv-issuer" title={invoice.issuedBy?.name ?? undefined}>
+                    {invoice.issuedBy?.name ?? '—'}
+                  </span>
                   <span>
                     {persianNumber(invoice.itemCount ?? invoice.items?.length ?? 0)}
                     {returned > 0 && <small className="chip warn">برگشتی {money(returned)}</small>}

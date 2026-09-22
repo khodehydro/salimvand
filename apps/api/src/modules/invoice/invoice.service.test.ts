@@ -875,6 +875,7 @@ describe('InvoiceService.list and panel link/pdf actions', () => {
       paidAt: null,
       issuedAt: new Date(`2026-09-18T10:0${index}:00Z`),
       voidedAt: null,
+      issuedBy: { name: `فروشنده-${count - index}` },
       publicTokenExpiresAt: null,
     }));
   const listHarness = (rows: unknown[], aggregates = {}) => ({
@@ -912,6 +913,13 @@ describe('InvoiceService.list and panel link/pdf actions', () => {
     expect(result.data[1].itemCount).toBe(2);
     expect(result.data[1].returnedTotal).toBe(30n);
     expect(result.data[1].netTotal).toBe(70n);
+    // The issuer travels with every summary row for the panel's issuer column.
+    const listArgs = prisma.invoice.findMany.mock.calls[0]?.[0] as {
+      select: Record<string, unknown>;
+    };
+    expect(listArgs.select.issuedBy).toEqual({ select: { name: true } });
+    expect(result.data[0].issuedBy).toEqual({ name: 'فروشنده-2' });
+    expect(result.data[1].issuedBy).toEqual({ name: 'فروشنده-1' });
     expect(result.hasMore).toBe(false);
     expect(result.nextCursor).toBeNull();
   });
