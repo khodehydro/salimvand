@@ -3549,6 +3549,10 @@ body,
   background: var(--sv-surface);
   border: 1px solid var(--sv-border);
   border-radius: 12px;
+  position: sticky;
+  top: 56px;
+  z-index: 12;
+  box-shadow: 0 2px 8px rgba(13,43,75,.06);
 }
 /* جست‌وجو تمام‌عرض در سطر اول — دقیقاً مثل نوار لیست فاکتورها */
 .inventory-filter-toolbar .search-field {
@@ -6208,6 +6212,10 @@ button.btn-primary-lg:hover:not(:disabled) {
   background: var(--sv-surface);
   border: 1px solid var(--sv-border);
   border-radius: 12px;
+  position: sticky;
+  top: 56px;
+  z-index: 12;
+  box-shadow: 0 2px 8px rgba(13,43,75,.06);
 }
 /* جست‌وجو تمام‌عرض در سطر اول — دقیقاً مثل نوار لیست فاکتورها */
 .product-filter-toolbar .search-field {
@@ -9934,5 +9942,32 @@ html[data-theme='dark'] {
   .inv-v2-kpis { grid-template-columns: 1fr 1fr; }
   .inv-v2-grid { grid-template-columns: 1fr; }
   .inv-v2-form { grid-template-columns: 1fr; }
+}
+
+
+/* ── 15) Sticky search toolbars for products & inventory — UX improvement ── */
+.admin .inventory-filter-toolbar,
+.admin .product-filter-toolbar {
+  position: sticky;
+  top: 56px;
+  z-index: 12;
+}
+.admin .inventory-filter-toolbar.is-stuck,
+.admin .product-filter-toolbar.is-stuck,
+.admin .inventory-filter-toolbar:where(:hover),
+.admin .product-filter-toolbar:where(:hover) {
+  /* keep shadow visible when stuck */
+  box-shadow: 0 4px 12px rgba(13,43,75,.08);
+}
+@media (max-width: 700px) {
+  .admin .inventory-filter-toolbar,
+  .admin .product-filter-toolbar {
+    top: 56px; /* topbar stays 56px even on mobile */
+  }
+}
+/* Ensure toolbar background covers content when sticky */
+.inventory-filter-toolbar,
+.product-filter-toolbar {
+  backdrop-filter: saturate(1.2) blur(2px);
 }
 
