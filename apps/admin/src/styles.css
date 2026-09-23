@@ -9223,7 +9223,243 @@ html[data-theme='dark'] {
   }
 }
 
-/* ── 11) Dark theme overrides for unified system ── */
+/* ── 11) Reports page redesign — matches invoices list & issue page ── */
+.reports-page.dash-page {
+  padding: 26px 30px 40px;
+}
+.reports-page .page-h {
+  margin-bottom: 14px;
+}
+.reports-tabs {
+  margin: 12px 0 14px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+@media (max-width: 1100px) {
+  .reports-tabs {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 700px) {
+  .reports-tabs {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.reports-toolbar {
+  display: grid;
+  gap: 10px;
+  background: var(--sv-surface);
+  border: 1px solid var(--sv-border);
+  border-radius: 12px;
+  padding: 8px;
+  margin: 0 0 16px;
+  box-shadow: var(--sv-shadow-1, 0 1px 2px rgba(11, 28, 47, 0.08));
+}
+.reports-toolbar .invoice-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  flex: 1 1 100%;
+  min-width: 0;
+}
+.report-export-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 4px 2px;
+  border-top: 1px dashed var(--sv-border);
+  margin-top: 2px;
+}
+.report-export-row .muted {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--sv-text-3);
+  margin-inline-end: 4px;
+}
+.report-export-row .row-action {
+  min-height: 30px;
+  padding: 5px 12px;
+  font-size: 11px;
+}
+/* Cards inside reports: use same .card system as dashboard */
+.reports-page .card {
+  background: var(--sv-surface);
+  border: 1px solid var(--sv-border);
+  border-radius: 14px;
+  padding: 16px 18px;
+  box-shadow: var(--sv-shadow-1, 0 1px 2px rgba(11, 28, 47, 0.08));
+  min-width: 0;
+}
+.reports-page .card-h {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.reports-page .card-h h3 {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 800;
+}
+.reports-page .card-b {
+  min-width: 0;
+}
+/* Report check tables: use dash-tbl grid, not legacy report-check-table */
+.reports-page .dash-tbl {
+  display: grid;
+}
+.reports-page .dash-tbl.report-check-tbl .thead,
+.reports-page .dash-tbl.report-check-tbl .trow {
+  display: grid;
+  grid-template-columns: 0.8fr 1.1fr 1.2fr 0.9fr 0.9fr 0.8fr;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 4px;
+}
+.reports-page .dash-tbl.report-check-tbl .thead {
+  color: var(--sv-text-3);
+  font-size: 11px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--sv-border);
+}
+.reports-page .dash-tbl.report-check-tbl .trow {
+  border-bottom: 1px dashed var(--sv-border);
+  font-size: 12.5px;
+}
+.reports-page .dash-tbl.report-check-tbl .trow:last-child {
+  border-bottom: 0;
+}
+.reports-page .dash-tbl.report-check-tbl .trow code {
+  font-size: 11px;
+  color: var(--sv-text-2);
+}
+@media (max-width: 900px) {
+  .reports-page .dash-tbl.report-check-tbl .thead,
+  .reports-page .dash-tbl.report-check-tbl .trow {
+    grid-template-columns: 1fr 1fr 0.8fr;
+  }
+  .reports-page .dash-tbl.report-check-tbl .thead span:nth-child(n+4),
+  .reports-page .dash-tbl.report-check-tbl .trow span:nth-child(n+4),
+  .reports-page .dash-tbl.report-check-tbl .trow b {
+    display: none;
+  }
+  .reports-page .dash-tbl.report-check-tbl .trow {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+/* Remove old clutter: legacy .report-filters, .checks-report-card, .history */
+.reports-page .report-filters {
+  display: none;
+}
+.reports-page .checks-report-card {
+  margin: 0;
+  background: var(--sv-surface);
+  border: 1px solid var(--sv-border);
+  border-radius: 14px;
+  padding: 16px 18px;
+  box-shadow: var(--sv-shadow-1);
+}
+.reports-page .history {
+  background: var(--sv-surface);
+  border: 1px solid var(--sv-border);
+  border-radius: 14px;
+  padding: 16px 18px;
+  box-shadow: var(--sv-shadow-1);
+  margin: 0 0 16px;
+}
+.reports-page .history h2 {
+  font-size: 14.5px;
+  font-weight: 800;
+  margin: 0 0 12px;
+}
+.reports-page .history > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px dashed var(--sv-border);
+}
+.reports-page .history > div:first-of-type {
+  border-top: 0;
+}
+/* KPI harmonization: same as dashboard */
+.reports-page .kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 16px;
+}
+.reports-page .kpis .kpi {
+  background: var(--sv-surface);
+  border: 1px solid var(--sv-border);
+  border-radius: 14px;
+  padding: 15px 16px;
+  box-shadow: var(--sv-shadow-1);
+}
+@media (max-width: 1100px) {
+  .reports-page .kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 700px) {
+  .reports-page.dash-page {
+    padding: 18px 14px 30px;
+  }
+  .reports-page .kpis {
+    grid-template-columns: 1fr;
+  }
+  .reports-toolbar .invoice-filter-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .report-export-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .report-export-row .row-action {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* ── 12) Card harmonization — ensure every page uses .card tokens ── */
+.admin .card {
+  background: var(--sv-surface);
+  border: 1px solid var(--sv-border);
+  border-radius: 14px;
+  box-shadow: var(--sv-shadow-1, 0 1px 2px rgba(11, 28, 47, 0.08));
+}
+.admin .card-h {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.admin .card-h h3 {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 800;
+  color: var(--sv-text);
+}
+.admin .card-b {
+  min-width: 0;
+}
+/* Ensure dashboard-cards, product cards, etc. all use same padding */
+.admin .dashboard-cards article,
+.admin .cards article {
+  background: var(--sv-surface);
+  border: 1px solid var(--sv-border);
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: var(--sv-shadow-1);
+}
+
+/* ── 13) Dark theme overrides for unified system ── */
 [data-theme='dark'] .admin .count,
 [data-theme='dark'] .admin .row-action,
 [data-theme='dark'] .admin .invoice-count-link {
@@ -9239,7 +9475,8 @@ html[data-theme='dark'] {
 [data-theme='dark'] .admin .customer-search,
 [data-theme='dark'] .admin .inventory-filter-toolbar,
 [data-theme='dark'] .admin .product-filter-toolbar,
-[data-theme='dark'] .admin .invoices-toolbar {
+[data-theme='dark'] .admin .invoices-toolbar,
+[data-theme='dark'] .admin .reports-toolbar {
   background: var(--sv-surface);
   border-color: var(--sv-border);
 }
@@ -9248,7 +9485,9 @@ html[data-theme='dark'] {
 [data-theme='dark'] .admin .inventory-flat-list,
 [data-theme='dark'] .admin .audit-list,
 [data-theme='dark'] .admin .reference-list,
-[data-theme='dark'] .admin .wholesale-table-wrap {
+[data-theme='dark'] .admin .wholesale-table-wrap,
+[data-theme='dark'] .admin .card,
+[data-theme='dark'] .admin .kpi {
   background: var(--sv-surface);
   border-color: var(--sv-border);
 }
