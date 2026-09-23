@@ -27,6 +27,7 @@ type CreateInput = {
   storePhone?: string;
   customerAddress?: string;
   discount?: string | number;
+  discountPercent?: string | number;
   operationId?: string;
   items?: Array<{ inventoryItemId?: string; quantity?: number; unitPrice?: string | number }>;
 };
@@ -108,7 +109,41 @@ export class InvoiceService {
       const unitPrice = BigInt(item.unitPrice ?? 0);
       return { inventoryItemId: record.id, productName: record.product.name, quantity, unitPrice };
     });
-    const discount = BigInt(input.discount ?? 0);
+    // --- discount handling: persist both amount and percent ---
+    const rawPercent =
+      input.discountPercent != null && input.discountPercent !== ''
+        ? Number(input.discountPercent)
+        : undefined;
+    const hasPercent = rawPercent != null && Number.isFinite(rawPercent) && rawPercent >= 0 && rawPercent <= 100;
+    const rawDiscountAmount = input.discount != null ? BigInt(input.discount) : 0n;
+    // provisional subtotal to derive percent/amount when one side is missing
+    const provisionalSubtotal = lines.reduce(
+      (sum, line) => sum + BigInt(line.quantity) * line.unitPrice,
+      0n,
+    );
+    let discount = rawDiscountAmount;
+    let discountPercent = hasPercent ? Math.round(rawPercent!) : 0;
+    if (hasPercent) {
+      // percent takes precedence: compute amount from subtotal, rounded to rial
+      discount = (provisionalSubtotal * BigInt(discountPercent)) / 100n;
+      // handle fractional remainder by rounding (subtotal * percent /100 may truncate)
+      // we keep integer division; for more precise rounding use Math.round on Number if subtotal fits
+      // but for big totals we accept floor; frontend already rounded.
+      if (provisionalSubtotal <= BigInt(Number.MAX_SAFE_INTEGER)) {
+        const exact = (Number(provisionalSubtotal) * discountPercent) / 100;
+        discount = BigInt(Math.round(exact));
+      }
+    } else if (provisionalSubtotal > 0n && rawDiscountAmount > 0n) {
+      // derive percent from amount
+      if (provisionalSubtotal <= BigInt(Number.MAX_SAFE_INTEGER)) {
+        discountPercent = Math.round((Number(rawDiscountAmount) * 100) / Number(provisionalSubtotal));
+      } else {
+        // big int fallback: integer percent
+        discountPercent = Number((rawDiscountAmount * 100n) / provisionalSubtotal);
+      }
+    }
+    if (discountPercent < 0) discountPercent = 0;
+    if (discountPercent > 100) discountPercent = 100;
     const totals = calculateInvoiceTotals(lines, discount);
     // Store address/phone default from settings when the panel did not send
     // an explicit override — nobody should retype them on every invoice.
@@ -159,6 +194,7 @@ export class InvoiceService {
           customerAddress: input.customerAddress?.trim() || undefined,
           subtotal: totals.subtotal,
           discount: totals.discount,
+          discountPercent,
           total: totals.total,
           operationId: input.operationId,
           issuedById: userId,
@@ -279,6 +315,7 @@ export class InvoiceService {
         customerAddress: true,
         subtotal: true,
         discount: true,
+        discountPercent: true,
         total: true,
         paymentStatus: true,
         paidAmount: true,
@@ -444,6 +481,7 @@ export class InvoiceService {
       customerAddress?: string | null;
       subtotal: bigint | number;
       discount: bigint | number;
+      discountPercent?: number | null;
       total: bigint | number;
       returnedTotal?: bigint | number;
       paymentStatus: string;
@@ -655,11 +693,16 @@ export class InvoiceService {
     const netTotal = BigInt(invoice.total) - returnedTotal;
     const paidAmount = BigInt(invoice.paidAmount);
     const remaining = netTotal - paidAmount;
+    const discPercent = (invoice as any).discountPercent ?? 0;
+    const discLabel =
+      discPercent > 0
+        ? `تخفیف (${formatPersianNumber(discPercent)}٪): ${formatGroupedPersian(invoice.discount)} ریال`
+        : `تخفیف: ${formatGroupedPersian(invoice.discount)} ریال`;
     doc
       .moveDown(1)
       .fontSize(11)
       .text(text(`جمع اقلام: ${formatGroupedPersian(invoice.subtotal)} ریال`), { align: 'right' })
-      .text(text(`تخفیف: ${formatGroupedPersian(invoice.discount)} ریال`), { align: 'right' });
+      .text(text(discLabel), { align: 'right' });
     if (returnedTotal > 0n) {
       doc.text(text(`برگشتی: ${formatGroupedPersian(returnedTotal)} ریال`), { align: 'right' });
       doc
@@ -1418,6 +1461,7 @@ export class InvoiceService {
         customerAddress: true,
         subtotal: true,
         discount: true,
+        discountPercent: true,
         total: true,
         paidAmount: true,
         paymentStatus: true,
@@ -1547,6 +1591,7 @@ export class InvoiceService {
         customerAddress: true,
         subtotal: true,
         discount: true,
+        discountPercent: true,
         total: true,
         paymentStatus: true,
         paidAmount: true,
@@ -1587,6 +1632,7 @@ export class InvoiceService {
       customerAddress: invoice.customerAddress,
       subtotal: invoice.subtotal,
       discount: invoice.discount,
+      discountPercent: (invoice as any).discountPercent ?? 0,
       total: invoice.total,
       returnedTotal,
       paymentStatus: invoice.paymentStatus,

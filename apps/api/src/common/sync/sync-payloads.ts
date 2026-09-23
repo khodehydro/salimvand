@@ -135,6 +135,7 @@ export function buildInvoiceSyncPayload(
     | 'customerMobile'
     | 'subtotal'
     | 'discount'
+    | 'discountPercent'
     | 'total'
     | 'paymentStatus'
     | 'paymentMethod'
@@ -159,6 +160,7 @@ export function buildInvoiceSyncPayload(
     customerMobile: invoice.customerMobile,
     subtotal: money(invoice.subtotal),
     discount: money(invoice.discount),
+    discountPercent: (invoice as any).discountPercent ?? 0,
     total: money(invoice.total),
     paymentStatus: invoice.paymentStatus,
     paymentMethod: invoice.paymentMethod,

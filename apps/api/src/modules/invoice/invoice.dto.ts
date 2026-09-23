@@ -27,6 +27,7 @@ export class CreateInvoiceDto {
   @IsOptional() @IsString() @MaxLength(30) storePhone?: string;
   @IsOptional() @IsString() @MaxLength(500) customerAddress?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(9_000_000_000_000_000) discount?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(100) discountPercent?: number;
   @ValidateNested({ each: true }) @Type(() => InvoiceItemDto) items!: InvoiceItemDto[];
 }
 

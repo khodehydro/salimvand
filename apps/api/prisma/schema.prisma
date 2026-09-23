@@ -355,9 +355,11 @@ model Invoice {
   storeAddress    String?
   storePhone      String?
   customerAddress String?
-  subtotal     BigInt        @default(0)
-  discount     BigInt        @default(0)
-  total        BigInt        @default(0)
+  subtotal        BigInt        @default(0)
+  discount        BigInt        @default(0)
+  /// Discount percent (0-100) applied at issue time — stored so the panel and PDF can show «٪۱۰» alongside the amount.
+  discountPercent Int           @default(0)
+  total           BigInt        @default(0)
   paymentStatus PaymentStatus @default(unpaid)
   paymentMethod PaymentMethod?
   paidAmount   BigInt        @default(0)

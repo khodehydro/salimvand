@@ -20,6 +20,7 @@ export type PublicInvoice = {
   salesPerson?: string | null;
   subtotal: string | number;
   discount: string | number;
+  discountPercent?: number | null;
   total: string | number;
   /** Sum of every partial return — what the invoice shrinks by. */
   returnedTotal?: string | number;
@@ -276,7 +277,12 @@ export async function InvoiceDocument({
               <b>{money(invoice.subtotal)}</b>
             </div>
             <div>
-              <span>تخفیف فاکتور</span>
+              <span>
+                تخفیف فاکتور
+                {Number(invoice.discountPercent ?? 0) > 0
+                  ? ` (${formatPersianNumber(invoice.discountPercent ?? 0)}٪)`
+                  : ''}
+              </span>
               <b>− {money(invoice.discount)}</b>
             </div>
             {returnedTotal > 0 && (
