@@ -140,6 +140,7 @@ describe('sync payload builders (Android pull contract)', () => {
         customerMobile: '0912',
         subtotal: 100n,
         discount: 0n,
+        discountPercent: 0,
         total: 100n,
         paymentStatus: 'unpaid' as const,
         paymentMethod: null,

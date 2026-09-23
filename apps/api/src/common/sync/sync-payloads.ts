@@ -135,7 +135,6 @@ export function buildInvoiceSyncPayload(
     | 'customerMobile'
     | 'subtotal'
     | 'discount'
-    | 'discountPercent'
     | 'total'
     | 'paymentStatus'
     | 'paymentMethod'
@@ -143,7 +142,7 @@ export function buildInvoiceSyncPayload(
     | 'issuedAt'
     | 'paidAt'
     | 'voidedAt'
-  >,
+  > & { discountPercent?: number | null },
   items: ReadonlyArray<
     Pick<
       InvoiceItem,

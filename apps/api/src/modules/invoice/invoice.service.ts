@@ -1324,6 +1324,7 @@ export class InvoiceService {
           customerMobile: true,
           subtotal: true,
           discount: true,
+          discountPercent: true,
           total: true,
           paymentStatus: true,
           paymentMethod: true,
