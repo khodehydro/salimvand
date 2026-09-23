@@ -2033,489 +2033,270 @@ export function InvoicesPage({
           </div>
         </>
       )}
-            {viewing && (
+                  {viewing && (
         <div className="modal-backdrop" onClick={() => setViewing(null)}>
           <div
-            className="editor invoice-dialog inv-detail-modal"
+            className="editor invoice-dialog inv-detail-modal inv-detail-pro"
             onClick={(event) => event.stopPropagation()}
             role="dialog"
             aria-label={`جزئیات فاکتور ${formatPersianNumber(viewing.number)}`}
           >
-            {/* ── Header: page-h style inside modal ── */}
-            <div className="editor-head inv-detail-head">
-              <div className="inv-detail-title">
-                <span className="eyebrow">جزئیات فاکتور</span>
-                <h2>
-                  {formatPersianNumber(viewing.number)}
-                  <span className="inv-detail-badges">
+            {/* Header - compact page-h style */}
+            <div className="inv-pro-head">
+              <div className="inv-pro-head-main">
+                <div className="inv-pro-title-row">
+                  <h2>
+                    <span className="inv-pro-no">{formatPersianNumber(viewing.number)}</span>
+                    <span className="inv-pro-label">فاکتور</span>
+                  </h2>
+                  <div className="inv-pro-badges">
                     <span className={`badge ${viewing.status === 'voided' ? 'b-danger' : 'b-line'}`}>
                       {labels[viewing.status] ?? viewing.status}
                     </span>
-                    <span
-                      className={`badge ${
-                        viewing.paymentStatus === 'paid'
-                          ? 'b-ok'
-                          : viewing.paymentStatus === 'partial'
-                            ? 'b-warn'
-                            : 'b-danger'
-                      }`}
-                    >
+                    <span className={`badge ${viewing.paymentStatus === 'paid' ? 'b-ok' : viewing.paymentStatus === 'partial' ? 'b-warn' : 'b-danger'}`}>
                       {labels[viewing.paymentStatus] ?? viewing.paymentStatus}
                     </span>
                     {Number(viewing.discountPercent ?? 0) > 0 && (
-                      <span className="badge b-warn inv-disc-badge">
-                        تخفیف {persianNumber(viewing.discountPercent ?? 0)}٪
-                      </span>
+                      <span className="badge b-warn inv-disc-badge">٪{persianNumber(viewing.discountPercent ?? 0)} تخفیف</span>
                     )}
-                  </span>
-                </h2>
-                <small className="muted">
-                  صدور: {new Date(viewing.issuedAt).toLocaleDateString('fa-IR')} ·{' '}
-                  {new Date(viewing.issuedAt).toLocaleTimeString('fa-IR', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
-                  {viewing.issuedBy?.name ? ` · صادرکننده: ${viewing.issuedBy.name}` : ''}
-                </small>
+                  </div>
+                </div>
+                <div className="inv-pro-meta">
+                  <span>📅 {new Date(viewing.issuedAt).toLocaleDateString('fa-IR')} · {new Date(viewing.issuedAt).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })}</span>
+                  {viewing.issuedBy?.name && <span>👤 {viewing.issuedBy.name}</span>}
+                  <span>📦 {persianNumber(viewing.itemCount ?? viewing.items?.length ?? 0)} قلم</span>
+                  {viewing.customerName && <span>🧑‍💼 {viewing.customerName}</span>}
+                </div>
               </div>
-              <div className="editor-head-actions">
-                <button
-                  className="row-action"
-                  onClick={() => void downloadInvoicePdf(viewing)}
-                  title="دانلود PDF با نمایش درصد تخفیف"
-                >
-                  PDF
-                </button>
-                <button className="close" onClick={() => setViewing(null)}>
-                  بستن
-                </button>
+              <div className="inv-pro-head-actions">
+                <button className="row-action" onClick={() => void downloadInvoicePdf(viewing)}>PDF</button>
+                <button className="close" onClick={() => setViewing(null)}>✕</button>
               </div>
             </div>
 
-            <div className="editor-body inv-detail-body">
-              {/* ── KPI row: totals with discount percent highlighted ── */}
-              <div className="kpis inv-detail-kpis">
-                <div className="kpi">
-                  <div className="hd">
-                    <span className="ic" aria-hidden="true">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <rect x="3" y="4" width="18" height="18" rx="2" />
-                        <path d="M16 2v4M8 2v4M3 10h18" />
-                      </svg>
-                    </span>
-                    <small>جمع اقلام</small>
-                  </div>
-                  <div className="v">
-                    {money(viewing.subtotal || viewing.total)}
-                    <span className="unit">ریال</span>
-                  </div>
-                  <div className="f">
-                    <span className="fl">
-                      {persianNumber(viewing.itemCount ?? viewing.items?.length ?? 0)} قلم کالا
-                    </span>
-                  </div>
+            <div className="editor-body inv-pro-body">
+              {/* KPI strip - compact 4 cols */}
+              <div className="inv-pro-kpis">
+                <div className="inv-pro-kpi">
+                  <small>جمع اقلام</small>
+                  <b>{money(viewing.subtotal || viewing.total)}</b>
+                  <span className="unit">ریال</span>
                 </div>
-
-                <div className={`kpi ${Number(viewing.discount) > 0 ? 'alert' : ''}`}>
-                  <div className="hd">
-                    <span className="ic" aria-hidden="true">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <circle cx="12" cy="12" r="10" />
-                        <path d="M9 15l6-6M9 9h.01M15 15h.01" />
-                      </svg>
-                    </span>
-                    <small>تخفیف</small>
-                    {Number(viewing.discountPercent ?? 0) > 0 && (
-                      <span className="badge b-warn">
-                        {persianNumber(viewing.discountPercent ?? 0)}٪
-                      </span>
-                    )}
-                  </div>
-                  <div className="v">
-                    {Number(viewing.discount) > 0 ? money(viewing.discount) : '—'}
-                    {Number(viewing.discount) > 0 && <span className="unit">ریال</span>}
-                  </div>
-                  <div className="f">
-                    {Number(viewing.discountPercent ?? 0) > 0 ? (
-                      <span className="dn">
-                        {persianNumber(viewing.discountPercent ?? 0)}٪ از{' '}
-                        {money(viewing.subtotal || viewing.total)}
-                      </span>
-                    ) : Number(viewing.discount) > 0 ? (
-                      <span className="fl">
-                        {persianNumber(
-                          Math.round(
-                            (Number(viewing.discount) * 100) /
-                              Math.max(1, Number(viewing.subtotal || viewing.total)),
-                          ),
-                        )}
-                        ٪ محاسبه شده از جمع
-                      </span>
-                    ) : (
-                      <span className="fl">بدون تخفیف</span>
-                    )}
-                  </div>
+                <div className={`inv-pro-kpi ${Number(viewing.discount) > 0 ? 'has-disc' : ''}`}>
+                  <small>تخفیف {Number(viewing.discountPercent ?? 0) > 0 ? `(${persianNumber(viewing.discountPercent ?? 0)}٪)` : ''}</small>
+                  <b className={Number(viewing.discount) > 0 ? 'danger-text' : ''}>{Number(viewing.discount) > 0 ? `-${money(viewing.discount)}` : '—'}</b>
+                  <span className="unit">{Number(viewing.discount) > 0 ? 'ریال' : ''}</span>
                 </div>
-
-                <div className="kpi">
-                  <div className="hd">
-                    <span className="ic" aria-hidden="true">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7H14a3.5 3.5 0 0 1 0 7H6" />
-                      </svg>
-                    </span>
-                    <small>مبلغ نهایی</small>
-                  </div>
-                  <div className="v">
-                    {money(viewing.total)} <span className="unit">ریال</span>
-                  </div>
-                  <div className="f">
-                    {returnedOf(viewing) > 0 ? (
-                      <span className="dn">خالص پس از برگشتی: {money(net(viewing))}</span>
-                    ) : (
-                      <span className="fl">پس از کسر تخفیف</span>
-                    )}
-                  </div>
+                <div className="inv-pro-kpi primary">
+                  <small>مبلغ نهایی</small>
+                  <b>{money(viewing.total)}</b>
+                  <span className="unit">ریال</span>
                 </div>
-
-                <div
-                  className={`kpi ${
-                    net(viewing) - Number(viewing.paidAmount) > 0 ? 'alert' : ''
-                  }`}
-                >
-                  <div className="hd">
-                    <span className="ic" aria-hidden="true">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <rect x="2" y="5" width="20" height="14" rx="2" />
-                        <path d="M2 10h20" />
-                      </svg>
-                    </span>
-                    <small>پرداخت / بدهی</small>
-                  </div>
-                  <div className="v">
-                    {money(viewing.paidAmount)} <span className="unit">پرداخت</span>
-                  </div>
-                  <div className="f">
+                <div className={`inv-pro-kpi ${net(viewing) - Number(viewing.paidAmount) > 0 ? 'alert' : 'ok'}`}>
+                  <small>پرداخت / بدهی</small>
+                  <b>{money(viewing.paidAmount)}</b>
+                  <span className="unit">پرداخت</span>
+                  <div className="inv-pro-kpi-foot">
                     {net(viewing) - Number(viewing.paidAmount) > 0 ? (
-                      <span className="dn">
-                        بدهی: {money(net(viewing) - Number(viewing.paidAmount))}
-                      </span>
-                    ) : net(viewing) - Number(viewing.paidAmount) < 0 ? (
-                      <span className="up">
-                        اضافه پرداختی: {money(Math.abs(net(viewing) - Number(viewing.paidAmount)))}
-                      </span>
+                      <span className="dn">بدهی {money(net(viewing) - Number(viewing.paidAmount))}</span>
                     ) : (
-                      <span className="up">تسویه کامل ✓</span>
+                      <span className="up">تسویه ✓</span>
                     )}
                   </div>
                 </div>
               </div>
 
-              {/* ── Customer / Store cards ── */}
-              <div className="cols-2b inv-detail-cols">
-                <div className="card">
-                  <div className="card-h">
-                    <h3>👤 مشتری</h3>
-                    {viewing.customerMobile && (
-                      <span className="badge b-line" dir="ltr">
-                        {formatPersianNumber(viewing.customerMobile)}
-                      </span>
-                    )}
+              {/* Customer / Store - compact cards with divider */}
+              <div className="inv-pro-info-grid">
+                <div className="inv-pro-card">
+                  <div className="inv-pro-card-h">
+                    <b>👤 مشتری</b>
+                    {viewing.customerMobile && <code dir="ltr">{formatPersianNumber(viewing.customerMobile)}</code>}
                   </div>
-                  <div className="card-b inv-cust-card">
-                    <b>{viewing.customerName ?? 'مشتری حضوری'}</b>
-                    {viewing.customerAddress ? (
-                      <p>{viewing.customerAddress}</p>
-                    ) : (
-                      <p className="muted">آدرس ثبت نشده</p>
-                    )}
-                    {viewing.customerMobile && (
-                      <small className="muted">موبایل: {viewing.customerMobile}</small>
-                    )}
+                  <div className="inv-pro-card-b">
+                    <div className="inv-pro-field"><span>نام</span><b>{viewing.customerName ?? 'مشتری حضوری'}</b></div>
+                    <div className="inv-pro-field"><span>آدرس</span><p>{viewing.customerAddress || '— ثبت نشده'}</p></div>
+                    <div className="inv-pro-field"><span>وضعیت پرداخت</span><span className={`badge ${viewing.paymentStatus === 'paid' ? 'b-ok' : viewing.paymentStatus === 'partial' ? 'b-warn' : 'b-danger'}`}>{labels[viewing.paymentStatus] ?? viewing.paymentStatus}</span></div>
                   </div>
                 </div>
-
-                <div className="card">
-                  <div className="card-h">
-                    <h3>🏪 فروشگاه</h3>
-                    {viewing.storePhone && (
-                      <span className="badge b-line" dir="ltr">
-                        {formatPersianNumber(viewing.storePhone)}
-                      </span>
-                    )}
+                <div className="inv-pro-card">
+                  <div className="inv-pro-card-h">
+                    <b>🏪 فروشگاه</b>
+                    {viewing.storePhone && <code dir="ltr">{formatPersianNumber(viewing.storePhone)}</code>}
                   </div>
-                  <div className="card-b inv-cust-card">
-                    {viewing.storeAddress ? <p>{viewing.storeAddress}</p> : <p className="muted">—</p>}
-                    <small className="muted">
-                      {viewing.storePhone ? `تماس: ${viewing.storePhone}` : 'پروفایل فروشگاه'}
-                    </small>
+                  <div className="inv-pro-card-b">
+                    <div className="inv-pro-field"><span>آدرس</span><p>{viewing.storeAddress || '—'}</p></div>
+                    <div className="inv-pro-field"><span>تماس</span><p dir="ltr">{viewing.storePhone || '—'}</p></div>
+                    <div className="inv-pro-field"><span>پرداخت‌شده</span><b className="mono">{money(viewing.paidAmount)}</b></div>
                   </div>
                 </div>
               </div>
 
-              {/* ── Address edit (professional card) ── */}
-              <div className="card inv-addr-card">
-                <div className="card-h">
-                  <h3>✏️ ویرایش آدرس‌ها</h3>
-                  <span className="muted">آدرس‌ها پس از صدور قابل ویرایش هستند</span>
+              {/* Address edit - professional inline form */}
+              <div className="inv-pro-card inv-pro-edit">
+                <div className="inv-pro-card-h">
+                  <b>✏️ ویرایش آدرس‌ها</b>
+                  <small className="muted">پس از صدور قابل ویرایش</small>
                 </div>
-                <div className="card-b">
-                  <div className="inv-addr-grid">
-                    <label>
-                      <span>آدرس فروشگاه</span>
-                      <textarea
-                        rows={2}
-                        value={addressDraft.store}
-                        onChange={(event) =>
-                          setAddressDraft({ ...addressDraft, store: event.target.value })
-                        }
-                        placeholder="آدرس فروشگاه..."
-                      />
-                    </label>
-                    <label>
-                      <span>شماره تماس فروشگاه</span>
-                      <input
-                        dir="ltr"
-                        value={addressDraft.phone}
-                        onChange={(event) =>
-                          setAddressDraft({ ...addressDraft, phone: event.target.value })
-                        }
-                        placeholder="۰۹۱۲..."
-                      />
-                    </label>
-                    <label>
-                      <span>آدرس مشتری</span>
-                      <textarea
-                        rows={2}
-                        value={addressDraft.customer}
-                        onChange={(event) =>
-                          setAddressDraft({ ...addressDraft, customer: event.target.value })
-                        }
-                        placeholder="آدرس تحویل..."
-                      />
-                    </label>
-                    <button
-                      className="button-primary"
-                      disabled={addressBusy}
-                      onClick={() => void saveAddresses()}
-                    >
-                      {addressBusy ? 'در حال ذخیره…' : 'ذخیره آدرس‌ها'}
-                    </button>
-                  </div>
+                <div className="inv-pro-edit-grid">
+                  <label className="field-sm">
+                    <span>آدرس فروشگاه</span>
+                    <textarea rows={2} value={addressDraft.store} onChange={(e) => setAddressDraft({ ...addressDraft, store: e.target.value })} placeholder="آدرس فروشگاه..." />
+                  </label>
+                  <label className="field-sm">
+                    <span>شماره تماس فروشگاه</span>
+                    <input dir="ltr" value={addressDraft.phone} onChange={(e) => setAddressDraft({ ...addressDraft, phone: e.target.value })} placeholder="۰۹۱۲..." />
+                  </label>
+                  <label className="field-sm">
+                    <span>آدرس مشتری</span>
+                    <textarea rows={2} value={addressDraft.customer} onChange={(e) => setAddressDraft({ ...addressDraft, customer: e.target.value })} placeholder="آدرس تحویل..." />
+                  </label>
+                </div>
+                <div className="inv-pro-edit-actions">
+                  <button className="button-primary" disabled={addressBusy} onClick={() => void saveAddresses()}>{addressBusy ? 'در حال ذخیره…' : 'ذخیره آدرس‌ها'}</button>
+                  <span className="muted fs11">آدرس‌ها در PDF و لینک امن به‌روز می‌شوند</span>
                 </div>
               </div>
 
-              {/* ── Items table: dash-tbl with discount row highlight ── */}
-              <div className="card">
-                <div className="card-h">
-                  <h3>📦 اقلام فاکتور</h3>
-                  <span className="badge b-line">
-                    {persianNumber(viewing.items?.length ?? 0)} ردیف
-                  </span>
+              {/* Items table - with real borders and dividers */}
+              <div className="inv-pro-card">
+                <div className="inv-pro-card-h">
+                  <b>📦 اقلام فاکتور</b>
+                  <span className="badge b-line">{persianNumber(viewing.items?.length ?? 0)} ردیف</span>
                 </div>
-                <div className="card-b">
-                  <div className="dash-tbl inv-items-tbl">
-                    <div className="thead">
-                      <span>شرح کالا</span>
-                      <span>برند</span>
-                      <span>تعداد</span>
-                      <span>قیمت واحد</span>
-                      <span>مبلغ ردیف</span>
-                      <span>عملیات</span>
-                    </div>
-                    {(viewing.items ?? []).map((item) => {
-                      const returnedQty = item.returnedQuantity ?? 0;
-                      const remaining = lineRemaining(item.quantity, returnedQty);
-                      return (
-                        <div className="trow" key={item.id}>
-                          <span>
-                            <b>{item.productName}</b>
-                          </span>
-                          <span className="muted">
-                            {item.inventoryItem?.brand?.name ?? '—'}
-                          </span>
-                          <span>
-                            {persianNumber(item.quantity)}
-                            {returnedQty > 0 && (
-                              <small className="chip warn" style={{ marginRight: 6 }}>
-                                {persianNumber(returnedQty)} برگشتی
-                              </small>
-                            )}
-                          </span>
-                          <span className="mono">{money(item.unitPrice)}</span>
-                          <span className="mono">
-                            <b>{money(item.lineTotal)}</b>
-                          </span>
-                          <span>
-                            {viewing.status !== 'voided' && remaining > 0 ? (
-                              <button
-                                className="row-action"
-                                onClick={() => openReturn(viewing, item)}
-                              >
-                                برگشت
-                              </button>
-                            ) : (
-                              <span className="muted">—</span>
-                            )}
-                          </span>
-                        </div>
-                      );
-                    })}
-                    {/* Totals footer inside table */}
-                    <div className="trow inv-totals-row">
-                      <span className="muted">جمع اقلام</span>
-                      <span />
-                      <span />
-                      <span />
-                      <span className="mono">
-                        <b>{money(viewing.subtotal || viewing.total)}</b>
-                      </span>
-                      <span />
-                    </div>
-                    {Number(viewing.discount) > 0 && (
-                      <div className="trow inv-disc-row">
-                        <span>
-                          <span className="badge b-warn">
-                            تخفیف {persianNumber(viewing.discountPercent ?? 0)}٪
-                          </span>
-                        </span>
-                        <span className="muted">
-                          {Number(viewing.discountPercent ?? 0) > 0
-                            ? `${persianNumber(viewing.discountPercent ?? 0)}٪ از جمع`
-                            : 'مبلغ ثابت'}
-                        </span>
-                        <span />
-                        <span />
-                        <span className="mono danger-text">
-                          <b>-{money(viewing.discount)}</b>
-                        </span>
-                        <span />
-                      </div>
-                    )}
-                    <div className="trow grand">
-                      <span>
-                        <b>مبلغ نهایی فاکتور</b>
-                      </span>
-                      <span />
-                      <span />
-                      <span />
-                      <span className="mono">
-                        <b>{money(viewing.total)}</b>
-                      </span>
-                      <span />
-                    </div>
-                    {returnedOf(viewing) > 0 && (
-                      <div className="trow">
-                        <span className="muted">خالص پس از برگشتی</span>
-                        <span />
-                        <span>
-                          <span className="chip warn">
-                            برگشتی {money(returnedOf(viewing))}
-                          </span>
-                        </span>
-                        <span />
-                        <span className="mono">
-                          <b>{money(net(viewing))}</b>
-                        </span>
-                        <span />
-                      </div>
-                    )}
-                  </div>
+                <div className="inv-pro-table-wrap">
+                  <table className="tbl inv-pro-tbl">
+                    <thead>
+                      <tr>
+                        <th>شرح کالا</th>
+                        <th>برند</th>
+                        <th className="num">تعداد</th>
+                        <th className="num">فی</th>
+                        <th className="num">مبلغ ردیف</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(viewing.items ?? []).map((item) => {
+                        const rq = item.returnedQuantity ?? 0;
+                        const rem = lineRemaining(item.quantity, rq);
+                        return (
+                          <tr key={item.id}>
+                            <td>
+                              <b className="fs13">{item.productName}</b>
+                              {rq > 0 && <span className="chip warn" style={{ marginRight: 6 }}>{persianNumber(rq)} برگشتی</span>}
+                            </td>
+                            <td><span className="badge b-brand">{item.inventoryItem?.brand?.name ?? '—'}</span></td>
+                            <td className="num"><b>{persianNumber(item.quantity)}</b></td>
+                            <td className="num mono">{money(item.unitPrice)}</td>
+                            <td className="num mono"><b>{money(item.lineTotal)}</b></td>
+                            <td>{viewing.status !== 'voided' && rem > 0 ? <button className="row-action" onClick={() => openReturn(viewing, item)}>برگشت</button> : <span className="muted">—</span>}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr className="inv-pro-tfoot">
+                        <td colSpan={4} className="muted">جمع اقلام</td>
+                        <td className="num mono"><b>{money(viewing.subtotal || viewing.total)}</b></td>
+                        <td />
+                      </tr>
+                      {Number(viewing.discount) > 0 && (
+                        <tr className="inv-pro-tfoot disc">
+                          <td>
+                            <span className="badge b-warn">تخفیف {persianNumber(viewing.discountPercent ?? 0)}٪</span>
+                          </td>
+                          <td className="muted fs11">{Number(viewing.discountPercent ?? 0) > 0 ? `${persianNumber(viewing.discountPercent ?? 0)}٪ از جمع` : 'ثابت'}</td>
+                          <td />
+                          <td />
+                          <td className="num mono danger-text"><b>-{money(viewing.discount)}</b></td>
+                          <td />
+                        </tr>
+                      )}
+                      <tr className="inv-pro-tfoot grand">
+                        <td colSpan={4}><b>مبلغ نهایی فاکتور</b></td>
+                        <td className="num mono"><b>{money(viewing.total)}</b></td>
+                        <td />
+                      </tr>
+                      {returnedOf(viewing) > 0 && (
+                        <tr className="inv-pro-tfoot">
+                          <td className="muted">خالص پس از برگشتی <span className="chip warn">برگشتی {money(returnedOf(viewing))}</span></td>
+                          <td />
+                          <td />
+                          <td />
+                          <td className="num mono"><b>{money(net(viewing))}</b></td>
+                          <td />
+                        </tr>
+                      )}
+                    </tfoot>
+                  </table>
                 </div>
               </div>
 
-              {/* ── Payments & Returns timeline ── */}
-              <div className="cols-2b">
-                <div className="card">
-                  <div className="card-h">
-                    <h3>💳 پرداخت‌ها</h3>
-                    <span className="badge b-line">
-                      {persianNumber(viewing.payments?.length ?? 0)} تراکنش
-                    </span>
+              {/* Payments & Returns */}
+              <div className="inv-pro-info-grid">
+                <div className="inv-pro-card">
+                  <div className="inv-pro-card-h">
+                    <b>💳 پرداخت‌ها</b>
+                    <span className="badge b-line">{persianNumber(viewing.payments?.length ?? 0)}</span>
                   </div>
-                  <div className="card-b">
+                  <div className="inv-pro-card-b">
                     {viewing.payments?.length ? (
-                      <div className="tl">
+                      <div className="inv-pro-list">
                         {viewing.payments.map((p, i) => (
-                          <div className="tl-item pos" key={i}>
-                            <b>
-                              {money(p.amount)} ·{' '}
-                              {methods.find((m) => m.value === p.method)?.label ?? p.method}
-                            </b>
-                            <small>
-                              {p.receivedAt || p.paidAt
-                                ? new Date((p.receivedAt ?? p.paidAt) as string).toLocaleDateString(
-                                    'fa-IR',
-                                  )
-                                : '—'}
-                            </small>
-                            <span className="num ok">{money(p.amount)}</span>
+                          <div className="inv-pro-list-row" key={i}>
+                            <span className="dot ok" />
+                            <div>
+                              <b>{methods.find((m) => m.value === p.method)?.label ?? p.method} · {money(p.amount)}</b>
+                              <small>{p.receivedAt || p.paidAt ? new Date((p.receivedAt ?? p.paidAt) as string).toLocaleDateString('fa-IR') : '—'}</small>
+                            </div>
+                            <b className="mono num ok">{money(p.amount)}</b>
                           </div>
                         ))}
                       </div>
                     ) : (
-                      <p className="muted empty-line">پرداختی ثبت نشده</p>
+                      <p className="muted empty-line fs12">پرداختی ثبت نشده</p>
                     )}
                   </div>
                 </div>
-
-                <div className="card">
-                  <div className="card-h">
-                    <h3>↩️ برگشتی‌ها</h3>
-                    {returnedOf(viewing) > 0 && (
-                      <span className="badge b-warn">جمع: {money(returnedOf(viewing))}</span>
-                    )}
+                <div className="inv-pro-card">
+                  <div className="inv-pro-card-h">
+                    <b>↩️ برگشتی‌ها</b>
+                    {returnedOf(viewing) > 0 && <span className="badge b-warn">{money(returnedOf(viewing))}</span>}
                   </div>
-                  <div className="card-b">
+                  <div className="inv-pro-card-b">
                     {viewing.returns?.length ? (
-                      <div className="tl">
-                        {viewing.returns.map((record) => {
-                          const line = (viewing.items ?? []).find(
-                            (item) => item.id === record.invoiceItemId,
-                          );
+                      <div className="inv-pro-list">
+                        {viewing.returns.map((r) => {
+                          const ln = (viewing.items ?? []).find((it) => it.id === r.invoiceItemId);
                           return (
-                            <div className="tl-item neg" key={record.id}>
-                              <b>
-                                {line?.productName ?? '—'} · {persianNumber(record.quantity)} عدد
-                              </b>
-                              <small>
-                                {new Date(record.createdAt).toLocaleDateString('fa-IR')} ·{' '}
-                                {record.restock ? 'به انبار برگشت' : 'ضایعات'} · {record.reason}
-                              </small>
-                              <span className="num danger">{money(record.refundAmount)}</span>
+                            <div className="inv-pro-list-row" key={r.id}>
+                              <span className="dot danger" />
+                              <div>
+                                <b>{ln?.productName ?? '—'} · {persianNumber(r.quantity)} عدد</b>
+                                <small>{new Date(r.createdAt).toLocaleDateString('fa-IR')} · {r.restock ? 'به انبار' : 'ضایعات'} · {r.reason}</small>
+                              </div>
+                              <b className="mono num danger">{money(r.refundAmount)}</b>
                             </div>
                           );
                         })}
                       </div>
                     ) : (
-                      <p className="muted empty-line">برگشتی ثبت نشده</p>
+                      <p className="muted empty-line fs12">برگشتی ندارد</p>
                     )}
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="editor-footer inv-detail-footer">
-              <button className="outline" onClick={() => setViewing(null)}>
-                بستن
-              </button>
-              <button className="outline" onClick={() => void downloadInvoicePdf(viewing)}>
-                دانلود PDF
-              </button>
-              <button
-                className="button-primary"
-                onClick={() => {
-                  setLinkFor(viewing);
-                  void issueLink(viewing);
-                }}
-              >
-                لینک امن مشتری
-              </button>
+            <div className="inv-pro-footer">
+              <button className="outline" onClick={() => setViewing(null)}>بستن</button>
+              <button className="outline" onClick={() => void downloadInvoicePdf(viewing)}>دانلود PDF</button>
+              <button className="button-primary" onClick={() => { setLinkFor(viewing); void issueLink(viewing); }}>لینک امن مشتری</button>
             </div>
           </div>
         </div>
       )}
-
 
 
       {returnLine && (
