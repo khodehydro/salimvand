@@ -2167,76 +2167,50 @@ export function InvoicesPage({
                   <span>اقلام فاکتور</span>
                   <span className="badge b-line">{persianNumber(viewing.items?.length ?? viewing.itemCount ?? 0)} ردیف</span>
                 </div>
-                <div className="inv-v2-table">
-                  <div className="inv-v2-thead">
-                    <span>شرح کالا</span>
-                    <span>برند</span>
-                    <span>تعداد</span>
-                    <span>فی</span>
-                    <span>مبلغ ردیف</span>
-                    <span></span>
-                  </div>
-                  <div className="inv-v2-tbody">
-                    {(viewing.items && viewing.items.length > 0) ? viewing.items.map((item) => {
-                      const rq = item.returnedQuantity ?? 0;
-                      const rem = lineRemaining(item.quantity, rq);
-                      return (
-                        <div className="inv-v2-trow" key={item.id}>
-                          <span>
-                            <b>{item.productName}</b>
-                            {rq > 0 && <small className="chip warn" style={{ marginRight: 6 }}>{persianNumber(rq)} برگشتی</small>}
-                          </span>
-                          <span><span className="badge b-line">{item.inventoryItem?.brand?.name ?? '—'}</span></span>
-                          <span>{persianNumber(item.quantity)}</span>
-                          <span>{money(item.unitPrice)}</span>
-                          <span><b>{money(item.lineTotal)}</b></span>
-                          <span>{viewing.status !== 'voided' && rem > 0 ? <button className="row-action" onClick={() => openReturn(viewing, item)}>برگشت</button> : <span className="muted">—</span>}</span>
-                        </div>
-                      );
-                    }) : (
-                      <div className="inv-v2-empty">
-                        {viewing.items ? 'اقلامی ثبت نشده' : 'در حال بارگذاری اقلام…'}
-                      </div>
-                    )}
-                  </div>
-                  <div className="inv-v2-tfoot">
-                    <div className="inv-v2-trow">
-                      <span>جمع اقلام</span>
-                      <span></span>
-                      <span></span>
-                      <span></span>
-                      <span><b>{money(viewing.subtotal || viewing.total)}</b></span>
-                      <span></span>
-                    </div>
-                    {Number(viewing.discount) > 0 && (
-                      <div className="inv-v2-trow disc">
-                        <span>تخفیف {Number(viewing.discountPercent ?? 0) > 0 ? `${persianNumber(viewing.discountPercent ?? 0)}٪` : ''}</span>
-                        <span className="muted">{Number(viewing.discountPercent ?? 0) > 0 ? `${persianNumber(viewing.discountPercent ?? 0)}٪ از جمع` : 'ثابت'}</span>
-                        <span></span>
-                        <span></span>
-                        <span><b>-{money(viewing.discount)}</b></span>
-                        <span></span>
-                      </div>
-                    )}
-                    <div className="inv-v2-trow grand">
-                      <span><b>مبلغ نهایی فاکتور</b></span>
-                      <span></span>
-                      <span></span>
-                      <span></span>
-                      <span><b>{money(viewing.total)}</b></span>
-                      <span></span>
-                    </div>
-                    {returnedOf(viewing) > 0 && (
-                      <div className="inv-v2-trow">
-                        <span>خالص پس از برگشتی</span>
-                        <span><span className="chip warn">برگشتی {money(returnedOf(viewing))}</span></span>
-                        <span></span>
-                        <span></span>
-                        <span><b>{money(net(viewing))}</b></span>
-                        <span></span>
-                      </div>
-                    )}
-                  </div>
+                <div className="inv-v2-table-wrap">
+                  <table className="inv-v2-tbl">
+                    <thead>
+                      <tr>
+                        <th>شرح کالا</th>
+                        <th>برند</th>
+                        <th className="c">تعداد</th>
+                        <th className="l">فی</th>
+                        <th className="l">مبلغ ردیف</th>
+                        <th className="c">عملیات</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(viewing.items && viewing.items.length > 0) ? viewing.items.map((item) => {
+                        const rq = item.returnedQuantity ?? 0;
+                        const rem = lineRemaining(item.quantity, rq);
+                        return (
+                          <tr key={item.id}>
+                            <td>
+                              <b>{item.productName}</b>
+                              {rq > 0 && <small className="chip warn" style={{ marginRight: 6 }}>{persianNumber(rq)} برگشتی</small>}
+                            </td>
+                            <td><span className="badge b-line">{item.inventoryItem?.brand?.name ?? '—'}</span></td>
+                            <td className="c">{persianNumber(item.quantity)}</td>
+                            <td className="l">{money(item.unitPrice)}</td>
+                            <td className="l"><b>{money(item.lineTotal)}</b></td>
+                            <td className="c">{viewing.status !== 'voided' && rem > 0 ? <button className="row-action" onClick={() => openReturn(viewing, item)}>برگشت</button> : <span className="muted">—</span>}</td>
+                          </tr>
+                        );
+                      }) : (
+                        <tr><td colSpan={6} className="inv-v2-empty">{viewing.items ? 'اقلامی ثبت نشده' : 'در حال بارگذاری اقلام…'}</td></tr>
+                      )}
+                    </tbody>
+                    <tfoot>
+                      <tr><td>جمع اقلام</td><td></td><td></td><td></td><td className="l"><b>{money(viewing.subtotal || viewing.total)}</b></td><td></td></tr>
+                      {Number(viewing.discount) > 0 && (
+                        <tr className="disc"><td>تخفیف {Number(viewing.discountPercent ?? 0) > 0 ? `${persianNumber(viewing.discountPercent ?? 0)}٪` : ''}</td><td className="muted">{Number(viewing.discountPercent ?? 0) > 0 ? `${persianNumber(viewing.discountPercent ?? 0)}٪ از جمع` : 'ثابت'}</td><td></td><td></td><td className="l"><b>-{money(viewing.discount)}</b></td><td></td></tr>
+                      )}
+                      <tr className="grand"><td><b>مبلغ نهایی فاکتور</b></td><td></td><td></td><td></td><td className="l"><b>{money(viewing.total)}</b></td><td></td></tr>
+                      {returnedOf(viewing) > 0 && (
+                        <tr><td>خالص پس از برگشتی</td><td><span className="chip warn">برگشتی {money(returnedOf(viewing))}</span></td><td></td><td></td><td className="l"><b>{money(net(viewing))}</b></td><td></td></tr>
+                      )}
+                    </tfoot>
+                  </table>
                 </div>
               </div>
 
