@@ -1,8 +1,8 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { createEan13, formatJalaliDate, formatRial } from '@salimvand/shared';
 import { FaNumberInput } from '../components/FaNumberInput';
 import { locationChip, locationLabel } from '../lib/location-label';
-import { api } from '../lib/api';
+import { api, downloadFile } from '../lib/api';
 import { hashForPage } from '../lib/admin-route';
 import { publicSiteUrl } from '../lib/public-site';
 import { MediaPicker, type PickerItem } from '../components/MediaPicker';
@@ -116,6 +116,9 @@ export function ProductsPage() {
   const [vehicleFilter, setVehicleFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [keywordBusy, setKeywordBusy] = useState(false);
+  const [backupBusy, setBackupBusy] = useState(false);
+  const [restoreBusy, setRestoreBusy] = useState(false);
+  const restoreInputRef = useRef<HTMLInputElement | null>(null);
   const [message, setMessage] = useState('');
   const [draft, setDraft] = useState<ProductDetail | null>(null);
   const [tab, setTab] = useState<Tab>('basic');
@@ -243,6 +246,82 @@ export function ProductsPage() {
           >
             {keywordBusy ? 'در حال ساخت…' : 'بازسازی کلیدواژه‌ها'}
           </button>
+          <button
+            className="outline products-backup-export"
+            disabled={backupBusy}
+            onClick={async () => {
+              setBackupBusy(true);
+              try {
+                await downloadFile(
+                  '/products/backup/export',
+                  `salimvand-products-backup-${new Date().toISOString().slice(0, 10)}.zip`,
+                );
+              } catch (error) {
+                setMessage((error as Error).message);
+              } finally {
+                setBackupBusy(false);
+              }
+            }}
+          >
+            {backupBusy ? 'در حال ساخت…' : 'پشتیبان‌گیری کامل (ZIP)'}
+          </button>
+          <button
+            className="outline products-backup-restore"
+            disabled={restoreBusy}
+            onClick={() => restoreInputRef.current?.click()}
+          >
+            {restoreBusy ? 'در حال بازگردانی…' : 'بازگردانی از پشتیبان…'}
+          </button>
+          <input
+            ref={restoreInputRef}
+            type="file"
+            accept=".zip,application/zip"
+            hidden
+            onChange={async (event) => {
+              const file = event.target.files?.[0];
+              event.target.value = '';
+              if (!file) return;
+              if (
+                !window.confirm(
+                  'بازگردانی از فایل پشتیبان؟\nهیچ داده‌ای حذف نمی‌شود — محصولات موجود بر اساس کد به‌روزرسانی می‌شوند و محصولات غایب با همان کد قبلی دوباره ساخته می‌شوند.',
+                )
+              )
+                return;
+              setRestoreBusy(true);
+              try {
+                const form = new FormData();
+                form.append('file', file);
+                const result = await api<{
+                  data: {
+                    productsCreated: number;
+                    productsUpdated: number;
+                    itemsCreated: number;
+                    itemsUpdated: number;
+                    imagesWritten: number;
+                    errors: string[];
+                  };
+                }>('/products/backup/import', { method: 'POST', body: form });
+                const summary = result.data;
+                const parts = [
+                  `${summary.productsCreated.toLocaleString('fa-IR')} محصول جدید`,
+                  `${summary.productsUpdated.toLocaleString('fa-IR')} محصول به‌روزرسانی‌شده`,
+                  `${(summary.itemsCreated + summary.itemsUpdated).toLocaleString('fa-IR')} قلم انبار`,
+                  `${summary.imagesWritten.toLocaleString('fa-IR')} تصویر`,
+                ];
+                setMessage(
+                  `بازگردانی انجام شد — ${parts.join('، ')}` +
+                    (summary.errors.length
+                      ? ` (${summary.errors.length.toLocaleString('fa-IR')} خطا: ${summary.errors.slice(0, 3).join('؛ ')}${summary.errors.length > 3 ? '…' : ''})`
+                      : ''),
+                );
+                await load();
+              } catch (error) {
+                setMessage((error as Error).message);
+              } finally {
+                setRestoreBusy(false);
+              }
+            }}
+          />
         </div>
       </div>
 

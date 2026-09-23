@@ -20,6 +20,7 @@
     "@nestjs/throttler": "^6.5.0",
     "@prisma/client": "^5.22.0",
     "@salimvand/shared": "workspace:*",
+    "adm-zip": "^0.6.1",
     "arabic-persian-reshaper": "^1.0.1",
     "argon2": "^0.41.1",
     "bidi-js": "^1.0.3",
@@ -38,6 +39,7 @@
     "sharp": "^0.34.5"
   },
   "devDependencies": {
+    "@types/adm-zip": "^0.5.8",
     "@types/cookie-parser": "^1.4.8",
     "@types/express": "^5.0.1",
     "@types/jsonwebtoken": "^9.0.9",

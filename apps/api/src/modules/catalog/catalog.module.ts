@@ -8,6 +8,7 @@ import { ReferenceController } from './reference.controller';
 import { ReferenceService } from './reference.service';
 import { CompatibilityController } from './compatibility.controller';
 import { CompatibilityService } from './compatibility.service';
+import { ProductsBackupService } from './products-backup.service';
 
 @Module({
   imports: [AuthModule],
@@ -17,7 +18,13 @@ import { CompatibilityService } from './compatibility.service';
     ReferenceController,
     CompatibilityController,
   ],
-  providers: [CatalogService, CatalogAdminService, ReferenceService, CompatibilityService],
+  providers: [
+    CatalogService,
+    CatalogAdminService,
+    ReferenceService,
+    CompatibilityService,
+    ProductsBackupService,
+  ],
   exports: [CatalogAdminService],
 })
 export class CatalogModule {}
