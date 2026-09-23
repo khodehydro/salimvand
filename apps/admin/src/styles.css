@@ -8239,3 +8239,39 @@ html[data-theme='dark'] {
     font-size: 12px;
   }
 }
+
+/* — نوار عملیاتِ عنوان صفحهٔ محصولات: هم‌شکل قرص‌های نوار فیلتر زیرش —
+   چیپ تعداد و دکمه‌های عملیات (بازسازی کلیدواژه‌ها، پشتیبان‌گیری،
+   بازگردانی) به همان زبان طراحی: قرص گرد با سطح روشن، بوردر ظریف و
+   سایهٔ ملایم؛ hover با بوردر و متن سرمه‌ای. دکمه‌های «اقدام» مثل
+   خروجی‌های CSV نوار انبار، بدون آیکنِ دایره‌ایِ فیلترها هستند. */
+.products-page .page-title-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.products-page .page-title-actions .count {
+  background: var(--sv-surface);
+  border: 1px solid var(--sv-border);
+  box-shadow: 0 1px 2px rgb(13 43 75 / 5%);
+  color: var(--sv-text-2);
+}
+.products-page .page-title-actions button {
+  border: 1px solid var(--sv-border);
+  border-radius: 999px;
+  background: var(--sv-surface);
+  color: var(--sv-text-2);
+  font-family: Vazirmatn, Tahoma, sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 8px 16px;
+  min-height: 36px;
+  box-shadow: 0 1px 2px rgb(13 43 75 / 5%);
+  white-space: nowrap;
+}
+.products-page .page-title-actions button:hover:not(:disabled) {
+  background: var(--sv-surface-2);
+  border-color: var(--sv-primary);
+  color: var(--sv-primary);
+}

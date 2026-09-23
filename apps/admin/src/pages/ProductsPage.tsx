@@ -228,7 +228,7 @@ export function ProductsPage() {
         <div className="page-title-actions">
           <span className="count">{products.length} محصول</span>
           <button
-            className="outline keyword-regenerate"
+            className="keyword-regenerate"
             disabled={keywordBusy}
             onClick={async () => {
               if (!window.confirm('کلیدواژه‌های همه محصولات بازسازی شود؟')) return;
@@ -247,7 +247,7 @@ export function ProductsPage() {
             {keywordBusy ? 'در حال ساخت…' : 'بازسازی کلیدواژه‌ها'}
           </button>
           <button
-            className="outline products-backup-export"
+            className="products-backup-export"
             disabled={backupBusy}
             onClick={async () => {
               setBackupBusy(true);
@@ -266,7 +266,7 @@ export function ProductsPage() {
             {backupBusy ? 'در حال ساخت…' : 'پشتیبان‌گیری کامل (ZIP)'}
           </button>
           <button
-            className="outline products-backup-restore"
+            className="products-backup-restore"
             disabled={restoreBusy}
             onClick={() => restoreInputRef.current?.click()}
           >
