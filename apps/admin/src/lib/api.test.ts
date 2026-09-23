@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { api, resolveApiUrl } from './api';
+import { api, fetchAllPages, resolveApiUrl } from './api';
 
 const storage = new Map<string, string>();
 
@@ -46,5 +46,37 @@ describe('admin API client', () => {
     await expect(api('/auth/login', { method: 'POST', body: '{}' })).rejects.toThrow(
       'نام کاربری یا رمز عبور نادرست است',
     );
+  });
+});
+
+describe('fetchAllPages (cursor-paginated lists)', () => {
+  const page = (rows: unknown[], nextCursor: string | null) =>
+    new Response(JSON.stringify({ ok: true, data: rows, nextCursor }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+
+  it('drains the cursor chain and keeps any existing query params', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(page([{ id: 'a' }], 'cursor-1'))
+      .mockResolvedValueOnce(page([{ id: 'b' }], null));
+    vi.stubGlobal('fetch', fetchMock);
+    const rows = await fetchAllPages<{ id: string }>('/inventory/items?q=لنت', { limit: 500 });
+    expect(rows).toEqual([{ id: 'a' }, { id: 'b' }]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [firstUrl, secondUrl] = fetchMock.mock.calls.map((call) => String(call[0]));
+    expect(firstUrl).toContain('/inventory/items?q=');
+    expect(firstUrl).toContain('limit=500');
+    expect(firstUrl).not.toContain('cursor=');
+    expect(secondUrl).toContain('cursor=cursor-1');
+  });
+
+  it('stops at the page cap so a broken cursor loop cannot run forever', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => page([], 'same-cursor'));
+    vi.stubGlobal('fetch', fetchMock);
+    const rows = await fetchAllPages<{ id: string }>('/invoices', { maxPages: 3 });
+    expect(rows).toEqual([]);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 });

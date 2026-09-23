@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import { extractMapEmbedUrl, formatPersianNumber } from '@salimvand/shared';
 import { FaNumberInput } from '../components/FaNumberInput';
 import { api } from '../lib/api';
+import { applyStoreFavicon } from '../lib/favicon';
 import { isValidIranMobile } from '../lib/invoice-math';
 import { MediaPicker, type PickerItem } from '../components/MediaPicker';
 import { MediaImage } from '../components/MediaImage';
@@ -41,6 +42,10 @@ type Settings = {
       navCatalog?: string;
       navVideo?: string;
       navContact?: string;
+      heroHeadline?: string;
+      heroSubheadline?: string;
+      experienceYears?: string;
+      experienceLabel?: string;
     };
   };
   'store.trust_video'?: string;
@@ -70,7 +75,17 @@ const initial: Settings = {
     navLng: '',
     navApp: 'both',
     instagram: '',
-    header: { tagline: '', cta: '', navCatalog: '', navVideo: '', navContact: '' },
+    header: {
+      tagline: '',
+      cta: '',
+      navCatalog: '',
+      navVideo: '',
+      navContact: '',
+      heroHeadline: '',
+      heroSubheadline: '',
+      experienceYears: '',
+      experienceLabel: '',
+    },
   },
   'store.trust_video': '',
   'store.pricing': { showPrices: false },
@@ -87,6 +102,16 @@ export function SettingsPage() {
   const [testSending, setTestSending] = useState(false);
   const [backupJobs, setBackupJobs] = useState<BackupJob[]>([]);
   const [backupRunning, setBackupRunning] = useState(false);
+  const [importInspecting, setImportInspecting] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importRestoring, setImportRestoring] = useState(false);
+  const [importPreview, setImportPreview] = useState<{
+    filename: string;
+    sizeBytes: number;
+    entries: number;
+    version: number | null;
+    mediaIncluded: boolean;
+  } | null>(null);
   const [backupStatus, setBackupStatus] = useState<{
     status: string;
     createdAt: string;
@@ -124,10 +149,17 @@ export function SettingsPage() {
   >([]);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
+  // When /settings fails to load (network blip, expired session, API restart
+  // mid-deploy) the form must NOT render with the in-code defaults — saving
+  // that state would wipe the operator's real settings back to defaults.
+  const [loadFailed, setLoadFailed] = useState(false);
   useEffect(() => {
     void api<{ data: Settings }>('/settings')
       .then((result) => setSettings({ ...initial, ...result.data }))
-      .catch((error: Error) => setMessage(error.message))
+      .catch((error: Error) => {
+        setLoadFailed(true);
+        setMessage(error.message);
+      })
       .finally(() => setLoading(false));
     void api<{ data: typeof integrationHealth }>('/notifications/health')
       .then((result) => {
@@ -219,10 +251,56 @@ export function SettingsPage() {
       setBackupRunning(false);
     }
   };
+  const inspectImport = async (file: File) => {
+    setImportInspecting(true);
+    setImportPreview(null);
+    try {
+      const body = new FormData();
+      body.append('file', file);
+      const result = await api<{
+        data: {
+          filename: string;
+          sizeBytes: number;
+          entries: number;
+          version: number | null;
+          mediaIncluded: boolean;
+        };
+      }>('/settings/backup/inspect', { method: 'POST', body });
+      setImportPreview(result.data);
+      setMessage('فایل Backup معتبر است؛ قبل از Restore باید Preview بررسی شود.');
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setImportInspecting(false);
+    }
+  };
+  const restoreImport = async () => {
+    if (
+      !importFile ||
+      !importPreview ||
+      !window.confirm('این عملیات اطلاعات فعلی را جایگزین می‌کند. ادامه می‌دهید؟')
+    )
+      return;
+    setImportRestoring(true);
+    try {
+      const body = new FormData();
+      body.append('file', importFile);
+      await api('/settings/backup/restore', { method: 'POST', body });
+      setMessage('Restore با موفقیت انجام شد. برای امنیت، دوباره وارد پنل شوید.');
+      setImportFile(null);
+      setImportPreview(null);
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setImportRestoring(false);
+    }
+  };
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     try {
       await api('/settings', { method: 'PUT', body: JSON.stringify(settings) });
+      // The tab icon follows the saved favicon immediately — no manual refresh.
+      void applyStoreFavicon();
       setMessage('تنظیمات با موفقیت ذخیره شد.');
     } catch (error) {
       setMessage((error as Error).message);
@@ -282,6 +360,21 @@ export function SettingsPage() {
       <section>
         <div className="skeleton-block" />
         <div className="skeleton-block" />
+      </section>
+    );
+
+  if (loadFailed)
+    return (
+      <section>
+        <h1>تنظیمات</h1>
+        <p className="field-error">
+          تنظیمات از سرور بارگذاری نشد؛ برای جلوگیری از بازنویسیٔ تصادفی مقادیر پیش‌فرض روی تنظیمات
+          واقعی، فرم نمایش داده نمی‌شود.
+        </p>
+        {message && <p className="muted">{message}</p>}
+        <button className="button-primary" onClick={() => window.location.reload()}>
+          تلاش دوباره
+        </button>
       </section>
     );
 
@@ -437,6 +530,42 @@ export function SettingsPage() {
                       value={settings['store.profile']?.header?.navVideo ?? ''}
                       onChange={(e) => updateHeaderText('navVideo', e.target.value)}
                       placeholder="ویدئوی فروشگاه"
+                    />
+                  </label>
+                </div>
+                <div className="two-fields">
+                  <label>
+                    تیتر اصلی هدر
+                    <input
+                      value={settings['store.profile']?.header?.heroHeadline ?? ''}
+                      onChange={(e) => updateHeaderText('heroHeadline', e.target.value)}
+                      placeholder="قطعهٔ ماشینت رو پیدا کن، بقیه‌اش با ماست"
+                    />
+                  </label>
+                  <label>
+                    توضیح زیر تیتر هدر
+                    <input
+                      value={settings['store.profile']?.header?.heroSubheadline ?? ''}
+                      onChange={(e) => updateHeaderText('heroSubheadline', e.target.value)}
+                      placeholder="کاتالوگ قطعات یدکی خودرو"
+                    />
+                  </label>
+                </div>
+                <div className="two-fields">
+                  <label>
+                    عدد سابقه
+                    <input
+                      value={settings['store.profile']?.header?.experienceYears ?? ''}
+                      onChange={(e) => updateHeaderText('experienceYears', e.target.value)}
+                      placeholder="۱۸ سال"
+                    />
+                  </label>
+                  <label>
+                    توضیح سابقه
+                    <input
+                      value={settings['store.profile']?.header?.experienceLabel ?? ''}
+                      onChange={(e) => updateHeaderText('experienceLabel', e.target.value)}
+                      placeholder="سابقهٔ تأمین قطعات یدکی"
                     />
                   </label>
                 </div>
@@ -938,6 +1067,45 @@ export function SettingsPage() {
             >
               {backupRunning ? 'در حال آغاز…' : 'اجرای پشتیبان‌گیری اکنون'}
             </button>
+            <label className="outline" style={{ display: 'inline-flex', cursor: 'pointer' }}>
+              {importInspecting ? 'در حال بررسی فایل…' : 'واردکردن فایل پشتیبان'}
+              <input
+                type="file"
+                accept=".tar.gz,.gpg"
+                hidden
+                disabled={importInspecting}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) {
+                    setImportFile(file);
+                    void inspectImport(file);
+                  }
+                  event.currentTarget.value = '';
+                }}
+              />
+            </label>
+            {importPreview && (
+              <div className="backup-status">
+                <b className="status-chip">Backup معتبر</b>
+                <span>{importPreview.filename}</span>
+                <small>
+                  {formatPersianNumber(importPreview.entries)} فایل · نسخهٔ{' '}
+                  {formatPersianNumber(importPreview.version ?? 0)} ·{' '}
+                  {importPreview.mediaIncluded ? 'رسانه دارد' : 'بدون رسانه'}
+                </small>
+                <p className="settings-help">
+                  Restore واقعی فقط با فعال‌سازی امن روی سرور اجرا می‌شود.
+                </p>
+                <button
+                  type="button"
+                  className="outline"
+                  disabled={importRestoring}
+                  onClick={() => void restoreImport()}
+                >
+                  {importRestoring ? 'در حال Restore…' : 'تأیید و Restore اطلاعات'}
+                </button>
+              </div>
+            )}
             <label className="switch-row">
               <input
                 type="checkbox"

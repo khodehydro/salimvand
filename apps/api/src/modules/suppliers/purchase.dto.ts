@@ -28,8 +28,16 @@ export enum SupplierPaymentMethod {
   transfer = 'transfer',
   credit = 'credit',
 }
+export class SupplierPaymentCheckDto {
+  @IsOptional() @IsString() checkNumber?: string;
+  @IsOptional() @IsString() bank?: string;
+  @IsOptional() @IsString() branch?: string;
+  @IsNumberString() amount!: string;
+  @IsString() dueDate!: string;
+}
 export class SupplierPaymentDto {
   @IsNumberString() amount!: string;
   @IsEnum(SupplierPaymentMethod) method!: SupplierPaymentMethod;
   @IsOptional() @IsString() @MaxLength(500) notes?: string;
+  @IsOptional() @ValidateNested() @Type(() => SupplierPaymentCheckDto) check?: SupplierPaymentCheckDto;
 }

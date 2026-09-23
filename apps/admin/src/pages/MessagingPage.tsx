@@ -43,17 +43,20 @@ type Tab = (typeof tabs)[number]['id'];
 
 type MessagingConfig = {
   sms?: { apiKey?: string; lineNumber?: string };
-  telegram?: { botToken?: string; chatId?: string; apiBase?: string; proxySecret?: string };
-  bale?: { botToken?: string; chatId?: string };
+  telegram?: { botToken?: string; chatId?: string; passwordRecoveryChatId?: string; apiBase?: string; proxySecret?: string };
+  bale?: { botToken?: string; chatId?: string; botId?: string; apiAccessKey?: string };
 };
 type MessagingDraft = {
   smsApiKey: string;
   smsLineNumber: string;
   telegramBotToken: string;
   telegramChatId: string;
+  telegramPasswordRecoveryChatId: string;
   telegramApiBase: string;
   telegramProxySecret: string;
   baleBotToken: string;
+  baleBotId: string;
+  baleApiAccessKey: string;
   baleChatId: string;
 };
 const emptyDraft: MessagingDraft = {
@@ -61,9 +64,12 @@ const emptyDraft: MessagingDraft = {
   smsLineNumber: '',
   telegramBotToken: '',
   telegramChatId: '',
+  telegramPasswordRecoveryChatId: '8686398534',
   telegramApiBase: '',
   telegramProxySecret: '',
   baleBotToken: '',
+  baleBotId: '',
+  baleApiAccessKey: '',
   baleChatId: '',
 };
 
@@ -94,9 +100,12 @@ export function MessagingPage() {
           smsLineNumber: config.sms?.lineNumber ?? '',
           telegramBotToken: '',
           telegramChatId: config.telegram?.chatId ?? '',
+          telegramPasswordRecoveryChatId: config.telegram?.passwordRecoveryChatId ?? '8686398534',
           telegramApiBase: config.telegram?.apiBase ?? '',
           telegramProxySecret: '',
           baleBotToken: '',
+          baleBotId: config.bale?.botId ?? '',
+          baleApiAccessKey: '',
           baleChatId: config.bale?.chatId ?? '',
         });
       })
@@ -114,9 +123,13 @@ export function MessagingPage() {
         sms: { lineNumber: draft.smsLineNumber.trim() || undefined },
         telegram: {
           chatId: draft.telegramChatId.trim() || undefined,
+          passwordRecoveryChatId: draft.telegramPasswordRecoveryChatId.trim() || undefined,
           apiBase: draft.telegramApiBase.trim() || undefined,
         },
-        bale: { chatId: draft.baleChatId.trim() || undefined },
+        bale: {
+          chatId: draft.baleChatId.trim() || undefined,
+          botId: draft.baleBotId.trim() || undefined,
+        },
       };
       // Secrets are only sent when the operator typed a fresh value; an empty
       // field keeps the stored credential (the server merges masked values).
@@ -125,6 +138,7 @@ export function MessagingPage() {
       if (draft.telegramProxySecret.trim())
         payload.telegram!.proxySecret = draft.telegramProxySecret.trim();
       if (draft.baleBotToken.trim()) payload.bale!.botToken = draft.baleBotToken.trim();
+      if (draft.baleApiAccessKey.trim()) payload.bale!.apiAccessKey = draft.baleApiAccessKey.trim();
       await api('/settings', {
         method: 'PUT',
         body: JSON.stringify({ 'integrations.messaging': payload }),
@@ -296,6 +310,11 @@ export function MessagingPage() {
               />
             </label>
             <label>
+              شناسهٔ عددی مدیر برای بازیابی رمز
+              <input dir="ltr" inputMode="numeric" value={draft.telegramPasswordRecoveryChatId} placeholder="مثال: 8686398534" onChange={(event) => updateDraft('telegramPasswordRecoveryChatId', event.target.value)} />
+              <small className="field-hint">لینک فراموشی رمز فقط به این شناسه ارسال می‌شود.</small>
+            </label>
+            <label>
               آدرس تلگرام — وورکر کلادفلر (برای انتشار در کانال)
               <input
                 dir="ltr"
@@ -330,11 +349,30 @@ export function MessagingPage() {
               />
             </label>
             <label>
-              شناسهٔ چت/کانال مقصد در بله
+              شناسهٔ عددی ربات بله (bot_id)
+              <input
+                dir="ltr"
+                value={draft.baleBotId}
+                placeholder="مثال: 123456789"
+                onChange={(event) => updateDraft('baleBotId', event.target.value)}
+              />
+            </label>
+            <label>
+              API Access Key سرویس سفیر بله
+              <input
+                dir="ltr"
+                type="password"
+                value={draft.baleApiAccessKey}
+                placeholder={messaging.bale?.apiAccessKey || 'از business.bale.ai'}
+                onChange={(event) => updateDraft('baleApiAccessKey', event.target.value)}
+              />
+            </label>
+            <label>
+              شناسهٔ چت/کانال مقصد برای اعلان‌های قدیمی
               <input
                 dir="ltr"
                 value={draft.baleChatId}
-                placeholder="مثال: -1001234567890"
+                placeholder="اختیاری؛ برای تست یا اعلان کانال"
                 onChange={(event) => updateDraft('baleChatId', event.target.value)}
               />
             </label>

@@ -5,14 +5,11 @@ import {
   NotFoundException,
   Optional,
 } from '@nestjs/common';
-import {
-  NotificationsService,
-  buildInvoiceMessage,
-  integrationConfigured,
-} from '../notifications/notifications.service';
+import { NotificationsService, buildInvoiceMessage } from '../notifications/notifications.service';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
 import { writeAudit } from '../../common/audit/audit-log';
+import { buildInvoiceSyncPayload } from '../../common/sync/sync-payloads';
 import { calculateInvoiceTotals, InvoiceLineInput } from './invoice.rules';
 import * as QRCode from 'qrcode';
 import PDFDocument = require('pdfkit');
@@ -30,6 +27,7 @@ type CreateInput = {
   storePhone?: string;
   customerAddress?: string;
   discount?: string | number;
+  operationId?: string;
   items?: Array<{ inventoryItemId?: string; quantity?: number; unitPrice?: string | number }>;
 };
 
@@ -72,16 +70,21 @@ export class InvoiceService {
   /** Store contact block from settings (store.profile): used to default the
    * invoice snapshot so sellers never type the store address/phone per
    * invoice — settings stay the single source of truth. */
-  private async storeProfile(): Promise<{ address: string; phone: string }> {
+  private async storeProfile(): Promise<{ address: string; phone: string; logoUrl: string }> {
     try {
       const row = await this.prisma.setting.findUnique({ where: { key: 'store.profile' } });
-      const profile = (row?.value ?? {}) as { address?: unknown; phones?: unknown };
+      const profile = (row?.value ?? {}) as {
+        address?: unknown;
+        phones?: unknown;
+        logoUrl?: unknown;
+      };
       return {
         address: typeof profile.address === 'string' ? profile.address.trim() : '',
         phone: typeof profile.phones === 'string' ? profile.phones.trim() : '',
+        logoUrl: typeof profile.logoUrl === 'string' ? profile.logoUrl.trim() : '',
       };
     } catch {
-      return { address: '', phone: '' };
+      return { address: '', phone: '', logoUrl: '' };
     }
   }
 
@@ -116,6 +119,13 @@ export class InvoiceService {
     const publicShortCode = createPublicShortCode();
     const publicTokenExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     const invoice = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      if (input.operationId) {
+        const previous = await tx.invoice.findUnique({
+          where: { operationId: input.operationId },
+          include: { items: true },
+        });
+        if (previous) return previous;
+      }
       const counter = await tx.counter.upsert({
         where: { key: 'invoice' },
         update: { lastValue: { increment: 1 } },
@@ -150,6 +160,7 @@ export class InvoiceService {
           subtotal: totals.subtotal,
           discount: totals.discount,
           total: totals.total,
+          operationId: input.operationId,
           issuedById: userId,
           items: {
             create: lines.map((line) => ({
@@ -166,9 +177,17 @@ export class InvoiceService {
       if (customerName && customerMobile) {
         // Prisma upsert: ids are generated client-side, no database-side
         // uuid function has to exist for this to work.
+        // A brand-new inline customer keeps the invoice address on its
+        // profile too; an existing one is never rewritten — the invoice's
+        // customerAddress is only a snapshot (explicit profile edits go
+        // through PATCH /customers/:id).
         const customer = await tx.customer.upsert({
           where: { mobile: customerMobile },
-          create: { name: customerName, mobile: customerMobile },
+          create: {
+            name: customerName,
+            mobile: customerMobile,
+            address: input.customerAddress?.trim() || undefined,
+          },
           update: { name: customerName },
           select: { id: true },
         });
@@ -197,6 +216,7 @@ export class InvoiceService {
         entityType: 'invoice',
         entityId: created.id,
         after: { number, total: totals.total.toString() },
+        syncPayload: buildInvoiceSyncPayload(created, created.items),
       });
       for (const line of lines) {
         const item = await tx.inventoryItem.findUniqueOrThrow({
@@ -210,10 +230,10 @@ export class InvoiceService {
       }
       return created;
     });
-    if (
-      this.notifications &&
-      (input.customerMobile || integrationConfigured('telegram') || integrationConfigured('bale'))
-    )
+    // Invoice delivery is private: only queue the customer's SMS. Telegram
+    // and Bale are channel/broadcast providers and must never receive invoice
+    // links as a side effect of issuing an invoice.
+    if (this.notifications && input.customerMobile)
       await this.notifications.enqueue({
         type: 'invoice.issued',
         invoiceId: invoice.id,
@@ -226,6 +246,12 @@ export class InvoiceService {
           await this.smsTemplate('invoice'),
           input.customerName?.trim(),
         ),
+        invoicePreview: {
+          number: invoice.number,
+          shortCode: publicShortCode.code,
+          total: totals.total.toString(),
+          items: lines.map((line) => ({ name: line.productName, quantity: line.quantity })),
+        },
       });
     return {
       ok: true,
@@ -328,12 +354,17 @@ export class InvoiceService {
       );
     // Older invoices were issued before the store snapshot existed — fill
     // the store contact block from settings so the customer still sees it.
-    let storeContact: { storeAddress?: string | null; storePhone?: string | null } = {};
-    if (!publicInvoice.storeAddress || !publicInvoice.storePhone) {
+    let storeContact: {
+      storeAddress?: string | null;
+      storePhone?: string | null;
+      storeLogoUrl?: string | null;
+    } = {};
+    {
       const profile = await this.storeProfile();
       storeContact = {
         storeAddress: publicInvoice.storeAddress || profile.address || null,
         storePhone: publicInvoice.storePhone || profile.phone || null,
+        storeLogoUrl: profile.logoUrl || null,
       };
     }
     return {
@@ -350,10 +381,10 @@ export class InvoiceService {
             quantity: number;
             unitPrice: bigint;
             lineTotal: bigint;
-            inventoryItem: { brand: { name: string } };
+            inventoryItem: { brand?: { name: string } | null };
           }) => ({
             productName: item.productName,
-            brand: item.inventoryItem.brand.name,
+            brand: item.inventoryItem.brand?.name ?? 'بدون برند',
             quantity: item.quantity,
             returnedQuantity: returnedPerLine.get(item.id) ?? 0,
             unitPrice: item.unitPrice,
@@ -523,35 +554,102 @@ export class InvoiceService {
       });
     if (invoice.customerAddress)
       doc.text(text(`آدرس مشتری: ${invoice.customerAddress}`), { align: 'right' });
-    doc
-      .moveDown(0.8)
-      .fontSize(11)
-      .fillColor('#0d2b4b')
-      .text(text('اقلام فاکتور'), { align: 'right' });
-    doc.moveDown(0.3).fillColor('#0b1c2f').fontSize(9);
-    for (const [index, item] of invoice.items.entries())
-      doc.text(
-        text(
-          `${formatPersianNumber(index + 1)}. ${item.productName}${item.brand ? ` | برند: ${item.brand}` : ''} | تعداد: ${formatPersianNumber(item.quantity)} | فی: ${formatGroupedPersian(item.unitPrice)} ریال | جمع: ${formatGroupedPersian(item.lineTotal)} ریال`,
-        ),
-        { align: 'right' },
-      );
+    const drawTable = (title: string, headers: string[], rows: string[][], widths: number[]) => {
+      const tableX = doc.page.margins.left;
+      const tableWidth = widths.reduce((sum, width) => sum + width, 0);
+      const headerHeight = 29;
+      const rowHeight = 34;
+      const drawHeader = () => {
+        const headerY = doc.y;
+        doc
+          .save()
+          .fillColor('#0d2b4b')
+          .rect(tableX, headerY, tableWidth, headerHeight)
+          .fill()
+          .restore();
+        let x = tableX;
+        headers.forEach((header, index) => {
+          doc
+            .fillColor('#ffffff')
+            .fontSize(8)
+            .text(text(header), x + 5, headerY + 9, {
+              width: widths[index] - 10,
+              align: 'right',
+              lineBreak: false,
+            });
+          x += widths[index];
+        });
+        doc.y = headerY + headerHeight;
+      };
+      doc.moveDown(0.7).fillColor('#0d2b4b').fontSize(11).text(text(title), { align: 'right' });
+      doc.moveDown(0.25);
+      drawHeader();
+      rows.forEach((row, rowIndex) => {
+        if (doc.y + rowHeight > doc.page.height - 80) {
+          doc.addPage();
+          drawHeader();
+        }
+        const y = doc.y;
+        doc
+          .save()
+          .fillColor(rowIndex % 2 === 0 ? '#f4f7fa' : '#ffffff')
+          .rect(tableX, y, tableWidth, rowHeight)
+          .fill()
+          .restore();
+        doc.strokeColor('#cbd5df').lineWidth(0.5).rect(tableX, y, tableWidth, rowHeight).stroke();
+        let x = tableX;
+        row.forEach((cell, index) => {
+          doc
+            .strokeColor('#d6dee7')
+            .moveTo(x, y)
+            .lineTo(x, y + rowHeight)
+            .stroke();
+          doc
+            .fillColor('#17243b')
+            .fontSize(8)
+            .text(text(cell), x + 5, y + 9, {
+              width: widths[index] - 10,
+              height: rowHeight - 10,
+              align: 'right',
+              ellipsis: true,
+              lineBreak: false,
+            });
+          x += widths[index];
+        });
+        doc
+          .moveTo(tableX + tableWidth, y)
+          .lineTo(tableX + tableWidth, y + rowHeight)
+          .stroke();
+        doc.y = y + rowHeight;
+      });
+    };
+
+    drawTable(
+      'اقلام فاکتور',
+      ['ردیف', 'شرح کالا', 'برند', 'تعداد', 'قیمت واحد (ریال)', 'مبلغ (ریال)'],
+      invoice.items.map((item, index) => [
+        formatPersianNumber(index + 1),
+        item.productName,
+        item.brand ?? '—',
+        formatPersianNumber(item.quantity),
+        formatGroupedPersian(item.unitPrice),
+        formatGroupedPersian(item.lineTotal),
+      ]),
+      [38, 180, 72, 55, 86, 80],
+    );
     if (invoice.returns?.length) {
-      doc
-        .moveDown(0.8)
-        .fontSize(11)
-        .fillColor('#0d2b4b')
-        .text(text('مرجوعی‌ها'), { align: 'right' })
-        .moveDown(0.2)
-        .fillColor('#0b1c2f')
-        .fontSize(9);
-      for (const record of invoice.returns)
-        doc.text(
-          text(
-            `${record.productName} | تعداد برگشتی: ${formatPersianNumber(record.quantity)} | مبلغ برگشتی: ${formatGroupedPersian(record.refundAmount)} ریال | ${record.restock ? 'به انبار برگشت' : 'خراب — بدون بازگشت به انبار'} | دلیل: ${record.reason}`,
-          ),
-          { align: 'right' },
-        );
+      drawTable(
+        'مرجوعی‌ها',
+        ['شرح کالا', 'تعداد', 'مبلغ برگشتی (ریال)', 'مقصد', 'دلیل'],
+        invoice.returns.map((record) => [
+          record.productName,
+          formatPersianNumber(record.quantity),
+          formatGroupedPersian(record.refundAmount),
+          record.restock ? 'بازگشت به انبار' : 'ضایعات',
+          record.reason,
+        ]),
+        [170, 55, 105, 90, 91],
+      );
     }
     const returnedTotal = BigInt(invoice.returnedTotal ?? 0);
     const netTotal = BigInt(invoice.total) - returnedTotal;
@@ -617,25 +715,42 @@ export class InvoiceService {
       id: string;
       name: string;
       mobile: string;
+      address: string | null;
       notes: string | null;
       isActive: boolean;
       createdAt: Date;
     }>(
       this.prisma as unknown as { $queryRawUnsafe: unknown },
-      'SELECT "id", "name", "mobile", "notes", "isActive", "createdAt" FROM "customers" WHERE "isActive" = true AND ("name" ILIKE $1 OR "mobile" ILIKE $1) ORDER BY "createdAt" DESC LIMIT 100',
+      'SELECT "id", "name", "mobile", "address", "notes", "isActive", "createdAt" FROM "customers" WHERE "isActive" = true AND ("name" ILIKE $1 OR "mobile" ILIKE $1) ORDER BY "createdAt" DESC LIMIT 100',
       pattern,
     );
     return { ok: true, data: rows };
   }
 
-  async createCustomer(input: { name?: string; mobile?: string; notes?: string }) {
+  async createCustomer(input: {
+    name?: string;
+    mobile?: string;
+    address?: string;
+    notes?: string;
+  }) {
     const name = input.name?.trim();
     const mobile = input.mobile?.trim();
     if (!name || !mobile) throw new BadRequestException('نام و موبایل مشتری الزامی است');
+    // Address/notes are only touched when the request carries them: the issue
+    // form prefills them from the profile, and a one-off delivery address on
+    // one invoice must never silently rewrite the saved customer profile.
+    const update: { name: string; address?: string | null; notes?: string | null } = { name };
+    if (input.address !== undefined) update.address = input.address.trim() || null;
+    if (input.notes !== undefined) update.notes = input.notes.trim() || null;
     const customer = await this.prisma.customer.upsert({
       where: { mobile },
-      create: { name, mobile, notes: input.notes?.trim() || undefined },
-      update: { name, notes: input.notes?.trim() || undefined },
+      create: {
+        name,
+        mobile,
+        address: input.address?.trim() || undefined,
+        notes: input.notes?.trim() || undefined,
+      },
+      update,
     });
     return { ok: true, data: customer };
   }
@@ -663,7 +778,44 @@ export class InvoiceService {
       data: items,
       storeAddress: profile.address,
       storePhone: profile.phone,
+      storeLogoUrl: profile.logoUrl,
     };
+  }
+
+  async updateCheckStatus(
+    checkId: string,
+    status: 'pending' | 'cleared' | 'bounced' | 'cancelled',
+    notes?: string,
+    actorId?: string,
+  ) {
+    if (!['pending', 'cleared', 'bounced', 'cancelled'].includes(status))
+      throw new BadRequestException('وضعیت چک معتبر نیست');
+    const check = await this.prisma.paymentCheck.findUnique({ where: { id: checkId } });
+    if (!check) throw new NotFoundException('چک پیدا نشد');
+    const now = new Date();
+    const updated = await this.prisma.paymentCheck.update({
+      where: { id: checkId },
+      data: {
+        status,
+        notes: notes?.trim() || undefined,
+        clearedAt: status === 'cleared' ? now : null,
+        bouncedAt: status === 'bounced' ? now : null,
+      },
+    });
+    if (actorId)
+      await writeAudit(this.prisma, {
+        userId: actorId,
+        action: 'update',
+        entityType: 'payment_check',
+        entityId: checkId,
+        before: { status: check.status },
+        after: {
+          status: updated.status,
+          clearedAt: updated.clearedAt,
+          bouncedAt: updated.bouncedAt,
+        },
+      });
+    return { ok: true, data: updated };
   }
 
   async pay(
@@ -671,6 +823,14 @@ export class InvoiceService {
     amount: string | number,
     method: 'cash' | 'card' | 'transfer' | 'credit',
     userId: string,
+    checks?: Array<{
+      checkNumber?: string;
+      bank?: string;
+      branch?: string;
+      amount: string;
+      dueDate: string;
+    }>,
+    operationId?: string,
   ) {
     if (!userId || !['cash', 'card', 'transfer', 'credit'].includes(method))
       throw new BadRequestException('کاربر و روش پرداخت معتبر الزامی است');
@@ -681,7 +841,31 @@ export class InvoiceService {
       throw new BadRequestException('مبلغ پرداخت معتبر نیست');
     }
     if (paidAmount <= 0n) throw new BadRequestException('مبلغ پرداخت باید مثبت باشد');
+    if (method === 'credit') {
+      if (!checks?.length) throw new BadRequestException('حداقل یک چک برای پرداخت چکی وارد کنید');
+      const todayTehran = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Tehran',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(new Date());
+      for (const check of checks) {
+        if (
+          !/^\d{4}-\d{2}-\d{2}$/.test(check.dueDate) ||
+          Number.isNaN(new Date(`${check.dueDate}T00:00:00Z`).getTime()) ||
+          check.dueDate < todayTehran
+        )
+          throw new BadRequestException({
+            code: 'INVALID_CHECK_DUE_DATE',
+            message: 'تاریخ سررسید چک نمی‌تواند گذشته باشد',
+          });
+      }
+    }
     const result = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      if (operationId) {
+        const previous = await tx.payment.findUnique({ where: { operationId } });
+        if (previous) return { ok: true, data: { payment: previous, duplicate: true } };
+      }
       const invoice = await tx.invoice.findUnique({ where: { id } });
       if (!invoice || invoice.status === 'voided') throw new NotFoundException('فاکتور پیدا نشد');
       // Returns shrink what the customer can still owe: cap new payments at
@@ -707,14 +891,37 @@ export class InvoiceService {
       });
       // Prisma supplies the uuid client-side: no raw SQL, no dependency on
       // gen_random_uuid()/pgcrypto being available on the server database.
-      await tx.payment.create({
+      const payment = await tx.payment.create({
         data: {
           invoiceId: id,
           amount: paidAmount,
           method,
           receivedById: userId,
+          operationId,
         },
       });
+      if (method === 'credit') {
+        if (!checks?.length) throw new BadRequestException('حداقل یک چک برای پرداخت چکی وارد کنید');
+        const checkRows = checks.map((check) => ({
+          ...check,
+          amount: BigInt(check.amount || '0'),
+        }));
+        if (checkRows.some((check) => !check.dueDate || check.amount <= 0n))
+          throw new BadRequestException('تاریخ و مبلغ همهٔ چک‌ها الزامی است');
+        const checksTotal = checkRows.reduce((sum, check) => sum + check.amount, 0n);
+        if (checksTotal !== paidAmount)
+          throw new BadRequestException('جمع مبالغ چک‌ها باید با مبلغ پرداختی برابر باشد');
+        await tx.paymentCheck.createMany({
+          data: checkRows.map((check) => ({
+            paymentId: payment.id,
+            amount: check.amount,
+            dueDate: new Date(check.dueDate),
+            checkNumber: check.checkNumber,
+            bank: check.bank,
+            branch: check.branch,
+          })),
+        });
+      }
       await writeAudit(tx, {
         userId,
         action: 'pay',
@@ -722,6 +929,7 @@ export class InvoiceService {
         entityId: id,
         before: { paidAmount: invoice.paidAmount.toString(), paymentStatus: invoice.paymentStatus },
         after: { paidAmount: nextPaid.toString(), paymentStatus: status, method },
+        syncPayload: buildInvoiceSyncPayload(updated, updated.items),
       });
       return { ok: true, data: updated };
     });
@@ -740,6 +948,12 @@ export class InvoiceService {
     if (!userId || !input.invoiceItemId || !Number.isInteger(quantity) || quantity <= 0 || !reason)
       throw new BadRequestException('قلم، تعداد صحیح مثبت و دلیل مرجوعی الزامی است');
     return this.prisma.$transaction(async (tx) => {
+      // Concurrent returns of the same invoice must serialize: the row lock
+      // holds the second transaction until the first one commits, so the
+      // aggregate below sees the committed return and the over-return guard
+      // cannot be raced past (two "return the last item" requests can never
+      // both apply). Different invoices never block each other.
+      await tx.$queryRaw`SELECT id FROM "invoices" WHERE id = ${id} FOR UPDATE`;
       const invoice = await tx.invoice.findUnique({ where: { id }, include: { items: true } });
       if (!invoice || invoice.status === 'voided')
         throw new NotFoundException('فاکتور فعال پیدا نشد');
@@ -803,6 +1017,21 @@ export class InvoiceService {
             paidAt: nextStatus === 'paid' ? (invoice.paidAt ?? new Date()) : invoice.paidAt,
           },
         });
+      const returnedInvoice = await tx.invoice.findUnique({
+        where: { id },
+        include: {
+          items: {
+            select: {
+              id: true,
+              inventoryItemId: true,
+              productName: true,
+              quantity: true,
+              unitPrice: true,
+              lineTotal: true,
+            },
+          },
+        },
+      });
       await writeAudit(tx, {
         userId,
         action: 'return',
@@ -815,9 +1044,89 @@ export class InvoiceService {
           restock: input.restock !== false,
           ...(nextStatus !== invoice.paymentStatus ? { paymentStatus: nextStatus } : {}),
         },
+        syncPayload: returnedInvoice
+          ? buildInvoiceSyncPayload(returnedInvoice, returnedInvoice.items)
+          : undefined,
       });
       return { ok: true, data: { ...record, quantityAfter } };
     });
+  }
+
+  /** Everything the (mobile) return sheet needs for one invoice —
+   * deliberately narrower than get(): no customer PII (mobile, address,
+   * payments) so the warehouse role can pick a line, quantity, reason and
+   * restock mode without gaining access to sensitive invoice data. */
+  async returnContext(id: string) {
+    const [invoice, returnedAggregate, perLine] = await Promise.all([
+      this.prisma.invoice.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          number: true,
+          status: true,
+          paymentStatus: true,
+          total: true,
+          paidAmount: true,
+          items: { select: { id: true, productName: true, quantity: true, unitPrice: true } },
+          returns: {
+            select: {
+              id: true,
+              invoiceItemId: true,
+              quantity: true,
+              refundAmount: true,
+              reason: true,
+              restock: true,
+              createdAt: true,
+            },
+            orderBy: { createdAt: 'desc' },
+          },
+        },
+      }),
+      this.prisma.returnRecord.aggregate({
+        where: { invoiceId: id },
+        _sum: { refundAmount: true },
+      }),
+      this.prisma.returnRecord.groupBy({
+        by: ['invoiceItemId'],
+        where: { invoiceId: id },
+        _sum: { quantity: true },
+      }),
+    ]);
+    if (!invoice) throw new NotFoundException('فاکتور پیدا نشد');
+    const returnedTotal = returnedAggregate._sum.refundAmount ?? 0n;
+    const returnedByLine = new Map(
+      perLine.map((row) => [row.invoiceItemId, row._sum.quantity ?? 0]),
+    );
+    return {
+      ok: true,
+      data: {
+        id: invoice.id,
+        number: invoice.number,
+        status: invoice.status,
+        paymentStatus: invoice.paymentStatus,
+        // Money stays string-exact in rials — same contract as the sync payloads.
+        total: invoice.total.toString(),
+        paidAmount: invoice.paidAmount.toString(),
+        returnedTotal: returnedTotal.toString(),
+        netTotal: (invoice.total - returnedTotal).toString(),
+        items: invoice.items.map((item) => ({
+          id: item.id,
+          productName: item.productName,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice.toString(),
+          returnedQuantity: returnedByLine.get(item.id) ?? 0,
+        })),
+        returns: invoice.returns.map((row) => ({
+          id: row.id,
+          invoiceItemId: row.invoiceItemId,
+          quantity: row.quantity,
+          refundAmount: row.refundAmount.toString(),
+          reason: row.reason,
+          restock: row.restock,
+          createdAt: row.createdAt.toISOString(),
+        })),
+      },
+    };
   }
 
   /** Editable store/customer contact block on an issued invoice. Empty store
@@ -875,6 +1184,7 @@ export class InvoiceService {
         storePhone: nextStorePhone,
         customerAddress: customerAddress ?? invoice.customerAddress,
       },
+      syncPayload: buildInvoiceSyncPayload(updated),
     });
     return { ok: true, data: updated };
   }
@@ -917,6 +1227,7 @@ export class InvoiceService {
         entityId: id,
         before: { status: invoice.status, number: invoice.number },
         after: { status: updated.status },
+        syncPayload: buildInvoiceSyncPayload(updated, updated.items),
       });
       return { ok: true, data: updated };
     });
@@ -936,6 +1247,7 @@ export class InvoiceService {
         total: true,
         customerMobile: true,
         customerName: true,
+        items: { select: { productName: true, quantity: true } },
       },
     });
     if (!invoice) throw new NotFoundException('فاکتور پیدا نشد');
@@ -958,6 +1270,26 @@ export class InvoiceService {
           ...(mobile === invoice.customerMobile ? {} : { customerMobile: mobile }),
         },
       });
+      const rotated = await tx.invoice.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          number: true,
+          status: true,
+          customerId: true,
+          customerName: true,
+          customerMobile: true,
+          subtotal: true,
+          discount: true,
+          total: true,
+          paymentStatus: true,
+          paymentMethod: true,
+          paidAmount: true,
+          issuedAt: true,
+          paidAt: true,
+          voidedAt: true,
+        },
+      });
       await writeAudit(tx, {
         userId,
         ip,
@@ -966,6 +1298,9 @@ export class InvoiceService {
         entityId: id,
         before: { publicLink: 'rotated' },
         after: { publicShortCode: shortCode.code, linkExpiresAt: linkExpiresAt.toISOString() },
+        // The public link never travels inside a pull payload; the snapshot is
+        // only there so offline caches can refresh the invoice row itself.
+        syncPayload: rotated ? buildInvoiceSyncPayload(rotated) : undefined,
       });
     });
     await this.notifications.enqueue({
@@ -980,6 +1315,17 @@ export class InvoiceService {
         await this.smsTemplate('invoice'),
         invoice.customerName,
       ),
+      invoicePreview: {
+        number: invoice.number,
+        shortCode: shortCode.code,
+        total: invoice.total.toString(),
+        items: ((invoice.items ?? []) as Array<{ productName: string; quantity: number }>).map(
+          (item) => ({
+            name: item.productName,
+            quantity: item.quantity,
+          }),
+        ),
+      },
     });
     return {
       ok: true,
@@ -1028,9 +1374,40 @@ export class InvoiceService {
     return execute(query, ...values);
   }
 
-  async list() {
+  /** Cursor for the paginated invoice archive: `<issuedAtISO>|<id>`. The id
+   * tie-breaker keeps the keyset stable when two invoices share a millisecond
+   * (offline batch replays do that). */
+  private parseListCursor(cursor?: string): { issuedAt: Date; id: string } | null {
+    if (!cursor) return null;
+    const separator = cursor.indexOf('|');
+    if (separator <= 0) throw new BadRequestException('کرسر فهرست فاکتورها نامعتبر است');
+    const issuedAt = new Date(cursor.slice(0, separator));
+    const id = cursor.slice(separator + 1);
+    if (!id || Number.isNaN(issuedAt.getTime()))
+      throw new BadRequestException('کرسر فهرست فاکتورها نامعتبر است');
+    return { issuedAt, id };
+  }
+
+  /** Paginated archive for the panel. Rows are summaries — items and returns
+   * do not travel with the list (thousands of invoices made this response
+   * megabytes); the detail endpoint serves them one invoice at a time. */
+  async list(cursor?: string, limitValue?: string) {
+    const limit = Math.min(500, Math.max(1, Number(limitValue ?? 100) || 100));
+    const keyset = this.parseListCursor(cursor);
     const rows = await this.prisma.invoice.findMany({
-      orderBy: { issuedAt: 'desc' },
+      ...(keyset
+        ? {
+            where: {
+              OR: [
+                { issuedAt: { lt: keyset.issuedAt } },
+                { issuedAt: keyset.issuedAt, id: { lt: keyset.id } },
+              ],
+            },
+          }
+        : {}),
+      orderBy: [{ issuedAt: 'desc' }, { id: 'desc' }],
+      // One extra row only tells us whether another page exists.
+      take: limit + 1,
       select: {
         id: true,
         number: true,
@@ -1048,57 +1425,72 @@ export class InvoiceService {
         paidAt: true,
         issuedAt: true,
         voidedAt: true,
+        // Who issued the invoice — the panel shows an issuer column and lets
+        // staff filter the archive by issuer.
+        issuedBy: { select: { name: true } },
         publicTokenExpiresAt: true,
-        items: {
-          select: {
-            id: true,
-            productName: true,
-            quantity: true,
-            unitPrice: true,
-            lineTotal: true,
-            inventoryItem: { select: { brand: { select: { name: true } } } },
-          },
-        },
-        returns: {
-          orderBy: { createdAt: 'desc' },
-          select: {
-            id: true,
-            invoiceItemId: true,
-            quantity: true,
-            refundAmount: true,
-            reason: true,
-            restock: true,
-            createdAt: true,
-          },
-        },
       },
     });
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    const ids = page.map((row) => row.id);
+    // Two grouped queries instead of per-invoice item/return joins.
+    const [itemCounts, returnTotals] = ids.length
+      ? await Promise.all([
+          this.prisma.invoiceItem.groupBy({
+            by: ['invoiceId'],
+            where: { invoiceId: { in: ids } },
+            _count: { _all: true },
+          }),
+          this.prisma.returnRecord.groupBy({
+            by: ['invoiceId'],
+            where: { invoiceId: { in: ids } },
+            _sum: { refundAmount: true },
+          }),
+        ])
+      : [[], []];
+    const itemCountById = new Map(itemCounts.map((row) => [row.invoiceId, row._count._all]));
+    const returnedById = new Map(returnTotals.map((row) => [row.invoiceId, row._sum.refundAmount]));
     // Never surface the token hashes — the raw public link is only ever handed
     // out once at issue time or through the audited rotate endpoint. Net
     // amounts after partial returns are computed here so the panel and the
     // debt views always show what the customer effectively owes.
+    const data = page.map((row) => {
+      const returnedTotal = returnedById.get(row.id) ?? 0n;
+      return {
+        ...row,
+        itemCount: itemCountById.get(row.id) ?? 0,
+        returnedTotal,
+        netTotal: row.total - returnedTotal,
+      };
+    });
+    const last = page[page.length - 1];
     return {
       ok: true,
-      data: rows.map((row) => {
-        const rowReturns = row.returns ?? [];
-        const { returnedTotal, netTotal } = netInvoiceTotals(row.total, rowReturns);
-        const returnedPerLine = new Map<string, number>();
-        for (const record of rowReturns)
-          returnedPerLine.set(
-            record.invoiceItemId,
-            (returnedPerLine.get(record.invoiceItemId) ?? 0) + record.quantity,
-          );
-        return {
-          ...row,
-          returnedTotal,
-          netTotal,
-          items: row.items.map((item) => ({
-            ...item,
-            returnedQuantity: returnedPerLine.get(item.id) ?? 0,
-          })),
-        };
-      }),
+      data,
+      hasMore,
+      nextCursor: hasMore && last ? `${last.issuedAt.toISOString()}|${last.id}` : null,
     };
+  }
+
+  async get(id: string) {
+    const invoice = await this.prisma.invoice.findUnique({
+      where: { id },
+      include: {
+        customer: true,
+        items: {
+          include: {
+            inventoryItem: {
+              include: { product: true, brand: true, location: { include: { parent: true } } },
+            },
+          },
+        },
+        payments: { include: { checks: true }, orderBy: { receivedAt: 'desc' } },
+        returns: { orderBy: { createdAt: 'desc' } },
+      },
+    });
+    if (!invoice) throw new NotFoundException('فاکتور پیدا نشد');
+    return { ok: true, data: invoice };
   }
 
   /** Issues a fresh public link for an invoice (the old link stops working). */
@@ -1202,7 +1594,7 @@ export class InvoiceService {
       issuedAt: invoice.issuedAt,
       items: invoice.items.map((item) => ({
         productName: item.productName,
-        brand: item.inventoryItem.brand.name,
+        brand: item.inventoryItem.brand?.name ?? 'بدون برند',
         quantity: item.quantity,
         unitPrice: item.unitPrice,
         lineTotal: item.lineTotal,

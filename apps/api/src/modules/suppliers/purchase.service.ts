@@ -40,10 +40,16 @@ export class PurchaseService {
     notes: string | undefined,
     actorId: string,
     ip?: string,
+    check?: { checkNumber?: string; bank?: string; branch?: string; amount: string; dueDate: string },
+    operationId?: string,
   ) {
     const paymentAmount = parseMoney(amount, 'مبلغ پرداخت');
     if (paymentAmount <= 0n) throw new BadRequestException('مبلغ پرداخت باید مثبت باشد');
     return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      if (operationId) {
+        const previous = await tx.supplierPayment.findUnique({ where: { operationId } });
+        if (previous) return { ok: true, data: { payment: previous, duplicate: true } };
+      }
       const invoice = await tx.purchaseInvoice.findUnique({ where: { id: invoiceId } });
       if (!invoice || invoice.status !== 'issued')
         throw new NotFoundException('فاکتور خرید پیدا نشد');
@@ -69,8 +75,15 @@ export class PurchaseService {
           method,
           notes: notes?.trim() || null,
           receivedById: actorId,
+          operationId,
         },
       });
+      if (method === 'credit') {
+        if (!check?.dueDate) throw new BadRequestException('تاریخ سررسید چک تأمین‌کننده الزامی است');
+        const checkAmount = BigInt(check.amount || String(paymentAmount));
+        if (checkAmount !== paymentAmount) throw new BadRequestException('مبلغ چک باید با مبلغ پرداختی برابر باشد');
+        await tx.supplierCheck.create({ data: { paymentId: payment.id, amount: checkAmount, dueDate: new Date(check.dueDate), checkNumber: check.checkNumber, bank: check.bank, branch: check.branch } });
+      }
       await writeAudit(tx, {
         userId: actorId,
         ip,
@@ -84,10 +97,20 @@ export class PurchaseService {
     });
   }
 
+  async updateCheckStatus(checkId: string, status: 'pending' | 'cleared' | 'bounced' | 'cancelled', actorId?: string, ip?: string) {
+    if (!['pending', 'cleared', 'bounced', 'cancelled'].includes(status)) throw new BadRequestException('وضعیت چک معتبر نیست');
+    const check = await this.prisma.supplierCheck.findUnique({ where: { id: checkId } });
+    if (!check) throw new NotFoundException('چک تأمین‌کننده پیدا نشد');
+    const now = new Date();
+    const updated = await this.prisma.supplierCheck.update({ where: { id: checkId }, data: { status, clearedAt: status === 'cleared' ? now : null, bouncedAt: status === 'bounced' ? now : null } });
+    if (actorId) await writeAudit(this.prisma, { userId: actorId, ip, action: 'update', entityType: 'supplier_check', entityId: checkId, before: { status: check.status }, after: { status: updated.status, clearedAt: updated.clearedAt, bouncedAt: updated.bouncedAt } });
+    return { ok: true, data: updated };
+  }
+
   async get(id: string) {
     const invoice = await this.prisma.purchaseInvoice.findUnique({
       where: { id },
-      include: { supplier: true, items: true, payments: { orderBy: { paidAt: 'desc' } } },
+      include: { supplier: true, items: true, payments: { orderBy: { paidAt: 'desc' }, include: { check: true } } },
     });
     if (!invoice) throw new NotFoundException('فاکتور خرید پیدا نشد');
     return {
@@ -102,6 +125,7 @@ export class PurchaseService {
     paidAmount: number | string | undefined,
     actorId: string,
     ip?: string,
+    operationId?: string,
   ) {
     if (!supplierId || !Array.isArray(lines) || !lines.length)
       throw new BadRequestException('تأمین‌کننده و حداقل یک قلم خرید الزامی است');
@@ -130,6 +154,10 @@ export class PurchaseService {
     const paid = parseMoney(paidAmount, 'مبلغ پرداخت');
     if (paid < 0n) throw new BadRequestException('مبلغ پرداخت معتبر نیست');
     return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      if (operationId) {
+        const previous = await tx.purchaseInvoice.findUnique({ where: { operationId }, include: { items: true } });
+        if (previous) return { ok: true, data: previous, duplicate: true };
+      }
       const supplier = await tx.supplier.findFirst({
         where: { id: supplierId, isActive: true, deletedAt: null },
       });
@@ -153,6 +181,7 @@ export class PurchaseService {
           subtotal: total,
           total,
           paidAmount: paid,
+          operationId,
           issuedById: actorId,
           items: {
             create: normalized.map((line, index) => ({

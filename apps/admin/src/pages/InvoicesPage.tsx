@@ -12,11 +12,12 @@ import {
   remainingDebt as debtLeft,
   type PaymentRow,
 } from '../lib/invoice-math';
-import { api, downloadFile } from '../lib/api';
+import { api, downloadFile, fetchAllPages } from '../lib/api';
 import { publicSiteUrl } from '../lib/public-site';
 import { paramsFromHash } from '../lib/admin-route';
 import { formatPersianNumber } from '@salimvand/shared';
 import { FaNumberInput } from '../components/FaNumberInput';
+import { JalaliDateInput } from '../components/JalaliDateInput';
 
 type Invoice = {
   id: string;
@@ -37,7 +38,13 @@ type Invoice = {
   paymentStatus: string;
   status: string;
   issuedAt: string;
-  items: InvoiceItemRow[];
+  /** Staff member who issued the invoice (summary rows carry their name). */
+  issuedBy?: { name: string } | null;
+  /** Archive rows are paginated summaries — line data only arrives with the
+   * detail view (fetchInvoiceDetail). */
+  items?: InvoiceItemRow[];
+  /** Line count on summary rows; avoids loading every line of every invoice. */
+  itemCount?: number;
   returns?: ReturnRow[];
 };
 type StockOption = {
@@ -47,7 +54,8 @@ type StockOption = {
   salePrice: string;
   location?: { code: string; name: string } | null;
   product: { name: string; code: string };
-  brand: { name: string };
+  /** brandId is nullable in the DB — legacy items can exist without a brand. */
+  brand: { name: string } | null;
 };
 type CustomerOption = {
   id: string;
@@ -64,7 +72,7 @@ type InvoiceItemRow = {
   returnedQuantity?: number;
   unitPrice: string;
   lineTotal: string;
-  inventoryItem?: { brand: { name: string } } | null;
+  inventoryItem?: { brand: { name: string } | null } | null;
 };
 type ReturnRow = {
   id: string;
@@ -127,6 +135,9 @@ export function InvoicesPage({
   /** The customer picked from the lookup — drives the customer bar chip. */
   const [pickedCustomer, setPickedCustomer] = useState<CustomerOption | null>(null);
   const [customerQuery, setCustomerQuery] = useState('');
+  // Inline customer registration (issue tab): the operator should never have
+  // to leave the invoice draft to file a new customer.
+  const [customerBusy, setCustomerBusy] = useState(false);
   /** True once the debounced lookup finished with zero matches — drives the
    * "will be issued as a walk-in" hint under the name/mobile inputs. */
   const [noCustomerMatch, setNoCustomerMatch] = useState(false);
@@ -134,6 +145,9 @@ export function InvoicesPage({
   const [mobile, setMobile] = useState('');
   const [discount, setDiscount] = useState('');
   const [payments, setPayments] = useState<PaymentRow[]>([{ method: 'cash', amount: '' }]);
+  const [checksDraft, setChecksDraft] = useState([
+    { checkNumber: '', bank: '', branch: '', dueDate: '', amount: '' },
+  ]);
   const [paying, setPaying] = useState<Invoice | null>(null);
   const [viewing, setViewing] = useState<Invoice | null>(null);
   // Public-link dialog: shows the short tokenized link for one invoice.
@@ -146,6 +160,11 @@ export function InvoicesPage({
   } | null>(null);
   const [linkBusy, setLinkBusy] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'all' | 'paid' | 'partial' | 'unpaid'>('all');
+  // Jalali date-range filter — JalaliDateInput hands back Gregorian yyyy-mm-dd.
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  // Issuer filter: names come from the loaded archive rows, no extra endpoint.
+  const [issuerFilter, setIssuerFilter] = useState('');
   const [invoiceQuery, setInvoiceQuery] = useState('');
   const [created, setCreated] = useState<CreatedInvoice | null>(null);
   // Two tabs: issuing lives apart from the issued-invoices register so sellers
@@ -155,6 +174,7 @@ export function InvoicesPage({
   // Read-only store contact block from settings (issue-form hint).
   const [storeAddress, setStoreAddress] = useState('');
   const [storePhone, setStorePhone] = useState('');
+  const [storeLogoUrl, setStoreLogoUrl] = useState('');
   const [customerAddress, setCustomerAddress] = useState('');
   const [addressDraft, setAddressDraft] = useState({ store: '', phone: '', customer: '' });
   const [addressBusy, setAddressBusy] = useState(false);
@@ -172,10 +192,12 @@ export function InvoicesPage({
   const searchRef = useRef<HTMLInputElement | null>(null);
 
   const load = () =>
-    api<{ data: Invoice[] }>('/invoices')
-      .then((result) => {
-        setRows(result.data);
-        return result.data;
+    // The archive endpoint is cursor-paginated (summaries only); drain the
+    // pages so client-side search across the whole history keeps working.
+    fetchAllPages<Invoice>('/invoices', { limit: 200 })
+      .then((data) => {
+        setRows(data);
+        return data;
       })
       .catch((error: Error) => {
         setMessage(error.message);
@@ -232,10 +254,10 @@ export function InvoicesPage({
       const match = rows.find((row) => row.id === invoiceId);
       if (match) openViewing(match);
       else
-        void api<{ data: Invoice[] }>('/invoices')
-          .then((result) => {
-            setRows(result.data);
-            const found = result.data.find((row) => row.id === invoiceId);
+        void fetchAllPages<Invoice>('/invoices', { limit: 200 })
+          .then((data) => {
+            setRows(data);
+            const found = data.find((row) => row.id === invoiceId);
             if (found) openViewing(found);
           })
           .catch(() => undefined);
@@ -249,15 +271,19 @@ export function InvoicesPage({
   useEffect(() => {
     void load();
     if (canCreate)
-      void api<{ data: StockOption[]; storeAddress?: string; storePhone?: string }>(
-        '/invoices/options',
-      )
+      void api<{
+        data: StockOption[];
+        storeAddress?: string;
+        storePhone?: string;
+        storeLogoUrl?: string;
+      }>('/invoices/options')
         .then((result) => {
           setOptions(result.data);
           // Store contact block from settings — shown read-only in the issue
           // form; the server snapshots it onto the invoice automatically.
           if (result.storeAddress) setStoreAddress(result.storeAddress);
           if (result.storePhone) setStorePhone(result.storePhone);
+          if (result.storeLogoUrl) setStoreLogoUrl(result.storeLogoUrl);
         })
         .catch((error: Error) => setMessage(error.message));
   }, [canCreate]);
@@ -286,6 +312,65 @@ export function InvoicesPage({
     return () => window.clearTimeout(handle);
   }, [canCreate, customerQuery]);
 
+  /** Files the typed-in customer right here in the issue tab. If the mobile
+   *  already belongs to a saved customer, that profile is picked instead of
+   *  creating a duplicate — and is never overwritten from the invoice draft. */
+  const registerCustomer = async () => {
+    const name = customerName.trim();
+    if (!name) return setMessage('نام مشتری را وارد کنید.');
+    if (!isValidIranMobile(mobile))
+      return setMessage('شماره موبایل باید با ۰۹ شروع شود و ۱۱ رقم باشد.');
+    setCustomerBusy(true);
+    try {
+      const found = await api<{ data: CustomerOption[] }>(
+        `/customers?search=${encodeURIComponent(mobile)}`,
+      );
+      const exact = found.data.find((entry) => entry.mobile === mobile);
+      if (exact) {
+        pickCustomer(exact);
+        setMessage('این شماره قبلاً ثبت شده بود؛ همان پروندهٔ مشتری انتخاب شد.');
+        return;
+      }
+      const created = await api<{
+        data: { id: string; name: string; mobile: string; address?: string | null };
+      }>('/customers', {
+        method: 'POST',
+        body: JSON.stringify({ name, mobile, address: customerAddress.trim() || undefined }),
+      });
+      pickCustomer({ ...created.data, debt: '0', invoiceCount: 0 });
+      setMessage(`مشتری «${name}» ثبت شد و به فاکتور متصل گردید.`);
+    } catch (error) {
+      // A duplicate race (someone else saved this mobile a moment ago): pick
+      // the existing profile instead of failing the draft.
+      try {
+        const again = await api<{ data: CustomerOption[] }>(
+          `/customers?search=${encodeURIComponent(mobile)}`,
+        );
+        const exact = again.data.find((entry) => entry.mobile === mobile);
+        if (exact) {
+          pickCustomer(exact);
+          setMessage('این شماره هم‌اکنون ثبت شد؛ پروندهٔ مشتری انتخاب گردید.');
+          return;
+        }
+      } catch {
+        /* fall through to the original error */
+      }
+      setMessage((error as Error).message);
+    } finally {
+      setCustomerBusy(false);
+    }
+  };
+
+  const pickCustomer = (customer: CustomerOption) => {
+    setPickedCustomer(customer);
+    setCustomerName(customer.name);
+    setMobile(customer.mobile);
+    if (customer.address) setCustomerAddress(customer.address);
+    setCustomerQuery('');
+    setCustomers([]);
+    setNoCustomerMatch(false);
+  };
+
   const candidates = useMemo(() => {
     const query = search.trim().toLocaleLowerCase();
     return options
@@ -294,7 +379,7 @@ export function InvoicesPage({
           item.quantity > 0 &&
           !lines.some((line) => line.item.id === item.id) &&
           (!query ||
-            `${item.product.name} ${item.product.code} ${item.barcode} ${item.brand.name}`
+            `${item.product.name} ${item.product.code} ${item.barcode} ${item.brand?.name ?? ''}`
               .toLocaleLowerCase()
               .includes(query)),
       )
@@ -320,22 +405,20 @@ export function InvoicesPage({
   }, [candidates]);
 
   const lineTotal = (line: DraftLine) =>
-    invoiceTotals(
-      [{ salePrice: line.price, quantity: line.quantity, lineDiscount: line.lineDiscount }],
-      0,
-    ).total;
-  const lineDiscountSum = lines.reduce((sum, line) => sum + Math.max(0, line.lineDiscount || 0), 0);
+    invoiceTotals([{ salePrice: line.price, quantity: line.quantity, lineDiscount: 0 }], 0).total;
+  const discountPercent = Math.min(100, Math.max(0, Number(discount) || 0));
+  const grossSubtotal = lines.reduce(
+    (sum, line) => sum + Math.max(0, line.price) * Math.max(1, line.quantity),
+    0,
+  );
+  const discountAmount = Math.round((grossSubtotal * discountPercent) / 100);
   const {
     subtotal,
     discount: discountValue,
     total,
   } = invoiceTotals(
-    lines.map((line) => ({
-      salePrice: line.price,
-      quantity: line.quantity,
-      lineDiscount: line.lineDiscount,
-    })),
-    Number(discount) || 0,
+    lines.map((line) => ({ salePrice: line.price, quantity: line.quantity, lineDiscount: 0 })),
+    discountAmount,
   );
   const paymentTotal = sumPayments(payments);
   const remainingDebt = debtLeft(total, payments);
@@ -400,6 +483,8 @@ export function InvoicesPage({
 
   const create = async () => {
     if (!lines.length) return setMessage('حداقل یک قلم برای فاکتور انتخاب کنید');
+    if (lines.some((line) => !Number.isFinite(line.price) || line.price <= 0))
+      return setMessage('قیمت واحد همهٔ اقلام باید بیشتر از صفر باشد');
     if (discountValue > subtotal) return setMessage('تخفیف نمی‌تواند از جمع اقلام بیشتر باشد');
     if (paymentTotal > total) return setMessage('مجموع دریافتی از مبلغ فاکتور بیشتر است');
     if (mobile && !isValidIranMobile(mobile))
@@ -430,7 +515,18 @@ export function InvoicesPage({
         if (amount <= 0) continue;
         await api(`/invoices/${response.data.id}/pay`, {
           method: 'POST',
-          body: JSON.stringify({ amount: String(amount), method: row.method }),
+          body: JSON.stringify({
+            amount: String(amount),
+            method: row.method,
+            ...(row.method === 'credit'
+              ? {
+                  checks: checksDraft.map((check) => ({
+                    ...check,
+                    amount: check.amount || String(amount),
+                  })),
+                }
+              : {}),
+          }),
         });
       }
       const qr = await api<{ data: { dataUrl: string } }>(
@@ -469,7 +565,18 @@ export function InvoicesPage({
         if (amount <= 0) continue;
         await api(`/invoices/${paying.id}/pay`, {
           method: 'POST',
-          body: JSON.stringify({ amount: String(amount), method: row.method }),
+          body: JSON.stringify({
+            amount: String(amount),
+            method: row.method,
+            ...(row.method === 'credit'
+              ? {
+                  checks: checksDraft.map((check) => ({
+                    ...check,
+                    amount: check.amount || String(amount),
+                  })),
+                }
+              : {}),
+          }),
         });
       }
       setMessage('پرداخت ثبت و در Audit Log نوشته شد.');
@@ -483,12 +590,44 @@ export function InvoicesPage({
   const payAmountValid = () => payments.some((row) => Number(row.amount) > 0);
 
   /** Opens the invoice detail modal with a fresh address draft. */
+  /** Archive rows are summaries; the detail view (lines + returns + per-line
+   * returnedQuantity) is fetched on demand and cached onto the row. */
+  const fetchInvoiceDetail = (invoice: Invoice): Promise<Invoice | null> =>
+    api<{ data: Invoice }>(`/invoices/${invoice.id}`)
+      .then((result) => {
+        const detail = result.data;
+        const returnedPerLine = new Map<string, number>();
+        let returnedTotal = 0;
+        for (const record of detail.returns ?? []) {
+          returnedPerLine.set(
+            record.invoiceItemId,
+            (returnedPerLine.get(record.invoiceItemId) ?? 0) + record.quantity,
+          );
+          returnedTotal += Number(record.refundAmount);
+        }
+        return {
+          ...detail,
+          itemCount: detail.items?.length ?? 0,
+          returnedTotal: String(returnedTotal),
+          netTotal: String(Number(detail.total) - returnedTotal),
+          items: (detail.items ?? []).map((item) => ({
+            ...item,
+            returnedQuantity: returnedPerLine.get(item.id) ?? 0,
+          })),
+        };
+      })
+      .catch(() => null);
+
   const openViewing = (invoice: Invoice) => {
     setViewing(invoice);
     setAddressDraft({
       store: invoice.storeAddress ?? '',
       phone: invoice.storePhone ?? '',
       customer: invoice.customerAddress ?? '',
+    });
+    void fetchInvoiceDetail(invoice).then((detail) => {
+      // Only upgrade the modal if the user is still on this invoice.
+      setViewing((current) => (current && current.id === invoice.id && detail ? detail : current));
     });
   };
 
@@ -506,8 +645,10 @@ export function InvoicesPage({
         }),
       });
       setMessage(`آدرس‌های فاکتور ${formatPersianNumber(viewing.number)} ذخیره شد.`);
-      const updated = await load();
-      setViewing(updated.find((row) => row.id === viewing.id) ?? null);
+      await load();
+      // The archive row is a summary — refresh the open modal from the detail.
+      const detail = await fetchInvoiceDetail(viewing);
+      if (detail) setViewing(detail);
     } catch (error) {
       setMessage((error as Error).message);
     } finally {
@@ -524,6 +665,24 @@ export function InvoicesPage({
     setReturnQty('1');
     setReturnReason('');
     setReturnRestock(true);
+  };
+
+  const printReturnReceipt = (
+    invoice: Invoice,
+    item: InvoiceItemRow,
+    quantity: number,
+    reason: string,
+    restock: boolean,
+  ) => {
+    const win = window.open('', '_blank', 'width=800,height=700');
+    if (!win) return;
+    const date = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'full', timeStyle: 'short' }).format(
+      new Date(),
+    );
+    win.document.write(
+      `<!doctype html><html dir="rtl"><head><meta charset="utf-8"><title>رسید مرجوعی ${invoice.number}</title><style>body{font-family:Vazirmatn,Tahoma,sans-serif;color:#17243b;padding:28px;max-width:760px;margin:auto}.head{display:flex;justify-content:space-between;border-bottom:3px solid #173b63;padding-bottom:14px}.brand{font-size:21px;font-weight:800;color:#173b63}h1{font-size:19px;margin:28px 0 8px}.meta{color:#64748b;font-size:11px;margin-bottom:20px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccd5df;padding:10px;text-align:right}th{background:#edf2f7}.note{margin-top:20px;padding:12px;background:#f5f8fb;border-radius:8px;font-size:12px}.sign{display:flex;justify-content:space-between;margin-top:70px;font-size:11px;color:#64748b}@media print{body{padding:0}}</style></head><body><div class="head"><span class="brand">فروشگاه سلیم وند</span><span>رسید مرجوعی کالا</span></div><h1>رسید مرجوعی فاکتور ${invoice.number}</h1><div class="meta">مشتری: ${invoice.customerName ?? 'حضوری'} · تاریخ ثبت: ${date}</div><table><thead><tr><th>محصول</th><th>تعداد</th><th>مبلغ برگشت</th><th>مقصد کالا</th></tr></thead><tbody><tr><td>${item.productName}</td><td>${quantity}</td><td>${money(Number(item.unitPrice) * quantity)}</td><td>${restock ? 'بازگشت به انبار' : 'ضایعات'}</td></tr></tbody></table><div class="note"><b>دلیل مرجوعی:</b> ${reason}</div><div class="sign"><span>امضای مشتری</span><span>امضای فروشگاه</span></div><script>window.onload=()=>setTimeout(()=>window.print(),250)</script></body></html>`,
+    );
+    win.document.close();
   };
 
   const submitReturn = async () => {
@@ -545,13 +704,19 @@ export function InvoicesPage({
           restock: returnRestock,
         }),
       });
+      printReturnReceipt(returnLine.invoice, returnLine.item, qty, reason, returnRestock);
       setMessage(
         `${qty} عدد «${returnLine.item.productName}» برگشت خورده شد؛ مبلغ فاکتور کم شد${
           returnRestock ? ' و قطعه به دارایی انبار برگشت' : ' (خراب — به انبار برنگشت)'
         }.`,
       );
       const updated = await load();
-      if (viewing) setViewing(updated.find((row) => row.id === returnLine.invoice.id) ?? null);
+      // Refresh the open modal with fresh line data (the list row is a summary).
+      const refreshed = updated.find((row) => row.id === returnLine.invoice.id);
+      if (viewing && refreshed) {
+        const detail = await fetchInvoiceDetail(refreshed);
+        if (detail) setViewing(detail);
+      }
       setReturnLine(null);
     } catch (error) {
       setMessage((error as Error).message);
@@ -578,11 +743,20 @@ export function InvoicesPage({
     }
   };
 
-  // The archive is searchable the moment you type — number, name or mobile.
+  // The archive is searchable the moment you type — number, name or mobile —
+  // and narrows by a Jalali date range (whole days, inclusive).
   const filteredRows = useMemo(() => {
     const query = invoiceQuery.trim().toLocaleLowerCase();
+    const fromTime = dateFrom ? new Date(`${dateFrom}T00:00:00`).getTime() : null;
+    const toTime = dateTo ? new Date(`${dateTo}T23:59:59.999`).getTime() : null;
     return rows
       .filter((invoice) => statusFilter === 'all' || invoice.paymentStatus === statusFilter)
+      .filter((invoice) => !issuerFilter || (invoice.issuedBy?.name ?? '') === issuerFilter)
+      .filter((invoice) => {
+        if (fromTime == null && toTime == null) return true;
+        const issued = new Date(invoice.issuedAt).getTime();
+        return (fromTime == null || issued >= fromTime) && (toTime == null || issued <= toTime);
+      })
       .filter(
         (invoice) =>
           !query ||
@@ -590,16 +764,40 @@ export function InvoicesPage({
             .toLocaleLowerCase()
             .includes(query),
       );
-  }, [rows, statusFilter, invoiceQuery]);
+  }, [rows, statusFilter, invoiceQuery, dateFrom, dateTo, issuerFilter]);
+
+  // Unique issuer names across the whole loaded archive (not the filtered
+  // subset, so picking a filter never shrinks the option list).
+  const issuers = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          rows.map((invoice) => invoice.issuedBy?.name).filter((name): name is string => !!name),
+        ),
+      ).sort((a, b) => a.localeCompare(b, 'fa')),
+    [rows],
+  );
 
   const net = (invoice: Invoice) => netInvoiceAmount(invoice.total, invoice.netTotal);
   const returnedOf = (invoice: Invoice) => Number(invoice.returnedTotal ?? 0);
+
+  /** Shamsi date + HH:mm for the list column — Persian digits via fa-IR. */
+  const jalaliDateTime = (iso: string) => {
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return { date: '—', time: '' };
+    return {
+      date: date.toLocaleDateString('fa-IR'),
+      time: date.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }),
+    };
+  };
 
   return (
     <section className="invoices-page">
       <div className="page-title">
         <div>
-          <h1>فروش و فاکتورها</h1>
+          <h1 className="invoice-page-heading">
+            {storeLogoUrl && <img src={storeLogoUrl} alt="فروشگاه سلیم‌وند" />}فروش و فاکتورها
+          </h1>
           <p className="muted">
             {tab === 'issue'
               ? 'صدور فاکتور چندقلمی با اسکنر، مصرف اتمیک موجودی و پرداخت چندروشه'
@@ -609,7 +807,7 @@ export function InvoicesPage({
         <span className="count">{persianNumber(rows.length)} فاکتور</span>
       </div>
 
-      <nav className="settings-tabs" aria-label="بخش‌های فروش">
+      <nav className="settings-tabs seg-tabs" aria-label="بخش‌های فروش">
         {canCreate && (
           <button
             type="button"
@@ -785,15 +983,7 @@ export function InvoicesPage({
                       <button
                         type="button"
                         key={customer.id}
-                        onClick={() => {
-                          setPickedCustomer(customer);
-                          setCustomerName(customer.name);
-                          setMobile(customer.mobile);
-                          setCustomerAddress(customer.address ?? '');
-                          setCustomerQuery('');
-                          setCustomers([]);
-                          setNoCustomerMatch(false);
-                        }}
+                        onClick={() => pickCustomer(customer)}
                       >
                         <b>{customer.name}</b>
                         <span>
@@ -806,15 +996,37 @@ export function InvoicesPage({
                 )}
                 {!pickedCustomer && noCustomerMatch && (
                   <small className="walkin-hint">
-                    مشتری ثبت‌شده‌ای با این مشخصات نیست؛ فاکتور با همین نام به‌صورت حضوری صادر
-                    می‌شود.
+                    مشتری جدید است؟ با دکمهٔ «ثبت مشتری جدید» همین‌جا (بدون خروج از صفحه) پرونده‌اش
+                    ساخته می‌شود. اگر موبایل را وارد کنید ولی ثبت نکنید، هنگام صدور فاکتور خودکار
+                    ثبت می‌شود؛ بدون موبایل، فاکتور حضوری صادر می‌شود.
                   </small>
                 )}
               </div>
             )}
-            <a className="btn-soft-sm" href="#/customers">
-              + مشتری جدید
-            </a>
+            <input
+              className="cust-addr-in"
+              aria-label="آدرس مشتری"
+              placeholder="آدرس مشتری (اختیاری)…"
+              title="با انتخاب مشتری از پرونده‌اش پر می‌شود؛ تغییرش فقط روی همین فاکتور اعمال می‌شود"
+              autoComplete="off"
+              value={customerAddress}
+              onChange={(event) => setCustomerAddress(event.target.value)}
+            />
+            {!pickedCustomer ? (
+              <button
+                type="button"
+                className="btn-soft-sm"
+                disabled={customerBusy}
+                title="ساخت پروندهٔ مشتری بدون خروج از صفحهٔ صدور فاکتور"
+                onClick={() => void registerCustomer()}
+              >
+                {customerBusy ? 'در حال ثبت…' : '+ ثبت مشتری جدید'}
+              </button>
+            ) : (
+              <a className="btn-ghost-sm" href="#/customers" title="مدیریت مشتری‌ها">
+                پروندهٔ مشتری‌ها ↗
+              </a>
+            )}
           </div>
 
           {/* Store contact (auto from settings) + customer address */}
@@ -832,12 +1044,6 @@ export function InvoicesPage({
                 </span>
               )}
             </div>
-            <input
-              aria-label="آدرس مشتری"
-              placeholder="آدرس مشتری (اختیاری — با انتخاب مشتری از پرونده‌اش پر می‌شود)"
-              value={customerAddress}
-              onChange={(event) => setCustomerAddress(event.target.value)}
-            />
           </div>
 
           <div className="inv-grid">
@@ -871,7 +1077,18 @@ export function InvoicesPage({
                   <div className="scan-res">
                     {candidateGroups.length ? (
                       candidateGroups.map((group) => (
-                        <div className="sr" key={group.key}>
+                        <div
+                          className={`sr${group.brands.length === 1 ? ' sr-pick' : ''}`}
+                          key={group.key}
+                          title={
+                            group.brands.length === 1
+                              ? 'افزودن به فاکتور (کلیک روی همین ردیف)'
+                              : undefined
+                          }
+                          onClick={
+                            group.brands.length === 1 ? () => addLine(group.brands[0]) : undefined
+                          }
+                        >
                           <span className="thumb">{group.name.slice(0, 2)}</span>
                           <div className="wrap">
                             <div className="nm">
@@ -883,9 +1100,15 @@ export function InvoicesPage({
                                   type="button"
                                   className="br"
                                   key={option.id}
-                                  onClick={() => addLine(option)}
+                                  onClick={(event) => {
+                                    // Single-brand rows are clickable as a whole —
+                                    // stop the bubble or the row handler adds twice.
+                                    event.stopPropagation();
+                                    addLine(option);
+                                  }}
                                 >
-                                  {option.brand.name} <b>{money(option.salePrice)}</b>{' '}
+                                  {option.brand?.name ?? 'بدون برند'}{' '}
+                                  <b>{money(option.salePrice)}</b>{' '}
                                   <span className="mut3">
                                     {option.location?.code ?? '—'} ·{' '}
                                     {persianNumber(option.quantity)} عدد
@@ -896,6 +1119,9 @@ export function InvoicesPage({
                           </div>
                           <div className="val">
                             <span className="badge b-ok">موجود</span>
+                            {group.brands.length === 1 && (
+                              <small className="sr-add-hint">+ افزودن</small>
+                            )}
                           </div>
                         </div>
                       ))
@@ -912,9 +1138,8 @@ export function InvoicesPage({
                   <div>محصول / قفسه</div>
                   <div>برند</div>
                   <div>تعداد</div>
-                  <div className="hd-hide num">فی (ریال)</div>
-                  <div className="hd-hide num">تخفیف</div>
-                  <div className="num">جمع</div>
+                  <div className="hd-hide num price-column-title">قیمت واحد (قابل ویرایش)</div>
+                  <div className="num">مبلغ نهایی</div>
                   <div />
                 </div>
                 {lines.length ? (
@@ -927,7 +1152,9 @@ export function InvoicesPage({
                         </div>
                       </div>
                       <div>
-                        <span className="badge b-brand">{line.item.brand.name}</span>
+                        <span className="badge b-brand">
+                          {line.item.brand?.name ?? 'بدون برند'}
+                        </span>
                       </div>
                       <div className="qty">
                         <button
@@ -956,23 +1183,13 @@ export function InvoicesPage({
                         </button>
                       </div>
                       <FaNumberInput
-                        className="money-in hd-hide"
-                        aria-label={`فی ${line.item.product.name}`}
+                        className="money-in hd-hide invoice-price-input"
+                        aria-label={`قیمت واحد قابل ویرایش ${line.item.product.name}`}
+                        title="قیمت پیش‌فرض از انبار آمده است؛ در صورت نیاز آن را تغییر دهید."
                         value={String(line.price)}
                         onChange={(plain) =>
                           setLine(line.item.id, {
                             price: Math.max(0, Number(plain) || 0),
-                          })
-                        }
-                      />
-                      <FaNumberInput
-                        className="money-in hd-hide"
-                        aria-label={`تخفیف ${line.item.product.name}`}
-                        placeholder="۰"
-                        value={line.lineDiscount ? String(line.lineDiscount) : ''}
-                        onChange={(plain) =>
-                          setLine(line.item.id, {
-                            lineDiscount: Math.max(0, Number(plain) || 0),
                           })
                         }
                       />
@@ -1016,24 +1233,24 @@ export function InvoicesPage({
                   <span>جمع اقلام ({persianNumber(lines.length)} قلم)</span>
                   <b>{money(subtotal)}</b>
                 </div>
-                {lineDiscountSum > 0 && (
-                  <div className="ln">
-                    <span>تخفیف ردیف‌ها</span>
-                    <b>{money(lineDiscountSum)}</b>
+                <div className="invoice-discount-field field">
+                  <span className="lab">تخفیف کل فاکتور (درصد)</span>
+                  <div className="percent-input-wrap">
+                    <FaNumberInput
+                      className="money-in"
+                      aria-label="درصد تخفیف کل فاکتور"
+                      value={discount}
+                      placeholder="۰"
+                      onChange={(plain) =>
+                        setDiscount(String(Math.min(100, Math.max(0, Number(plain) || 0))))
+                      }
+                    />
+                    <b>٪</b>
                   </div>
-                )}
-                <div className="field">
-                  <span className="lab">تخفیف کل فاکتور (ریال)</span>
-                  <FaNumberInput
-                    className="money-in"
-                    aria-label="تخفیف کل"
-                    value={discount}
-                    placeholder="۰"
-                    onChange={(plain) => setDiscount(plain)}
-                  />
+                  <small>مبلغ تخفیف: {money(discountValue)}</small>
                 </div>
                 <div className="ln grand">
-                  <span>مبلغ نهایی</span>
+                  <span>مبلغ نهایی پس از تخفیف</span>
                   <b>{money(total)}</b>
                 </div>
 
@@ -1076,6 +1293,83 @@ export function InvoicesPage({
                       </div>
                     );
                   })}
+                  {payments.some((entry) => entry.method === 'credit') && (
+                    <div className="check-fields">
+                      <b>جزئیات چک‌ها</b>
+                      {checksDraft.map((check, index) => (
+                        <div className="check-row" key={index}>
+                          <strong>چک {index + 1}</strong>
+                          <input
+                            placeholder="شماره چک"
+                            value={check.checkNumber}
+                            onChange={(e) =>
+                              setChecksDraft((all) =>
+                                all.map((item, i) =>
+                                  i === index ? { ...item, checkNumber: e.target.value } : item,
+                                ),
+                              )
+                            }
+                          />
+                          <input
+                            placeholder="بانک"
+                            value={check.bank}
+                            onChange={(e) =>
+                              setChecksDraft((all) =>
+                                all.map((item, i) =>
+                                  i === index ? { ...item, bank: e.target.value } : item,
+                                ),
+                              )
+                            }
+                          />
+                          <input
+                            placeholder="شعبه"
+                            value={check.branch}
+                            onChange={(e) =>
+                              setChecksDraft((all) =>
+                                all.map((item, i) =>
+                                  i === index ? { ...item, branch: e.target.value } : item,
+                                ),
+                              )
+                            }
+                          />
+                          <JalaliDateInput
+                            value={check.dueDate}
+                            onChange={(value) =>
+                              setChecksDraft((all) =>
+                                all.map((item, i) =>
+                                  i === index ? { ...item, dueDate: value } : item,
+                                ),
+                              )
+                            }
+                          />
+                          <FaNumberInput
+                            className="money-in"
+                            placeholder="مبلغ چک"
+                            value={check.amount}
+                            onChange={(plain) =>
+                              setChecksDraft((all) =>
+                                all.map((item, i) =>
+                                  i === index ? { ...item, amount: plain } : item,
+                                ),
+                              )
+                            }
+                          />
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        className="outline"
+                        onClick={() =>
+                          setChecksDraft((all) => [
+                            ...all,
+                            { checkNumber: '', bank: '', branch: '', dueDate: '', amount: '' },
+                          ])
+                        }
+                      >
+                        + افزودن چک
+                      </button>
+                    </div>
+                  )}
                   <div className="hr" />
                   <div className="pr">
                     <span className="mut">پرداخت‌شده</span>
@@ -1269,6 +1563,83 @@ export function InvoicesPage({
                     </div>
                   );
                 })}
+                {payments.some((entry) => entry.method === 'credit') && (
+                  <div className="check-fields">
+                    <b>جزئیات چک‌ها</b>
+                    {checksDraft.map((check, index) => (
+                      <div className="check-row" key={index}>
+                        <strong>چک {index + 1}</strong>
+                        <input
+                          placeholder="شماره چک"
+                          value={check.checkNumber}
+                          onChange={(e) =>
+                            setChecksDraft((all) =>
+                              all.map((item, i) =>
+                                i === index ? { ...item, checkNumber: e.target.value } : item,
+                              ),
+                            )
+                          }
+                        />
+                        <input
+                          placeholder="بانک"
+                          value={check.bank}
+                          onChange={(e) =>
+                            setChecksDraft((all) =>
+                              all.map((item, i) =>
+                                i === index ? { ...item, bank: e.target.value } : item,
+                              ),
+                            )
+                          }
+                        />
+                        <input
+                          placeholder="شعبه"
+                          value={check.branch}
+                          onChange={(e) =>
+                            setChecksDraft((all) =>
+                              all.map((item, i) =>
+                                i === index ? { ...item, branch: e.target.value } : item,
+                              ),
+                            )
+                          }
+                        />
+                        <JalaliDateInput
+                          value={check.dueDate}
+                          onChange={(value) =>
+                            setChecksDraft((all) =>
+                              all.map((item, i) =>
+                                i === index ? { ...item, dueDate: value } : item,
+                              ),
+                            )
+                          }
+                        />
+                        <FaNumberInput
+                          className="money-in"
+                          placeholder="مبلغ چک"
+                          value={check.amount}
+                          onChange={(plain) =>
+                            setChecksDraft((all) =>
+                              all.map((item, i) =>
+                                i === index ? { ...item, amount: plain } : item,
+                              ),
+                            )
+                          }
+                        />
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      className="outline"
+                      onClick={() =>
+                        setChecksDraft((all) => [
+                          ...all,
+                          { checkNumber: '', bank: '', branch: '', dueDate: '', amount: '' },
+                        ])
+                      }
+                    >
+                      + افزودن چک
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
             <footer className="pay-modal-f">
@@ -1295,7 +1666,7 @@ export function InvoicesPage({
 
       {tab === 'list' && (
         <>
-          <div className="list-toolbar">
+          <div className="list-toolbar invoices-toolbar">
             <div className="search-field">
               <span className="search-icon">⌕</span>
               <input
@@ -1314,31 +1685,154 @@ export function InvoicesPage({
                 </button>
               )}
             </div>
-            <div className="pill-filters" role="tablist" aria-label="فیلتر وضعیت پرداخت">
-              {(
-                [
-                  { id: 'all', label: 'همه' },
-                  { id: 'unpaid', label: 'پرداخت‌نشده' },
-                  { id: 'partial', label: 'پرداخت بخشی' },
-                  { id: 'paid', label: 'تسویه‌شده' },
-                ] as const
-              ).map((entry) => (
-                <button
-                  key={entry.id}
-                  role="tab"
-                  aria-selected={statusFilter === entry.id}
-                  className={statusFilter === entry.id ? 'pill active' : 'pill'}
-                  onClick={() => setStatusFilter(entry.id)}
+            <div className="invoice-filter-row">
+              <div
+                className={`date-range-filters${dateFrom || dateTo ? ' is-active' : ''}`}
+                aria-label="فیلتر بازهٔ تاریخ شمسی"
+              >
+                <span className="drf-lead" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <rect x="3" y="4" width="18" height="18" rx="2" />
+                    <path d="M16 2v4M8 2v4M3 10h18" />
+                  </svg>
+                </span>
+                <label className="drf-field">
+                  <span className="drf-label">از تاریخ</span>
+                  <JalaliDateInput
+                    value={dateFrom}
+                    onChange={setDateFrom}
+                    aria-label="از تاریخ (شمسی)"
+                    placeholder="۱۴۰۵/۰۱/۰۱"
+                  />
+                  {dateFrom && (
+                    <button
+                      type="button"
+                      className="drf-x"
+                      aria-label="پاک کردن از تاریخ"
+                      onClick={() => setDateFrom('')}
+                    >
+                      ×
+                    </button>
+                  )}
+                </label>
+                <span className="drf-sep" aria-hidden="true" />
+                <label className="drf-field">
+                  <span className="drf-label">تا تاریخ</span>
+                  <JalaliDateInput
+                    value={dateTo}
+                    onChange={setDateTo}
+                    aria-label="تا تاریخ (شمسی)"
+                    placeholder="۱۴۰۵/۰۱/۰۱"
+                  />
+                  {dateTo && (
+                    <button
+                      type="button"
+                      className="drf-x"
+                      aria-label="پاک کردن تا تاریخ"
+                      onClick={() => setDateTo('')}
+                    >
+                      ×
+                    </button>
+                  )}
+                </label>
+              </div>
+              <label
+                className={`issuer-filter${issuerFilter ? ' is-active' : ''}`}
+                aria-label="فیلتر صادرکننده"
+              >
+                <span className="iss-lead" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+                    <circle cx="12" cy="7" r="4" />
+                  </svg>
+                </span>
+                <select
+                  value={issuerFilter}
+                  onChange={(event) => setIssuerFilter(event.target.value)}
+                  aria-label="صادرکنندهٔ فاکتور"
                 >
-                  {entry.label}
+                  <option value="">همهٔ صادرکنندگان</option>
+                  {issuers.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div
+                className={`status-filter${statusFilter !== 'all' ? ' is-active' : ''}`}
+                aria-label="فیلتر وضعیت پرداخت"
+              >
+                <span className="stf-lead" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <rect x="2" y="6" width="20" height="12" rx="2" />
+                    <circle cx="12" cy="12" r="2" />
+                    <path d="M6 12h.01M18 12h.01" />
+                  </svg>
+                </span>
+                <div className="stf-options" role="tablist" aria-label="وضعیت پرداخت">
+                  {(
+                    [
+                      { id: 'all', label: 'همه' },
+                      { id: 'unpaid', label: 'پرداخت‌نشده' },
+                      { id: 'partial', label: 'پرداخت بخشی' },
+                      { id: 'paid', label: 'تسویه‌شده' },
+                    ] as const
+                  ).map((entry) => (
+                    <button
+                      key={entry.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={statusFilter === entry.id}
+                      className={statusFilter === entry.id ? 'active' : ''}
+                      onClick={() => setStatusFilter(entry.id)}
+                    >
+                      {entry.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {(dateFrom || dateTo) && (
+                <button
+                  type="button"
+                  className="pill"
+                  onClick={() => {
+                    setDateFrom('');
+                    setDateTo('');
+                  }}
+                >
+                  × پاک کردن بازه
                 </button>
-              ))}
+              )}
             </div>
           </div>
           <div className="product-table">
             <div className="table-head invoice-head">
               <span>شماره</span>
+              <span className="inv-when-head">تاریخ و ساعت</span>
               <span>مشتری</span>
+              <span>صادرکننده</span>
               <span>اقلام</span>
               <span>مبلغ</span>
               <span>پرداخت</span>
@@ -1348,12 +1842,20 @@ export function InvoicesPage({
             {filteredRows.map((invoice) => {
               const debt = Math.max(0, net(invoice) - Number(invoice.paidAmount));
               const returned = returnedOf(invoice);
+              const when = jalaliDateTime(invoice.issuedAt);
               return (
                 <div className="table-row invoice-row" key={invoice.id}>
                   <code>{formatPersianNumber(invoice.number)}</code>
+                  <span className="inv-when">
+                    <b>{when.date}</b>
+                    {when.time && <small dir="ltr">{when.time}</small>}
+                  </span>
                   <span>{invoice.customerName ?? 'مشتری حضوری'}</span>
+                  <span className="inv-issuer" title={invoice.issuedBy?.name ?? undefined}>
+                    {invoice.issuedBy?.name ?? '—'}
+                  </span>
                   <span>
-                    {persianNumber(invoice.items.length)}
+                    {persianNumber(invoice.itemCount ?? invoice.items?.length ?? 0)}
                     {returned > 0 && <small className="chip warn">برگشتی {money(returned)}</small>}
                   </span>
                   <strong>{money(net(invoice))}</strong>
@@ -1530,7 +2032,7 @@ export function InvoicesPage({
               </div>
 
               <div className="invoice-detail-items">
-                {viewing.items.map((item) => {
+                {(viewing.items ?? []).map((item) => {
                   const returnedQty = item.returnedQuantity ?? 0;
                   const remaining = lineRemaining(item.quantity, returnedQty);
                   return (
@@ -1564,7 +2066,9 @@ export function InvoicesPage({
                 <div className="returns-history">
                   <h3>تاریخچهٔ برگشتی‌ها</h3>
                   {viewing.returns.map((record) => {
-                    const line = viewing.items.find((item) => item.id === record.invoiceItemId);
+                    const line = (viewing.items ?? []).find(
+                      (item) => item.id === record.invoiceItemId,
+                    );
                     return (
                       <div key={record.id}>
                         <b>{line?.productName ?? '—'}</b>

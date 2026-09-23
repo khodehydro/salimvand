@@ -8,7 +8,7 @@ type SitemapData = {
 };
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const base = process.env.APP_URL ?? 'https://salimvand.ir';
+  const base = (process.env.PUBLIC_SITE_URL ?? process.env.APP_URL ?? 'https://salimvand.ir').replace(/\/$/, '');
   const entries: MetadataRoute.Sitemap = [
     { url: base, changeFrequency: 'daily', priority: 1 },
     { url: `${base}/location/miandoab`, changeFrequency: 'weekly', priority: 0.8 },

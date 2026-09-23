@@ -1,8 +1,8 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { createEan13 } from '@salimvand/shared';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { createEan13, formatJalaliDate, formatRial } from '@salimvand/shared';
 import { FaNumberInput } from '../components/FaNumberInput';
 import { locationChip, locationLabel } from '../lib/location-label';
-import { api } from '../lib/api';
+import { api, downloadFile } from '../lib/api';
 import { hashForPage } from '../lib/admin-route';
 import { publicSiteUrl } from '../lib/public-site';
 import { MediaPicker, type PickerItem } from '../components/MediaPicker';
@@ -17,14 +17,16 @@ type ProductRow = {
   status: string;
   deletedAt?: string | null;
   partNumber?: string | null;
+  seoKeywords?: string[];
   category?: { name: string };
+  compatibilities?: Array<{ model: { name: string; make: { name: string } } }>;
   images?: Array<{ path: string; alt?: string | null; isPrimary: boolean }>;
   inventoryItems?: Array<{
     id: string;
     quantity: number;
     minStock?: number | null;
     salePrice: string;
-    brand: { name: string };
+    brand?: { name: string } | null;
     location?: { code: string; name: string } | null;
   }>;
 };
@@ -63,7 +65,8 @@ type ProductDetail = {
     purchasePrice: string;
     minStock?: number | null;
     isActive: boolean;
-    brand: { id: string; name: string };
+    priceUpdatedAt?: string | null;
+    brand?: { id: string; name: string } | null;
     location?: { id: string; code: string; name: string } | null;
   }>;
 };
@@ -108,6 +111,14 @@ export function ProductsPage() {
   const [locations, setLocations] = useState<Location[]>([]);
   const [vehicles, setVehicles] = useState<VehicleMake[]>([]);
   const [filter, setFilter] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [brandFilter, setBrandFilter] = useState('');
+  const [vehicleFilter, setVehicleFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [keywordBusy, setKeywordBusy] = useState(false);
+  const [backupBusy, setBackupBusy] = useState(false);
+  const [restoreBusy, setRestoreBusy] = useState(false);
+  const restoreInputRef = useRef<HTMLInputElement | null>(null);
   const [message, setMessage] = useState('');
   const [draft, setDraft] = useState<ProductDetail | null>(null);
   const [tab, setTab] = useState<Tab>('basic');
@@ -118,16 +129,26 @@ export function ProductsPage() {
       .catch((error: Error) => setMessage(error.message));
   const refresh = async (id: string) => {
     const fresh = await api<{ data: ProductDetail }>(`/products/${id}`);
-    setDraft(fresh.data);
+    // Update the open editor only: the header save closes the editor and a
+    // refresh that was still in flight must never resurrect it.
+    setDraft((current) => (current?.id === id ? fresh.data : current));
     await load();
     return fresh.data;
   };
+  /** Opens the editor for a product — refresh() alone only updates an
+   *  already-open draft, so every entry point (row button, deep link) must
+   *  set the draft explicitly. */
+  const openEditor = (id: string) =>
+    void refresh(id).then((fresh) => {
+      setTab('basic');
+      setDraft(fresh);
+    });
 
   // Deep link from the global palette (#/products?edit=<id>) opens the editor.
   useEffect(() => {
     const openFromHash = () => {
       const editId = paramsFromHash(window.location.hash).edit;
-      if (editId) void refresh(editId).then(() => setTab('basic'));
+      if (editId) openEditor(editId);
     };
     openFromHash();
     window.addEventListener('hashchange', openFromHash);
@@ -144,16 +165,55 @@ export function ProductsPage() {
       .then((result) => setBrands(result.data))
       .catch(() => undefined);
     void api<{ data: Location[] }>('/locations')
-      .then((result) => setLocations(result.data))
+      // Warehouses first, then shelves in numeric code order (۱.۱ … ۱۰.۱ … ۲۰.۷)
+      // — mirrors the inventory page's ordering for the shelf pickers.
+      .then((result) =>
+        setLocations(
+          [...result.data].sort(
+            (a, b) =>
+              Number(b.type === 'warehouse') - Number(a.type === 'warehouse') ||
+              a.code.localeCompare(b.code, 'en', { numeric: true }),
+          ),
+        ),
+      )
       .catch(() => undefined);
     void api<{ data: VehicleMake[] }>('/vehicles/tree')
       .then((result) => setVehicles(result.data))
       .catch(() => undefined);
   }, []);
 
-  const visible = products.filter((product) =>
-    `${product.name} ${product.code} ${product.partNumber ?? ''}`.includes(filter.trim()),
-  );
+  const visible = products.filter((product) => {
+    const normalizedFilter = filter.trim().toLocaleLowerCase('fa');
+    const queryMatch =
+      `${product.name} ${product.code} ${product.partNumber ?? ''} ${(product.seoKeywords ?? []).join(' ')} ${
+        product.compatibilities
+          ?.map((entry) => `${entry.model.make.name} ${entry.model.name}`)
+          .join(' ') ?? ''
+      }`
+        .toLocaleLowerCase('fa')
+        .includes(normalizedFilter);
+    const categoryMatch = !categoryFilter || product.category?.name === categoryFilter;
+    const statusMatch = !statusFilter || product.status === statusFilter;
+    const brandMatch =
+      !brandFilter ||
+      product.inventoryItems?.some((entry) => (entry.brand?.name ?? 'بدون برند') === brandFilter);
+    const vehicleMatch =
+      !vehicleFilter ||
+      product.compatibilities?.some(
+        (entry) => `${entry.model.make.name} ${entry.model.name}` === vehicleFilter,
+      );
+    return queryMatch && categoryMatch && statusMatch && brandMatch && vehicleMatch;
+  });
+
+  const vehicleOptions = [
+    ...new Set(
+      products.flatMap(
+        (product) =>
+          product.compatibilities?.map((entry) => `${entry.model.make.name} ${entry.model.name}`) ??
+          [],
+      ),
+    ),
+  ];
 
   return (
     <section className="products-page">
@@ -165,34 +225,290 @@ export function ProductsPage() {
             می‌شود.
           </p>
         </div>
-        <span className="count">{products.length} محصول</span>
+        <div className="page-title-actions">
+          <span className="count">{products.length} محصول</span>
+          <button
+            className="keyword-regenerate"
+            disabled={keywordBusy}
+            onClick={async () => {
+              if (!window.confirm('کلیدواژه‌های همه محصولات بازسازی شود؟')) return;
+              setKeywordBusy(true);
+              try {
+                await api('/products/seo-keywords/regenerate', { method: 'POST' });
+                setMessage('کلیدواژه‌های محصولات بازسازی شد.');
+                await load();
+              } catch (error) {
+                setMessage((error as Error).message);
+              } finally {
+                setKeywordBusy(false);
+              }
+            }}
+          >
+            {keywordBusy ? 'در حال ساخت…' : 'بازسازی کلیدواژه‌ها'}
+          </button>
+          <button
+            className="products-backup-export"
+            disabled={backupBusy}
+            onClick={async () => {
+              setBackupBusy(true);
+              try {
+                await downloadFile(
+                  '/products/backup/export',
+                  `salimvand-products-backup-${new Date().toISOString().slice(0, 10)}.zip`,
+                );
+              } catch (error) {
+                setMessage((error as Error).message);
+              } finally {
+                setBackupBusy(false);
+              }
+            }}
+          >
+            {backupBusy ? 'در حال ساخت…' : 'پشتیبان‌گیری کامل (ZIP)'}
+          </button>
+          <button
+            className="products-backup-restore"
+            disabled={restoreBusy}
+            onClick={() => restoreInputRef.current?.click()}
+          >
+            {restoreBusy ? 'در حال بازگردانی…' : 'بازگردانی از پشتیبان…'}
+          </button>
+          <input
+            ref={restoreInputRef}
+            type="file"
+            accept=".zip,application/zip"
+            hidden
+            onChange={async (event) => {
+              const file = event.target.files?.[0];
+              event.target.value = '';
+              if (!file) return;
+              if (
+                !window.confirm(
+                  'بازگردانی از فایل پشتیبان؟\nهیچ داده‌ای حذف نمی‌شود — محصولات موجود بر اساس کد به‌روزرسانی می‌شوند و محصولات غایب با همان کد قبلی دوباره ساخته می‌شوند.',
+                )
+              )
+                return;
+              setRestoreBusy(true);
+              try {
+                const form = new FormData();
+                form.append('file', file);
+                const result = await api<{
+                  data: {
+                    productsCreated: number;
+                    productsUpdated: number;
+                    itemsCreated: number;
+                    itemsUpdated: number;
+                    imagesWritten: number;
+                    errors: string[];
+                  };
+                }>('/products/backup/import', { method: 'POST', body: form });
+                const summary = result.data;
+                const parts = [
+                  `${summary.productsCreated.toLocaleString('fa-IR')} محصول جدید`,
+                  `${summary.productsUpdated.toLocaleString('fa-IR')} محصول به‌روزرسانی‌شده`,
+                  `${(summary.itemsCreated + summary.itemsUpdated).toLocaleString('fa-IR')} قلم انبار`,
+                  `${summary.imagesWritten.toLocaleString('fa-IR')} تصویر`,
+                ];
+                setMessage(
+                  `بازگردانی انجام شد — ${parts.join('، ')}` +
+                    (summary.errors.length
+                      ? ` (${summary.errors.length.toLocaleString('fa-IR')} خطا: ${summary.errors.slice(0, 3).join('؛ ')}${summary.errors.length > 3 ? '…' : ''})`
+                      : ''),
+                );
+                await load();
+              } catch (error) {
+                setMessage((error as Error).message);
+              } finally {
+                setRestoreBusy(false);
+              }
+            }}
+          />
+        </div>
       </div>
 
-      <div className="search-field">
-        <span className="search-icon">⌕</span>
-        <input
-          placeholder="جست‌وجوی لحظه‌ای نام، کد یا شماره فنی…"
-          value={filter}
-          onChange={(event) => setFilter(event.target.value)}
-        />
-        {filter && (
-          <button
-            type="button"
-            className="search-clear"
-            onClick={() => setFilter('')}
-            aria-label="پاک کردن جست‌وجو"
+      <div className="product-filter-toolbar">
+        <div className="search-field product-search-field">
+          <span className="search-icon">⌕</span>
+          <input
+            placeholder="جست‌وجوی نام، کد یا شماره فنی…"
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+          />
+          {filter && (
+            <button
+              type="button"
+              className="search-clear"
+              onClick={() => setFilter('')}
+              aria-label="پاک کردن جست‌وجو"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+        <div className="toolbar-filter-row">
+          <label
+            className={`toolbar-pill${categoryFilter ? ' is-active' : ''}`}
+            aria-label="فیلتر دسته‌بندی"
           >
-            ✕
-          </button>
-        )}
+            <span className="tp-lead" aria-hidden="true">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
+              </svg>
+            </span>
+            <select
+              value={categoryFilter}
+              onChange={(event) => setCategoryFilter(event.target.value)}
+              aria-label="فیلتر دسته‌بندی"
+            >
+              <option value="">همه دسته‌ها</option>
+              {[...new Set(products.map((product) => product.category?.name).filter(Boolean))].map(
+                (category) => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
+                ),
+              )}
+            </select>
+          </label>
+          <label
+            className={`toolbar-pill${brandFilter ? ' is-active' : ''}`}
+            aria-label="فیلتر برند"
+          >
+            <span className="tp-lead" aria-hidden="true">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="12" cy="8" r="6" />
+                <path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11" />
+              </svg>
+            </span>
+            <select
+              value={brandFilter}
+              onChange={(event) => setBrandFilter(event.target.value)}
+              aria-label="فیلتر برند"
+            >
+              <option value="">همه برندها</option>
+              {brands.map((brand) => (
+                <option key={brand.id} value={brand.name}>
+                  {brand.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label
+            className={`toolbar-pill${vehicleFilter ? ' is-active' : ''}`}
+            aria-label="فیلتر خودرو"
+          >
+            <span className="tp-lead" aria-hidden="true">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2" />
+                <circle cx="7" cy="17" r="2" />
+                <path d="M9 17h6" />
+                <circle cx="17" cy="17" r="2" />
+              </svg>
+            </span>
+            <select
+              value={vehicleFilter}
+              onChange={(event) => setVehicleFilter(event.target.value)}
+              aria-label="فیلتر خودرو"
+            >
+              <option value="">همه خودروها</option>
+              {vehicleOptions.map((vehicle) => (
+                <option key={vehicle} value={vehicle}>
+                  {vehicle}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div
+            className={`toolbar-pill${statusFilter ? ' is-active' : ''}`}
+            aria-label="فیلتر وضعیت"
+          >
+            <span className="tp-lead" aria-hidden="true">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            </span>
+            <div className="tp-options" role="tablist" aria-label="وضعیت محصول">
+              {(
+                [
+                  { id: '', label: 'همه' },
+                  { id: 'active', label: 'فعال' },
+                  { id: 'hidden', label: 'مخفی' },
+                ] as const
+              ).map((entry) => (
+                <button
+                  key={entry.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={statusFilter === entry.id}
+                  className={statusFilter === entry.id ? 'active' : ''}
+                  onClick={() => setStatusFilter(entry.id)}
+                >
+                  {entry.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {(filter || categoryFilter || brandFilter || vehicleFilter || statusFilter) && (
+            <button
+              type="button"
+              className="pill"
+              onClick={() => {
+                setFilter('');
+                setCategoryFilter('');
+                setBrandFilter('');
+                setVehicleFilter('');
+                setStatusFilter('');
+              }}
+            >
+              × پاک کردن فیلترها
+            </button>
+          )}
+        </div>
       </div>
 
       {message && <div className="notice">{message}</div>}
 
-      <div className="product-list">
+      <div className="product-list product-list-table">
+        <div className="product-list-head" aria-hidden="true">
+          <span>محصول</span>
+          <span>وضعیت و دسته</span>
+          <span>برندها و موجودی</span>
+          <span>عملیات</span>
+        </div>
         {visible.map((product) => (
-          <article className="product-list-card" key={product.id}>
-            <div className="plc-main">
+          <article
+            className={`product-list-card product-row${totalStock(product) === 0 ? ' is-out' : ''}`}
+            key={product.id}
+          >
+            <div className="product-cell product-main-cell">
               <span className="product-thumb">
                 {product.images?.[0] ? (
                   <MediaImage
@@ -209,63 +525,46 @@ export function ProductsPage() {
                   {product.code}
                   {product.partNumber ? ` · ${product.partNumber}` : ''}
                 </small>
-                <div className="plc-chips">
-                  {product.category?.name && <span className="chip">{product.category.name}</span>}
-                  <span className={product.status === 'active' ? 'chip ok' : 'chip warn'}>
-                    {product.status === 'active' ? 'فعال' : 'مخفی'}
-                  </span>
-                  {cheapestSalePrice(product) != null && (
-                    <span className="chip price">
-                      از {Number(cheapestSalePrice(product)).toLocaleString('fa-IR')} ریال
-                    </span>
-                  )}
-                </div>
               </div>
-              <div className="plc-actions">
+            </div>
+            <div className="product-cell product-status-cell">
+              <div className="plc-chips">
+                {product.category?.name && <span className="chip">{product.category.name}</span>}
                 <button
-                  className="row-action"
-                  onClick={() => {
-                    void refresh(product.id).then(() => setTab('basic'));
-                  }}
-                >
-                  ویرایش
-                </button>
-                <a
-                  className="row-action"
-                  href={`${publicSiteUrl}/product/${encodeURIComponent(product.slug)}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  title="نمایش این محصول در سایت عمومی"
-                >
-                  سایت
-                </a>
-                <button
-                  className="row-action"
-                  title="ساخت برچسب برای این محصول"
-                  onClick={() => {
-                    window.location.hash = hashForPage('labels', { product: product.id });
-                  }}
-                >
-                  برچسب
-                </button>
-                <button
-                  className="row-action danger-text"
+                  type="button"
+                  className={`catalog-switch ${product.status === 'active' ? 'on' : ''}`}
+                  role="switch"
+                  aria-checked={product.status === 'active'}
+                  title="نمایش محصول برای کاربران عمومی سایت"
                   onClick={async () => {
-                    if (!window.confirm('محصول حذف نرم شود؟ از سایت پنهان می‌شود.')) return;
                     try {
-                      await api(`/products/${product.id}`, { method: 'DELETE' });
-                      setMessage('محصول حذف نرم شد.');
+                      await api(`/products/${product.id}`, {
+                        method: 'PATCH',
+                        body: JSON.stringify({
+                          status: product.status === 'active' ? 'hidden' : 'active',
+                        }),
+                      });
+                      setMessage(
+                        product.status === 'active'
+                          ? 'نمایش محصول در سایت غیرفعال شد.'
+                          : 'نمایش محصول در سایت فعال شد.',
+                      );
                       await load();
                     } catch (error) {
                       setMessage((error as Error).message);
                     }
                   }}
                 >
-                  حذف
+                  <span /> {product.status === 'active' ? 'نمایش در سایت' : 'مخفی از سایت'}
                 </button>
+                {vehicleOptions.length > 0 && product.compatibilities?.length ? (
+                  <span className="chip vehicle-chip">
+                    {product.compatibilities.length.toLocaleString('fa-IR')} خودرو
+                  </span>
+                ) : null}
               </div>
             </div>
-            <div className="plc-stock">
+            <div className="product-cell product-stock-cell">
               {product.inventoryItems?.length ? (
                 product.inventoryItems.map((entry) => (
                   <div className="plc-brand" key={entry.id}>
@@ -273,7 +572,7 @@ export function ProductsPage() {
                       className="brand-name"
                       title={entry.location ? locationChip(entry.location) : undefined}
                     >
-                      {entry.brand.name}
+                      {entry.brand?.name ?? 'بدون برند'} · {formatRial(Number(entry.salePrice))}
                       {entry.location ? <small> · {locationChip(entry.location)}</small> : null}
                     </span>
                     <StockStepper
@@ -285,13 +584,48 @@ export function ProductsPage() {
                   </div>
                 ))
               ) : (
-                <span className="muted">
-                  قلم انباری ثبت نشده — از ویرایشگر تب «قلم‌ها» اضافه کنید.
-                </span>
+                <span className="muted">قلم انباری ثبت نشده</span>
               )}
               <span className="plc-total">
-                جمع: <b>{totalStock(product).toLocaleString('fa-IR')}</b>
+                جمع قطعات: <b>{totalStock(product).toLocaleString('fa-IR')}</b>
               </span>
+            </div>
+            <div className="product-cell product-actions-cell">
+              <button className="row-action" onClick={() => openEditor(product.id)}>
+                ویرایش
+              </button>
+              <a
+                className="row-action"
+                href={`${publicSiteUrl}/product/${encodeURIComponent(product.slug)}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                سایت
+              </a>
+              <button
+                className="row-action"
+                title="ساخت برچسب برای این محصول"
+                onClick={() => {
+                  window.location.hash = hashForPage('labels', { product: product.id });
+                }}
+              >
+                برچسب
+              </button>
+              <button
+                className="row-action danger-text"
+                onClick={async () => {
+                  if (!window.confirm('محصول حذف نرم شود؟ از سایت پنهان می‌شود.')) return;
+                  try {
+                    await api(`/products/${product.id}`, { method: 'DELETE' });
+                    setMessage('محصول حذف نرم شد.');
+                    await load();
+                  } catch (error) {
+                    setMessage((error as Error).message);
+                  }
+                }}
+              >
+                حذف
+              </button>
             </div>
           </article>
         ))}
@@ -405,14 +739,18 @@ function ProductEditor({
     [vehicles, pickModel],
   );
 
+  // Saves report success so the header save button can close the editor
+  // only when the change actually landed (failures keep it open + noticed).
   const patch = async (payload: Record<string, unknown>, success: string) => {
     setBusy(true);
     try {
       await api(`/products/${product.id}`, { method: 'PATCH', body: JSON.stringify(payload) });
       notify(success);
       onRefresh();
+      return true;
     } catch (error) {
       notify((error as Error).message);
+      return false;
     } finally {
       setBusy(false);
     }
@@ -420,8 +758,11 @@ function ProductEditor({
 
   const saveBasic = async (event?: FormEvent) => {
     event?.preventDefault();
-    if (!basic.name.trim() || !basic.categoryId) return notify('نام محصول و دسته‌بندی الزامی است.');
-    await patch(
+    if (!basic.name.trim() || !basic.categoryId) {
+      notify('نام محصول و دسته‌بندی الزامی است.');
+      return false;
+    }
+    return patch(
       {
         name: basic.name,
         categoryId: basic.categoryId,
@@ -431,17 +772,29 @@ function ProductEditor({
         priceDisplay: basic.priceDisplay,
         seoTitle: basic.seoTitle || null,
         seoDescription: basic.seoDescription || null,
-        seoKeywords: basic.seoKeywords
-          .split(/[،,]/)
-          .map((entry) => entry.trim())
-          .filter(Boolean),
       },
       'مشخصات و سئو ذخیره شد',
     );
   };
 
+  const reorderImages = async (imageIds: string[]) => {
+    try {
+      await api(`/media/products/${product.id}/reorder`, {
+        method: 'PATCH',
+        body: JSON.stringify({ imageIds }),
+      });
+      notify('ترتیب تصاویر ذخیره شد');
+      onRefresh();
+    } catch (error) {
+      notify((error as Error).message);
+    }
+  };
+
   const upload = async () => {
-    if (!mediaFile) return notify('ابتدا یک فایل انتخاب کنید');
+    if (!mediaFile) {
+      notify('ابتدا یک فایل انتخاب کنید');
+      return false;
+    }
     setBusy(true);
     try {
       const data = new FormData();
@@ -450,8 +803,10 @@ function ProductEditor({
       setMediaFile(null);
       notify('تصویر آپلود شد');
       onRefresh();
+      return true;
     } catch (error) {
       notify((error as Error).message);
+      return false;
     } finally {
       setBusy(false);
     }
@@ -471,15 +826,20 @@ function ProductEditor({
       });
       notify('سازگاری خودرو ذخیره شد');
       onRefresh();
+      return true;
     } catch (error) {
       notify((error as Error).message);
+      return false;
     } finally {
       setBusy(false);
     }
   };
 
   const createItem = async () => {
-    if (!item.brandId) return notify('برند قلم را انتخاب کنید');
+    if (!item.brandId) {
+      notify('برند قلم را انتخاب کنید');
+      return false;
+    }
     setBusy(true);
     try {
       await api('/inventory/items', {
@@ -505,8 +865,10 @@ function ProductEditor({
         initialQuantity: '',
       });
       onRefresh();
+      return true;
     } catch (error) {
       notify((error as Error).message);
+      return false;
     } finally {
       setBusy(false);
     }
@@ -514,7 +876,7 @@ function ProductEditor({
 
   const saveItemEdit = async (itemId: string) => {
     const edit = itemEdits[itemId];
-    if (!edit) return;
+    if (!edit) return true;
     setBusy(true);
     try {
       await api(`/inventory/items/${itemId}`, {
@@ -533,8 +895,10 @@ function ProductEditor({
       });
       notify('قلم انبار ذخیره شد');
       onRefresh();
+      return true;
     } catch (error) {
       notify((error as Error).message);
+      return false;
     } finally {
       setBusy(false);
     }
@@ -561,27 +925,36 @@ function ProductEditor({
       [entry.id]: { ...itemEditFor(entry), ...changes },
     }));
 
-  // The pinned footer save: each tab maps to its own save action, so the
-  // button never scrolls away while the operator switches tabs.
-  const saveActiveTab = () => {
-    if (tab === 'basic') return void saveBasic();
-    if (tab === 'images') return void upload();
+  // The header save: each tab maps to its own save action, so the button
+  // never scrolls away while the operator switches tabs.
+  const saveActiveTab = async (): Promise<boolean> => {
+    if (tab === 'basic') return saveBasic();
+    if (tab === 'images') return upload();
     if (tab === 'aparat')
-      return void patch(
+      return patch(
         { aparatVideoId: aparatId || null },
         aparatId ? 'ویدیوی آپارات ذخیره شد' : 'ویدیوی آپارات حذف شد',
       );
-    if (tab === 'vehicles') return void saveCompat();
-    return void saveItemsTab();
+    if (tab === 'vehicles') return saveCompat();
+    return saveItemsTab();
+  };
+  /** Header save-and-close: the editor only closes when the active tab's
+   *  save succeeded — a failure keeps it open with the error notice. */
+  const saveAndClose = async () => {
+    if (await saveActiveTab()) onClose();
   };
   /** The items-tab footer button saves everything on the tab: pending row
    *  edits first, then the new-item form when a brand was selected. */
   const saveItemsTab = async () => {
     const dirtyIds = Object.keys(itemEdits);
-    for (const itemId of dirtyIds) await saveItemEdit(itemId);
-    if (item.brandId) await createItem();
-    if (!dirtyIds.length && !item.brandId)
+    let saved = true;
+    for (const itemId of dirtyIds) saved = (await saveItemEdit(itemId)) && saved;
+    if (item.brandId) saved = (await createItem()) && saved;
+    if (!dirtyIds.length && !item.brandId) {
       notify('تغییری برای ذخیره نیست؛ برای افزودن قلم، برند را انتخاب کنید.');
+      return false;
+    }
+    return saved;
   };
   const footerLabel: Record<Tab, string> = {
     basic: 'ذخیرهٔ پایه و سئو',
@@ -604,9 +977,20 @@ function ProductEditor({
           <h2>
             {product.name} <code dir="ltr">{product.code}</code>
           </h2>
-          <button className="close" onClick={onClose} aria-label="بستن">
-            ✕
-          </button>
+          <div className="editor-head-actions">
+            <button
+              type="button"
+              className="button-primary editor-save"
+              disabled={busy}
+              title={footerLabel[tab]}
+              onClick={() => void saveAndClose()}
+            >
+              {busy ? 'در حال ذخیره…' : '✓ ذخیره'}
+            </button>
+            <button className="close" onClick={onClose} aria-label="بستن">
+              ✕
+            </button>
+          </div>
         </div>
         {notice && (
           <div className="notice modal-notice" role="status">
@@ -637,7 +1021,13 @@ function ProductEditor({
 
         <div className="editor-body">
           {tab === 'basic' && (
-            <form className="product-form" onSubmit={saveBasic}>
+            <form
+              className="product-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void saveAndClose();
+              }}
+            >
               <label>
                 نام
                 <input
@@ -692,9 +1082,11 @@ function ProductEditor({
               </label>
               <label>
                 توضیحات
-                <input
+                <textarea
+                  rows={4}
                   value={basic.description}
                   onChange={(event) => setBasic({ ...basic, description: event.target.value })}
+                  placeholder="توضیحات محصول را وارد کنید"
                 />
               </label>
               <label>
@@ -717,18 +1109,43 @@ function ProductEditor({
                 کلیدواژه‌ها
                 <input
                   value={basic.seoKeywords}
-                  onChange={(event) => setBasic({ ...basic, seoKeywords: event.target.value })}
-                  placeholder="لنت، ترموز، پژو ۲۰۶"
+                  readOnly
+                  title="کلیدواژه‌ها خودکار از نام محصول و خودروهای سازگار ساخته می‌شوند"
+                  placeholder="پس از ذخیره خودکار تولید می‌شود"
                 />
+                <small className="field-hint">
+                  تک‌واژه‌ها و ترکیب‌های دوکلمه‌ای، سه‌کلمه‌ای و بیشتر به‌صورت خودکار ساخته می‌شوند.
+                </small>
               </label>
             </form>
           )}
 
           {tab === 'images' && (
             <div>
+              <p className="media-reorder-hint">
+                برای تغییر ترتیب، تصویر را بگیرید و روی تصویر مقصد رها کنید. تصویر اصلی در سایت و
+                پیش‌نمایش لینک نمایش داده می‌شود.
+              </p>
               <div className="image-grid">
                 {(product.images ?? []).map((image) => (
-                  <div className="image-item" key={image.id}>
+                  <div
+                    className="image-item"
+                    key={image.id}
+                    draggable
+                    onDragStart={(event) => event.dataTransfer.setData('text/plain', image.id)}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      const draggedId = event.dataTransfer.getData('text/plain');
+                      const current = [...(product.images ?? [])];
+                      const from = current.findIndex((entry) => entry.id === draggedId);
+                      const to = current.findIndex((entry) => entry.id === image.id);
+                      if (from < 0 || to < 0 || from === to) return;
+                      const [moved] = current.splice(from, 1);
+                      current.splice(to, 0, moved);
+                      void reorderImages(current.map((entry) => entry.id));
+                    }}
+                  >
                     <MediaImage src={image.path} alt={image.alt ?? product.name} />
                     <small>{image.isPrimary ? 'تصویر اصلی' : (image.alt ?? 'بدون Alt')}</small>
                     <button
@@ -945,7 +1362,7 @@ function ProductEditor({
                   return (
                     <div className="item-edit-row" key={entry.id}>
                       <div className="ier-head">
-                        <b>{entry.brand.name}</b>
+                        <b>{entry.brand?.name ?? 'بدون برند'}</b>
                         <code dir="ltr">{entry.barcode}</code>
                         <StockStepper
                           itemId={entry.id}
@@ -961,6 +1378,11 @@ function ProductEditor({
                             value={edit.salePrice}
                             onChange={(plain) => setItemEdit(entry, { salePrice: plain })}
                           />
+                          {entry.priceUpdatedAt && (
+                            <small className="ier-price-date">
+                              قیمت فعلی از {formatJalaliDate(entry.priceUpdatedAt)}
+                            </small>
+                          )}
                         </label>
                         <label>
                           قیمت خرید
@@ -1096,15 +1518,6 @@ function ProductEditor({
               </p>
             </div>
           )}
-        </div>
-
-        <div className="editor-footer">
-          <button type="button" className="outline" onClick={onClose} disabled={busy}>
-            بستن
-          </button>
-          <button type="button" className="button-primary" disabled={busy} onClick={saveActiveTab}>
-            {busy ? 'در حال ذخیره…' : `✓ ${footerLabel[tab]}`}
-          </button>
         </div>
       </div>
     </div>

@@ -17,6 +17,8 @@ export type CardProduct = {
   availability: string;
   /** Cheapest active brand price (rial, as a string) or null while hidden. */
   price?: string | null;
+  /** Shamsi date of when the displayed price took effect (badge). */
+  priceUpdatedAtJalali?: string | null;
   aparatVideoId?: string | null;
   brands?: Array<{ name: string; inStock: boolean }>;
   compatibilities?: Array<{
@@ -109,6 +111,9 @@ export function ProductCard({
             <span className="card-price">
               {(product.brands?.length ?? 0) > 1 ? 'از ' : ''}
               {formatRial(Number(product.price))}
+              {product.priceUpdatedAtJalali && (
+                <small className="card-price-date">{product.priceUpdatedAtJalali}</small>
+              )}
             </span>
           ) : (
             <span>

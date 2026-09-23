@@ -2,6 +2,8 @@ import { AparatVideo } from '../../AparatVideo';
 import { NavigationButton } from '../../NavigationButton';
 import { ProductGallery } from '../../ProductGallery';
 import { PublicSubHeader } from '../../PublicSubHeader';
+import { ProductShareActions } from '../../ProductShareActions';
+import QRCode from 'qrcode';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { formatPersianNumber, formatRial } from '@salimvand/shared';
@@ -22,6 +24,8 @@ type Product = {
   availability: string;
   /** Cheapest active brand price (rial, as a string) or null while hidden. */
   price?: string | null;
+  /** Shamsi date of when the displayed price took effect (badge). */
+  priceUpdatedAtJalali?: string | null;
   brands: Array<{ name: string; inStock: boolean }>;
   images?: Array<{ path: string; thumbnailPath?: string; alt?: string }>;
   compatibilities?: Array<{
@@ -95,18 +99,37 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const product = await getProduct((await params).slug);
-  if (!product) return { title: 'محصول پیدا نشد | فروشگاه سلیم وند' };
+  if (!product) return { title: 'محصول پیدا نشد' };
   return {
-    title: product.seoTitle ?? `${product.name} | فروشگاه سلیم وند`,
+    // The root layout template appends «| فروشگاه سلیم وند» once — don't
+    // repeat it here or every SERP title shows the brand twice.
+    title: product.seoTitle ?? product.name,
     description:
       product.seoDescription ??
       product.description ??
       `استعلام ${product.name} از فروشگاه سلیم وند میاندوآب`,
     alternates: { canonical: `/product/${product.slug}` },
     openGraph: {
+      type: 'website',
       title: product.seoTitle ?? product.name,
       description: product.seoDescription ?? product.description ?? '',
+      url: `/product/${product.slug}`,
+      images: product.images?.[0]?.path
+        ? [{ url: product.images[0].path, alt: product.name }]
+        : undefined,
     },
+    twitter: {
+      card: 'summary_large_image',
+      title: product.seoTitle ?? product.name,
+      description: product.seoDescription ?? product.description ?? '',
+      images: product.images?.[0]?.path ? [product.images[0].path] : undefined,
+    },
+    robots: { index: true, follow: true },
+    keywords: [
+      product.name,
+      product.partNumber ?? '',
+      ...product.brands.map((brand) => brand.name),
+    ].filter(Boolean),
   };
 }
 
@@ -115,6 +138,13 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   if (!product) notFound();
   const specs = normalizeSpecs(product.specs);
   const compatibilities = product.compatibilities ?? [];
+  const siteUrl = process.env.PUBLIC_SITE_URL ?? 'https://salimvand.ir';
+  const shareUrl = `${siteUrl}/p/${encodeURIComponent(product.slug)}`;
+  const qrDataUrl = await QRCode.toDataURL(shareUrl, {
+    width: 180,
+    margin: 1,
+    errorCorrectionLevel: 'M',
+  });
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'Product',
@@ -123,6 +153,21 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
     description: product.description,
     image: product.images?.map((image) => image.path),
     brand: product.brands?.length ? { '@type': 'Brand', name: product.brands[0].name } : undefined,
+    category: product.category?.name,
+    mpn: product.partNumber ?? undefined,
+    offers:
+      product.price != null
+        ? {
+            '@type': 'Offer',
+            url: shareUrl,
+            priceCurrency: 'IRR',
+            price: product.price,
+            availability:
+              product.availability === 'in_stock' || product.availability === 'low_stock'
+                ? 'https://schema.org/InStock'
+                : 'https://schema.org/OutOfStock',
+          }
+        : undefined,
   };
   const breadcrumb = {
     '@context': 'https://schema.org',
@@ -243,6 +288,11 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
               <div className="product-price">
                 <small>قیمت</small>
                 <b>{formatRial(Number(product.price))}</b>
+                {product.priceUpdatedAtJalali && (
+                  <span className="price-update-badge">
+                    قیمت به‌روز: {product.priceUpdatedAtJalali}
+                  </span>
+                )}
                 {(product.brands?.length ?? 0) > 1 && <span>ارزان‌ترین برند موجود</span>}
               </div>
             )}
@@ -265,6 +315,18 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
                   </a>
                 )}
               </div>
+            </div>
+            <div className="product-share-box">
+              <ProductShareActions url={shareUrl} title={product.name} />
+              <details>
+                <summary>نمایش QR Code</summary>
+                <img
+                  src={qrDataUrl}
+                  width={180}
+                  height={180}
+                  alt={`QR Code لینک ${product.name}`}
+                />
+              </details>
             </div>
             <p className="price-note-inline">
               {product.price != null

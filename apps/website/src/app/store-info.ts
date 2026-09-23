@@ -36,6 +36,10 @@ export type StoreInfo = {
     navCatalog: string;
     navVideo: string;
     navContact: string;
+    heroHeadline: string;
+    heroSubheadline: string;
+    experienceYears: string;
+    experienceLabel: string;
   };
   telegram: string;
   bale: string;
@@ -71,6 +75,10 @@ export async function getStoreInfo(): Promise<StoreInfo> {
       navCatalog: 'کاتالوگ',
       navVideo: 'ویدئوی فروشگاه',
       navContact: 'تماس',
+      heroHeadline: 'قطعهٔ ماشینت رو پیدا کن، بقیه‌اش با ماست.',
+      heroSubheadline: 'کاتالوگ زندهٔ قطعات یدکی خودرو با اعلام وضعیت موجودی و برندهای موجود در انبار.',
+      experienceYears: '۱۸ سال',
+      experienceLabel: 'سابقهٔ تأمین قطعات یدکی',
     },
     telegram: 'https://t.me/',
     bale: 'https://ble.ir/',
@@ -151,6 +159,10 @@ export async function getStoreInfo(): Promise<StoreInfo> {
         navCatalog: headerText('navCatalog', fallback.header.navCatalog),
         navVideo: headerText('navVideo', fallback.header.navVideo),
         navContact: headerText('navContact', fallback.header.navContact),
+        heroHeadline: headerText('heroHeadline', fallback.header.heroHeadline),
+        heroSubheadline: headerText('heroSubheadline', fallback.header.heroSubheadline),
+        experienceYears: headerText('experienceYears', fallback.header.experienceYears),
+        experienceLabel: headerText('experienceLabel', fallback.header.experienceLabel),
       },
       telegram: telegramLink || fallback.telegram,
       bale: baleLink || fallback.bale,

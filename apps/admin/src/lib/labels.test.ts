@@ -8,7 +8,9 @@ import {
   ean13CheckDigit,
   ean13FromSku,
   renderLabelHTML,
+  renderShelfLabelHTML,
   type LabelOptions,
+  type ShelfLabelOptions,
 } from './labels';
 
 const base: LabelOptions = {
@@ -136,5 +138,78 @@ describe('buildSheetHTML', () => {
     expect(doc).toContain('gap:2mm');
     expect(doc).toContain("@font-face{font-family:'Vazirmatn'");
     expect(doc).toContain('woff2');
+  });
+});
+
+const shelf: ShelfLabelOptions = {
+  name: 'قفسه جلو',
+  warehouse: 'انبار اصلی',
+  size: '50x30',
+  style: 'brand',
+};
+
+describe('renderShelfLabelHTML (برچسب قفسه‌ها)', () => {
+  it('puts the shelf name and warehouse chip on the label — and nothing else', () => {
+    const html = renderShelfLabelHTML(shelf);
+    expect(html).toContain('قفسه جلو');
+    expect(html).toContain('انبار اصلی');
+    expect(html).toContain('sl-name');
+    expect(html).toContain('فروشگاه سلیم‌وند');
+    expect(html).toContain('>salimvand.ir<');
+  });
+  it('renders no code and no barcode — the name is the whole point', () => {
+    const html = renderShelfLabelHTML(shelf);
+    expect(html).not.toContain('sl-code');
+    expect(html).not.toContain('lb-bc');
+    expect(html).not.toContain('<svg');
+    expect(html).not.toContain('class="lb-digits"');
+  });
+  it('omits the warehouse chip for legacy shelves without a warehouse', () => {
+    const html = renderShelfLabelHTML({ ...shelf, warehouse: '' });
+    expect(html).not.toContain('lb-chip');
+    expect(html).not.toContain('sl-sub');
+    expect(html).toContain('قفسه جلو');
+  });
+  it('escapes operator-entered shelf data', () => {
+    const html = renderShelfLabelHTML({ ...shelf, name: '<script>قفسه</script>' });
+    expect(html).not.toContain('<script>');
+    expect(html).toContain('&lt;script&gt;قفسه&lt;/script&gt;');
+  });
+  it('applies size and style classes like product labels', () => {
+    const html = renderShelfLabelHTML({ ...shelf, size: '60x40', style: 'mono' });
+    expect(html).toContain('lb s-60x40 mono');
+  });
+  it('ships shelf-label CSS in the single-source stylesheet', () => {
+    // The print sheet and the live preview share LABEL_CSS; the shelf block
+    // must be there or the printed shelf label loses all of its styling.
+    expect(LABEL_CSS).toContain('.sl-name');
+    expect(LABEL_CSS).toContain('.lb.s-38x22 .sl-name');
+    expect(LABEL_CSS).not.toContain('.sl-code');
+  });
+  it('gives the shelf name the biggest font on the label', () => {
+    // با حذف کد و بارکد، فونت نام بزرگ‌تر شده؛ ۵mm روی ۵۰×۳۰ یعنی تقریباً یک‌پنجم ارتفاع.
+    const name50 = LABEL_CSS.match(/\.lb\.s-50x30 \.sl-name\{font-size:([\d.]+)mm\}/)?.[1];
+    expect(Number(name50)).toBeGreaterThanOrEqual(5);
+    const name60 = LABEL_CSS.match(/\.lb\.s-60x40 \.sl-name\{font-size:([\d.]+)mm\}/)?.[1];
+    expect(Number(name60)).toBeGreaterThanOrEqual(6.5);
+  });
+  it('center-aligns the shelf name and warehouse chip', () => {
+    // نام قفسه و چیپ انبار وسط چین‌اند: ستون sl-b و ردیف چیپ هر دو وسط‌چین.
+    const slb = LABEL_CSS.match(/\.sl-b\{[^}]*\}/)?.[0] ?? '';
+    const slsub = LABEL_CSS.match(/\.sl-sub\{[^}]*\}/)?.[0] ?? '';
+    expect(slb).toContain('text-align:center');
+    expect(slb).toContain('align-items:center');
+    expect(slsub).toContain('justify-content:center');
+  });
+  it('tiles one shelf label per shelf on the same A4 sheet builder', () => {
+    const rows = [
+      { ...shelf, name: 'قفسه جلو' },
+      { ...shelf, name: 'قفسه عقب' },
+      { ...shelf, name: 'باکس ابزار', warehouse: '' },
+    ];
+    const doc = buildSheetHTML(rows.map((row) => renderShelfLabelHTML(row)));
+    expect((doc.match(/class="lb /g) ?? []).length).toBe(3);
+    expect(doc).toContain('قفسه عقب');
+    expect(doc).toContain('باکس ابزار');
   });
 });

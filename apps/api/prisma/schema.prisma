@@ -49,12 +49,19 @@ enum PaymentMethod {
   transfer
   credit
 }
+enum CheckStatus {
+  pending
+  cleared
+  bounced
+  cancelled
+}
 enum UserRole {
   super_admin
   manager
   seller
   warehouse
   accountant
+  wholesale
 }
 
 enum AuditAction {
@@ -125,6 +132,34 @@ model Product {
   @@index([categoryId, deletedAt])
   @@index([partNumber])
   @@map("products")
+}
+
+model ProductOperation {
+  id          String   @id @default(uuid()) @db.Uuid
+  operationId String   @unique @db.VarChar(100)
+  productId   String   @db.Uuid
+  type        String   @db.VarChar(40)
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+  @@index([productId])
+  @@map("product_operations")
+}
+
+/// Idempotency ledger for offline inventory mutations (mirrors ProductOperation):
+/// one row per applied operation so a retried queue entry can never create a
+/// second metadata write. Stock quantity itself is protected by the unique
+/// operationId on InventoryTransaction.
+model InventoryOperation {
+  id          String   @id @default(uuid()) @db.Uuid
+  // Not unique: a single product.create may legitimately carry several
+  // inventory lines (one per brand), all sharing one operationId.
+  operationId String   @db.VarChar(100)
+  itemId      String   @db.Uuid
+  type        String   @db.VarChar(40)
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+  @@unique([operationId, itemId])
+  @@index([itemId])
+  @@index([operationId])
+  @@map("inventory_operations")
 }
 
 model ProductImage {
@@ -199,7 +234,7 @@ model Location {
 model InventoryItem {
   id           String                 @id @default(uuid()) @db.Uuid
   productId    String                 @db.Uuid
-  brandId      String                 @db.Uuid
+  brandId      String?                @db.Uuid
   barcode      String                 @unique @db.VarChar(20)
   quantity     Int                    @default(0)
   purchasePrice BigInt                @default(0)
@@ -208,16 +243,37 @@ model InventoryItem {
   locationId   String?                @db.Uuid
   notes        String?
   isActive     Boolean                @default(true)
+  /// When the current salePrice took effect — feeds the Shamsi price badges.
+  priceUpdatedAt DateTime?            @db.Timestamptz(6)
   product      Product                @relation(fields: [productId], references: [id])
-  brand        Brand                  @relation(fields: [brandId], references: [id])
+  brand        Brand?                 @relation(fields: [brandId], references: [id])
   location     Location?              @relation(fields: [locationId], references: [id])
   transactions InventoryTransaction[]
   invoiceItems InvoiceItem[]
   purchaseItems PurchaseInvoiceItem[]
+  priceHistory InventoryPriceHistory[]
   @@unique([productId, brandId])
   @@index([productId])
   @@index([locationId])
   @@map("inventory_items")
+}
+
+/// Sale-price audit trail: one row per actual price change so the shop can
+/// see — in Shamsi — when a price was at a given number (inflation tracking).
+/// priceUpdatedAt on the item itself feeds the light-weight badges.
+model InventoryPriceHistory {
+  id           BigInt        @id @default(autoincrement())
+  itemId       String        @db.Uuid
+  oldSalePrice BigInt?
+  newSalePrice BigInt
+  userId       String?       @db.Uuid
+  source       String        @default("panel") @db.VarChar(30)
+  operationId  String?       @unique @db.VarChar(100)
+  item         InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  user         User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt    DateTime      @default(now()) @db.Timestamptz(6)
+  @@index([itemId, createdAt(sort: Desc)])
+  @@map("inventory_price_history")
 }
 
 model InventoryTransaction {
@@ -229,6 +285,7 @@ model InventoryTransaction {
   refType        String?                   @db.VarChar(30)
   refId          String?                   @db.Uuid
   reason         String?                   @db.VarChar(255)
+  operationId    String?                   @unique @db.VarChar(100)
   userId         String                    @db.Uuid
   item           InventoryItem             @relation(fields: [itemId], references: [id])
   user           User                      @relation(fields: [userId], references: [id])
@@ -248,6 +305,7 @@ model User {
   lastLoginAt  DateTime?              @db.Timestamptz(6)
   transactions InventoryTransaction[]
   refreshTokens RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
   auditLogs AuditLog[]
   settings  Setting[]
   purchaseInvoices PurchaseInvoice[]
@@ -256,9 +314,25 @@ model User {
   payments Payment[]
   customerPayments CustomerPayment[]
   returns ReturnRecord[]
+  syncDevices SyncDevice[]
+  syncOperations SyncOperation[]
+  syncConflicts SyncConflict[]
+  priceHistory InventoryPriceHistory[]
   createdAt    DateTime               @default(now()) @db.Timestamptz(6)
   updatedAt    DateTime               @updatedAt @db.Timestamptz(6)
   @@map("users")
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  tokenHash String   @unique @db.VarChar(128)
+  expiresAt DateTime @db.Timestamptz(6)
+  usedAt    DateTime? @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, expiresAt])
+  @@map("password_reset_tokens")
 }
 
 model Counter {
@@ -287,6 +361,7 @@ model Invoice {
   paymentStatus PaymentStatus @default(unpaid)
   paymentMethod PaymentMethod?
   paidAmount   BigInt        @default(0)
+  operationId  String?       @unique @db.VarChar(100)
   paidAt       DateTime?     @db.Timestamptz(6)
   issuedById   String        @db.Uuid
   issuedBy     User          @relation(fields: [issuedById], references: [id])
@@ -298,6 +373,9 @@ model Invoice {
   issuedAt     DateTime      @default(now()) @db.Timestamptz(6)
   voidedAt     DateTime?     @db.Timestamptz(6)
   @@index([status, issuedAt])
+  // Cursor-paginated archive listing: keyset on (issuedAt, id) — [status,
+  // issuedAt] alone cannot serve the statusless "all invoices" scan.
+  @@index([issuedAt, id])
   @@map("invoices")
 }
 
@@ -327,6 +405,7 @@ model PurchaseInvoice {
   subtotal       BigInt         @default(0)
   total          BigInt         @default(0)
   paidAmount     BigInt         @default(0)
+  operationId   String?        @unique @db.VarChar(100)
   status         PurchaseStatus @default(issued)
   issuedById     String         @db.Uuid
   supplier       Supplier       @relation(fields: [supplierId], references: [id])
@@ -347,12 +426,29 @@ model SupplierPayment {
   notes        String?
   paidAt       DateTime        @default(now()) @db.Timestamptz(6)
   receivedById String          @db.Uuid
+  operationId  String?         @unique @db.VarChar(100)
   supplier     Supplier        @relation(fields: [supplierId], references: [id])
   invoice      PurchaseInvoice @relation(fields: [invoiceId], references: [id])
-  receivedBy   User            @relation(fields: [receivedById], references: [id])
+  receivedBy   User           @relation(fields: [receivedById], references: [id])
+  check        SupplierCheck?
   @@index([supplierId, paidAt])
   @@index([invoiceId, paidAt])
   @@map("supplier_payments")
+}
+
+model SupplierCheck {
+  id          String   @id @default(uuid()) @db.Uuid
+  paymentId   String   @unique @db.Uuid
+  checkNumber String?
+  bank        String?
+  branch      String?
+  amount      BigInt
+  dueDate     DateTime @db.Date
+  status      CheckStatus @default(pending)
+  clearedAt   DateTime?
+  bouncedAt   DateTime?
+  payment     SupplierPayment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  @@index([dueDate, status])
 }
 
 model PurchaseInvoiceItem {
@@ -407,11 +503,30 @@ model Payment {
   amount      BigInt
   method      PaymentMethod
   receivedById String       @db.Uuid
+  operationId  String?       @unique @db.VarChar(100)
   receivedAt  DateTime      @default(now()) @db.Timestamptz(6)
   invoice     Invoice       @relation(fields: [invoiceId], references: [id])
   receivedBy  User          @relation(fields: [receivedById], references: [id])
+  checks      PaymentCheck[]
   @@index([invoiceId, receivedAt])
   @@map("payments")
+}
+
+model PaymentCheck {
+  id          String   @id @default(uuid()) @db.Uuid
+  paymentId   String   @db.Uuid
+  checkNumber String?  @db.VarChar(80)
+  bank        String?  @db.VarChar(120)
+  branch      String?  @db.VarChar(120)
+  amount      BigInt
+  dueDate     DateTime @db.Date
+  status      CheckStatus @default(pending)
+  clearedAt   DateTime?
+  bouncedAt   DateTime?
+  notes       String?
+  payment     Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  @@index([dueDate])
+  @@map("payment_checks")
 }
 
 model InvoiceItem {
@@ -549,4 +664,83 @@ model BackupJob {
   finishedAt  DateTime? @db.Timestamptz(6)
   @@index([startedAt])
   @@map("backup_jobs")
+}
+
+enum SyncOperationStatus {
+  pending
+  applied
+  conflict
+  failed
+}
+
+model SyncDevice {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @db.Uuid
+  deviceId   String   @db.VarChar(100)
+  name       String?  @db.VarChar(120)
+  lastSeenAt DateTime @default(now()) @db.Timestamptz(6)
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(6)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([userId, deviceId])
+  @@index([userId, lastSeenAt])
+  @@map("sync_devices")
+}
+
+model SyncOperation {
+  id            String              @id @default(uuid()) @db.Uuid
+  operationId   String              @unique @db.VarChar(100)
+  deviceId      String              @db.VarChar(100)
+  userId        String              @db.Uuid
+  type          String              @db.VarChar(80)
+  payload       Json
+  status        SyncOperationStatus @default(pending)
+  result        Json?
+  error         String?             @db.VarChar(500)
+  attempts      Int                 @default(0)
+  lastAttemptAt DateTime?           @db.Timestamptz(6)
+  createdAt     DateTime            @default(now()) @db.Timestamptz(6)
+  appliedAt     DateTime?           @db.Timestamptz(6)
+  user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, status, createdAt])
+  @@index([deviceId, createdAt])
+  @@map("sync_operations")
+}
+
+model SyncChange {
+  revision    BigInt   @id @default(autoincrement())
+  entityType  String   @db.VarChar(60)
+  entityId    String   @db.VarChar(100)
+  action      String   @db.VarChar(30)
+  payload     Json?
+  operationId String?  @db.VarChar(100)
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+  @@index([createdAt])
+  @@index([entityType, entityId, revision])
+  @@map("sync_changes")
+}
+
+
+enum SyncConflictStatus {
+  open
+  resolved
+}
+
+model SyncConflict {
+  id String @id @default(uuid()) @db.Uuid
+  operationId String @db.VarChar(100)
+  userId String @db.Uuid
+  deviceId String @db.VarChar(100)
+  type String @db.VarChar(80)
+  code String @db.VarChar(80)
+  payload Json
+  serverState Json?
+  status SyncConflictStatus @default(open)
+  resolution Json?
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  resolvedAt DateTime? @db.Timestamptz(6)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, status, createdAt])
+  @@unique([operationId, status])
+  @@map("sync_conflicts")
 }

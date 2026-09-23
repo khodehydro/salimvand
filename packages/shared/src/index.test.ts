@@ -16,6 +16,7 @@ import {
   formatRial,
   normalizeDigits,
   parseDigitsInput,
+  validateSyncOperationEnvelope,
 } from './index';
 
 describe('shared utilities', () => {
@@ -123,6 +124,69 @@ describe('shared utilities', () => {
     const seo = buildProductSeo({ name: 'قاب ستون', vehicleNames: ['پژو ۲۰۶'] });
     expect(seo.seoTitle).toContain('قاب ستون');
     expect(seo.seoDescription).toContain('میاندوآب');
+  });
+  it('validates canonical offline operation envelopes', () => {
+    const valid = validateSyncOperationEnvelope({
+      operationId: 'android-2026-0001',
+      deviceId: 'phone-a',
+      type: 'invoice.pay',
+      payload: { invoiceId: 'inv-1', amount: '1000', method: 'cash' },
+    });
+    expect(valid.ok).toBe(true);
+    expect(validateSyncOperationEnvelope(null).ok).toBe(false);
+    expect(
+      validateSyncOperationEnvelope({
+        operationId: 'short',
+        deviceId: 'phone-a',
+        type: 'invoice.pay',
+        payload: {},
+      }).ok,
+    ).toBe(false);
+    expect(
+      validateSyncOperationEnvelope({
+        operationId: 'android-2026-0002',
+        deviceId: 'phone-a',
+        type: 'unsupported',
+        payload: {},
+      }).ok,
+    ).toBe(false);
+    expect(
+      validateSyncOperationEnvelope({
+        operationId: 'android-2026-0003',
+        deviceId: 'phone-a',
+        type: 'invoice.pay',
+        payload: [],
+      }).ok,
+    ).toBe(false);
+  });
+  it('accepts the mobile product and inventory metadata operations', () => {
+    // product.create with a nested inventory block is the atomic mobile flow.
+    expect(
+      validateSyncOperationEnvelope({
+        operationId: 'android-2026-product-000001',
+        deviceId: 'phone-a',
+        type: 'product.create',
+        payload: {
+          name: 'لنت ترمز جلو پژو ۲۰۶',
+          categoryId: 'ca7e9000-0000-4000-8000-000000000001',
+          inventory: {
+            brandId: null,
+            barcode: '6261234567890',
+            purchasePrice: '1850000',
+            salePrice: '2450000',
+            initialQuantity: 10,
+          },
+        },
+      }).ok,
+    ).toBe(true);
+    expect(
+      validateSyncOperationEnvelope({
+        operationId: 'android-2026-meta-000001',
+        deviceId: 'phone-a',
+        type: 'inventory.update_metadata',
+        payload: { itemId: '17a0e000-0000-4000-8000-000000000001', salePrice: '2450000' },
+      }).ok,
+    ).toBe(true);
   });
   it('formats Jalali dates with Persian digits', () => {
     const formatted = formatJalaliDate(new Date('2026-08-27T12:00:00Z'));

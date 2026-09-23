@@ -59,6 +59,7 @@ describe('PurchaseController', () => {
       'تسویه',
       'user-1',
       '127.0.0.1',
+      undefined,
     );
   });
 });

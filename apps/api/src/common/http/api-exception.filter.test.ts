@@ -42,6 +42,41 @@ describe('ApiExceptionFilter', () => {
     expect(res.payload).toEqual({ ok: false, error: { code: 'NOT_FOUND', message: 'یافت نشد' } });
   });
 });
+it('maps Prisma P2002 unique violations to a readable 409', () => {
+  const res = {
+    statusCode: 0,
+    payload: undefined as unknown,
+    status(code: number) {
+      this.statusCode = code;
+      return this;
+    },
+    json(payload: unknown) {
+      this.payload = payload;
+      return payload;
+    },
+  };
+  new ApiExceptionFilter().catch(
+    Object.assign(new Error('Unique constraint failed'), {
+      code: 'P2002',
+      meta: { target: ['slug'] },
+    }),
+    {
+      switchToHttp: () => ({
+        getResponse: () => res,
+        getRequest: () => ({ url: '/x', method: 'POST' }),
+      }),
+    } as never,
+  );
+  expect(res.statusCode).toBe(409);
+  expect(res.payload).toEqual({
+    ok: false,
+    error: {
+      code: 'CONFLICT',
+      message: 'مقدار تکراری برای slug؛ رکوردی با این مشخصات از قبل ثبت شده است',
+      detail: 'P2002',
+    },
+  });
+});
 it('exposes a short diagnostic for unexpected server errors', () => {
   const res = {
     statusCode: 0,

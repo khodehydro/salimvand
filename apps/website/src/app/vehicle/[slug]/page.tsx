@@ -59,11 +59,21 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const data = await getVehicle((await params).slug);
   return {
-    title: data ? `قطعات مناسب ${data.vehicle.name} | فروشگاه سلیم وند` : 'خودرو پیدا نشد',
+    title: data ? `قطعات مناسب ${data.vehicle.name}` : 'خودرو پیدا نشد',
     description: data
-      ? `کاتالوگ لوازم داخلی و قطعات مناسب ${data.vehicle.name} از فروشگاه سلیم وند میاندوآب.`
+      ? `کاتالوگ لوازم یدکی و قطعات مناسب ${data.vehicle.name} از فروشگاه سلیم وند میاندوآب.`
+      : undefined,
+    keywords: data
+      ? [`قطعات ${data.vehicle.name}`, `لوازم یدکی ${data.vehicle.name}`, 'قطعات خودرو میاندوآب']
       : undefined,
     alternates: data ? { canonical: `/vehicle/${data.vehicle.slug}` } : undefined,
+    openGraph: data
+      ? {
+          type: 'website',
+          title: `قطعات مناسب ${data.vehicle.name}`,
+          description: `کاتالوگ قطعات ${data.vehicle.name}`,
+        }
+      : undefined,
   };
 }
 

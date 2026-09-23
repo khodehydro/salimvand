@@ -1,13 +1,13 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { hashForPage } from '../lib/admin-route';
-import { api, downloadFile } from '../lib/api';
-import { Sheet } from '@salimvand/ui';
+import { api, downloadFile, fetchAllPages } from '../lib/api';
+import { Modal } from '@salimvand/ui';
 import { StockStepper } from '../components/StockStepper';
 import { ProductCreateModal } from '../components/ProductCreateModal';
 import { BarcodeSvg } from '../components/BarcodeSvg';
-import { formatPersianNumber, formatRial } from '@salimvand/shared';
+import { formatJalaliDate, formatPersianNumber, formatRial } from '@salimvand/shared';
 import { FaNumberInput } from '../components/FaNumberInput';
-import { locationChip, locationLabel } from '../lib/location-label';
+import { locationLabel } from '../lib/location-label';
 
 const BarcodeScanner = lazy(() =>
   import('../components/BarcodeScanner').then((module) => ({ default: module.BarcodeScanner })),
@@ -18,6 +18,9 @@ type Item = {
   barcode: string;
   quantity: number;
   salePrice: string;
+  purchasePrice?: string;
+  /** When the current sale price took effect (ISO) — the Shamsi price badge. */
+  priceUpdatedAt?: string | null;
   minStock?: number | null;
   product?: {
     id: string;
@@ -47,10 +50,25 @@ type VehicleMake = {
   models: Array<{ id: string; name: string; trims: Array<{ id: string; name: string }> }>;
 };
 type Transaction = { id: string; type: string; quantityChange: number; quantityAfter: number };
+/** Sale-price timeline row of one stock line (GET /inventory/items/:id/price-history). */
+type PriceHistoryRow = {
+  id: string;
+  oldSalePrice: string | null;
+  newSalePrice: string;
+  source: string;
+  userName: string | null;
+  changedAt: string;
+  changedAtJalali: string;
+};
+const priceSourceLabels: Record<string, string> = {
+  panel: 'پنل',
+  android: 'اندروید',
+  bulk: 'تغییر گروهی',
+};
 
 const tabs = [
-  { id: 'register', label: 'ثبت محصول', hint: 'انبار + کاتالوگ + سایت، همه در یک پنجره' },
   { id: 'stock', label: 'لیست انبار', hint: 'جست‌وجوی لحظه‌ای، بارکدخوان و اصلاح سریع موجودی' },
+  { id: 'register', label: 'ثبت محصول', hint: 'انبار + کاتالوگ + سایت، همه در یک پنجره' },
   { id: 'shelves', label: 'قفسه‌ها', hint: 'انبارها و گروه‌بندی قفسه‌ها — ایجاد، ویرایش و حذف' },
 ] as const;
 type Tab = (typeof tabs)[number]['id'];
@@ -94,19 +112,24 @@ function stockRatio(item: Item): number {
 }
 
 export function InventoryPage() {
-  const [tab, setTab] = useState<Tab>('register');
+  const [tab, setTab] = useState<Tab>('stock');
   const [items, setItems] = useState<Item[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [categories, setCategories] = useState<Option[]>([]);
   const [brands, setBrands] = useState<Option[]>([]);
   const [vehicles, setVehicles] = useState<VehicleMake[]>([]);
   const [filter, setFilter] = useState('');
-  const [scanCode, setScanCode] = useState('');
+  const [bulkBrand, setBulkBrand] = useState('');
+  const [bulkCategory, setBulkCategory] = useState('');
+  const [bulkSalePercent, setBulkSalePercent] = useState('');
+  const [bulkPurchasePercent, setBulkPurchasePercent] = useState('');
+  const [bulkRoundTo, setBulkRoundTo] = useState('1000');
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [message, setMessage] = useState('');
-  const [createOpen, setCreateOpen] = useState(false);
   // Detail sheet for one inventory item: ledger, transfer and bulk receive.
   const [detail, setDetail] = useState<Item | null>(null);
   const [history, setHistory] = useState<Transaction[]>([]);
+  const [priceHistory, setPriceHistory] = useState<PriceHistoryRow[]>([]);
   const [transferLocation, setTransferLocation] = useState('');
   const [receiveQty, setReceiveQty] = useState('');
   const [busy, setBusy] = useState(false);
@@ -118,15 +141,31 @@ export function InventoryPage() {
   const [shelfForm, setShelfForm] = useState({ name: '', code: '', parentId: '' });
   const [editingShelf, setEditingShelf] = useState<Location | null>(null);
   const [locationError, setLocationError] = useState('');
+  // نمای فعلی لیست اقلام — برای هایلایت سگمنت «همه اقلام / کم‌موجود»
+  const [stockView, setStockView] = useState<'all' | 'low'>('all');
   const skipFirstSearch = useRef(true);
 
   const load = (q = filter) =>
-    api<{ data: Item[] }>(`/inventory/items${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ''}`)
-      .then((r) => setItems(r.data))
+    // Cursor-paginated endpoint: drain the pages so the grouped view keeps
+    // showing the whole (filtered) stock list.
+    fetchAllPages<Item>(`/inventory/items${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ''}`, {
+      limit: 500,
+    })
+      .then((data) => setItems(data))
       .catch((e: Error) => setMessage(e.message));
   const loadLocations = () =>
     api<{ data: Location[] }>('/locations')
-      .then((r) => setLocations(r.data))
+      // Warehouses first, then shelves in numeric code order (۱.۱ … ۱۰.۱ … ۲۰.۷)
+      // — the API's plain string sort would push shelf 10-19 between 1 and 2.
+      .then((r) =>
+        setLocations(
+          [...r.data].sort(
+            (a, b) =>
+              Number(b.type === 'warehouse') - Number(a.type === 'warehouse') ||
+              a.code.localeCompare(b.code, 'en', { numeric: true }),
+          ),
+        ),
+      )
       .catch(() => undefined);
 
   useEffect(() => {
@@ -190,7 +229,6 @@ export function InventoryPage() {
       );
       setDetail(result.data);
       setMessage(`قلم ${result.data.product?.name ?? ''} پیدا شد`);
-      setScanCode('');
     } catch (e) {
       setMessage((e as Error).message);
     }
@@ -201,11 +239,31 @@ export function InventoryPage() {
     setTransferLocation(item.location?.id ?? '');
     setReceiveQty('');
     setHistory([]);
+    setPriceHistory([]);
     try {
-      const result = await api<{ data: Transaction[] }>(`/inventory/items/${item.id}/transactions`);
-      setHistory(result.data);
+      const [transactions, prices] = await Promise.all([
+        api<{ data: Transaction[] }>(`/inventory/items/${item.id}/transactions`),
+        api<{ data: PriceHistoryRow[] }>(`/inventory/items/${item.id}/price-history`),
+      ]);
+      setHistory(transactions.data);
+      setPriceHistory(prices.data);
     } catch (e) {
       setMessage((e as Error).message);
+    }
+  };
+
+  const removeItem = async () => {
+    if (!detail || !window.confirm(`قلم «${detail.product?.name ?? ''}» حذف شود؟`)) return;
+    setBusy(true);
+    try {
+      await api(`/inventory/items/${detail.id}`, { method: 'DELETE' });
+      setMessage('قلم از لیست انبار حذف شد');
+      setDetail(null);
+      await load();
+    } catch (e) {
+      setMessage((e as Error).message);
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -235,7 +293,7 @@ export function InventoryPage() {
     try {
       await api('/inventory/receive', {
         method: 'POST',
-        body: JSON.stringify({ itemId: detail.id, quantity: qty, userId: 'panel-user' }),
+        body: JSON.stringify({ itemId: detail.id, quantity: qty, reason: 'ورود از کارت قلم' }),
       });
       setMessage('ورود کالا ثبت شد');
       await load();
@@ -252,6 +310,7 @@ export function InventoryPage() {
       const result = await api<{ data: Item[] }>('/inventory/low-stock');
       setItems(result.data);
       setFilter('');
+      setStockView('low');
       setMessage(`${result.data.length} قلم کم‌موجودی`);
     } catch (e) {
       setMessage((e as Error).message);
@@ -400,18 +459,27 @@ export function InventoryPage() {
   };
 
   const activeTab = tabs.find((entry) => entry.id === tab) ?? tabs[0];
+  const totalPieces = items.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
     <section className="inventory-page">
       <div className="page-title">
         <div>
-          <h1>انبار و موجودی</h1>
-          <p className="muted">{activeTab.hint}</p>
+          <h1>{tab === 'stock' ? 'اقلام موجودی و اصلاح' : 'انبار و موجودی'}</h1>
+          <p className="muted">
+            {tab === 'stock'
+              ? 'لیست قلم‌های موجودی (محصول × برند) با قفسه و آستانه؛ ویرایش با دلیل اجباری و تاریخچه تراکنش‌ها.'
+              : activeTab.hint}
+          </p>
         </div>
-        <span className="count">{items.length} قلم</span>
+        <span className="count inventory-count">
+          <b>{formatPersianNumber(items.length)} قلم</b>
+          <i>·</i>
+          <b>{formatPersianNumber(totalPieces)} قطعه</b>
+        </span>
       </div>
 
-      <nav className="settings-tabs" aria-label="بخش‌های انبار">
+      <nav className="settings-tabs seg-tabs" aria-label="بخش‌های انبار">
         {tabs.map((entry) => (
           <button
             type="button"
@@ -429,26 +497,84 @@ export function InventoryPage() {
       {message && <div className="notice">{message}</div>}
 
       {tab === 'register' && (
-        <div className="register-tab">
-          <div className="register-card">
-            <b>ثبت محصول جدید</b>
-            <p className="muted">
-              یک پنجره، همهٔ قابلیت‌ها: مشخصات و سئو، قلم انبار با برند و بارکد و قیمت، موجودی
-              اولیه، قفسه و خودروهای سازگار. با یک بار ذخیره، محصول هم‌زمان در انبار، در کاتالوگ و
-              روی سایت ثبت می‌شود — دیگر نیازی نیست اول در جایی ثبت کنید و بعد از لیست ادامه دهید.
-            </p>
-            <button className="button-primary" onClick={() => setCreateOpen(true)}>
-              + ثبت محصول جدید
-            </button>
-          </div>
-        </div>
+        <ProductCreateModal
+          open
+          inline
+          onClose={() => setTab('stock')}
+          onCreated={(msg) => {
+            setMessage(msg);
+            void load();
+          }}
+          categories={categories}
+          brands={brands}
+          locations={locations}
+          vehicles={vehicles}
+        />
       )}
 
       {tab === 'stock' && (
         <div className="stock-tab">
-          {/* Live search: the list filters on every keystroke — no button. */}
-          <div className="stock-search">
-            <div className="search-field">
+          {/* One compact filter toolbar, matching the documented inventory screen. */}
+          <div className="inventory-kpis" aria-label="خلاصه موجودی">
+            <article className="inventory-kpi">
+              <span className="kpi-icon">▱</span>
+              <div>
+                <small>اقلام فعال</small>
+                <strong>{formatPersianNumber(items.length)}</strong>
+                <em>در {formatPersianNumber(groups.length)} محصول</em>
+              </div>
+            </article>
+            <article className="inventory-kpi">
+              <span className="kpi-icon">▣</span>
+              <div>
+                <small>ارزش انبار (خرید)</small>
+                <strong>
+                  {formatRial(
+                    items.reduce(
+                      (sum, item) =>
+                        sum + item.quantity * Number(item.purchasePrice ?? item.salePrice),
+                      0,
+                    ),
+                  )}
+                </strong>
+                <em>بر پایه قیمت خرید</em>
+              </div>
+            </article>
+            <article className="inventory-kpi inventory-kpi-sale-value">
+              <span className="kpi-icon">◈</span>
+              <div>
+                <small>ارزش انبار (فروش)</small>
+                <strong>
+                  {formatRial(
+                    items.reduce(
+                      (sum, item) => sum + item.quantity * Number(item.salePrice || 0),
+                      0,
+                    ),
+                  )}
+                </strong>
+                <em>بر پایه قیمت فروش</em>
+              </div>
+            </article>
+            <article className="inventory-kpi inventory-kpi-alert">
+              <span className="kpi-icon">△</span>
+              <div>
+                <small>زیر آستانه</small>
+                <strong>
+                  {formatPersianNumber(
+                    items.filter(
+                      (item) =>
+                        item.quantity > 0 &&
+                        item.minStock != null &&
+                        item.quantity <= item.minStock,
+                    ).length,
+                  )}
+                </strong>
+                <em>نیاز به سفارش</em>
+              </div>
+            </article>
+          </div>
+          <div className="inventory-filter-toolbar">
+            <div className="search-field inventory-search-field">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
                 <path
@@ -459,8 +585,8 @@ export function InventoryPage() {
                 />
               </svg>
               <input
-                placeholder="جست‌وجوی فوری: نام کالا، کد محصول، بارکد یا برند…"
-                aria-label="جست‌وجوی فوری کالا"
+                placeholder="نام قطعه، کد محصول، بارکد یا برند…"
+                aria-label="جست‌وجوی کالا در انبار"
                 value={filter}
                 onChange={(e) => setFilter(e.target.value)}
               />
@@ -475,171 +601,347 @@ export function InventoryPage() {
                 </button>
               )}
             </div>
+            <div className="toolbar-filter-row">
+              <div
+                className={`toolbar-pill${stockView === 'low' ? ' is-active' : ''}`}
+                aria-label="نمایش اقلام"
+              >
+                <span className="tp-lead" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
+                    <path d="M3.3 7l8.7 5 8.7-5" />
+                    <path d="M12 22V12" />
+                  </svg>
+                </span>
+                <div className="tp-options" role="tablist" aria-label="نمایش اقلام">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={stockView === 'all'}
+                    className={stockView === 'all' ? 'active' : ''}
+                    onClick={() => {
+                      setStockView('all');
+                      setFilter('');
+                      void load('');
+                    }}
+                  >
+                    همه اقلام
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={stockView === 'low'}
+                    className={stockView === 'low' ? 'active' : ''}
+                    onClick={() => void lowStock()}
+                  >
+                    کم‌موجود
+                  </button>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="pill"
+                onClick={() =>
+                  void downloadFile('/reports/inventory/export', 'salimvand-inventory.csv').catch(
+                    (e: Error) => setMessage(e.message),
+                  )
+                }
+              >
+                خروجی CSV
+              </button>
+              <button
+                type="button"
+                className="pill"
+                onClick={() =>
+                  void downloadFile(
+                    '/reports/inventory/accounting-export',
+                    'salimvand-products-accounting.xlsx',
+                  ).catch((e: Error) => setMessage(e.message))
+                }
+              >
+                خروجی حسابداری
+              </button>
+              <Suspense
+                fallback={<span className="muted scanner-inline-loading">آماده‌سازی اسکنر…</span>}
+              >
+                <BarcodeScanner
+                  onCode={(code) => {
+                    setFilter(code);
+                    void lookupBarcode(code);
+                  }}
+                />
+              </Suspense>
+            </div>
             <p className="stock-search-meta" aria-live="polite">
               {filter
-                ? `${formatPersianNumber(groups.length)} کالا · ${formatPersianNumber(
-                    items.length,
-                  )} قلم برای «${filter}»`
-                : `${formatPersianNumber(groups.length)} کالا · ${formatPersianNumber(
-                    items.length,
-                  )} قلم در انبار`}
+                ? `${formatPersianNumber(groups.length)} کالا · ${formatPersianNumber(items.length)} قلم برای «${filter}»`
+                : `${formatPersianNumber(groups.length)} کالا · ${formatPersianNumber(items.length)} قلم در انبار`}
             </p>
           </div>
-          <div className="list-toolbar stock-toolbar">
-            <button className="row-action" onClick={() => void lowStock()}>
-              فقط کم‌موجودی
-            </button>
-            <button
-              className="row-action"
-              onClick={() => {
-                setFilter('');
-                void load('');
-              }}
-            >
-              همه اقلام
-            </button>
-            <button
-              className="row-action"
-              onClick={() =>
-                void downloadFile('/reports/inventory/export', 'salimvand-inventory.csv').catch(
-                  (e: Error) => setMessage(e.message),
-                )
-              }
-            >
-              خروجی CSV
-            </button>
-          </div>
-          <div className="barcode-bar">
-            <input
-              value={scanCode}
-              onChange={(e) => setScanCode(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') void lookupBarcode(scanCode);
-              }}
-              placeholder="بارکدخوان یا ورود دستی بارکد، سپس Enter"
-              dir="ltr"
-            />
-            <button onClick={() => void lookupBarcode(scanCode)}>جستجو با بارکد</button>
-            <Suspense fallback={<span className="muted">در حال آماده‌سازی اسکنر…</span>}>
-              <BarcodeScanner
-                onCode={(code) => {
-                  setScanCode(code);
-                  void lookupBarcode(code);
+          <div className="bulk-price-toolbar">
+            <b className="bulk-price-title">مدیریت گروهی قیمت</b>
+            <div className="toolbar-filter-row">
+              <label
+                className={`toolbar-pill${bulkBrand ? ' is-active' : ''}`}
+                aria-label="برند تغییر گروهی"
+              >
+                <span className="tp-lead" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <circle cx="12" cy="8" r="6" />
+                    <path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11" />
+                  </svg>
+                </span>
+                <select value={bulkBrand} onChange={(event) => setBulkBrand(event.target.value)}>
+                  <option value="">همه برندها</option>
+                  {brands.map((brand) => (
+                    <option key={brand.id} value={brand.id}>
+                      {brand.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label
+                className={`toolbar-pill${bulkCategory ? ' is-active' : ''}`}
+                aria-label="دستهٔ تغییر گروهی"
+              >
+                <span className="tp-lead" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
+                  </svg>
+                </span>
+                <select
+                  value={bulkCategory}
+                  onChange={(event) => setBulkCategory(event.target.value)}
+                >
+                  <option value="">همه دسته‌ها</option>
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div
+                className={`toolbar-pill${bulkSalePercent || bulkPurchasePercent ? ' is-active' : ''}`}
+                aria-label="درصد تغییر و گرد کردن"
+              >
+                <span className="tp-lead" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M19 5 5 19" />
+                    <circle cx="6.5" cy="6.5" r="2.5" />
+                    <circle cx="17.5" cy="17.5" r="2.5" />
+                  </svg>
+                </span>
+                <input
+                  dir="ltr"
+                  inputMode="decimal"
+                  placeholder="٪ فروش"
+                  value={bulkSalePercent}
+                  onChange={(event) => setBulkSalePercent(event.target.value)}
+                />
+                <span className="drf-sep" aria-hidden="true" />
+                <input
+                  dir="ltr"
+                  inputMode="decimal"
+                  placeholder="٪ خرید"
+                  value={bulkPurchasePercent}
+                  onChange={(event) => setBulkPurchasePercent(event.target.value)}
+                />
+                <span className="drf-sep" aria-hidden="true" />
+                <input
+                  dir="ltr"
+                  inputMode="numeric"
+                  placeholder="گرد کردن"
+                  value={bulkRoundTo}
+                  onChange={(event) => setBulkRoundTo(event.target.value)}
+                />
+              </div>
+              <button
+                className="bulk-apply"
+                disabled={bulkBusy}
+                onClick={async () => {
+                  if (!bulkBrand && !bulkCategory)
+                    return setMessage('برای تغییر گروهی، برند یا دسته را انتخاب کنید.');
+                  setBulkBusy(true);
+                  try {
+                    const result = await api<{ data: { updated: number } }>(
+                      '/inventory/bulk-prices',
+                      {
+                        method: 'POST',
+                        body: JSON.stringify({
+                          brandId: bulkBrand || undefined,
+                          categoryId: bulkCategory || undefined,
+                          salePercent: Number(bulkSalePercent || 0),
+                          purchasePercent: Number(bulkPurchasePercent || 0),
+                          roundTo: Number(bulkRoundTo || 0),
+                        }),
+                      },
+                    );
+                    setMessage(`${result.data.updated.toLocaleString('fa-IR')} قلم بروزرسانی شد.`);
+                    await load();
+                  } catch (error) {
+                    setMessage((error as Error).message);
+                  } finally {
+                    setBulkBusy(false);
+                  }
                 }}
-              />
-            </Suspense>
+              >
+                {bulkBusy ? 'در حال بروزرسانی…' : 'اعمال تغییر قیمت'}
+              </button>
+            </div>
           </div>
-
-          <div className="inventory-list">
-            {groups.map((group) => {
-              const totalPieces = group.items.reduce((sum, item) => sum + item.quantity, 0);
-              const prices = group.items.map((item) => Number(item.salePrice)).filter(Boolean);
-              const cheapest = prices.length ? Math.min(...prices) : null;
+          <div className="inventory-table-head inventory-list-head" aria-hidden="true">
+            <span>محصول</span>
+            <span>برند و کد</span>
+            <span>وضعیت و موجودی</span>
+            <span>قفسه و قیمت</span>
+            <span>عملیات</span>
+          </div>
+          <div className="inventory-list inventory-flat-list">
+            {items.map((item) => {
+              const status = stockStatus(item);
+              const product = item.product;
+              const purchasePrice = Number(item.purchasePrice ?? 0);
+              const salePrice = Number(item.salePrice ?? 0);
+              const grossProfit =
+                salePrice > 0 && purchasePrice > 0 ? salePrice - purchasePrice : null;
+              const margin =
+                grossProfit !== null && purchasePrice > 0
+                  ? (grossProfit / purchasePrice) * 100
+                  : null;
               return (
-                <div className="inventory-group" key={group.productId}>
-                  <div className="ig-head">
+                <article
+                  className={`inventory-flat-row${item.quantity <= 0 ? ' is-out' : ''}`}
+                  key={item.id}
+                >
+                  <div className="inventory-product-cell">
                     <span className="product-thumb">
-                      {group.image ? (
-                        <img src={group.image} alt={group.name} loading="lazy" />
+                      {product?.images?.[0]?.path ? (
+                        <img src={product.images[0].path} alt={product.name} loading="lazy" />
                       ) : (
                         <span>قطعه</span>
                       )}
                     </span>
-                    <div className="ig-title">
-                      <div className="ig-name-row">
-                        <b>{group.name}</b>
-                        {group.code && (
-                          <code className="ig-code" dir="ltr">
-                            {group.code}
-                          </code>
-                        )}
-                      </div>
-                      <div className="plc-chips">
-                        <span className="chip">
-                          {group.items.length.toLocaleString('fa-IR')} قلم ·{' '}
-                          {totalPieces.toLocaleString('fa-IR')} قطعه
-                        </span>
-                        {group.category && <span className="chip">{group.category}</span>}
-                        {group.vehicles.slice(0, 3).map((vehicle) => (
-                          <span className="chip" key={vehicle}>
-                            🚗 {vehicle}
-                          </span>
-                        ))}
-                        {group.vehicles.length > 3 && (
-                          <span className="chip">
-                            +{formatPersianNumber(group.vehicles.length - 3)} خودروی دیگر
-                          </span>
-                        )}
-                        {cheapest != null && (
-                          <span className="chip price">از {formatRial(cheapest)}</span>
-                        )}
-                      </div>
+                    <div className="inventory-product-info">
+                      <b>{product?.name ?? item.barcode}</b>
+                      <small dir="ltr">{product?.code ?? 'بدون کد محصول'}</small>
+                      {product?.category?.name && (
+                        <span className="chip">{product.category.name}</span>
+                      )}
                     </div>
-                    {group.items.some((item) => item.product?.id) && (
+                  </div>
+                  <div className="inventory-brand-cell">
+                    <b>{item.brand?.name ?? 'بدون برند'}</b>
+                    <code dir="ltr">{item.barcode}</code>
+                  </div>
+                  <div className="inventory-stock-cell">
+                    <div className="inventory-stock-status">
+                      <span className={`badge ${status.badge}`}>{status.label}</span>
+                      <b>{formatPersianNumber(item.quantity)} قطعه</b>
+                    </div>
+                    <div className="inv-stock-line">
+                      <i className={`stockbar ${status.bar}`}>
+                        <i style={{ width: `${Math.round(stockRatio(item) * 100)}%` }} />
+                      </i>
+                      {item.minStock != null && item.minStock > 0 && (
+                        <small className="muted">حداقل {formatPersianNumber(item.minStock)}</small>
+                      )}
+                    </div>
+                    <StockStepper
+                      itemId={item.id}
+                      quantity={item.quantity}
+                      onMessage={setMessage}
+                      onSaved={() => void load()}
+                    />
+                  </div>
+                  <div className="inventory-location-cell">
+                    <span
+                      className="inv-shelf"
+                      title={item.location ? locationLabel(item.location) : 'بدون قفسه'}
+                    >
+                      {item.location ? `📦 ${locationLabel(item.location)}` : 'بدون قفسه'}
+                    </span>
+                    <div className="inventory-price">
+                      <b>{salePrice > 0 ? formatRial(salePrice) : '—'}</b>
+                      <small>قیمت فروش</small>
+                      {item.priceUpdatedAt && (
+                        <small className="inv-price-date">
+                          از {formatJalaliDate(item.priceUpdatedAt)}
+                        </small>
+                      )}
+                    </div>
+                    {purchasePrice > 0 && (
+                      <small className="inventory-purchase-price">
+                        خرید: {formatRial(purchasePrice)}
+                      </small>
+                    )}
+                    {grossProfit !== null && (
+                      <span className={`inventory-margin ${grossProfit < 0 ? 'negative' : ''}`}>
+                        {grossProfit < 0 ? 'ضرر' : 'سود'}: {formatRial(grossProfit)}
+                        {margin !== null ? ` · ${margin.toFixed(1)}٪` : ''}
+                      </span>
+                    )}
+                  </div>
+                  <div className="inventory-actions-cell">
+                    <button className="row-action" onClick={() => void openDetail(item)}>
+                      کارت قلم
+                    </button>
+                    <button className="row-action" onClick={() => openLabelStudio(item)}>
+                      برچسب
+                    </button>
+                    {product?.id && (
                       <button
-                        className="row-action ig-publish"
-                        onClick={() => void publishGroup(group)}
-                        title="انتشار عکس، کد، نام و مشخصات محصول در کانال تلگرام و بله"
+                        className="row-action"
+                        onClick={() =>
+                          void publishGroup({
+                            productId: product.id,
+                            name: product.name,
+                            code: product.code,
+                            image: product.images?.[0]?.path,
+                            category: product.category?.name,
+                            vehicles: [],
+                            items: [item],
+                          })
+                        }
                       >
-                        📢 انتشار در شبکه‌ها
+                        انتشار
                       </button>
                     )}
                   </div>
-                  <div className="ig-items">
-                    {group.items.map((item) => {
-                      const status = stockStatus(item);
-                      return (
-                        <div className="inventory-row" key={item.id}>
-                          <div className="inv-info">
-                            <div className="inv-title-row">
-                              <b>{item.brand?.name ?? 'بدون برند'}</b>
-                              <span className={`badge ${status.badge}`}>{status.label}</span>
-                            </div>
-                            <small>
-                              <code dir="ltr">{item.barcode}</code>
-                            </small>
-                            <div className="inv-stock-line">
-                              <i className={`stockbar ${status.bar}`}>
-                                <i style={{ width: `${Math.round(stockRatio(item) * 100)}%` }} />
-                              </i>
-                              {item.minStock != null && item.minStock > 0 && (
-                                <small className="muted">
-                                  حداقل {formatPersianNumber(item.minStock)}
-                                </small>
-                              )}
-                            </div>
-                            <span className="inv-shelf">
-                              {item.location ? `📦 ${locationChip(item.location)}` : 'بدون قفسه'}
-                            </span>
-                          </div>
-                          <StockStepper
-                            itemId={item.id}
-                            quantity={item.quantity}
-                            onMessage={setMessage}
-                            onSaved={() => void load()}
-                          />
-                          <div className="inv-price">
-                            <b>{formatRial(Number(item.salePrice))}</b>
-                            <small>قیمت فروش</small>
-                          </div>
-                          <div className="inv-actions">
-                            <button className="row-action" onClick={() => void openDetail(item)}>
-                              کارت قلم
-                            </button>
-                            <button className="row-action" onClick={() => openLabelStudio(item)}>
-                              برچسب
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
+                </article>
               );
             })}
-            {!groups.length && (
+            {!items.length && (
               <p className="muted">
-                {filter ? `کالایی مطابق «${filter}» پیدا نشد.` : 'قلمی یافت نشد.'}
+                {filter ? `قلمی مطابق «${filter}» پیدا نشد.` : 'قلمی یافت نشد.'}
               </p>
             )}
           </div>
@@ -805,21 +1107,9 @@ export function InventoryPage() {
         </div>
       )}
 
-      <ProductCreateModal
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        onCreated={(msg) => {
-          setMessage(msg);
-          void load();
-        }}
-        categories={categories}
-        brands={brands}
-        locations={locations}
-        vehicles={vehicles}
-      />
-
-      <Sheet
+      <Modal
         open={Boolean(detail)}
+        size="lg"
         title={detail ? `کارت قلم — ${detail.product?.name ?? ''}` : ''}
         onClose={() => setDetail(null)}
         footer={
@@ -830,11 +1120,35 @@ export function InventoryPage() {
             <button className="outline" disabled={busy} onClick={() => void transfer()}>
               انتقال به قفسهٔ انتخابی
             </button>
+            <button
+              className="outline danger-text"
+              disabled={busy}
+              onClick={() => void removeItem()}
+            >
+              حذف قلم از انبار
+            </button>
           </div>
         }
       >
         {detail && (
-          <div className="sheet-body">
+          <div className="sheet-body inventory-detail-body">
+            <div className="inventory-detail-hero">
+              <span className="detail-product-thumb">
+                {detail.product?.images?.[0]?.path ? (
+                  <img src={detail.product.images[0].path} alt="" />
+                ) : (
+                  <span>قطعه</span>
+                )}
+              </span>
+              <div>
+                <small>کارت قلم انبار</small>
+                <h4>{detail.product?.name ?? 'قلم بدون محصول'}</h4>
+                <code dir="ltr">{detail.product?.code ?? detail.barcode}</code>
+              </div>
+              <span className={`badge ${stockStatus(detail).badge}`}>
+                {stockStatus(detail).label}
+              </span>
+            </div>
             <dl className="sheet-meta">
               <div>
                 <dt>برند</dt>
@@ -850,7 +1164,31 @@ export function InventoryPage() {
               </div>
               <div>
                 <dt>قیمت فروش</dt>
-                <dd>{formatRial(Number(detail.salePrice))}</dd>
+                <dd>
+                  {Number(detail.salePrice) > 0 ? formatRial(Number(detail.salePrice)) : 'ثبت نشده'}
+                  {detail.priceUpdatedAt && (
+                    <small className="inv-price-date">
+                      {' '}
+                      از {formatJalaliDate(detail.priceUpdatedAt)}
+                    </small>
+                  )}
+                </dd>
+              </div>
+              <div>
+                <dt>قیمت خرید</dt>
+                <dd>
+                  {Number(detail.purchasePrice ?? 0) > 0
+                    ? formatRial(Number(detail.purchasePrice))
+                    : 'ثبت نشده'}
+                </dd>
+              </div>
+              <div>
+                <dt>سود ناخالص</dt>
+                <dd>
+                  {Number(detail.salePrice) > 0 && Number(detail.purchasePrice ?? 0) > 0
+                    ? formatRial(Number(detail.salePrice) - Number(detail.purchasePrice))
+                    : 'قابل محاسبه نیست'}
+                </dd>
               </div>
               <div>
                 <dt>آستانهٔ هشدار</dt>
@@ -906,9 +1244,34 @@ export function InventoryPage() {
                 ))}
               </div>
             )}
+            <div className="history price-history">
+              <h3>تاریخچهٔ قیمت (شمسی)</h3>
+              {priceHistory.length > 0 ? (
+                priceHistory.map((row) => (
+                  <div key={row.id}>
+                    <span title={row.changedAt}>{row.changedAtJalali}</span>
+                    <b>
+                      {row.oldSalePrice !== null && row.oldSalePrice !== row.newSalePrice
+                        ? `${formatRial(Number(row.oldSalePrice))} → `
+                        : ''}
+                      {formatRial(Number(row.newSalePrice))}
+                    </b>
+                    <small>
+                      {priceSourceLabels[row.source] ?? row.source}
+                      {row.userName ? ` · ${row.userName}` : ''}
+                    </small>
+                  </div>
+                ))
+              ) : (
+                <p className="muted">
+                  هنوز تغییری در قیمت فروش این قلم ثبت نشده است؛ از این به بعد هر تغییر قیمت به‌طور
+                  خودکار با تاریخ شمسی ثبت می‌شود.
+                </p>
+              )}
+            </div>
           </div>
         )}
-      </Sheet>
+      </Modal>
     </section>
   );
 }

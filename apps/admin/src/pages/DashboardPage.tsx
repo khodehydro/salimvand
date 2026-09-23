@@ -1,7 +1,8 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { formatPersianNumber } from '@salimvand/shared';
 import { locationChip } from '../lib/location-label';
-import { api } from '../lib/api';
+import { api, downloadFile } from '../lib/api';
+import type { AdminPage } from '../lib/admin-route';
 import { DonutChart } from '@salimvand/ui';
 import {
   brandComposition,
@@ -31,7 +32,7 @@ type Summary = {
     quantity: number;
     minStock: number | null;
     product: { name: string; code: string };
-    brand: { name: string };
+    brand?: { name: string } | null;
     location?: { code: string; name: string; parent?: { name: string } | null } | null;
   }>;
   stockComposition: StockRow[];
@@ -39,6 +40,18 @@ type Summary = {
     quantity: number;
     product?: { category?: { name?: string } | null } | null;
   }>;
+  unpaidInvoices?: number;
+  productsWithoutImages?: number;
+  productsWithoutPartNumber?: number;
+  productsWithoutVehicles?: number;
+  productsWithoutBrand?: number;
+  inventoryWithoutLocation?: number;
+  productsWithoutSalePrice?: number;
+  pendingPurchases?: number;
+  todaySales?: string;
+  todayReceived?: string;
+  todayInvoiceCount?: number;
+  dueChecks?: Array<{ id: string; checkNumber?: string | null; bank?: string | null; amount: string; dueDate: string; invoice: { id: string; number: string; customerName?: string | null } }>;
   recentTransactions: Array<{
     id: string;
     type: string;
@@ -55,6 +68,7 @@ type Health = {
   channels: Record<string, { configured: boolean; provider: string | null }>;
   queue: Record<string, number>;
 };
+type FailedNotification = { id: string; failedReason: string; type: string; attemptsMade: number };
 /** GET /dashboard/system — server RAM/disk usage (managers only). */
 type SystemStats = {
   memory: { total: number; used: number; free: number };
@@ -138,13 +152,17 @@ export function DashboardPage({
   canViewDebtors = true,
   canViewHealth = true,
   canNotify = true,
+  canBackup = false,
+  onNavigate,
 }: {
+  onNavigate?: (page: AdminPage) => void;
   canViewSales?: boolean;
   canViewInventory?: boolean;
   canViewProfit?: boolean;
   canViewDebtors?: boolean;
   canViewHealth?: boolean;
   canNotify?: boolean;
+  canBackup?: boolean;
 }) {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [trend, setTrend] = useState<Trend[]>([]);
@@ -153,10 +171,30 @@ export function DashboardPage({
   const [periodDays, setPeriodDays] = useState<1 | 7 | 30 | 90>(30);
   const [debtors, setDebtors] = useState<Debtor[]>([]);
   const [health, setHealth] = useState<Health | null>(null);
+  const [failedNotifications, setFailedNotifications] = useState<FailedNotification[]>([]);
   const [system, setSystem] = useState<SystemStats | null>(null);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [backupOpen, setBackupOpen] = useState(false);
+  const [backupProgress, setBackupProgress] = useState(0);
+  const [backupDone, setBackupDone] = useState(false);
+  const [backupError, setBackupError] = useState('');
+  const startBackup = async () => {
+    setBackupOpen(true); setBackupDone(false); setBackupError(''); setBackupProgress(5);
+    try {
+      await api('/settings/backup/run', { method: 'PUT' });
+      const timer = window.setInterval(async () => {
+        try {
+          const result = await api<{ data: { status: string; progress?: number } | null }>('/settings/backup/status');
+          if (result.data?.progress) setBackupProgress(result.data.progress);
+          if (result.data?.status === 'success') { window.clearInterval(timer); setBackupProgress(100); setBackupDone(true); }
+          else if (result.data?.status === 'failed') { window.clearInterval(timer); setBackupError('پشتیبان‌گیری ناموفق بود'); }
+          else setBackupProgress((value) => Math.min(value + 8, 92));
+        } catch { window.clearInterval(timer); setBackupError('دریافت وضعیت پشتیبان‌گیری ناموفق بود'); }
+      }, 1500);
+    } catch (e) { setBackupError((e as Error).message); }
+  };
   const query = useMemo(() => {
     const to = new Date();
     const from = new Date(to.getTime() - (periodDays - 1) * 86_400_000);
@@ -168,7 +206,7 @@ export function DashboardPage({
     setLoading(true);
     setError('');
     try {
-      const [s, t, i, p, d, h, sys] = await Promise.all([
+      const [s, t, i, p, d, h, n, sys] = await Promise.all([
         api<{ data: Summary }>('/dashboard/summary'),
         canViewSales
           ? api<{ data: Trend[] }>(`/dashboard/sales-trend${query}`)
@@ -185,6 +223,9 @@ export function DashboardPage({
         canViewHealth
           ? api<{ data: Health }>('/notifications/health')
           : Promise.resolve({ data: null as Health | null }),
+        canNotify
+          ? api<{ data: FailedNotification[] }>('/notifications/failed?limit=10')
+          : Promise.resolve({ data: [] as FailedNotification[] }),
         canViewHealth
           ? api<{ data: SystemStats }>('/dashboard/system')
           : Promise.resolve({ data: null as SystemStats | null }),
@@ -195,6 +236,7 @@ export function DashboardPage({
       setProfitTrend(p.data);
       setDebtors(d.data);
       setHealth(h.data);
+      setFailedNotifications(n.data);
       setSystem(sys.data);
     } catch (e) {
       setError((e as Error).message);
@@ -253,6 +295,7 @@ export function DashboardPage({
               </button>
             ))}
           </div>
+          {canBackup && <button className="btn primary" onClick={startBackup}>پشتیبان‌گیری</button>}
           <button className="icon-btn" title="به‌روزرسانی" onClick={load} disabled={loading}>
             <Ic name="refresh" />
           </button>
@@ -260,6 +303,68 @@ export function DashboardPage({
       </div>
       {error && <div className="notice">{error}</div>}
       {loading && !summary && <div className="notice">در حال دریافت اطلاعات داشبورد...</div>}
+      {backupOpen && <div className="backup-modal-backdrop" role="dialog" aria-modal="true"><div className="backup-modal-card"><div className="backup-modal-icon">▣</div><h3>پشتیبان‌گیری کامل</h3><p className="backup-modal-description">{backupError || (backupDone ? 'فایل پشتیبان با موفقیت آماده شد.' : 'در حال آماده‌سازی دیتابیس و فایل‌های رسانه‌ای هستیم.')}</p><div className="backup-progress-track"><span style={{ width: `${backupProgress}%` }} /></div><div className="backup-progress-meta"><strong>{faNum(backupProgress)}٪</strong><span>{backupDone ? 'تکمیل شد' : 'لطفاً پنجره را نبندید'}</span></div>{backupDone && <div className="backup-modal-actions"><button className="btn primary" onClick={() => void downloadFile('/settings/backup/download', 'salimvand-backup.tar.gz')}>دانلود فایل پشتیبان</button><button className="btn backup-drive-btn" onClick={async () => { try { const result = await api<{ data: { webViewLink?: string } }>('/settings/backup/google-drive', { method: 'PUT' }); if (result.data.webViewLink) window.open(result.data.webViewLink, '_blank', 'noopener,noreferrer'); } catch (error) { setBackupError((error as Error).message); } }}>ارسال به Google Drive</button></div>}{(backupDone || backupError) && <button className="backup-close-btn" onClick={() => setBackupOpen(false)}>بستن</button>}</div></div>}
+
+      <section className="ops-today-grid" aria-label="خلاصهٔ عملیاتی امروز">
+        <article className="ops-today-card primary"><small>فروش امروز</small><strong>{money(summary?.todaySales ?? 0)}</strong><span>{faNum(summary?.todayInvoiceCount ?? 0)} فاکتور صادرشده</span></article>
+        <article className="ops-today-card success"><small>دریافت‌شده امروز</small><strong>{money(summary?.todayReceived ?? 0)}</strong><span>پرداخت‌های ثبت‌شده امروز</span></article>
+        <article className="ops-today-card warn"><small>فاکتورهای باز</small><strong>{faNum(summary?.unpaidInvoices ?? 0)}</strong><span>نیازمند پیگیری پرداخت</span></article>
+        <article className="ops-today-card danger"><small>چک‌های امروز</small><strong>{faNum(summary?.dueChecks?.filter((check) => new Date(check.dueDate).toDateString() === new Date().toDateString()).length ?? 0)}</strong><span>سررسید امروز</span></article>
+      </section>
+
+      <section className="daily-work" aria-labelledby="daily-work-title">
+        <div className="daily-work-heading">
+          <div>
+            <h3 id="daily-work-title">کارهای امروز</h3>
+            <p>مواردی که بهتر است قبل از پایان روز بررسی شوند.</p>
+          </div>
+          <span className="daily-work-count">{faNum([
+            summary?.lowStock ?? 0,
+            summary?.unpaidInvoices ?? 0,
+            failedNotifications.length,
+            summary?.productsWithoutImages ?? 0,
+            summary?.inventoryWithoutLocation ?? 0,
+            summary?.pendingPurchases ?? 0,
+          ].filter((count) => count > 0).length)} مورد</span>
+        </div>
+        <div className="daily-work-list">
+          {[
+            { label: 'اقلام زیر حداقل موجودی', count: summary?.lowStock ?? 0, page: 'inventory' as AdminPage, tone: 'warn' },
+            { label: 'فاکتور پرداخت‌نشده', count: summary?.unpaidInvoices ?? 0, page: 'invoices' as AdminPage, tone: 'danger' },
+            { label: 'ارسال پیام ناموفق', count: failedNotifications.length, page: 'messaging' as AdminPage, tone: 'danger' },
+            { label: 'محصول بدون تصویر', count: summary?.productsWithoutImages ?? 0, page: 'products' as AdminPage, tone: 'neutral' },
+            { label: 'قلم بدون قفسه', count: summary?.inventoryWithoutLocation ?? 0, page: 'inventory' as AdminPage, tone: 'neutral' },
+            { label: 'خرید نیازمند پیگیری', count: summary?.pendingPurchases ?? 0, page: 'purchases' as AdminPage, tone: 'neutral' },
+          ].map((task) => (
+            <button className={`daily-work-item ${task.tone}`} key={task.label} onClick={() => onNavigate?.(task.page)}>
+              <span className="daily-work-dot" />
+              <span className="daily-work-label">{task.label}</span>
+              <b>{faNum(task.count)}</b>
+              <span className="daily-work-arrow">←</span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="data-quality-panel" aria-labelledby="data-quality-title">
+        <div className="daily-work-heading">
+          <div><h3 id="data-quality-title">کنترل کیفیت داده‌های محصولات</h3><p>موارد ناقص را تکمیل کنید تا جست‌وجو و نمایش سایت دقیق‌تر شود.</p></div>
+        </div>
+        <div className="data-quality-list">
+          {[
+            ['بدون تصویر', summary?.productsWithoutImages ?? 0],
+            ['بدون شماره فنی', summary?.productsWithoutPartNumber ?? 0],
+            ['بدون خودروی سازگار', summary?.productsWithoutVehicles ?? 0],
+            ['بدون برند', summary?.productsWithoutBrand ?? 0],
+            ['بدون قفسه', summary?.inventoryWithoutLocation ?? 0],
+            ['بدون قیمت فروش', summary?.productsWithoutSalePrice ?? 0],
+          ].map(([label, count]) => (
+            <button className="data-quality-item" key={label} onClick={() => onNavigate?.('products')}>
+              <span>{label}</span><b>{faNum(Number(count))}</b><i>ویرایش ←</i>
+            </button>
+          ))}
+        </div>
+      </section>
 
       <div className="kpis">
         {canViewSales ? (
@@ -384,6 +489,10 @@ export function DashboardPage({
             </header>
             <DonutChart data={donutFallback} />
           </article>
+          <article className="card check-due-card">
+            <header className="card-h"><h3>سررسید چک‌ها {summary?.dueChecks?.length ? <span className="badge b-warn">{faNum(summary.dueChecks.length)} مورد</span> : null}</h3><a className="card-more" href="#/invoices">فاکتورها ›</a></header>
+            {summary?.dueChecks?.length ? <div className="list-rows">{summary.dueChecks.map((check) => <div className="list-row" key={check.id}><span className="thumb">چک</span><span className="grow"><b>فاکتور {check.invoice.number}</b><small>{check.invoice.customerName ?? 'مشتری حضوری'} · {check.bank ?? 'بانک نامشخص'}</small></span><span className="badge b-danger">{money(check.amount)}</span></div>)}</div> : <p className="muted empty-line">چک با سررسید نزدیک وجود ندارد.</p>}
+          </article>
         </div>
 
         <div className="cols-2">
@@ -473,7 +582,7 @@ export function DashboardPage({
                       <span className="grow">
                         <b>{row.product.name}</b>
                         <small>
-                          {row.brand.name}
+                          {row.brand?.name ?? 'بدون برند'}
                           {row.location ? ` · ${locationChip(row.location)}` : ''}
                         </small>
                         <i className={`stockbar ${barClass}`}>

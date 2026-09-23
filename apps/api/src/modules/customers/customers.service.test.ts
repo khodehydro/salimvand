@@ -37,15 +37,23 @@ describe('customer payment accounting', () => {
       amount: 1200n,
       paidAt: new Date('2026-09-01T10:00:00Z'),
     }));
+    const customerRow = {
+      id: 'customer-1',
+      name: 'مشتری',
+      mobile: '09351112233',
+      address: null,
+      notes: null,
+      isActive: true,
+      updatedAt: new Date('2026-09-17T00:00:00Z'),
+      invoices: [
+        { id: 'invoice-1', total: 1000n, paidAmount: 0n, paymentStatus: 'unpaid' },
+        { id: 'invoice-2', total: 500n, paidAmount: 0n, paymentStatus: 'unpaid' },
+      ],
+    };
     const tx = {
       customer: {
-        findFirst: vi.fn(async () => ({
-          id: 'customer-1',
-          invoices: [
-            { id: 'invoice-1', total: 1000n, paidAmount: 0n, paymentStatus: 'unpaid' },
-            { id: 'invoice-2', total: 500n, paidAmount: 0n, paymentStatus: 'unpaid' },
-          ],
-        })),
+        findFirst: vi.fn(async () => customerRow),
+        findUnique: vi.fn(async () => customerRow),
       },
       customerPayment: { create: receiptCreate },
       invoice: { update: invoiceUpdate },
@@ -86,15 +94,23 @@ describe('customer payment accounting', () => {
 
   it('allocates a payment to the requested invoice only', async () => {
     const invoiceUpdate = vi.fn(async () => ({}));
+    const customerRow = {
+      id: 'customer-1',
+      name: 'مشتری',
+      mobile: '09351112233',
+      address: null,
+      notes: null,
+      isActive: true,
+      updatedAt: new Date('2026-09-17T00:00:00Z'),
+      invoices: [
+        { id: 'invoice-1', total: 1000n, paidAmount: 0n, paymentStatus: 'unpaid' },
+        { id: 'invoice-2', total: 500n, paidAmount: 0n, paymentStatus: 'unpaid' },
+      ],
+    };
     const tx = {
       customer: {
-        findFirst: vi.fn(async () => ({
-          id: 'customer-1',
-          invoices: [
-            { id: 'invoice-1', total: 1000n, paidAmount: 0n, paymentStatus: 'unpaid' },
-            { id: 'invoice-2', total: 500n, paidAmount: 0n, paymentStatus: 'unpaid' },
-          ],
-        })),
+        findFirst: vi.fn(async () => customerRow),
+        findUnique: vi.fn(async () => customerRow),
       },
       customerPayment: { create: vi.fn(async () => ({ id: 'receipt-1' })) },
       invoice: { update: invoiceUpdate },
@@ -165,5 +181,54 @@ describe('customer payment accounting', () => {
       ),
     ).rejects.toThrow('مبلغ پرداخت بیشتر از بدهی مشتری است');
     expect(receiptCreate).not.toHaveBeenCalled();
+  });
+});
+
+describe('customer profile sync', () => {
+  it('broadcasts an address change through the sync pull payload', async () => {
+    const before = {
+      id: 'customer-1',
+      name: 'حسن رضایی',
+      mobile: '09121234567',
+      address: 'تهران، خیابان نمونه، پلاک ۱۲',
+      notes: null,
+      isActive: true,
+    };
+    const updated = {
+      ...before,
+      address: 'تهران، خیابان جدید، پلاک ۲۰',
+      updatedAt: new Date('2026-09-18T12:00:00Z'),
+    };
+    const customerUpdate = vi.fn(async () => updated);
+    const syncChangeCreate = vi.fn(async () => ({}));
+    const prisma = {
+      customer: { findUnique: vi.fn(async () => before), update: customerUpdate },
+      auditLog: { create: vi.fn(async () => ({})) },
+      syncChange: { create: syncChangeCreate },
+    };
+    await new CustomersService(prisma as never).update(
+      'customer-1',
+      { address: 'تهران، خیابان جدید، پلاک ۲۰' },
+      'user-1',
+    );
+    expect(customerUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { address: 'تهران، خیابان جدید، پلاک ۲۰' } }),
+    );
+    // The sync change carries the full rebuildable snapshot so every Android
+    // device pulls the new address on the next GET /sync/pull.
+    expect(syncChangeCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          entityType: 'customer',
+          entityId: 'customer-1',
+          action: 'updated',
+          payload: expect.objectContaining({
+            id: 'customer-1',
+            address: 'تهران، خیابان جدید، پلاک ۲۰',
+            updatedAt: '2026-09-18T12:00:00.000Z',
+          }),
+        }),
+      }),
+    );
   });
 });

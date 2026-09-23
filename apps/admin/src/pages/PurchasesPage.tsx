@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { formatJalaliDate, formatPersianNumber, formatRial } from '@salimvand/shared';
 import { FaNumberInput } from '../components/FaNumberInput';
-import { api } from '../lib/api';
+import { api, fetchAllPages } from '../lib/api';
+import { JalaliDateInput } from '../components/JalaliDateInput';
 
 type Supplier = { id: string; name: string };
 type Item = {
   id: string;
   barcode: string;
   product: { name: string; code: string };
-  brand: { name: string };
+  /** brandId is nullable in the DB — legacy items can exist without a brand. */
+  brand: { name: string } | null;
   quantity: number;
 };
 type Line = { inventoryItemId: string; productName: string; quantity: number; unitPrice: string };
@@ -18,6 +20,14 @@ type Payment = {
   method: string;
   notes?: string | null;
   paidAt: string;
+  check?: {
+    id: string;
+    checkNumber?: string | null;
+    bank?: string | null;
+    amount: string | number;
+    dueDate: string;
+    status: string;
+  } | null;
 };
 type PurchaseItem = {
   id: string;
@@ -56,8 +66,16 @@ export function PurchasesPage({ canCreate = true }: { canCreate?: boolean }) {
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('transfer');
   const [paymentNotes, setPaymentNotes] = useState('');
+  const [supplierCheck, setSupplierCheck] = useState({
+    checkNumber: '',
+    bank: '',
+    branch: '',
+    dueDate: '',
+    amount: '',
+  });
   const [supplierId, setSupplierId] = useState('');
   const [itemId, setItemId] = useState('');
+  const [itemOpen, setItemOpen] = useState(false);
   const [quantity, setQuantity] = useState('1');
   const [unitPrice, setUnitPrice] = useState('');
   const [lines, setLines] = useState<Line[]>([]);
@@ -82,11 +100,12 @@ export function PurchasesPage({ canCreate = true }: { canCreate?: boolean }) {
   useEffect(() => {
     void Promise.all([
       api<{ data: Supplier[] }>('/suppliers'),
-      api<{ data: Item[] }>('/inventory/items'),
+      // Cursor-paginated endpoint: drain the pages for the item picker.
+      fetchAllPages<Item>('/inventory/items', { limit: 500 }),
     ])
-      .then(([supplierResult, itemResult]) => {
+      .then(([supplierResult, items]) => {
         setSuppliers(supplierResult.data);
-        setItems(itemResult.data);
+        setItems(items);
       })
       .catch((error: Error) => setMessage(error.message));
     void loadPurchases();
@@ -95,7 +114,7 @@ export function PurchasesPage({ canCreate = true }: { canCreate?: boolean }) {
     const query = itemQuery.trim().toLocaleLowerCase('fa');
     return query
       ? items.filter((item) =>
-          `${item.product.name} ${item.product.code} ${item.brand.name} ${item.barcode}`
+          `${item.product.name} ${item.product.code} ${item.brand?.name ?? ''} ${item.barcode}`
             .toLocaleLowerCase('fa')
             .includes(query),
         )
@@ -128,7 +147,7 @@ export function PurchasesPage({ canCreate = true }: { canCreate?: boolean }) {
             ...lines,
             {
               inventoryItemId: item.id,
-              productName: `${item.product.name} · ${item.brand.name}`,
+              productName: `${item.product.name} · ${item.brand?.name ?? 'بدون برند'}`,
               quantity: count,
               unitPrice,
             },
@@ -188,7 +207,14 @@ export function PurchasesPage({ canCreate = true }: { canCreate?: boolean }) {
     try {
       await api(`/purchases/${payFor.id}/payments`, {
         method: 'POST',
-        body: JSON.stringify({ amount: paymentAmount, method: paymentMethod, notes: paymentNotes }),
+        body: JSON.stringify({
+          amount: paymentAmount,
+          method: paymentMethod,
+          notes: paymentNotes,
+          ...(paymentMethod === 'credit'
+            ? { check: { ...supplierCheck, amount: supplierCheck.amount || paymentAmount } }
+            : {}),
+        }),
       });
       setMessage('پرداخت تأمین‌کننده ثبت شد.');
       const id = payFor.id;
@@ -239,25 +265,64 @@ export function PurchasesPage({ canCreate = true }: { canCreate?: boolean }) {
                 <small className="field-error">{fieldErrors.supplier}</small>
               )}
             </label>
-            <label>
-              جست‌وجوی قلم
-              <input
-                value={itemQuery}
-                onChange={(event) => setItemQuery(event.target.value)}
-                placeholder="نام، برند یا بارکد"
-              />
-            </label>
-            <label>
+            <label className="purchase-item-picker">
               قلم انبار
-              <select value={itemId} onChange={(event) => setItemId(event.target.value)}>
-                <option value="">انتخاب کالا</option>
-                {visibleItems.slice(0, 100).map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.product.name} · {item.brand.name} · موجودی{' '}
-                    {formatPersianNumber(item.quantity)}
-                  </option>
-                ))}
-              </select>
+              <div className="purchase-item-combobox">
+                <input
+                  value={
+                    itemId
+                      ? (() => {
+                          const selected = items.find((item) => item.id === itemId);
+                          return selected
+                            ? `${selected.product.name} · ${selected.brand?.name ?? 'بدون برند'}`
+                            : itemQuery;
+                        })()
+                      : itemQuery
+                  }
+                  onChange={(event) => {
+                    setItemQuery(event.target.value);
+                    setItemId('');
+                    setItemOpen(true);
+                  }}
+                  onFocus={() => setItemOpen(true)}
+                  placeholder="نام کالا، برند، کد یا بارکد را جست‌وجو کنید"
+                  role="combobox"
+                  aria-expanded={itemOpen}
+                  aria-controls="purchase-item-results"
+                />
+                {itemOpen && !itemId && itemQuery.trim() && (
+                  <div className="purchase-item-results" id="purchase-item-results" role="listbox">
+                    {visibleItems.slice(0, 30).map((item) => (
+                      <button
+                        type="button"
+                        key={item.id}
+                        role="option"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => {
+                          setItemId(item.id);
+                          setItemQuery('');
+                          setItemOpen(false);
+                        }}
+                      >
+                        <strong>{item.product.name}</strong>
+                        <span>
+                          {item.brand?.name ?? 'بدون برند'} · کد {item.product.code || item.barcode}{' '}
+                          · موجودی {formatPersianNumber(item.quantity)}
+                        </span>
+                      </button>
+                    ))}
+                    {!visibleItems.length && <p>قلمی با این عبارت پیدا نشد.</p>}
+                    {visibleItems.length > 30 && (
+                      <small>برای نمایش نتایج دقیق‌تر، عبارت جست‌وجو را کامل‌تر کنید.</small>
+                    )}
+                  </div>
+                )}
+              </div>
+              {itemId && (
+                <small className="purchase-selected-item">
+                  قلم انتخاب‌شده؛ برای تغییر، متن را ویرایش کنید.
+                </small>
+              )}
               {fieldErrors.item && <small className="field-error">{fieldErrors.item}</small>}
             </label>
             <label>
@@ -409,6 +474,32 @@ export function PurchasesPage({ canCreate = true }: { canCreate?: boolean }) {
               </option>
             ))}
           </select>
+          {paymentMethod === 'credit' && (
+            <div className="check-fields">
+              <b>جزئیات چک تأمین‌کننده</b>
+              <input
+                placeholder="شماره چک"
+                value={supplierCheck.checkNumber}
+                onChange={(e) =>
+                  setSupplierCheck({ ...supplierCheck, checkNumber: e.target.value })
+                }
+              />
+              <input
+                placeholder="بانک"
+                value={supplierCheck.bank}
+                onChange={(e) => setSupplierCheck({ ...supplierCheck, bank: e.target.value })}
+              />
+              <input
+                placeholder="شعبه"
+                value={supplierCheck.branch}
+                onChange={(e) => setSupplierCheck({ ...supplierCheck, branch: e.target.value })}
+              />
+              <JalaliDateInput
+                value={supplierCheck.dueDate}
+                onChange={(value) => setSupplierCheck({ ...supplierCheck, dueDate: value })}
+              />
+            </div>
+          )}
           <textarea
             value={paymentNotes}
             onChange={(event) => setPaymentNotes(event.target.value)}
@@ -466,6 +557,25 @@ export function PurchasesPage({ canCreate = true }: { canCreate?: boolean }) {
                 <strong>{paymentLabels[payment.method] ?? payment.method}</strong>
                 <span>{formatRial(Number(payment.amount))}</span>
                 <small>{formatJalaliDate(payment.paidAt, 'dateTime')}</small>
+                {payment.check && (
+                  <select
+                    className="check-status-select"
+                    value={payment.check.status}
+                    onChange={(event) =>
+                      void api(`/purchases/checks/${payment.check!.id}/status`, {
+                        method: 'PATCH',
+                        body: JSON.stringify({ status: event.target.value }),
+                      })
+                        .then(() => openDetail(detail.id))
+                        .catch((error: Error) => setMessage(error.message))
+                    }
+                  >
+                    <option value="pending">در انتظار</option>
+                    <option value="cleared">وصول‌شده</option>
+                    <option value="bounced">برگشتی</option>
+                    <option value="cancelled">لغوشده</option>
+                  </select>
+                )}
               </div>
             ))
           ) : (
