@@ -58,6 +58,7 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const data = await getVehicle((await params).slug);
+  const siteUrl = (process.env.PUBLIC_SITE_URL ?? 'https://salimvand.ir').replace(/\/$/, '');
   return {
     title: data ? `قطعات مناسب ${data.vehicle.name}` : 'خودرو پیدا نشد',
     description: data
@@ -66,12 +67,15 @@ export async function generateMetadata({
     keywords: data
       ? [`قطعات ${data.vehicle.name}`, `لوازم یدکی ${data.vehicle.name}`, 'قطعات خودرو میاندوآب']
       : undefined,
-    alternates: data ? { canonical: `/vehicle/${data.vehicle.slug}` } : undefined,
+    alternates: data
+      ? { canonical: `${siteUrl}/vehicle/${encodeURIComponent(data.vehicle.slug)}` }
+      : undefined,
     openGraph: data
       ? {
           type: 'website',
           title: `قطعات مناسب ${data.vehicle.name}`,
           description: `کاتالوگ قطعات ${data.vehicle.name}`,
+          url: `${siteUrl}/vehicle/${encodeURIComponent(data.vehicle.slug)}`,
         }
       : undefined,
   };
@@ -81,22 +85,24 @@ export default async function VehiclePage({ params }: { params: Promise<{ slug: 
   const data = await getVehicle((await params).slug);
   const info = await getStoreInfo();
   if (!data) notFound();
+  const siteUrl = (process.env.PUBLIC_SITE_URL ?? 'https://salimvand.ir').replace(/\/$/, '');
+  const canonicalUrl = `${siteUrl}/vehicle/${encodeURIComponent(data.vehicle.slug)}`;
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'CollectionPage',
     name: `قطعات مناسب ${data.vehicle.name}`,
-    url: `https://salimvand.ir/vehicle/${data.vehicle.slug}`,
+    url: canonicalUrl,
   };
   const breadcrumb = {
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
     itemListElement: [
-      { '@type': 'ListItem', position: 1, name: 'خانه', item: 'https://salimvand.ir' },
+      { '@type': 'ListItem', position: 1, name: 'خانه', item: siteUrl },
       {
         '@type': 'ListItem',
         position: 2,
         name: data.vehicle.name,
-        item: `https://salimvand.ir/vehicle/${data.vehicle.slug}`,
+        item: canonicalUrl,
       },
     ],
   };

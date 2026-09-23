@@ -100,6 +100,8 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const product = await getProduct((await params).slug);
   if (!product) return { title: 'محصول پیدا نشد' };
+  const siteUrl = (process.env.PUBLIC_SITE_URL ?? 'https://salimvand.ir').replace(/\/$/, '');
+  const canonicalUrl = `${siteUrl}/product/${encodeURIComponent(product.slug)}`;
   return {
     // The root layout template appends «| فروشگاه سلیم وند» once — don't
     // repeat it here or every SERP title shows the brand twice.
@@ -108,12 +110,12 @@ export async function generateMetadata({
       product.seoDescription ??
       product.description ??
       `استعلام ${product.name} از فروشگاه سلیم وند میاندوآب`,
-    alternates: { canonical: `/product/${product.slug}` },
+    alternates: { canonical: canonicalUrl },
     openGraph: {
       type: 'website',
       title: product.seoTitle ?? product.name,
       description: product.seoDescription ?? product.description ?? '',
-      url: `/product/${product.slug}`,
+      url: canonicalUrl,
       images: product.images?.[0]?.path
         ? [{ url: product.images[0].path, alt: product.name }]
         : undefined,
@@ -138,7 +140,11 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   if (!product) notFound();
   const specs = normalizeSpecs(product.specs);
   const compatibilities = product.compatibilities ?? [];
-  const siteUrl = process.env.PUBLIC_SITE_URL ?? 'https://salimvand.ir';
+  const siteUrl = (process.env.PUBLIC_SITE_URL ?? 'https://salimvand.ir').replace(/\/$/, '');
+  // Canonical URL is the only URL that should appear in structured data and
+  // canonical tags. The short /p/ link is kept ONLY for QR / user sharing
+  // and is disallowed in robots.txt to avoid \"Page with redirect\" in Search Console.
+  const canonicalUrl = `${siteUrl}/product/${encodeURIComponent(product.slug)}`;
   const shareUrl = `${siteUrl}/p/${encodeURIComponent(product.slug)}`;
   const qrDataUrl = await QRCode.toDataURL(shareUrl, {
     width: 180,
@@ -159,7 +165,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
       product.price != null
         ? {
             '@type': 'Offer',
-            url: shareUrl,
+            url: canonicalUrl,
             priceCurrency: 'IRR',
             price: product.price,
             availability:
@@ -173,18 +179,18 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
     itemListElement: [
-      { '@type': 'ListItem', position: 1, name: 'خانه', item: 'https://salimvand.ir' },
+      { '@type': 'ListItem', position: 1, name: 'خانه', item: `${siteUrl}` },
       {
         '@type': 'ListItem',
         position: 2,
         name: 'کاتالوگ محصولات',
-        item: 'https://salimvand.ir/#catalog',
+        item: `${siteUrl}/#catalog`,
       },
       {
         '@type': 'ListItem',
         position: 3,
         name: product.name,
-        item: `https://salimvand.ir/product/${product.slug}`,
+        item: canonicalUrl,
       },
     ],
   };

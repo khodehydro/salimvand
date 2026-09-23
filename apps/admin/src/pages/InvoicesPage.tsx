@@ -1294,71 +1294,115 @@ export function InvoicesPage({
                     );
                   })}
                   {payments.some((entry) => entry.method === 'credit') && (
-                    <div className="check-fields">
-                      <b>جزئیات چک‌ها</b>
-                      {checksDraft.map((check, index) => (
-                        <div className="check-row" key={index}>
-                          <strong>چک {index + 1}</strong>
-                          <input
-                            placeholder="شماره چک"
-                            value={check.checkNumber}
-                            onChange={(e) =>
-                              setChecksDraft((all) =>
-                                all.map((item, i) =>
-                                  i === index ? { ...item, checkNumber: e.target.value } : item,
-                                ),
-                              )
-                            }
-                          />
-                          <input
-                            placeholder="بانک"
-                            value={check.bank}
-                            onChange={(e) =>
-                              setChecksDraft((all) =>
-                                all.map((item, i) =>
-                                  i === index ? { ...item, bank: e.target.value } : item,
-                                ),
-                              )
-                            }
-                          />
-                          <input
-                            placeholder="شعبه"
-                            value={check.branch}
-                            onChange={(e) =>
-                              setChecksDraft((all) =>
-                                all.map((item, i) =>
-                                  i === index ? { ...item, branch: e.target.value } : item,
-                                ),
-                              )
-                            }
-                          />
-                          <JalaliDateInput
-                            value={check.dueDate}
-                            onChange={(value) =>
-                              setChecksDraft((all) =>
-                                all.map((item, i) =>
-                                  i === index ? { ...item, dueDate: value } : item,
-                                ),
-                              )
-                            }
-                          />
-                          <FaNumberInput
-                            className="money-in"
-                            placeholder="مبلغ چک"
-                            value={check.amount}
-                            onChange={(plain) =>
-                              setChecksDraft((all) =>
-                                all.map((item, i) =>
-                                  i === index ? { ...item, amount: plain } : item,
-                                ),
-                              )
-                            }
-                          />
+                    <div className="check-fields-v2">
+                      <div className="check-fields-v2-head">
+                        <div>
+                          <b>جزئیات چک‌ها</b>
+                          <small>
+                            {checksDraft.length > 1
+                              ? `${persianNumber(checksDraft.length)} چک ثبت شده`
+                              : 'اطلاعات چک را کامل وارد کنید'}
+                          </small>
                         </div>
-                      ))}
+                        <span className="check-fields-v2-icon">🏦</span>
+                      </div>
+                      <div className="check-cards">
+                        {checksDraft.map((check, index) => (
+                          <div className="check-card" key={index}>
+                            <div className="check-card-header">
+                              <strong>چک {persianNumber(index + 1)}</strong>
+                              {checksDraft.length > 1 && (
+                                <button
+                                  type="button"
+                                  className="check-card-remove"
+                                  onClick={() =>
+                                    setChecksDraft((all) => all.filter((_, i) => i !== index))
+                                  }
+                                >
+                                  حذف
+                                </button>
+                              )}
+                            </div>
+                            <div className="check-card-grid">
+                              <label className="check-field">
+                                <span>شماره چک</span>
+                                <input
+                                  placeholder="مثلاً ۱۲۳۴۵۶۷۸۹"
+                                  value={check.checkNumber}
+                                  onChange={(e) =>
+                                    setChecksDraft((all) =>
+                                      all.map((item, i) =>
+                                        i === index
+                                          ? { ...item, checkNumber: e.target.value }
+                                          : item,
+                                      ),
+                                    )
+                                  }
+                                />
+                              </label>
+                              <label className="check-field">
+                                <span>بانک</span>
+                                <input
+                                  placeholder="مثلاً ملی، ملت..."
+                                  value={check.bank}
+                                  onChange={(e) =>
+                                    setChecksDraft((all) =>
+                                      all.map((item, i) =>
+                                        i === index ? { ...item, bank: e.target.value } : item,
+                                      ),
+                                    )
+                                  }
+                                />
+                              </label>
+                              <label className="check-field">
+                                <span>شعبه</span>
+                                <input
+                                  placeholder="نام یا کد شعبه"
+                                  value={check.branch}
+                                  onChange={(e) =>
+                                    setChecksDraft((all) =>
+                                      all.map((item, i) =>
+                                        i === index ? { ...item, branch: e.target.value } : item,
+                                      ),
+                                    )
+                                  }
+                                />
+                              </label>
+                              <label className="check-field">
+                                <span>تاریخ سررسید</span>
+                                <JalaliDateInput
+                                  value={check.dueDate}
+                                  onChange={(value) =>
+                                    setChecksDraft((all) =>
+                                      all.map((item, i) =>
+                                        i === index ? { ...item, dueDate: value } : item,
+                                      ),
+                                    )
+                                  }
+                                />
+                              </label>
+                              <label className="check-field check-field-full">
+                                <span>مبلغ چک (ریال)</span>
+                                <FaNumberInput
+                                  className="money-in"
+                                  placeholder="مبلغ را وارد کنید"
+                                  value={check.amount}
+                                  onChange={(plain) =>
+                                    setChecksDraft((all) =>
+                                      all.map((item, i) =>
+                                        i === index ? { ...item, amount: plain } : item,
+                                      ),
+                                    )
+                                  }
+                                />
+                              </label>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                       <button
                         type="button"
-                        className="outline"
+                        className="check-add-btn"
                         onClick={() =>
                           setChecksDraft((all) => [
                             ...all,
@@ -1366,7 +1410,7 @@ export function InvoicesPage({
                           ])
                         }
                       >
-                        + افزودن چک
+                        + افزودن چک جدید
                       </button>
                     </div>
                   )}
@@ -1564,71 +1608,115 @@ export function InvoicesPage({
                   );
                 })}
                 {payments.some((entry) => entry.method === 'credit') && (
-                  <div className="check-fields">
-                    <b>جزئیات چک‌ها</b>
-                    {checksDraft.map((check, index) => (
-                      <div className="check-row" key={index}>
-                        <strong>چک {index + 1}</strong>
-                        <input
-                          placeholder="شماره چک"
-                          value={check.checkNumber}
-                          onChange={(e) =>
-                            setChecksDraft((all) =>
-                              all.map((item, i) =>
-                                i === index ? { ...item, checkNumber: e.target.value } : item,
-                              ),
-                            )
-                          }
-                        />
-                        <input
-                          placeholder="بانک"
-                          value={check.bank}
-                          onChange={(e) =>
-                            setChecksDraft((all) =>
-                              all.map((item, i) =>
-                                i === index ? { ...item, bank: e.target.value } : item,
-                              ),
-                            )
-                          }
-                        />
-                        <input
-                          placeholder="شعبه"
-                          value={check.branch}
-                          onChange={(e) =>
-                            setChecksDraft((all) =>
-                              all.map((item, i) =>
-                                i === index ? { ...item, branch: e.target.value } : item,
-                              ),
-                            )
-                          }
-                        />
-                        <JalaliDateInput
-                          value={check.dueDate}
-                          onChange={(value) =>
-                            setChecksDraft((all) =>
-                              all.map((item, i) =>
-                                i === index ? { ...item, dueDate: value } : item,
-                              ),
-                            )
-                          }
-                        />
-                        <FaNumberInput
-                          className="money-in"
-                          placeholder="مبلغ چک"
-                          value={check.amount}
-                          onChange={(plain) =>
-                            setChecksDraft((all) =>
-                              all.map((item, i) =>
-                                i === index ? { ...item, amount: plain } : item,
-                              ),
-                            )
-                          }
-                        />
+                  <div className="check-fields-v2">
+                    <div className="check-fields-v2-head">
+                      <div>
+                        <b>جزئیات چک‌ها</b>
+                        <small>
+                          {checksDraft.length > 1
+                            ? `${persianNumber(checksDraft.length)} چک ثبت شده`
+                            : 'اطلاعات چک را کامل وارد کنید'}
+                        </small>
                       </div>
-                    ))}
+                      <span className="check-fields-v2-icon">🏦</span>
+                    </div>
+                    <div className="check-cards">
+                      {checksDraft.map((check, index) => (
+                        <div className="check-card" key={index}>
+                          <div className="check-card-header">
+                            <strong>چک {persianNumber(index + 1)}</strong>
+                            {checksDraft.length > 1 && (
+                              <button
+                                type="button"
+                                className="check-card-remove"
+                                onClick={() =>
+                                  setChecksDraft((all) => all.filter((_, i) => i !== index))
+                                }
+                              >
+                                حذف
+                              </button>
+                            )}
+                          </div>
+                          <div className="check-card-grid">
+                            <label className="check-field">
+                              <span>شماره چک</span>
+                              <input
+                                placeholder="مثلاً ۱۲۳۴۵۶۷۸۹"
+                                value={check.checkNumber}
+                                onChange={(e) =>
+                                  setChecksDraft((all) =>
+                                    all.map((item, i) =>
+                                      i === index
+                                        ? { ...item, checkNumber: e.target.value }
+                                        : item,
+                                    ),
+                                  )
+                                }
+                              />
+                            </label>
+                            <label className="check-field">
+                              <span>بانک</span>
+                              <input
+                                placeholder="مثلاً ملی، ملت..."
+                                value={check.bank}
+                                onChange={(e) =>
+                                  setChecksDraft((all) =>
+                                    all.map((item, i) =>
+                                      i === index ? { ...item, bank: e.target.value } : item,
+                                    ),
+                                  )
+                                }
+                              />
+                            </label>
+                            <label className="check-field">
+                              <span>شعبه</span>
+                              <input
+                                placeholder="نام یا کد شعبه"
+                                value={check.branch}
+                                onChange={(e) =>
+                                  setChecksDraft((all) =>
+                                    all.map((item, i) =>
+                                      i === index ? { ...item, branch: e.target.value } : item,
+                                    ),
+                                  )
+                                }
+                              />
+                            </label>
+                            <label className="check-field">
+                              <span>تاریخ سررسید</span>
+                              <JalaliDateInput
+                                value={check.dueDate}
+                                onChange={(value) =>
+                                  setChecksDraft((all) =>
+                                    all.map((item, i) =>
+                                      i === index ? { ...item, dueDate: value } : item,
+                                    ),
+                                  )
+                                }
+                              />
+                            </label>
+                            <label className="check-field check-field-full">
+                              <span>مبلغ چک (ریال)</span>
+                              <FaNumberInput
+                                className="money-in"
+                                placeholder="مبلغ را وارد کنید"
+                                value={check.amount}
+                                onChange={(plain) =>
+                                  setChecksDraft((all) =>
+                                    all.map((item, i) =>
+                                      i === index ? { ...item, amount: plain } : item,
+                                    ),
+                                  )
+                                }
+                              />
+                            </label>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                     <button
                       type="button"
-                      className="outline"
+                      className="check-add-btn"
                       onClick={() =>
                         setChecksDraft((all) => [
                           ...all,
@@ -1636,7 +1724,7 @@ export function InvoicesPage({
                         ])
                       }
                     >
-                      + افزودن چک
+                      + افزودن چک جدید
                     </button>
                   </div>
                 )}

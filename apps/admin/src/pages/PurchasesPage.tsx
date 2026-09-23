@@ -475,29 +475,65 @@ export function PurchasesPage({ canCreate = true }: { canCreate?: boolean }) {
             ))}
           </select>
           {paymentMethod === 'credit' && (
-            <div className="check-fields">
-              <b>جزئیات چک تأمین‌کننده</b>
-              <input
-                placeholder="شماره چک"
-                value={supplierCheck.checkNumber}
-                onChange={(e) =>
-                  setSupplierCheck({ ...supplierCheck, checkNumber: e.target.value })
-                }
-              />
-              <input
-                placeholder="بانک"
-                value={supplierCheck.bank}
-                onChange={(e) => setSupplierCheck({ ...supplierCheck, bank: e.target.value })}
-              />
-              <input
-                placeholder="شعبه"
-                value={supplierCheck.branch}
-                onChange={(e) => setSupplierCheck({ ...supplierCheck, branch: e.target.value })}
-              />
-              <JalaliDateInput
-                value={supplierCheck.dueDate}
-                onChange={(value) => setSupplierCheck({ ...supplierCheck, dueDate: value })}
-              />
+            <div className="check-fields-v2">
+              <div className="check-fields-v2-head">
+                <div>
+                  <b>جزئیات چک تأمین‌کننده</b>
+                  <small>اطلاعات چک پرداختی را وارد کنید</small>
+                </div>
+                <span className="check-fields-v2-icon">🏦</span>
+              </div>
+              <div className="check-card">
+                <div className="check-card-grid">
+                  <label className="check-field">
+                    <span>شماره چک</span>
+                    <input
+                      placeholder="مثلاً ۱۲۳۴۵۶۷۸۹"
+                      value={supplierCheck.checkNumber}
+                      onChange={(e) =>
+                        setSupplierCheck({ ...supplierCheck, checkNumber: e.target.value })
+                      }
+                    />
+                  </label>
+                  <label className="check-field">
+                    <span>بانک</span>
+                    <input
+                      placeholder="مثلاً ملی، ملت..."
+                      value={supplierCheck.bank}
+                      onChange={(e) =>
+                        setSupplierCheck({ ...supplierCheck, bank: e.target.value })
+                      }
+                    />
+                  </label>
+                  <label className="check-field">
+                    <span>شعبه</span>
+                    <input
+                      placeholder="نام یا کد شعبه"
+                      value={supplierCheck.branch}
+                      onChange={(e) =>
+                        setSupplierCheck({ ...supplierCheck, branch: e.target.value })
+                      }
+                    />
+                  </label>
+                  <label className="check-field">
+                    <span>تاریخ سررسید</span>
+                    <JalaliDateInput
+                      value={supplierCheck.dueDate}
+                      onChange={(value) => setSupplierCheck({ ...supplierCheck, dueDate: value })}
+                    />
+                  </label>
+                  <label className="check-field check-field-full">
+                    <span>مبلغ چک (ریال)</span>
+                    <FaNumberInput
+                      value={supplierCheck.amount}
+                      placeholder="مبلغ چک"
+                      onChange={(plain) =>
+                        setSupplierCheck({ ...supplierCheck, amount: plain })
+                      }
+                    />
+                  </label>
+                </div>
+              </div>
             </div>
           )}
           <textarea

@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { mkdir, writeFile } from 'node:fs/promises';
-import { basename, join } from 'node:path';
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { basename, dirname, join } from 'node:path';
 import AdmZip = require('adm-zip');
 import { PrismaService } from '../../prisma.service';
 import { buildProductSyncPayload } from '../../common/sync/sync-payloads';
@@ -9,11 +9,13 @@ import { writeAudit, writeSyncChange } from '../../common/audit/audit-log';
 /** Backup format marker + version — bump when the zip layout changes so a
  * future importer can reject (or migrate) archives it does not understand. */
 const BACKUP_FORMAT = 'salimvand-products-backup';
-const BACKUP_VERSION = 1;
+const BACKUP_VERSION = 2;
+const BACKUP_SUPPORTED_VERSIONS = new Set([1, 2]);
 
 /** Plain file names only inside the images/ folder of the archive — blocks
  * path traversal (“../../.bashrc”) from a hand-crafted zip. */
 const SAFE_FILE_NAME = /^[A-Za-z0-9._-]+$/;
+const UPLOADS_PREFIX = '/uploads/products/';
 
 type BackupProduct = {
   code: string;
@@ -139,13 +141,16 @@ export class ProductsBackupService {
       seoDescription: product.seoDescription,
       seoKeywords: product.seoKeywords,
       deletedAt: product.deletedAt?.toISOString() ?? null,
-      images: product.images.map((image) => ({
-        path: image.path,
-        file: `images/${basename(image.path)}`,
-        alt: image.alt,
-        sort: image.sort,
-        isPrimary: image.isPrimary,
-      })),
+      images: product.images.map((image) => {
+        const file = this.toZipFilePath(image.path);
+        return {
+          path: image.path,
+          file,
+          alt: image.alt,
+          sort: image.sort,
+          isPrimary: image.isPrimary,
+        };
+      }),
       compatibilities: product.compatibilities.map((compat) => ({
         make: compat.model.make.name,
         model: compat.model.name,
@@ -206,6 +211,74 @@ export class ProductsBackupService {
         locationById.get(locationByCode.get(entry.code)?.parentId ?? '')?.code ?? null;
 
     const zip = new AdmZip();
+
+    // Collect image files to embed — supports both legacy flat layout
+    // (uploads/products/<file>.webp) and current dir layout
+    // (uploads/products/<uuid>/large.webp + small.webp).
+    let filesAdded = 0;
+    const seenZipPaths = new Set<string>();
+    const seenDirs = new Set<string>();
+
+    for (const product of serialized) {
+      for (const image of product.images) {
+        // External URLs have no local file — skip.
+        if (/^https?:\/\//i.test(image.path)) continue;
+        if (!image.file || !image.file.startsWith('images/')) continue;
+        if (seenZipPaths.has(image.file)) continue;
+        const relative = image.file.replace(/^images\//, ''); // e.g. a.webp or <id>/large.webp
+        if (!relative || relative.includes('..')) continue;
+        // Validate each path segment.
+        const segments = relative.split('/');
+        if (segments.some((seg) => !seg || !SAFE_FILE_NAME.test(seg))) continue;
+
+        const diskPath = join(this.uploadRoot, relative);
+        try {
+          const data = await readFile(diskPath);
+          zip.addFile(image.file, data);
+          seenZipPaths.add(image.file);
+          filesAdded += 1;
+
+          // If this image lives in a directory (current layout), also bundle
+          // any sibling variants (small.webp, medium.webp, etc.) so the restore
+          // brings back the exact same set the media service created.
+          const dir = dirname(relative);
+          if (dir !== '.' && !seenDirs.has(dir)) {
+            seenDirs.add(dir);
+            try {
+              const entries = await readdir(join(this.uploadRoot, dir));
+              for (const sibling of entries) {
+                if (sibling === basename(relative)) continue; // already added
+                if (!SAFE_FILE_NAME.test(sibling)) continue;
+                // Only include image files — be conservative.
+                if (!/\.(webp|jpg|jpeg|png|avif)$/i.test(sibling)) continue;
+                const siblingZip = `images/${dir}/${sibling}`;
+                if (seenZipPaths.has(siblingZip)) continue;
+                try {
+                  const siblingData = await readFile(join(this.uploadRoot, dir, sibling));
+                  zip.addFile(siblingZip, siblingData);
+                  seenZipPaths.add(siblingZip);
+                  filesAdded += 1;
+                } catch {
+                  // sibling vanished — ignore
+                }
+              }
+            } catch {
+              // dir missing — ignore
+            }
+          }
+        } catch {
+          // File vanished from disk (manual cleanup?) — the DB row still
+          // ships in products.json; the import will just not rewrite it.
+        }
+      }
+    }
+
+    // Fallback for any image dirs that weren't covered because the DB row
+    // points to large.webp but the directory also contains small.webp and we
+    // already handled it above. The above loop already covers it, but we also
+    // scan for dirs that might have been missed if product had no images?
+    // (nothing to do).
+
     zip.addFile(
       'manifest.json',
       Buffer.from(
@@ -217,6 +290,7 @@ export class ProductsBackupService {
             counts: {
               products: serialized.length,
               images: serialized.reduce((sum, product) => sum + product.images.length, 0),
+              imageFiles: filesAdded,
               items: serialized.reduce((sum, product) => sum + product.items.length, 0),
             },
           },
@@ -229,24 +303,34 @@ export class ProductsBackupService {
     zip.addFile('products.json', Buffer.from(JSON.stringify(serialized), 'utf8'));
     zip.addFile('references.json', Buffer.from(JSON.stringify(references), 'utf8'));
 
-    let missingImages = 0;
-    const seen = new Set<string>();
-    for (const product of serialized) {
-      for (const image of product.images) {
-        const name = basename(image.path);
-        if (!SAFE_FILE_NAME.test(name) || seen.has(name)) continue;
-        seen.add(name);
-        try {
-          zip.addLocalFile(join(this.uploadRoot, name), 'images');
-        } catch {
-          // File vanished from disk (manual cleanup?) — the DB row still
-          // ships in products.json; the import will just not rewrite it.
-          missingImages += 1;
-        }
-      }
-    }
-
     return zip.toBuffer();
+  }
+
+  private toZipFilePath(dbPath: string): string {
+    if (/^https?:\/\//i.test(dbPath)) {
+      // External image — no local file to bundle, keep the URL as file field
+      // so the importer knows it's remote.
+      return dbPath;
+    }
+    if (dbPath.startsWith(UPLOADS_PREFIX)) {
+      const relative = dbPath.slice(UPLOADS_PREFIX.length); // e.g. <id>/large.webp or file.webp
+      if (!relative || relative.includes('..')) {
+        // Fallback to basename if path is weird
+        const base = basename(dbPath);
+        return SAFE_FILE_NAME.test(base) ? `images/${base}` : dbPath;
+      }
+      // Validate segments, fallback to basename on failure
+      const segs = relative.split('/');
+      if (segs.some((s) => !s || (s !== '.' && !SAFE_FILE_NAME.test(s)))) {
+        const base = basename(dbPath);
+        return SAFE_FILE_NAME.test(base) ? `images/${base}` : `images/${basename(dbPath)}`;
+      }
+      return `images/${relative}`;
+    }
+    // Legacy or unexpected local path — try basename
+    const base = basename(dbPath);
+    if (SAFE_FILE_NAME.test(base)) return `images/${base}`;
+    return dbPath;
   }
 
   // ───────────────────────────── IMPORT ─────────────────────────────
@@ -271,7 +355,7 @@ export class ProductsBackupService {
     } catch {
       throw new BadRequestException('فایل پشتیبان معتبر نیست (manifest.json خراب است)');
     }
-    if (manifest.format !== BACKUP_FORMAT || manifest.version !== BACKUP_VERSION)
+    if (manifest.format !== BACKUP_FORMAT || !BACKUP_SUPPORTED_VERSIONS.has(manifest.version ?? 0))
       throw new BadRequestException('نسخهٔ فایل پشتیبان پشتیبانی نمی‌شود');
 
     let products: BackupProduct[];
@@ -447,6 +531,16 @@ export class ProductsBackupService {
     return { categoryId, brandId, locationId, vehicleModelId, vehicleTrimId };
   }
 
+  private isSafeZipImagePath(zipPath: string): boolean {
+    if (!zipPath.startsWith('images/')) return false;
+    if (zipPath.includes('..')) return false;
+    const relative = zipPath.slice('images/'.length);
+    if (!relative) return false;
+    const segments = relative.split('/');
+    // No empty segments, no absolute, each segment safe
+    return segments.every((seg) => seg && SAFE_FILE_NAME.test(seg));
+  }
+
   /** Product pass — each product restores in its own transaction so one bad
    * row (bad reference, barcode clash with another product…) never rolls back
    * the whole catalog. */
@@ -458,6 +552,14 @@ export class ProductsBackupService {
     userId: string,
     ip?: string,
   ): Promise<void> {
+    // Pre-index all image entries in the zip for quick sibling lookup
+    const zipImageEntries = new Set(
+      zip
+        .getEntries()
+        .map((e) => e.entryName)
+        .filter((name) => name.startsWith('images/')),
+    );
+
     for (const entry of products) {
       try {
         await this.prisma.$transaction(async (tx) => {
@@ -526,26 +628,132 @@ export class ProductsBackupService {
           // Images: replace the row set, write missing files from the zip.
           await tx.productImage.deleteMany({ where: { productId } });
           for (const image of entry.images) {
-            const name = basename(image.path);
-            if (!SAFE_FILE_NAME.test(name)) {
-              summary.errors.push(`${entry.code}: نام فایل تصویر نامعتبر («${name}») رد شد`);
+            const dbPath = image.path;
+
+            // External URL — no file to restore, just keep the DB row
+            if (/^https?:\/\//i.test(dbPath)) {
+              await tx.productImage.create({
+                data: {
+                  productId,
+                  path: dbPath,
+                  alt: image.alt,
+                  sort: image.sort,
+                  isPrimary: image.isPrimary,
+                },
+              });
               continue;
             }
-            const fileEntry = zip.getEntry(`images/${name}`);
-            if (fileEntry) {
+
+            const fileInZip = image.file;
+            // file field might be an external URL in old backups for remote images
+            if (/^https?:\/\//i.test(fileInZip)) {
+              await tx.productImage.create({
+                data: {
+                  productId,
+                  path: dbPath,
+                  alt: image.alt,
+                  sort: image.sort,
+                  isPrimary: image.isPrimary,
+                },
+              });
+              continue;
+            }
+
+            if (!fileInZip || !fileInZip.startsWith('images/')) {
+              summary.errors.push(`${entry.code}: مسیر فایل تصویر نامعتبر («${fileInZip}») رد شد`);
+              // Still create DB row so product doesn't lose image reference
+              await tx.productImage.create({
+                data: {
+                  productId,
+                  path: dbPath,
+                  alt: image.alt,
+                  sort: image.sort,
+                  isPrimary: image.isPrimary,
+                },
+              });
+              summary.imagesMissing += 1;
+              continue;
+            }
+
+            if (!this.isSafeZipImagePath(fileInZip)) {
+              summary.errors.push(`${entry.code}: نام فایل تصویر نامعتبر («${fileInZip}») رد شد`);
+              await tx.productImage.create({
+                data: {
+                  productId,
+                  path: dbPath,
+                  alt: image.alt,
+                  sort: image.sort,
+                  isPrimary: image.isPrimary,
+                },
+              });
+              continue;
+            }
+
+            const zipEntry = zip.getEntry(fileInZip);
+            const relative = fileInZip.replace(/^images\//, '');
+            const diskPath = join(this.uploadRoot, relative);
+
+            if (zipEntry) {
               try {
-                await writeFile(join(this.uploadRoot, name), fileEntry.getData());
+                await mkdir(dirname(diskPath), { recursive: true });
+                await writeFile(diskPath, zipEntry.getData());
                 summary.imagesWritten += 1;
+
+                // Also restore sibling variants (small.webp etc.) if they exist
+                // in the zip under the same directory.
+                const dir = dirname(relative);
+                if (dir !== '.' && dir !== '') {
+                  // Check for common variants
+                  const variants = ['small.webp', 'medium.webp', 'large.webp'];
+                  for (const variant of variants) {
+                    if (variant === basename(relative)) continue;
+                    const variantZipPath = `images/${dir}/${variant}`;
+                    if (!zipImageEntries.has(variantZipPath)) continue;
+                    const variantEntry = zip.getEntry(variantZipPath);
+                    if (!variantEntry) continue;
+                    const variantDiskPath = join(this.uploadRoot, dir, variant);
+                    try {
+                      await mkdir(dirname(variantDiskPath), { recursive: true });
+                      await writeFile(variantDiskPath, variantEntry.getData());
+                      summary.imagesWritten += 1;
+                    } catch {
+                      summary.errors.push(
+                        `${entry.code}: نوشتن تصویر «${variantZipPath}» روی دیسک ناموفق بود`,
+                      );
+                    }
+                  }
+                  // Also restore any other files in same dir that are in zip
+                  // (generic fallback) — iterate zip entries that start with images/<dir>/
+                  for (const otherZipPath of zipImageEntries) {
+                    if (!otherZipPath.startsWith(`images/${dir}/`)) continue;
+                    if (otherZipPath === fileInZip) continue;
+                    if (['small.webp', 'medium.webp', 'large.webp'].includes(basename(otherZipPath)))
+                      continue; // already handled
+                    const otherEntry = zip.getEntry(otherZipPath);
+                    if (!otherEntry) continue;
+                    const otherRelative = otherZipPath.replace(/^images\//, '');
+                    const otherDiskPath = join(this.uploadRoot, otherRelative);
+                    if (!this.isSafeZipImagePath(otherZipPath)) continue;
+                    try {
+                      await mkdir(dirname(otherDiskPath), { recursive: true });
+                      await writeFile(otherDiskPath, otherEntry.getData());
+                      summary.imagesWritten += 1;
+                    } catch {
+                      // ignore
+                    }
+                  }
+                }
               } catch {
-                summary.errors.push(`${entry.code}: نوشتن تصویر «${name}» روی دیسک ناموفق بود`);
+                summary.errors.push(`${entry.code}: نوشتن تصویر «${fileInZip}» روی دیسک ناموفق بود`);
               }
             } else {
               summary.imagesMissing += 1;
             }
+
             await tx.productImage.create({
               data: {
                 productId,
-                path: image.path,
+                path: dbPath,
                 alt: image.alt,
                 sort: image.sort,
                 isPrimary: image.isPrimary,

@@ -43,6 +43,7 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const data = await getCategory((await params).slug);
+  const siteUrl = (process.env.PUBLIC_SITE_URL ?? 'https://salimvand.ir').replace(/\/$/, '');
   return {
     title: data ? data.category.name : 'دسته‌بندی پیدا نشد',
     description: data
@@ -51,12 +52,15 @@ export async function generateMetadata({
     keywords: data
       ? [data.category.name, `لوازم یدکی ${data.category.name}`, 'قطعات خودرو میاندوآب']
       : undefined,
-    alternates: data ? { canonical: `/category/${data.category.slug}` } : undefined,
+    alternates: data
+      ? { canonical: `${siteUrl}/category/${encodeURIComponent(data.category.slug)}` }
+      : undefined,
     openGraph: data
       ? {
           type: 'website',
           title: data.category.name,
           description: `کاتالوگ ${data.category.name} و قطعات خودرو`,
+          url: `${siteUrl}/category/${encodeURIComponent(data.category.slug)}`,
         }
       : undefined,
   };
@@ -65,23 +69,25 @@ export default async function CategoryPage({ params }: { params: Promise<{ slug:
   const data = await getCategory((await params).slug);
   const info = await getStoreInfo();
   if (!data) notFound();
+  const siteUrl = (process.env.PUBLIC_SITE_URL ?? 'https://salimvand.ir').replace(/\/$/, '');
+  const canonicalUrl = `${siteUrl}/category/${encodeURIComponent(data.category.slug)}`;
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'CollectionPage',
     name: data.category.name,
-    url: `https://salimvand.ir/category/${data.category.slug}`,
-    isPartOf: { '@type': 'WebSite', name: 'فروشگاه سلیم وند', url: 'https://salimvand.ir' },
+    url: canonicalUrl,
+    isPartOf: { '@type': 'WebSite', name: 'فروشگاه سلیم وند', url: siteUrl },
   };
   const breadcrumb = {
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
     itemListElement: [
-      { '@type': 'ListItem', position: 1, name: 'خانه', item: 'https://salimvand.ir' },
+      { '@type': 'ListItem', position: 1, name: 'خانه', item: siteUrl },
       {
         '@type': 'ListItem',
         position: 2,
         name: data.category.name,
-        item: `https://salimvand.ir/category/${data.category.slug}`,
+        item: canonicalUrl,
       },
     ],
   };

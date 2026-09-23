@@ -381,7 +381,9 @@ describe('ProductsBackupService', () => {
 
     const manifest = JSON.parse(zip.readAsText('manifest.json'));
     expect(manifest.format).toBe('salimvand-products-backup');
-    expect(manifest.counts).toEqual({ products: 2, images: 1, items: 2 });
+    expect(manifest.version).toBe(2);
+    expect(manifest.counts).toMatchObject({ products: 2, images: 1, items: 2 });
+    expect(manifest.counts.imageFiles).toBe(1);
 
     const products = JSON.parse(zip.readAsText('products.json'));
     expect(products).toHaveLength(2);
@@ -414,6 +416,63 @@ describe('ProductsBackupService', () => {
     expect(zip.getEntry('images/a1b2c3d4.webp')?.getData().toString()).toBe(
       'fake-webp-bytes-for-backup-test',
     );
+  });
+
+  it('exports and restores new dir layout with large + small variants', async () => {
+    const { mkdirSync, writeFileSync } = await import('node:fs');
+    const dirId = 'img-dir-1234';
+    const dirPath = join(uploadDir, dirId);
+    mkdirSync(dirPath, { recursive: true });
+    const largeBytes = Buffer.from('large-bytes');
+    const smallBytes = Buffer.from('small-bytes');
+    writeFileSync(join(dirPath, 'large.webp'), largeBytes);
+    writeFileSync(join(dirPath, 'small.webp'), smallBytes);
+
+    const product = db.products.find((p) => p.code === '1001')!;
+    // Add a second image in new layout
+    db.productImages.push({
+      id: randomUUID(),
+      productId: product.id,
+      path: `/uploads/products/${dirId}/large.webp`,
+      alt: 'تصویر جدید',
+      sort: 1,
+      isPrimary: false,
+    });
+
+    const buffer = await service.buildBackup();
+    const zip = new AdmZip(buffer);
+    expect(zip.getEntry(`images/${dirId}/large.webp`)?.getData().toString()).toBe('large-bytes');
+    expect(zip.getEntry(`images/${dirId}/small.webp`)?.getData().toString()).toBe('small-bytes');
+
+    // Wipe files
+    rmSync(dirPath, { recursive: true, force: true });
+    db.productImages = db.productImages.filter((img: Row) => !img.path.includes(dirId));
+    db.products = [];
+    db.productImages = [];
+    db.compat = [];
+    db.items = [];
+    db.categories = [];
+    db.brands = [];
+    db.locations = [];
+    db.makes = [];
+    db.models = [];
+    db.trims = [];
+
+    // Re-seed minimal for import to work? No, we wiped all — but we need to re-seed from zip,
+    // the zip we built after adding dir image contains both old and new images, so import should restore both.
+    // However we cleared db.products etc. after building zip, so we need to rebuild zip with both images before wipe.
+    // Actually we already built zip, so we wiped after. Now import.
+    // For this test we need a fresh zip that includes the new layout — we already have buffer.
+    // But we cleared the DB that the service's makeDb uses — the import will recreate categories etc. from references in zip.
+
+    const summary = await service.importBackup(buffer, 'user-1');
+    expect(summary.errors).toEqual([]);
+    // Should have written at least 2 files for the new dir (large + small) plus the old flat one
+    expect(summary.imagesWritten).toBeGreaterThanOrEqual(3);
+    expect(existsSync(join(uploadDir, dirId, 'large.webp'))).toBe(true);
+    expect(existsSync(join(uploadDir, dirId, 'small.webp'))).toBe(true);
+    expect(readFileSync(join(uploadDir, dirId, 'large.webp')).toString()).toBe('large-bytes');
+    expect(readFileSync(join(uploadDir, dirId, 'small.webp')).toString()).toBe('small-bytes');
   });
 
   it('round-trips: wipes the shop, imports the zip and restores everything', async () => {

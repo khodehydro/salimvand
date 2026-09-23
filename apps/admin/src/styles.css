@@ -7002,11 +7002,13 @@ button.btn-primary-lg:hover:not(:disabled) {
 .editor-body .tabs { position: sticky; top: 0; z-index: 3; background: var(--sv-surface); padding: 8px 0; }
 .editor-body .tab { min-height: 40px; white-space: nowrap; }
 @media (max-width: 700px) { .product-form { grid-template-columns: 1fr; padding: 16px; } .editor-body .tabs { overflow-x: auto; flex-wrap: nowrap; } }
-.check-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 12px 0; padding: 12px; border: 1px solid var(--sv-border); border-radius: 10px; background: var(--sv-surface-2); }
-.check-fields b { grid-column: 1 / -1; }.check-fields input { min-height: 36px; padding: 7px 9px; border: 1px solid var(--sv-border-2); border-radius: 7px; background: var(--sv-surface); color: var(--sv-text); font: inherit; }
-@media (max-width: 650px) { .check-fields { grid-template-columns: 1fr; } }
-.check-fields { grid-template-columns: 1fr; }.check-row { display: grid; grid-template-columns: 60px repeat(5, minmax(0, 1fr)); gap: 7px; align-items: center; padding: 8px 0; border-top: 1px solid var(--sv-border); }.check-row input { min-height: 34px; padding: 6px; border: 1px solid var(--sv-border-2); border-radius: 7px; background: var(--sv-surface); color: var(--sv-text); font: inherit; }.check-row .money-in { min-width: 0; }
-@media (max-width: 800px) { .check-row { grid-template-columns: 1fr 1fr; } .check-row strong { grid-column: 1 / -1; } }
+/* ── Legacy check classes kept for compatibility but hidden ──
+   New UI uses .check-fields-v2 / .check-card / .check-field.
+   Old .check-fields/.check-row rules are overridden to avoid the cramped 5-col layout. */
+.check-fields,
+.check-row {
+  display: none;
+}
 .ops-today-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 14px 0; }
 .ops-today-card { min-height: 116px; padding: 16px; border: 1px solid var(--sv-border); border-radius: 14px; background: var(--sv-surface); box-shadow: 0 5px 18px rgba(25,45,70,.05); display: flex; flex-direction: column; gap: 5px; border-top: 3px solid var(--sv-link); }
 .ops-today-card.success { border-top-color: var(--sv-ok); }.ops-today-card.warn { border-top-color: #d89b21; }.ops-today-card.danger { border-top-color: var(--sv-danger); }
@@ -7014,10 +7016,7 @@ button.btn-primary-lg:hover:not(:disabled) {
 @media (max-width: 900px) { .ops-today-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } } @media (max-width: 520px) { .ops-today-grid { grid-template-columns: 1fr; } }
 .check-status-select { border: 1px solid var(--sv-border-2); border-radius: 6px; padding: 2px 6px; background: var(--sv-surface-2); color: var(--sv-text); font: inherit; font-size: 11px; }
 .checks-report-card { margin: 18px 0; }.checks-report-card .card-h { display:flex; align-items:center; justify-content:space-between; gap:10px; }.checks-report-card select { min-height:36px; padding:6px 9px; border:1px solid var(--sv-border-2); border-radius:8px; background:var(--sv-surface-2); color:var(--sv-text); font:inherit; }.report-check-table { overflow-x:auto; }.report-check-table .thead,.report-check-table .trow { min-width:760px; display:grid; grid-template-columns: .7fr 1.2fr 1.5fr 1fr 1.2fr .9fr; gap:10px; align-items:center; padding:10px 0; border-bottom:1px solid var(--sv-border); font-size:12px; }
-/* Final operational UI polish */
-.check-fields { width: 100%; margin: 14px 0; padding: 14px; gap: 10px; }
-.check-fields input, .check-fields select, .check-row input { min-height: 42px; font-size: 13px; color: var(--sv-text); background: var(--sv-surface); }
-.check-row { padding: 10px 0; gap: 9px; }
+/* Final operational UI polish — old check rules already hidden above */
 .invoice-count-link { border: 0; background: transparent; color: var(--sv-link); font: 600 12px Vazirmatn; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 .customer-row { min-height: 58px; }
 .customer-row > * { min-width: 0; }
@@ -7031,17 +7030,15 @@ button.btn-primary-lg:hover:not(:disabled) {
 .lbl-stage { transform: scale(.78); transform-origin: top center; margin-bottom: -70px; }
 .reports-page .cards, section:has(.report-check-table) .dashboard-cards { gap: 10px; }.reports-page .page-title { gap: 10px; }.reports-page .page-title > button { white-space: nowrap; }
 .report-filters { gap: 8px !important; }.report-filters button { min-height: 38px; padding: 7px 12px; }
-@media (max-width: 800px) { .check-row { grid-template-columns: 1fr 1fr; }.customer-head, .customer-row { min-width: 920px; }.lbl-stage { transform: scale(.7); margin-bottom: -100px; } }
+@media (max-width: 800px) { .customer-head, .customer-row { min-width: 920px; }.lbl-stage { transform: scale(.7); margin-bottom: -100px; } }
 
-/* Invoice payment dialog: cheque fields need the same readable dimensions
-   as the invoice creation form, not the compact report controls. */
-.pay-modal-body .paybox .pr .money-in,
-.pay-modal-body .check-fields .money-in,
-.pay-modal-body .check-fields input {
+/* Invoice payment dialog: keep payment method money inputs readable */
+.pay-modal-body .paybox .pr .money-in {
   box-sizing: border-box;
   min-height: 44px;
   height: 44px;
-  width: 100%;
+  width: 170px;
+  margin-inline-start: auto;
   padding: 9px 12px;
   border: 1px solid var(--sv-border-2);
   border-radius: 9px;
@@ -7052,15 +7049,17 @@ button.btn-primary-lg:hover:not(:disabled) {
   direction: rtl;
   text-align: right;
 }
-.pay-modal-body .paybox .pr .money-in { width: 170px; margin-inline-start: auto; }
-.pay-modal-body .check-fields input::placeholder { color: var(--sv-text-3); opacity: 1; }
-.pay-modal-body .check-fields input:focus,
-.pay-modal-body .paybox .pr .money-in:focus { outline: 3px solid color-mix(in srgb, var(--sv-brand-500) 18%, transparent); border-color: var(--sv-brand-500); }
-.pay-modal-body .check-fields input[type='date'] { direction: ltr; text-align: left; }
-.pay-modal-body .check-row { grid-template-columns: 72px repeat(5, minmax(120px, 1fr)); gap: 10px; align-items: stretch; }
-.pay-modal-body .check-row strong { display: flex; align-items: center; font-size: 13px; color: var(--sv-text-2); }
-@media (max-width: 900px) { .pay-modal-body .check-row { grid-template-columns: 1fr 1fr; } .pay-modal-body .check-row strong { grid-column: 1 / -1; } .pay-modal-body .paybox .pr .money-in { width: 150px; } }
-@media (max-width: 560px) { .pay-modal-body .check-row { grid-template-columns: 1fr; } .pay-modal-body .paybox .pr { flex-wrap: wrap; } .pay-modal-body .paybox .pr .money-in { width: 100%; margin-inline-start: 0; } }
+.pay-modal-body .paybox .pr .money-in:focus {
+  outline: 3px solid color-mix(in srgb, var(--sv-brand-500) 18%, transparent);
+  border-color: var(--sv-brand-500);
+}
+@media (max-width: 900px) {
+  .pay-modal-body .paybox .pr .money-in { width: 150px; }
+}
+@media (max-width: 560px) {
+  .pay-modal-body .paybox .pr { flex-wrap: wrap; }
+  .pay-modal-body .paybox .pr .money-in { width: 100%; margin-inline-start: 0; }
+}
 /* Reference data: explicit readable controls and compact vehicle hierarchy. */
 .admin .references-page .reference-card input,
 .admin .references-page .reference-card select,
@@ -8275,3 +8274,982 @@ html[data-theme='dark'] {
   border-color: var(--sv-primary);
   color: var(--sv-primary);
 }
+
+/* ============================================================
+   Check details — redesign v2 (fixes cramped side-by-side layout)
+   Used in InvoicesPage (issue + pay modal) and PurchasesPage.
+   - Full Persian labels above each input, not just placeholders
+   - Card per cheque with header + 2-col grid (1-col on mobile)
+   - Proper spacing, readable placeholders, remove button
+   ============================================================ */
+.check-fields-v2 {
+  display: grid;
+  gap: 14px;
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px solid var(--sv-border);
+  border-radius: 14px;
+  background: var(--sv-surface);
+  box-shadow: var(--sv-shadow-1);
+}
+.check-fields-v2-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px dashed var(--sv-border);
+}
+.check-fields-v2-head > div {
+  display: grid;
+  gap: 3px;
+}
+.check-fields-v2-head b {
+  font-size: 14.5px;
+  font-weight: 800;
+  color: var(--sv-text);
+}
+.check-fields-v2-head small {
+  font-size: 11.5px;
+  color: var(--sv-text-2);
+  line-height: 1.6;
+}
+.check-fields-v2-icon {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: var(--sv-brand-50);
+  color: var(--sv-link);
+  font-size: 18px;
+  flex: none;
+  border: 1px solid var(--sv-border);
+}
+.check-cards {
+  display: grid;
+  gap: 12px;
+}
+.check-card {
+  border: 1px solid var(--sv-border);
+  border-radius: 12px;
+  background: var(--sv-surface-2);
+  overflow: hidden;
+}
+.check-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--sv-surface);
+  border-bottom: 1px solid var(--sv-border);
+}
+.check-card-header strong {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--sv-text);
+}
+.check-card-remove {
+  border: 0;
+  background: var(--sv-danger-soft);
+  color: var(--sv-danger);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background .15s ease, color .15s ease;
+}
+.check-card-remove:hover {
+  background: var(--sv-danger);
+  color: #fff;
+}
+.check-card-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  padding: 16px;
+}
+/* On wider builder pages use 2 cols for compactness, but keep tot-panel
+   (300px) and pay-modal (430px) as single column to avoid clipped text. */
+@media (min-width: 700px) {
+  .purchases-page .check-card-grid,
+  .purchase-builder .check-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .purchases-page .check-field-full,
+  .purchase-builder .check-field-full {
+    grid-column: 1 / -1;
+  }
+}
+.check-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.check-field span {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--sv-text-2);
+}
+.check-field input,
+.check-field .money-in,
+.check-field select,
+.check-field .jalali-date-input,
+.check-field .fa-num-in {
+  min-height: 44px;
+  height: 44px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid var(--sv-border-2);
+  border-radius: 10px;
+  background: var(--sv-surface);
+  color: var(--sv-text);
+  font: inherit;
+  font-size: 13px;
+  transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+}
+.check-field input::placeholder,
+.check-field .money-in::placeholder {
+  color: var(--sv-text-3);
+  opacity: 1;
+}
+.check-field input:focus,
+.check-field .money-in:focus {
+  outline: none;
+  border-color: var(--sv-primary);
+  background: var(--sv-surface);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sv-primary) 14%, transparent);
+}
+/* JalaliDateInput wrapper — ensure it fills the grid cell */
+.check-field .jalali-date-input,
+.check-field .jalali-date-input input {
+  width: 100%;
+}
+.check-field-full {
+  grid-column: 1 / -1;
+}
+.check-add-btn {
+  width: 100%;
+  min-height: 46px;
+  border: 1.5px dashed var(--sv-border-2);
+  border-radius: 11px;
+  background: var(--sv-surface-2);
+  color: var(--sv-link);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: border-color .15s ease, background .15s ease, color .15s ease;
+}
+.check-add-btn:hover {
+  border-color: var(--sv-link);
+  background: color-mix(in srgb, var(--sv-link) 8%, var(--sv-surface-2));
+  color: var(--sv-primary);
+}
+
+/* Pay modal — the panel is narrower (430px), so ensure cards still breathe */
+.pay-modal .check-fields-v2 {
+  margin: 12px 0 0;
+  padding: 12px;
+  background: var(--sv-surface);
+}
+.pay-modal .check-card-grid {
+  padding: 12px;
+}
+
+/* Responsive: stack to single column on narrow screens */
+@media (max-width: 640px) {
+  .check-fields-v2 {
+    padding: 12px;
+    gap: 10px;
+  }
+  .check-card-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    padding: 12px;
+  }
+  .check-fields-v2-head b {
+    font-size: 13px;
+  }
+}
+
+/* Dark theme — ensure contrast stays correct via tokens */
+[data-theme='dark'] .check-fields-v2 {
+  background: var(--sv-surface);
+  border-color: var(--sv-border);
+}
+[data-theme='dark'] .check-card {
+  background: var(--sv-surface-2);
+  border-color: var(--sv-border);
+}
+[data-theme='dark'] .check-card-header {
+  background: var(--sv-surface);
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   Unified Admin Design System — harmonization pass
+   Goal: make all 18 admin pages speak the same visual language as
+   docs/ui-reference.html and the dashboard (page-h, kpis, card, tbl,
+   badge, btn, toolbar). This block normalizes legacy class names
+   without touching JSX, so every page gets the same tokens, spacing,
+   radius and shadow.
+
+   Sections covered:
+   1) Page headers (.page-title → .page-h)
+   2) Count badges (.count)
+   3) Filter toolbars (7 variants → unified toolbar)
+   4) Tables & list containers
+   5) Forms
+   6) Cards
+   7) Row actions & buttons
+   8) Tabs & empty states
+   ════════════════════════════════════════════════════════════════════ */
+
+/* ── 1) Page headers: unify .page-title to match .page-h from reference ── */
+.admin .page-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin: 0 0 18px;
+  padding: 0;
+}
+.admin .page-title > div:first-child {
+  display: grid;
+  gap: 6px;
+  min-width: 220px;
+  flex: 1;
+}
+.admin .page-title .eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--sv-text-3);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+.admin .page-title h1,
+.admin .page-title h2 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 800;
+  line-height: 1.35;
+  color: var(--sv-text);
+}
+.admin .page-title .muted {
+  margin: 0;
+  color: var(--sv-text-3);
+  font-size: 11.5px;
+  line-height: 1.8;
+}
+.admin .page-title-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-inline-start: auto;
+  padding-top: 2px;
+}
+/* Reports page had a special class, keep it but align with base */
+.admin .reports-page-title {
+  align-items: flex-start;
+}
+.admin .reports-page-title > div:first-child {
+  min-width: 220px;
+}
+
+/* ── 2) Count badges: unify .count to .badge b-line ── */
+.admin .count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--sv-surface);
+  border: 1px solid var(--sv-border);
+  color: var(--sv-text-2);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 0 1px 2px rgb(13 43 75 / 5%);
+}
+
+/* ── 3) Filter toolbars: 7+ legacy names → one unified surface ── */
+.admin .audit-filters,
+.admin .report-filters,
+.admin .media-toolbar,
+.admin .purchase-toolbar,
+.admin .list-toolbar,
+.admin .wholesale-filters,
+.admin .customer-search,
+.admin .inventory-filter-toolbar,
+.admin .product-filter-toolbar,
+.admin .invoices-toolbar,
+.admin .reports-page .report-filters,
+.admin .adjust-box.customer-search {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px;
+  margin: 0 0 14px;
+  background: var(--sv-surface);
+  border: 1px solid var(--sv-border);
+  border-radius: 12px;
+  box-shadow: var(--sv-shadow-1, 0 1px 2px rgba(11, 28, 47, 0.08));
+}
+
+/* Search field inside toolbars should be full-width first row */
+.admin .audit-filters .search-field,
+.admin .report-filters .search-field,
+.admin .media-toolbar .search-field,
+.admin .purchase-toolbar .search-field,
+.admin .list-toolbar .search-field,
+.admin .wholesale-filters .search-field,
+.admin .customer-search .search-field,
+.admin .inventory-filter-toolbar .search-field,
+.admin .product-filter-toolbar .search-field,
+.admin .invoices-toolbar .search-field {
+  flex: 1 1 100%;
+  width: 100%;
+  max-width: none;
+}
+
+/* Legacy audit-filters used label grid — normalize */
+.admin .audit-filters label,
+.admin .report-filters label,
+.admin .purchase-toolbar label {
+  display: grid;
+  gap: 5px;
+  min-width: 160px;
+  color: var(--sv-text-2);
+  font-size: 11px;
+  font-weight: 600;
+}
+.admin .audit-filters input,
+.admin .audit-filters select,
+.admin .report-filters input,
+.admin .report-filters select,
+.admin .purchase-toolbar select,
+.admin .wholesale-filters input,
+.admin .wholesale-filters select,
+.admin .customer-search input,
+.admin .adjust-box input,
+.admin .media-toolbar input {
+  min-height: 38px;
+  padding: 8px 11px;
+  border: 1px solid var(--sv-border);
+  border-radius: 8px;
+  background: var(--sv-surface-2);
+  color: var(--sv-text);
+  font: 12px Vazirmatn, Tahoma, sans-serif;
+}
+.admin .audit-filters input:focus,
+.admin .audit-filters select:focus,
+.admin .report-filters input:focus,
+.admin .purchase-toolbar select:focus,
+.admin .wholesale-filters input:focus,
+.admin .wholesale-filters select:focus,
+.admin .customer-search input:focus {
+  outline: none;
+  border-color: var(--sv-primary);
+  background: var(--sv-surface);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sv-primary) 12%, transparent);
+}
+.admin .audit-filters button,
+.admin .report-filters button,
+.admin .purchase-toolbar button {
+  min-height: 38px;
+  padding: 8px 14px;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* Wholesale filters were grid — make them flex like others */
+.admin .wholesale-filters {
+  display: flex;
+  grid-template-columns: unset;
+}
+.admin .wholesale-filters input,
+.admin .wholesale-filters select {
+  flex: 1;
+  min-width: 150px;
+}
+.admin .wholesale-filters .wholesale-print {
+  flex: none;
+  min-height: 38px;
+}
+
+/* ── 4) Tables & list containers: unify card look ── */
+.admin .product-table,
+.admin .product-list-table,
+.admin .inventory-flat-list,
+.admin .inventory-list,
+.admin .audit-list,
+.admin .reference-list,
+.admin .vehicle-tree,
+.admin .wholesale-table-wrap,
+.admin .media-grid {
+  background: var(--sv-surface);
+  border: 1px solid var(--sv-border);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: var(--sv-shadow-1, 0 1px 2px rgba(11, 28, 47, 0.08));
+}
+.admin .product-table {
+  overflow: auto;
+}
+.admin .table-head,
+.admin .product-list-head,
+.admin .inventory-list-head,
+.admin .inventory-table-head,
+.admin .customer-head,
+.admin .supplier-head,
+.admin .user-head,
+.admin .purchase-head,
+.admin .invoice-head,
+.admin .reference-list-head,
+.admin .wholesale-table th {
+  background: var(--sv-surface-2);
+  color: var(--sv-text-3);
+  font-size: 11px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--sv-border);
+  min-height: 42px;
+}
+.admin .table-row,
+.admin .product-row,
+.admin .inventory-flat-row,
+.admin .customer-row,
+.admin .supplier-row,
+.admin .user-row,
+.admin .purchase-row,
+.admin .invoice-row,
+.admin .wholesale-table td {
+  border-bottom: 1px solid var(--sv-border);
+  min-height: 52px;
+  font-size: 12.5px;
+}
+.admin .table-row:last-child,
+.admin .product-row:last-child,
+.admin .inventory-flat-row:last-child,
+.admin .customer-row:last-child,
+.admin .supplier-row:last-child,
+.admin .user-row:last-child,
+.admin .purchase-row:last-child,
+.admin .invoice-row:last-child {
+  border-bottom: 0;
+}
+.admin .table-row:hover,
+.admin .product-row:hover,
+.admin .inventory-flat-row:hover,
+.admin .customer-row:hover,
+.admin .supplier-row:hover,
+.admin .user-row:hover,
+.admin .purchase-row:hover {
+  background: var(--sv-surface-2);
+}
+
+/* Audit list special */
+.admin .audit-list .audit-event {
+  padding: 12px 16px;
+  min-height: 58px;
+}
+.admin .audit-list .audit-event:hover {
+  background: var(--sv-surface-2);
+}
+
+/* Wholesale table */
+.admin .wholesale-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 720px;
+  font-size: 12px;
+  background: transparent;
+  border: 0;
+}
+.admin .wholesale-table th {
+  padding: 10px 12px;
+  text-align: right;
+}
+.admin .wholesale-table td {
+  padding: 10px 12px;
+  background: var(--sv-surface);
+}
+.admin .wholesale-table-wrap {
+  overflow: auto;
+}
+
+/* ── 5) Forms: unify product-form, customer-form, supplier-form, user-form, reference-card, media-form, adjust-box ── */
+.admin .product-form,
+.admin .customer-form,
+.admin .supplier-form,
+.admin .user-form,
+.admin .reference-card,
+.admin .media-form,
+.admin .adjust-box,
+.admin .purchase-builder,
+.admin .settings-page fieldset,
+.admin .reference-workspace .reference-card,
+.admin .shelves-box {
+  background: var(--sv-surface);
+  border: 1px solid var(--sv-border);
+  border-radius: 14px;
+  padding: 20px;
+  gap: 14px;
+  box-shadow: var(--sv-shadow-1, 0 1px 2px rgba(11, 28, 47, 0.08));
+}
+.admin .product-form h2,
+.admin .customer-form h2,
+.admin .supplier-form h2,
+.admin .user-form h2,
+.admin .reference-card h2,
+.admin .media-form h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--sv-text);
+  grid-column: 1 / -1;
+}
+.admin .product-form label,
+.admin .customer-form label,
+.admin .supplier-form label,
+.admin .user-form label,
+.admin .reference-card label,
+.admin .media-form label,
+.admin .adjust-box label,
+.admin .purchase-fields label,
+.admin .purchase-builder footer label {
+  display: grid;
+  gap: 6px;
+  color: var(--sv-text-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+.admin .product-form input,
+.admin .product-form select,
+.admin .product-form textarea,
+.admin .customer-form input,
+.admin .customer-form select,
+.admin .supplier-form input,
+.admin .supplier-form select,
+.admin .user-form input,
+.admin .user-form select,
+.admin .reference-card input,
+.admin .reference-card select,
+.admin .reference-card textarea,
+.admin .media-form input,
+.admin .media-form select,
+.admin .adjust-box input,
+.admin .adjust-box select,
+.admin .purchase-fields input,
+.admin .purchase-fields select,
+.admin .purchase-builder footer input {
+  width: 100%;
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 1px solid var(--sv-border-2);
+  border-radius: 9px;
+  background: var(--sv-surface-2);
+  color: var(--sv-text);
+  font: 13px Vazirmatn, Tahoma, sans-serif;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+.admin .product-form input:focus,
+.admin .product-form select:focus,
+.admin .product-form textarea:focus,
+.admin .customer-form input:focus,
+.admin .supplier-form input:focus,
+.admin .user-form input:focus,
+.admin .reference-card input:focus,
+.admin .reference-card select:focus,
+.admin .media-form input:focus,
+.admin .adjust-box input:focus,
+.admin .purchase-fields input:focus {
+  outline: none;
+  border-color: var(--sv-primary);
+  background: var(--sv-surface);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sv-primary) 14%, transparent);
+}
+.admin .product-form input::placeholder,
+.admin .customer-form input::placeholder,
+.admin .supplier-form input::placeholder,
+.admin .user-form input::placeholder,
+.admin .reference-card input::placeholder,
+.admin .media-form input::placeholder {
+  color: var(--sv-text-3);
+  opacity: 1;
+}
+.admin .product-form button,
+.admin .customer-form button,
+.admin .supplier-form button,
+.admin .user-form button {
+  min-height: 42px;
+  border-radius: 10px;
+  font-weight: 700;
+}
+
+/* Form grids: keep 2-col on desktop, 1-col on mobile */
+.admin .product-form,
+.admin .customer-form,
+.admin .supplier-form {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.admin .user-form {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+@media (max-width: 900px) {
+  .admin .product-form,
+  .admin .customer-form,
+  .admin .supplier-form,
+  .admin .user-form {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── 6) Cards: unify reference-card, media-card, wholesale-card, kpi, inventory-kpi ── */
+.admin .reference-card,
+.admin .media-card,
+.admin .wholesale-card,
+.admin .cards article,
+.admin .dashboard-cards article,
+.admin .kpi,
+.admin .inventory-kpi,
+.admin .card,
+.admin .reference-list > article,
+.admin .vehicle-tree > article {
+  background: var(--sv-surface);
+  border: 1px solid var(--sv-border);
+  border-radius: 14px;
+  box-shadow: var(--sv-shadow-1, 0 1px 2px rgba(11, 28, 47, 0.08));
+}
+.admin .reference-card,
+.admin .media-card {
+  padding: 18px;
+  gap: 12px;
+}
+.admin .media-card img {
+  border-radius: 10px;
+}
+
+/* ── 7) Row actions & buttons: unify .row-action to match .btn-sm ── */
+.admin .row-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 30px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--sv-border);
+  background: var(--sv-surface);
+  color: var(--sv-link);
+  font: 600 11.5px Vazirmatn, Tahoma, sans-serif;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 1px 2px rgb(13 43 75 / 5%);
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.admin .row-action:hover:not(:disabled) {
+  background: var(--sv-surface-2);
+  border-color: var(--sv-primary);
+  color: var(--sv-primary);
+}
+.admin .row-action.danger-text,
+.admin .row-action.danger {
+  color: var(--sv-danger);
+  background: var(--sv-danger-soft);
+  border-color: color-mix(in srgb, var(--sv-danger) 25%, transparent);
+}
+.admin .row-action.danger-text:hover,
+.admin .row-action.danger:hover {
+  background: var(--sv-danger);
+  color: #fff;
+  border-color: var(--sv-danger);
+}
+.admin .invoice-count-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--sv-border);
+  background: var(--sv-surface);
+  color: var(--sv-link);
+  font: 600 11px Vazirmatn;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.admin .invoice-count-link:hover {
+  border-color: var(--sv-primary);
+  color: var(--sv-primary);
+  background: var(--sv-surface-2);
+}
+
+/* Button primary harmonization across pages */
+.admin button.button-primary {
+  min-height: 42px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: var(--sv-shadow-1);
+}
+.admin button.outline {
+  min-height: 38px;
+  border-radius: 10px;
+  background: var(--sv-surface);
+  border: 1px solid var(--sv-border-2);
+  color: var(--sv-text-2);
+  font-weight: 600;
+}
+.admin button.outline:hover {
+  border-color: var(--sv-primary);
+  color: var(--sv-primary);
+  background: var(--sv-surface-2);
+}
+
+/* ── 8) Tabs, empty states, notices ── */
+.admin .settings-tabs,
+.admin .reference-tabs,
+.admin .seg-tabs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: 2px;
+  padding: 4px;
+  background: var(--sv-surface);
+  border: 1px solid var(--sv-border);
+  border-radius: 999px;
+  box-shadow: 0 1px 2px rgb(13 43 75 / 5%);
+  margin: 12px 0 14px;
+}
+.admin .settings-tabs button,
+.admin .reference-tabs button,
+.admin .seg-tabs button {
+  border: 0;
+  background: transparent;
+  color: var(--sv-text);
+  border-radius: 999px;
+  padding: 9px 10px;
+  font: 700 13px Vazirmatn;
+  cursor: pointer;
+  text-align: center;
+}
+.admin .settings-tabs button.active,
+.admin .reference-tabs button.active,
+.admin .seg-tabs button.active {
+  background: var(--sv-primary);
+  color: var(--sv-primary-fg) !important;
+}
+.admin .settings-tabs button small,
+.admin .seg-tabs button small {
+  display: block;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--sv-text-3);
+  margin-top: 2px;
+}
+.admin .settings-tabs button.active small,
+.admin .seg-tabs button.active small {
+  color: var(--sv-primary-fg) !important;
+  opacity: 0.8;
+}
+.admin .empty-state,
+.admin .empty-line {
+  display: grid;
+  place-items: center;
+  gap: 6px;
+  padding: 32px 16px;
+  background: var(--sv-surface);
+  border: 1px dashed var(--sv-border-2);
+  border-radius: 14px;
+  color: var(--sv-text-2);
+  font-size: 12px;
+  text-align: center;
+}
+.admin .empty-state b {
+  color: var(--sv-text);
+  font-size: 13px;
+}
+.admin .notice {
+  background: var(--sv-ok-soft);
+  color: var(--sv-ok);
+  border: 1px solid color-mix(in srgb, var(--sv-ok) 20%, transparent);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 12px;
+  margin: 12px 0;
+}
+
+/* ── 9) Specific page harmonization ── */
+/* Suppliers & Users debt cards */
+.admin .supplier-debt-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.admin .supplier-debt-cards button {
+  display: grid;
+  gap: 5px;
+  text-align: right;
+  border: 1px solid var(--sv-border);
+  border-inline-start: 4px solid var(--sv-warn);
+  border-radius: 12px;
+  padding: 13px;
+  background: var(--sv-surface);
+  color: var(--sv-text);
+  box-shadow: var(--sv-shadow-1);
+}
+
+/* Media grid cards */
+.admin .media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 12px;
+  padding: 12px;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+.admin .media-grid .media-card {
+  background: var(--sv-surface);
+  border: 1px solid var(--sv-border);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+/* Reports page cards */
+.admin .reports-page .card,
+.admin .reports-page .checks-report-card {
+  background: var(--sv-surface);
+  border: 1px solid var(--sv-border);
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: var(--sv-shadow-1);
+}
+
+/* Settings page fieldsets */
+.admin .settings-page fieldset {
+  background: var(--sv-surface);
+  border: 1px solid var(--sv-border);
+  border-radius: 14px;
+  padding: 18px;
+  box-shadow: var(--sv-shadow-1);
+}
+
+/* Messaging config */
+.admin .messaging-config fieldset {
+  background: var(--sv-surface);
+  border: 1px solid var(--sv-border);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+/* Dashboard kpis already good, but ensure same radius/shadow */
+.admin .kpis .kpi,
+.admin .inventory-kpis .inventory-kpi {
+  border-radius: 14px;
+  box-shadow: var(--sv-shadow-1);
+}
+
+/* Global search field harmonization */
+.admin .search-field {
+  background: var(--sv-surface);
+  border: 1px solid var(--sv-border-2);
+  border-radius: 12px;
+  min-height: 42px;
+  padding: 0 14px;
+  box-shadow: 0 1px 2px rgb(13 43 75 / 5%);
+}
+.admin .search-field:focus-within {
+  border-color: var(--sv-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sv-primary) 12%, transparent);
+}
+
+/* ── 10) Responsive harmonization ── */
+@media (max-width: 700px) {
+  .admin .page-title {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .admin .page-title > div:first-child {
+    min-width: 0;
+  }
+  .admin .page-title-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .admin .audit-filters,
+  .admin .report-filters,
+  .admin .media-toolbar,
+  .admin .purchase-toolbar,
+  .admin .list-toolbar,
+  .admin .wholesale-filters,
+  .admin .customer-search,
+  .admin .inventory-filter-toolbar,
+  .admin .product-filter-toolbar,
+  .admin .invoices-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .admin .audit-filters label,
+  .admin .report-filters label,
+  .admin .purchase-toolbar label,
+  .admin .wholesale-filters input,
+  .admin .wholesale-filters select {
+    min-width: 0;
+    width: 100%;
+  }
+  .admin .settings-tabs,
+  .admin .seg-tabs {
+    border-radius: 14px;
+  }
+  .admin .settings-tabs button small,
+  .admin .seg-tabs button small {
+    display: none;
+  }
+}
+
+/* ── 11) Dark theme overrides for unified system ── */
+[data-theme='dark'] .admin .count,
+[data-theme='dark'] .admin .row-action,
+[data-theme='dark'] .admin .invoice-count-link {
+  background: var(--sv-surface);
+  border-color: var(--sv-border);
+}
+[data-theme='dark'] .admin .audit-filters,
+[data-theme='dark'] .admin .report-filters,
+[data-theme='dark'] .admin .media-toolbar,
+[data-theme='dark'] .admin .purchase-toolbar,
+[data-theme='dark'] .admin .list-toolbar,
+[data-theme='dark'] .admin .wholesale-filters,
+[data-theme='dark'] .admin .customer-search,
+[data-theme='dark'] .admin .inventory-filter-toolbar,
+[data-theme='dark'] .admin .product-filter-toolbar,
+[data-theme='dark'] .admin .invoices-toolbar {
+  background: var(--sv-surface);
+  border-color: var(--sv-border);
+}
+[data-theme='dark'] .admin .product-table,
+[data-theme='dark'] .admin .product-list-table,
+[data-theme='dark'] .admin .inventory-flat-list,
+[data-theme='dark'] .admin .audit-list,
+[data-theme='dark'] .admin .reference-list,
+[data-theme='dark'] .admin .wholesale-table-wrap {
+  background: var(--sv-surface);
+  border-color: var(--sv-border);
+}
+
