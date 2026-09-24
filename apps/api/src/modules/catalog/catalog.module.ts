@@ -25,6 +25,6 @@ import { ProductsBackupService } from './products-backup.service';
     CompatibilityService,
     ProductsBackupService,
   ],
-  exports: [CatalogAdminService],
+  exports: [CatalogAdminService, ProductsBackupService],
 })
 export class CatalogModule {}

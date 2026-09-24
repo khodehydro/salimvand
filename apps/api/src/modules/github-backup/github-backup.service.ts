@@ -328,6 +328,6 @@ export class GithubBackupService implements OnModuleInit {
       orderBy: { startedAt: 'desc' },
       take: 30,
     });
-    return { ok: true, data: jobs.map((j) => ({ ...j, id: String(j.id), sizeBytes: j.sizeBytes.toString() })) };
+    return { ok: true, data: jobs.map((j: any) => ({ ...j, id: String(j.id), sizeBytes: j.sizeBytes.toString() })) };
   }
 }

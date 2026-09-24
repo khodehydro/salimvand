@@ -1,9 +1,11 @@
 import { Body, Controller, Get, Post, Put, Req, UseGuards } from '@nestjs/common';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { RolesGuard } from '../auth/roles.guard';
-import { Roles } from '../auth/roles.decorator';
-import { AuthRequest } from '../auth/auth-request';
+import { Request } from 'express';
+import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
+import { RolesGuard } from '../../common/auth/roles.guard';
+import { Roles } from '../../common/auth/roles.decorator';
 import { GithubBackupService } from './github-backup.service';
+
+type AuthRequest = Request & { user?: { id: string } };
 
 @Controller('settings/github-backup')
 @UseGuards(JwtAuthGuard, RolesGuard)
