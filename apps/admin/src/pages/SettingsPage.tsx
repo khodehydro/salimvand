@@ -17,6 +17,22 @@ type BackupJob = {
   finishedAt?: string | null;
   error?: string | null;
 };
+type GithubBackupConfig = {
+  enabled: boolean;
+  repo: string;
+  branch: string;
+  token?: string;
+  tokenMasked?: string;
+  hasToken?: boolean;
+  intervalMinutes: number;
+  pathPrefix: string;
+  includeImages?: boolean;
+  lastRunAt?: string | null;
+  lastFile?: string | null;
+  lastStatus?: string | null;
+  lastError?: string | null;
+};
+
 type Settings = {
   'store.profile'?: {
     name?: string;
@@ -118,6 +134,10 @@ export function SettingsPage() {
     file: string;
     encrypted: boolean;
   } | null>(null);
+  const [githubCfg, setGithubCfg] = useState<GithubBackupConfig | null>(null);
+  const [githubJobs, setGithubJobs] = useState<BackupJob[]>([]);
+  const [githubRunning, setGithubRunning] = useState(false);
+  const [githubTokenInput, setGithubTokenInput] = useState('');
   const [settings, setSettings] = useState<Settings>(initial);
   // Settings are grouped into focused tabs so a first-time operator lands on
   // one clear task at a time instead of a wall of mixed fields.
@@ -175,6 +195,12 @@ export function SettingsPage() {
       .catch(() => undefined);
     void api<{ data: typeof failedJobs }>('/notifications/failed')
       .then((result) => setFailedJobs(result.data))
+      .catch(() => undefined);
+    void api<{ data: GithubBackupConfig }>('/settings/github-backup')
+      .then((result) => setGithubCfg(result.data))
+      .catch(() => undefined);
+    void api<{ data: BackupJob[] }>('/settings/github-backup/jobs')
+      .then((result) => setGithubJobs(result.data))
       .catch(() => undefined);
   }, []);
   useEffect(() => {
@@ -249,6 +275,49 @@ export function SettingsPage() {
       setMessage((error as Error).message);
     } finally {
       setBackupRunning(false);
+    }
+  };
+
+  const saveGithubConfig = async () => {
+    if (!githubCfg) return;
+    try {
+      const payload: any = {
+        enabled: githubCfg.enabled,
+        repo: githubCfg.repo,
+        branch: githubCfg.branch,
+        intervalMinutes: githubCfg.intervalMinutes,
+        pathPrefix: githubCfg.pathPrefix,
+      };
+      if (githubTokenInput.trim()) payload.token = githubTokenInput.trim();
+      const result = await api<{ data: GithubBackupConfig }>('/settings/github-backup', {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+      setGithubCfg(result.data);
+      setGithubTokenInput('');
+      setMessage('تنظیمات بکاپ گیت‌هاب ذخیره شد.');
+    } catch (error) {
+      setMessage((error as Error).message);
+    }
+  };
+
+  const runGithubBackup = async () => {
+    setGithubRunning(true);
+    try {
+      const result = await api<{ data: { file: string; url: string; sizeMB: number } }>('/settings/github-backup/run', {
+        method: 'POST',
+      });
+      setMessage(`بکاپ محصولات به گیت‌هاب ارسال شد: ${result.data.file} (${result.data.sizeMB}MB)`);
+      void api<{ data: GithubBackupConfig }>('/settings/github-backup')
+        .then((r) => setGithubCfg(r.data))
+        .catch(() => undefined);
+      void api<{ data: BackupJob[] }>('/settings/github-backup/jobs')
+        .then((r) => setGithubJobs(r.data))
+        .catch(() => undefined);
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setGithubRunning(false);
     }
   };
   const inspectImport = async (file: File) => {
@@ -1030,6 +1099,7 @@ export function SettingsPage() {
         )}
 
         {tab === 'system' && (
+          <>
           <fieldset>
             <legend>انبار و پشتیبان‌گیری</legend>
             <label>
@@ -1143,6 +1213,130 @@ export function SettingsPage() {
               فایل‌های پشتیبان پس از انتقال امن به مقصد خارجی از VPS حذف می‌شوند.
             </p>
           </fieldset>
+
+          <fieldset>
+            <legend>پشتیبان‌گیری خودکار محصولات به GitHub (private)</legend>
+            <p className="settings-help">
+              هر ۳۰ دقیقه یک فایل ZIP از محصولات (products.json + references.json + تصاویر) ساخته شده و با نام تاریخ و ساعت به ریپازیتوری خصوصی <code>khodehydro/salimvand-backup</code> پوش می‌شود. مسیر فایل: <code>backups/YYYY/MM/DD/products-YYYY-MM-DD_HH-mm-ss.zip</code> بر اساس ساعت تهران.
+            </p>
+            {githubCfg ? (
+              <>
+                <label className="switch-row">
+                  <input
+                    type="checkbox"
+                    checked={githubCfg.enabled}
+                    onChange={(e) => setGithubCfg({ ...githubCfg, enabled: e.target.checked })}
+                  />{' '}
+                  فعال‌سازی بکاپ خودکار GitHub
+                </label>
+                <div className="two-fields">
+                  <label>
+                    ریپازیتوری (owner/repo)
+                    <input
+                      dir="ltr"
+                      value={githubCfg.repo}
+                      onChange={(e) => setGithubCfg({ ...githubCfg, repo: e.target.value })}
+                      placeholder="khodehydro/salimvand-backup"
+                    />
+                  </label>
+                  <label>
+                    شاخه
+                    <input
+                      dir="ltr"
+                      value={githubCfg.branch}
+                      onChange={(e) => setGithubCfg({ ...githubCfg, branch: e.target.value })}
+                      placeholder="main"
+                    />
+                  </label>
+                </div>
+                <div className="two-fields">
+                  <label>
+                    مسیر پوشه در ریپو
+                    <input
+                      dir="ltr"
+                      value={githubCfg.pathPrefix}
+                      onChange={(e) => setGithubCfg({ ...githubCfg, pathPrefix: e.target.value })}
+                      placeholder="backups"
+                    />
+                  </label>
+                  <label>
+                    بازه زمانی (دقیقه)
+                    <input
+                      type="number"
+                      min={5}
+                      max={1440}
+                      value={githubCfg.intervalMinutes}
+                      onChange={(e) => setGithubCfg({ ...githubCfg, intervalMinutes: Number(e.target.value) || 30 })}
+                    />
+                  </label>
+                </div>
+                <label>
+                  توکن GitHub (PAT با دسترسی repo) - خصوصی، نمایش داده نمی‌شود
+                  <input
+                    dir="ltr"
+                    type="password"
+                    value={githubTokenInput}
+                    onChange={(e) => setGithubTokenInput(e.target.value)}
+                    placeholder={githubCfg.hasToken ? `موجود: ${githubCfg.tokenMasked} - برای تغییر توکن جدید وارد کنید` : 'ghp_...'}
+                  />
+                  {githubCfg.hasToken && <small className="muted">توکن فعلی: {githubCfg.tokenMasked} - خالی بگذارید تا تغییر نکند</small>}
+                </label>
+                <div className="two-fields">
+                  <button type="button" className="button-primary" onClick={() => void saveGithubConfig()}>
+                    ذخیره تنظیمات GitHub
+                  </button>
+                  <button
+                    type="button"
+                    className="outline"
+                    disabled={githubRunning}
+                    onClick={() => void runGithubBackup()}
+                  >
+                    {githubRunning ? 'در حال ارسال...' : 'اجرای دستی بکاپ اکنون'}
+                  </button>
+                </div>
+                {(githubCfg.lastRunAt || githubCfg.lastFile) && (
+                  <div className="backup-status">
+                    <b className={githubCfg.lastStatus === 'success' ? 'status-chip' : 'low-stock'}>
+                      {githubCfg.lastStatus === 'success' ? 'آخرین ارسال موفق' : githubCfg.lastStatus === 'failed' ? 'آخرین ارسال ناموفق' : 'وضعیت'}
+                    </b>
+                    {githubCfg.lastRunAt && <span>{new Date(githubCfg.lastRunAt).toLocaleString('fa-IR')}</span>}
+                    {githubCfg.lastFile && <small dir="ltr">{githubCfg.lastFile}</small>}
+                    {githubCfg.lastError && <small className="low-stock">{githubCfg.lastError}</small>}
+                    {githubCfg.lastFile && githubCfg.lastStatus === 'success' && (
+                      <a
+                        className="row-action"
+                        target="_blank"
+                        rel="noreferrer"
+                        href={`https://github.com/${githubCfg.repo}/blob/${githubCfg.branch}/${githubCfg.lastFile}`}
+                      >
+                        مشاهده در GitHub
+                      </a>
+                    )}
+                  </div>
+                )}
+                {githubJobs.length > 0 && (
+                  <div className="backup-jobs">
+                    <h3>تاریخچه بکاپ GitHub</h3>
+                    {githubJobs.slice(0, 8).map((job) => (
+                      <div key={job.id}>
+                        <span>
+                          <b>{job.status === 'success' ? 'موفق' : job.status === 'running' ? 'در حال اجرا' : 'ناموفق'}</b>
+                          <small>{new Date(job.startedAt).toLocaleString('fa-IR')}</small>
+                        </span>
+                        <code dir="ltr">{job.file || job.error || `#${job.id}`}</code>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className="settings-help">
+                  برای ساخت توکن: GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic) → Generate new token → تیک repo را بزنید. توکن را کپی و اینجا وارد کنید. ریپازیتوری <code>salimvand-backup</code> را private بسازید.
+                </p>
+              </>
+            ) : (
+              <p className="muted">در حال بارگذاری تنظیمات GitHub...</p>
+            )}
+          </fieldset>
+          </>
         )}
 
         <div className="settings-save-bar">

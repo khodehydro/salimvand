@@ -23,6 +23,7 @@ const allowedKeys = new Set([
   MESSAGING_SETTINGS_KEY,
   'inventory.default_min_stock',
   'backup.schedule',
+  'github.backup',
 ]);
 
 /** Keeps raw messaging secrets out of responses and the audit trail. */

@@ -16,6 +16,7 @@ import { CustomersModule } from './modules/customers/customers.module';
 import { SuppliersModule } from './modules/suppliers/suppliers.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { SyncModule } from './modules/sync/sync.module';
+import { GithubBackupModule } from './modules/github-backup/github-backup.module';
 import { SystemController } from './system.controller';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
@@ -39,6 +40,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
     SuppliersModule,
     AuditModule,
     SyncModule,
+    GithubBackupModule,
   ],
   controllers: [SystemController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
