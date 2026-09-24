@@ -19,5 +19,79 @@ export function WholesalePage() {
     const win = window.open('', '_blank', 'width=1100,height=800'); if (!win) return;
     win.document.write(`<!doctype html><html dir="rtl"><head><meta charset="utf-8"><title>لیست محصولات عمده</title><style>@font-face{font-family:Vazirmatn;src:url('${location.origin}/fonts/Vazirmatn-Regular.woff2')}*{box-sizing:border-box}body{font-family:Vazirmatn,Tahoma,sans-serif;color:#17243b;padding:24px}.print-header{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;margin-bottom:18px;border-bottom:3px solid #173b63;background:#f0f5fa}.brand{font-size:22px;font-weight:800;color:#173b63}.subtitle{font-size:11px;color:#60738a;margin-top:5px}.badge{padding:7px 13px;border:1px solid #d0dce8;border-radius:20px;color:#1e6aa8;font-size:11px;font-weight:700}.print-meta{display:flex;justify-content:space-between;align-items:end;border-bottom:1px solid #d9e1e9;margin-bottom:14px}.print-meta h1{font-size:18px;margin:0 0 5px}.print-meta p{font-size:10px;color:#68778d;margin:0 0 8px}table{width:100%;border-collapse:collapse;font-size:11px}th,td{border:1px solid #ccd5df;padding:8px;text-align:right;vertical-align:middle}th{background:#edf2f7}.category-row th{text-align:center;background:#dce7f2;font-size:13px;padding:10px}td:first-child{width:75px;text-align:center}td img{width:60px;height:60px;object-fit:contain} .print-footer{display:flex;justify-content:space-between;gap:14px;margin-top:22px;padding-top:10px;border-top:1px solid #ccd5df;color:#60738a;font-size:10px}.print-footer span{flex:1;text-align:center}@media print{body{padding:0}.print-header{break-inside:avoid}.print-footer{position:fixed;bottom:0;left:0;right:0;background:#fff}.print-meta{margin-bottom:10px}}</style></head><body><header class="print-header"><div><div class="brand">فروشگاه سلیم وند</div><div class="subtitle">کاتالوگ محصولات ویژهٔ خریداران عمده</div></div><div class="badge">لیست قیمت</div></header><div class="print-meta"><h1>لیست محصولات (عمده)</h1><p>تاریخ خروجی: ${esc(date)}</p></div><table><thead><tr><th>تصویر</th><th>کد محصول</th><th>نام محصول</th><th>برند و قیمت</th></tr></thead><tbody>${body}</tbody></table><footer class="print-footer"><span>${esc(store.address)}</span><span>${esc(store.phone)}</span><span dir="ltr">${esc(store.website)}</span></footer><script>window.onload=()=>{setTimeout(()=>window.print(),300)}</script></body></html>`); win.document.close();
   };
-  return <section className="wholesale-page"><div className="page-title"><div><span className="eyebrow">ویژهٔ خریداران عمده</span><h1>لیست محصولات (عمده)</h1><p className="muted">تصویر، کد، برند، قیمت و وضعیت موجودی محصولات</p></div></div><div className="wholesale-filters"><input placeholder="جست‌وجوی نام یا کد محصول" value={q} onChange={(e) => setQ(e.target.value)} /><select value={category} onChange={(e) => setCategory(e.target.value)}><option value="">همه دسته‌ها</option>{categories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><select value={vehicle} onChange={(e) => setVehicle(e.target.value)}><option value="">همه خودروها</option>{vehicles.map((item) => <option key={item} value={item}>{item}</option>)}</select><button className="button-primary wholesale-print" onClick={printPdf}>خروجی PDF</button></div><div className="wholesale-table-wrap"><table className="wholesale-table"><thead><tr><th>تصویر</th><th>کد محصول</th><th>نام محصول</th><th>برند</th><th>قیمت</th><th>وضعیت</th></tr></thead><tbody>{visible.map((row) => row.items.length ? row.items.map((item) => <tr key={`${row.id}-${item.brand}`}><td rowSpan={row.items.length}>{row.image ? <img src={row.image.path} alt={row.name} /> : '—'}</td><td rowSpan={row.items.length}>{row.code}</td><td rowSpan={row.items.length}>{row.name}</td><td>{item.brand}</td><td>{Number(item.price) > 0 ? formatRial(Number(item.price)) : 'استعلام قیمت'}</td><td className={item.inStock ? 'in-stock' : 'out-stock'}>{item.inStock ? 'موجود' : 'ناموجود'}</td></tr>) : <tr key={row.id}><td>{row.image ? <img src={row.image.path} alt={row.name} /> : '—'}</td><td>{row.code}</td><td>{row.name}</td><td>—</td><td>استعلام قیمت</td><td className="out-stock">ناموجود</td></tr>)}</tbody></table></div></section>;
+  return (
+    <section className="wholesale-page">
+      <div className="page-title">
+        <div>
+          <span className="eyebrow">ویژهٔ خریداران عمده</span>
+          <h1>لیست محصولات (عمده)</h1>
+          <p className="muted">یک کارت = یک محصول · تصویر واحد برای همه برندها · برندها داخل یک کارت</p>
+        </div>
+      </div>
+      <div className="wholesale-filters">
+        <input placeholder="جست‌وجوی نام یا کد محصول" value={q} onChange={(e) => setQ(e.target.value)} />
+        <select value={category} onChange={(e) => setCategory(e.target.value)}>
+          <option value="">همه دسته‌ها</option>
+          {categories.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.name}
+            </option>
+          ))}
+        </select>
+        <select value={vehicle} onChange={(e) => setVehicle(e.target.value)}>
+          <option value="">همه خودروها</option>
+          {vehicles.map((item) => (
+            <option key={item} value={item}>
+              {item}
+            </option>
+          ))}
+        </select>
+        <button className="button-primary wholesale-print" onClick={printPdf}>
+          خروجی PDF
+        </button>
+      </div>
+      <div className="wholesale-grouped-list">
+        {visible.map((row) => (
+          <article className="wholesale-group-card" key={row.id}>
+            <div className="wholesale-group-head">
+              <span className="product-thumb">
+                {row.image ? <img src={row.image.path} alt={row.name} loading="lazy" /> : <span>قطعه</span>}
+              </span>
+              <div className="wholesale-group-info">
+                <b>{row.name}</b>
+                <small dir="ltr">{row.code} · {row.category.name} {row.vehicles.length ? `· ${row.vehicles.length} خودرو` : ''}</small>
+                <div className="inv-group-chips">
+                  <span className="chip">{row.category.name}</span>
+                  {row.vehicles.slice(0, 3).map((v) => (
+                    <span className="chip vehicle-chip" key={v}>
+                      {v}
+                    </span>
+                  ))}
+                  {row.vehicles.length > 3 && <span className="chip">+{row.vehicles.length - 3}</span>}
+                </div>
+              </div>
+            </div>
+            <div className="wholesale-group-brands">
+              {row.items.length ? (
+                row.items.map((item) => (
+                  <div className={`wholesale-brand-row${item.inStock ? '' : ' is-out'}`} key={`${row.id}-${item.brand}`}>
+                    <b className="brand-name">{item.brand}</b>
+                    <span className="brand-price">{Number(item.price) > 0 ? formatRial(Number(item.price)) : 'استعلام قیمت'}</span>
+                    <span className={`badge ${item.inStock ? 'b-ok' : 'b-danger'}`}>{item.inStock ? 'موجود' : 'ناموجود'}</span>
+                  </div>
+                ))
+              ) : (
+                <div className="wholesale-brand-row is-out">
+                  <b>بدون برند</b>
+                  <span>استعلام قیمت</span>
+                  <span className="badge b-danger">ناموجود</span>
+                </div>
+              )}
+            </div>
+          </article>
+        ))}
+        {!visible.length && <p className="muted">محصولی یافت نشد.</p>}
+      </div>
+    </section>
+  );
 }

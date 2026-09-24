@@ -818,131 +818,91 @@ export function InventoryPage() {
               </button>
             </div>
           </div>
-          <div className="inventory-table-head inventory-list-head" aria-hidden="true">
-            <span>محصول</span>
-            <span>برند و کد</span>
-            <span>وضعیت و موجودی</span>
-            <span>قفسه و قیمت</span>
-            <span>عملیات</span>
+          <div className="inventory-table-head inventory-list-head grouped-head" aria-hidden="true">
+            <span>محصول · یک تصویر واحد برای همه برندها</span>
+            <span>{groups.length.toLocaleString('fa-IR')} محصول · {items.length.toLocaleString('fa-IR')} قلم برند</span>
           </div>
-          <div className="inventory-list inventory-flat-list">
-            {items.map((item) => {
-              const status = stockStatus(item);
-              const product = item.product;
-              const purchasePrice = Number(item.purchasePrice ?? 0);
-              const salePrice = Number(item.salePrice ?? 0);
-              const grossProfit =
-                salePrice > 0 && purchasePrice > 0 ? salePrice - purchasePrice : null;
-              const margin =
-                grossProfit !== null && purchasePrice > 0
-                  ? (grossProfit / purchasePrice) * 100
-                  : null;
+          <div className="inventory-list inventory-grouped-list">
+            {groups.map((group) => {
+              const firstProduct = group.items[0]?.product;
+              const totalQty = group.items.reduce((sum, it) => sum + it.quantity, 0);
+              const totalBrands = group.items.length;
               return (
-                <article
-                  className={`inventory-flat-row${item.quantity <= 0 ? ' is-out' : ''}`}
-                  key={item.id}
-                >
-                  <div className="inventory-product-cell">
+                <article className="inventory-group-card" key={group.productId}>
+                  <div className="inventory-group-head">
                     <span className="product-thumb">
-                      {product?.images?.[0]?.path ? (
-                        <img src={product.images[0].path} alt={product.name} loading="lazy" />
+                      {group.image ? (
+                        <img src={group.image} alt={group.name} loading="lazy" />
+                      ) : firstProduct?.images?.[0]?.path ? (
+                        <img src={firstProduct.images[0].path} alt={group.name} loading="lazy" />
                       ) : (
                         <span>قطعه</span>
                       )}
                     </span>
-                    <div className="inventory-product-info">
-                      <b>{product?.name ?? item.barcode}</b>
-                      <small dir="ltr">{product?.code ?? 'بدون کد محصول'}</small>
-                      {product?.category?.name && (
-                        <span className="chip">{product.category.name}</span>
+                    <div className="inventory-group-info">
+                      <b>{group.name}</b>
+                      <small dir="ltr">{group.code ?? 'بدون کد'} · {totalBrands.toLocaleString('fa-IR')} برند · {totalQty.toLocaleString('fa-IR')} قطعه</small>
+                      <div className="inv-group-chips">
+                        {group.category && <span className="chip">{group.category}</span>}
+                        {group.vehicles.length > 0 && <span className="chip vehicle-chip">{group.vehicles.length.toLocaleString('fa-IR')} خودرو سازگار</span>}
+                      </div>
+                    </div>
+                    <div className="inventory-group-actions">
+                      <button className="row-action" onClick={() => void publishGroup(group)}>انتشار گروه</button>
+                      {firstProduct?.id && (
+                        <a className="row-action" href={`#/products?product=${firstProduct.id}`} target="_blank" rel="noreferrer">ویرایش محصول</a>
                       )}
                     </div>
                   </div>
-                  <div className="inventory-brand-cell">
-                    <b>{item.brand?.name ?? 'بدون برند'}</b>
-                    <code dir="ltr">{item.barcode}</code>
-                  </div>
-                  <div className="inventory-stock-cell">
-                    <div className="inventory-stock-status">
-                      <span className={`badge ${status.badge}`}>{status.label}</span>
-                      <b>{formatPersianNumber(item.quantity)} قطعه</b>
-                    </div>
-                    <div className="inv-stock-line">
-                      <i className={`stockbar ${status.bar}`}>
-                        <i style={{ width: `${Math.round(stockRatio(item) * 100)}%` }} />
-                      </i>
-                      {item.minStock != null && item.minStock > 0 && (
-                        <small className="muted">حداقل {formatPersianNumber(item.minStock)}</small>
-                      )}
-                    </div>
-                    <StockStepper
-                      itemId={item.id}
-                      quantity={item.quantity}
-                      onMessage={setMessage}
-                      onSaved={() => void load()}
-                    />
-                  </div>
-                  <div className="inventory-location-cell">
-                    <span
-                      className="inv-shelf"
-                      title={item.location ? locationLabel(item.location) : 'بدون قفسه'}
-                    >
-                      {item.location ? `📦 ${locationLabel(item.location)}` : 'بدون قفسه'}
-                    </span>
-                    <div className="inventory-price">
-                      <b>{salePrice > 0 ? formatRial(salePrice) : '—'}</b>
-                      <small>قیمت فروش</small>
-                      {item.priceUpdatedAt && (
-                        <small className="inv-price-date">
-                          از {formatJalaliDate(item.priceUpdatedAt)}
-                        </small>
-                      )}
-                    </div>
-                    {purchasePrice > 0 && (
-                      <small className="inventory-purchase-price">
-                        خرید: {formatRial(purchasePrice)}
-                      </small>
-                    )}
-                    {grossProfit !== null && (
-                      <span className={`inventory-margin ${grossProfit < 0 ? 'negative' : ''}`}>
-                        {grossProfit < 0 ? 'ضرر' : 'سود'}: {formatRial(grossProfit)}
-                        {margin !== null ? ` · ${margin.toFixed(1)}٪` : ''}
-                      </span>
-                    )}
-                  </div>
-                  <div className="inventory-actions-cell">
-                    <button className="row-action" onClick={() => void openDetail(item)}>
-                      کارت قلم
-                    </button>
-                    <button className="row-action" onClick={() => openLabelStudio(item)}>
-                      برچسب
-                    </button>
-                    {product?.id && (
-                      <button
-                        className="row-action"
-                        onClick={() =>
-                          void publishGroup({
-                            productId: product.id,
-                            name: product.name,
-                            code: product.code,
-                            image: product.images?.[0]?.path,
-                            category: product.category?.name,
-                            vehicles: [],
-                            items: [item],
-                          })
-                        }
-                      >
-                        انتشار
-                      </button>
-                    )}
+                  <div className="inventory-group-brands">
+                    {group.items.map((item) => {
+                      const status = stockStatus(item);
+                      const purchasePrice = Number(item.purchasePrice ?? 0);
+                      const salePrice = Number(item.salePrice ?? 0);
+                      const grossProfit = salePrice > 0 && purchasePrice > 0 ? salePrice - purchasePrice : null;
+                      const margin = grossProfit !== null && purchasePrice > 0 ? (grossProfit / purchasePrice) * 100 : null;
+                      return (
+                        <div className={`inventory-brand-row${item.quantity <= 0 ? ' is-out' : ''}`} key={item.id}>
+                          <div className="ibr-brand">
+                            <b>{item.brand?.name ?? 'بدون برند'}</b>
+                            <code dir="ltr">{item.barcode}</code>
+                          </div>
+                          <div className="ibr-stock">
+                            <span className={`badge ${status.badge}`}>{status.label}</span>
+                            <b>{formatPersianNumber(item.quantity)} قطعه</b>
+                            <i className={`stockbar ${status.bar}`}><i style={{ width: `${Math.round(stockRatio(item) * 100)}%` }} /></i>
+                            {item.minStock != null && item.minStock > 0 && <small className="muted">حداقل {formatPersianNumber(item.minStock)}</small>}
+                            <StockStepper itemId={item.id} quantity={item.quantity} onMessage={setMessage} onSaved={() => void load()} />
+                          </div>
+                          <div className="ibr-location">
+                            <span className="inv-shelf" title={item.location ? locationLabel(item.location) : 'بدون قفسه'}>
+                              {item.location ? `📦 ${locationLabel(item.location)}` : 'بدون قفسه'}
+                            </span>
+                            <div className="inventory-price">
+                              <b>{salePrice > 0 ? formatRial(salePrice) : '—'}</b>
+                              <small>فروش</small>
+                              {item.priceUpdatedAt && <small className="inv-price-date">از {formatJalaliDate(item.priceUpdatedAt)}</small>}
+                            </div>
+                            {purchasePrice > 0 && <small className="inventory-purchase-price">خرید: {formatRial(purchasePrice)}</small>}
+                            {grossProfit !== null && (
+                              <span className={`inventory-margin ${grossProfit < 0 ? 'negative' : ''}`}>
+                                {grossProfit < 0 ? 'ضرر' : 'سود'}: {formatRial(grossProfit)}{margin !== null ? ` · ${margin.toFixed(1)}٪` : ''}
+                              </span>
+                            )}
+                          </div>
+                          <div className="ibr-actions">
+                            <button className="row-action" onClick={() => void openDetail(item)}>کارت قلم</button>
+                            <button className="row-action" onClick={() => openLabelStudio(item)}>برچسب</button>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </article>
               );
             })}
-            {!items.length && (
-              <p className="muted">
-                {filter ? `قلمی مطابق «${filter}» پیدا نشد.` : 'قلمی یافت نشد.'}
-              </p>
+            {!groups.length && (
+              <p className="muted">{filter ? `قلمی مطابق «${filter}» پیدا نشد.` : 'قلمی یافت نشد.'}</p>
             )}
           </div>
         </div>

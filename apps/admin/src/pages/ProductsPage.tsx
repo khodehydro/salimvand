@@ -678,9 +678,28 @@ function ProductEditor({
   onRefresh,
   categories,
   brands,
-  locations,
+  locations: initialLocations,
   vehicles,
 }: EditorProps) {
+  const [locations, setLocations] = useState<Location[]>(initialLocations);
+  useEffect(() => {
+    setLocations(initialLocations);
+  }, [initialLocations]);
+  useEffect(() => {
+    if (initialLocations.length === 0) {
+      void api<{ data: Location[] }>('/locations')
+        .then((result) =>
+          setLocations(
+            [...result.data].sort(
+              (a, b) =>
+                Number(b.type === 'warehouse') - Number(a.type === 'warehouse') ||
+                a.code.localeCompare(b.code, 'en', { numeric: true }),
+            ),
+          ),
+        )
+        .catch(() => undefined);
+    }
+  }, [initialLocations.length]);
   const [basic, setBasic] = useState({
     name: product.name,
     categoryId: product.category?.id ?? '',
@@ -1408,12 +1427,17 @@ function ProductEditor({
                             }
                           >
                             <option value="">بدون قفسه</option>
-                            {locations.map((location) => (
-                              <option value={location.id} key={location.id}>
-                                {locationLabel(location)}
-                              </option>
-                            ))}
+                            {locations.length ? (
+                              locations.map((location) => (
+                                <option value={location.id} key={location.id}>
+                                  {locationLabel(location)}
+                                </option>
+                              ))
+                            ) : (
+                              <option disabled>در حال بارگذاری قفسه‌ها...</option>
+                            )}
                           </select>
+                          {!locations.length && <small className="muted">قفسه‌ای یافت نشد — از تب انبار → قفسه‌ها، قفسه بسازید</small>}
                         </label>
                         <button
                           className={dirty ? 'button-primary' : 'outline'}
@@ -1497,12 +1521,17 @@ function ProductEditor({
                     onChange={(event) => setItem({ ...item, locationId: event.target.value })}
                   >
                     <option value="">بدون قفسه</option>
-                    {locations.map((location) => (
-                      <option value={location.id} key={location.id}>
-                        {locationLabel(location)}
-                      </option>
-                    ))}
+                    {locations.length ? (
+                      locations.map((location) => (
+                        <option value={location.id} key={location.id}>
+                          {locationLabel(location)}
+                        </option>
+                      ))
+                    ) : (
+                      <option disabled>در حال بارگذاری قفسه‌ها...</option>
+                    )}
                   </select>
+                  {!locations.length && <small className="muted">قفسه‌ای یافت نشد — از تب انبار → قفسه‌ها، قفسه بسازید</small>}
                 </label>
                 <label>
                   موجودی اولیه
