@@ -1080,51 +1080,66 @@ export function InvoicesPage({
                   <div className="scan-res">
                     {candidateGroups.length ? (
                       candidateGroups.map((group) => (
-                        <div
-                          className={`sr${group.brands.length === 1 ? ' sr-pick' : ''}`}
-                          key={group.key}
-                          title={
-                            group.brands.length === 1
-                              ? 'افزودن به فاکتور (کلیک روی همین ردیف)'
-                              : undefined
-                          }
-                          onClick={
-                            group.brands.length === 1 ? () => addLine(group.brands[0]) : undefined
-                          }
-                        >
-                          <span className="thumb">{group.name.slice(0, 2)}</span>
-                          <div className="wrap">
-                            <div className="nm">
-                              {group.name} <span className="badge b-brand">{group.code}</span>
+                        <div className="sr-group" key={group.key}>
+                          <div
+                            className={`sr-head${group.brands.length === 1 ? ' sr-pick' : ''}`}
+                            title={
+                              group.brands.length === 1
+                                ? 'افزودن به فاکتور (کلیک روی همین ردیف)'
+                                : undefined
+                            }
+                            onClick={
+                              group.brands.length === 1 ? () => addLine(group.brands[0]) : undefined
+                            }
+                          >
+                            <span className="thumb">{group.name.slice(0, 2)}</span>
+                            <div className="sr-head-info">
+                              <div className="sr-head-title">
+                                <b>{group.name}</b>
+                                <span className="badge b-brand">{group.code}</span>
+                                <span className="badge b-line">{persianNumber(group.brands.length)} برند</span>
+                              </div>
+                              {group.brands.length === 1 && (
+                                <small className="sr-head-sub">{group.brands[0].brand?.name ?? 'بدون برند'} · {group.brands[0].location?.code ?? '—'} {group.brands[0].location?.name ? `· ${group.brands[0].location?.name}` : ''}</small>
+                              )}
                             </div>
-                            <div className="brs">
-                              {group.brands.map((option) => (
+                            <div className="val">
+                              <span className="badge b-ok">موجود</span>
+                              {group.brands.length === 1 && (
+                                <small className="sr-add-hint">+ افزودن</small>
+                              )}
+                            </div>
+                          </div>
+                          <div className="sr-brands">
+                            {group.brands.map((option) => (
+                              <div className="sr-brand-row" key={option.id}>
+                                <div className="sr-brand-main">
+                                  <b className="sr-brand-name">{option.brand?.name ?? 'بدون برند'}</b>
+                                  <span className="sr-brand-loc">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                                    {option.location?.code ?? '—'}
+                                    {option.location?.name ? ` · ${option.location?.name}` : ''}
+                                    {option.location?.code ? '' : ' · بدون قفسه'}
+                                  </span>
+                                </div>
+                                <div className="sr-brand-meta">
+                                  <span className={`sr-qty ${option.quantity <= 0 ? 'is-zero' : option.quantity <= 5 ? 'is-low' : ''}`}>
+                                    {persianNumber(option.quantity)} عدد
+                                  </span>
+                                  <span className="sr-price">{money(option.salePrice)}</span>
+                                </div>
                                 <button
                                   type="button"
-                                  className="br"
-                                  key={option.id}
+                                  className="row-action sr-add"
                                   onClick={(event) => {
-                                    // Single-brand rows are clickable as a whole —
-                                    // stop the bubble or the row handler adds twice.
                                     event.stopPropagation();
                                     addLine(option);
                                   }}
                                 >
-                                  {option.brand?.name ?? 'بدون برند'}{' '}
-                                  <b>{money(option.salePrice)}</b>{' '}
-                                  <span className="mut3">
-                                    {option.location?.code ?? '—'} ·{' '}
-                                    {persianNumber(option.quantity)} عدد
-                                  </span>
+                                  + افزودن
                                 </button>
-                              ))}
-                            </div>
-                          </div>
-                          <div className="val">
-                            <span className="badge b-ok">موجود</span>
-                            {group.brands.length === 1 && (
-                              <small className="sr-add-hint">+ افزودن</small>
-                            )}
+                              </div>
+                            ))}
                           </div>
                         </div>
                       ))
