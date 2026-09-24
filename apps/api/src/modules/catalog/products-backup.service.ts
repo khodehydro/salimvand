@@ -104,8 +104,11 @@ export class ProductsBackupService {
 
   /** Builds the full-catalog zip: manifest + products.json + references.json
    * + every product image file. Deleted (soft) products are included with
-   * their deletedAt so a restore brings the catalog back exactly as it was. */
-  async buildBackup(): Promise<Buffer> {
+   * their deletedAt so a restore brings the catalog back exactly as it was.
+   * When includeImages=false, image files are omitted to keep the archive small
+   * (products.json still keeps image paths so restore knows what is missing). */
+  async buildBackup(options?: { includeImages?: boolean }): Promise<Buffer> {
+    const includeImages = options?.includeImages ?? true;
     const [products, categories, brands, locations, makes] = await Promise.all([
       this.prisma.product.findMany({
         orderBy: { code: 'asc' },
@@ -215,11 +218,13 @@ export class ProductsBackupService {
     // Collect image files to embed — supports both legacy flat layout
     // (uploads/products/<file>.webp) and current dir layout
     // (uploads/products/<uuid>/large.webp + small.webp).
+    // When includeImages=false, skip this whole block to keep zip small.
     let filesAdded = 0;
     const seenZipPaths = new Set<string>();
     const seenDirs = new Set<string>();
 
-    for (const product of serialized) {
+    if (includeImages) {
+      for (const product of serialized) {
       for (const image of product.images) {
         // External URLs have no local file — skip.
         if (/^https?:\/\//i.test(image.path)) continue;
@@ -272,6 +277,7 @@ export class ProductsBackupService {
         }
       }
     }
+    }
 
     // Fallback for any image dirs that weren't covered because the DB row
     // points to large.webp but the directory also contains small.webp and we
@@ -287,6 +293,7 @@ export class ProductsBackupService {
             format: BACKUP_FORMAT,
             version: BACKUP_VERSION,
             createdAt: new Date().toISOString(),
+            includeImages,
             counts: {
               products: serialized.length,
               images: serialized.reduce((sum, product) => sum + product.images.length, 0),

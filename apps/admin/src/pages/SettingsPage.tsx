@@ -287,6 +287,7 @@ export function SettingsPage() {
         branch: githubCfg.branch,
         intervalMinutes: githubCfg.intervalMinutes,
         pathPrefix: githubCfg.pathPrefix,
+        includeImages: githubCfg.includeImages ?? true,
       };
       if (githubTokenInput.trim()) payload.token = githubTokenInput.trim();
       const result = await api<{ data: GithubBackupConfig }>('/settings/github-backup', {
@@ -1217,7 +1218,7 @@ export function SettingsPage() {
           <fieldset>
             <legend>پشتیبان‌گیری خودکار محصولات به GitHub (private)</legend>
             <p className="settings-help">
-              هر ۳۰ دقیقه یک فایل ZIP از محصولات (products.json + references.json + تصاویر) ساخته شده و با نام تاریخ و ساعت به ریپازیتوری خصوصی <code>khodehydro/salimvand-backup</code> پوش می‌شود. مسیر فایل: <code>backups/YYYY/MM/DD/products-YYYY-MM-DD_HH-mm-ss.zip</code> بر اساس ساعت تهران.
+              هر {githubCfg?.intervalMinutes ?? 30} دقیقه یک فایل ZIP از محصولات (products.json + references.json {githubCfg?.includeImages ? '+ تصاویر' : 'بدون تصاویر'}) ساخته شده و با نام تاریخ و ساعت به ریپازیتوری خصوصی <code>khodehydro/salimvand-backup</code> پوش می‌شود. مسیر: <code>backups/YYYY/MM/DD/products[-noimg]-YYYY-MM-DD_HH-mm-ss.zip</code> بر اساس ساعت تهران. اگر حجم تصاویر زیاد شد، تیک تصاویر را بردارید تا بکاپ سبک‌تر شود.
             </p>
             {githubCfg ? (
               <>
@@ -1227,7 +1228,15 @@ export function SettingsPage() {
                     checked={githubCfg.enabled}
                     onChange={(e) => setGithubCfg({ ...githubCfg, enabled: e.target.checked })}
                   />{' '}
-                  فعال‌سازی بکاپ خودکار GitHub
+                  فعال‌سازی بکاپ خودکار GitHub (هر {githubCfg.intervalMinutes} دقیقه)
+                </label>
+                <label className="switch-row">
+                  <input
+                    type="checkbox"
+                    checked={githubCfg.includeImages ?? true}
+                    onChange={(e) => setGithubCfg({ ...githubCfg, includeImages: e.target.checked })}
+                  />{' '}
+                  شامل تصاویر محصولات در بکاپ (اگر تصاویر زیاد شد تیک را بردارید تا بکاپ بدون تصویر و سبک‌تر باشد)
                 </label>
                 <div className="two-fields">
                   <label>

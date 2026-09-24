@@ -44,13 +44,13 @@ export class GithubBackupService implements OnModuleInit {
   ) {}
 
   onModuleInit() {
-    // Check every minute if it's time to run
+    this.logger.log('GitHub backup scheduler initialized - checking every 60s');
     this.timer = setInterval(() => {
       void this.tick().catch((e) => this.logger.error(`tick failed: ${(e as Error).message}`));
     }, 60_000);
-    // Also run tick shortly after boot
     setTimeout(() => {
-      void this.tick().catch(() => undefined);
+      this.logger.log('GitHub backup initial tick after boot');
+      void this.tick().catch((e) => this.logger.error(`initial tick failed: ${(e as Error).message}`));
     }, 15_000);
   }
 
@@ -107,19 +107,44 @@ export class GithubBackupService implements OnModuleInit {
   }
 
   private async tick() {
-    if (this.running) return;
-    const cfg = await this.getConfig();
-    if (!cfg.enabled) return;
-    if (!cfg.token || !cfg.repo) return;
+    if (this.running) {
+      this.logger.debug('GitHub backup tick: already running, skip');
+      return;
+    }
+    let cfg: GithubBackupConfig;
+    try {
+      cfg = await this.getConfig();
+    } catch (e) {
+      this.logger.error(`GitHub backup tick: failed to get config ${(e as Error).message}`);
+      return;
+    }
+    if (!cfg.enabled) {
+      return;
+    }
+    if (!cfg.token || !cfg.repo) {
+      this.logger.warn('GitHub backup tick: enabled but token/repo missing');
+      return;
+    }
 
     const now = new Date();
     const lastRun = cfg.lastRunAt ? new Date(cfg.lastRunAt) : null;
     const intervalMs = cfg.intervalMinutes * 60_000;
 
-    if (lastRun && now.getTime() - lastRun.getTime() < intervalMs) return;
+    if (lastRun) {
+      const elapsed = now.getTime() - lastRun.getTime();
+      if (elapsed < intervalMs) {
+        return;
+      }
+    } else {
+      this.logger.log('GitHub backup tick: no previous run, will run now');
+    }
 
-    this.logger.log(`GitHub backup tick: running backup to ${cfg.repo} (interval ${cfg.intervalMinutes}m)`);
-    await this.runBackupInternal(cfg, 'auto');
+    this.logger.log(`GitHub backup tick: running auto backup to ${cfg.repo} (interval ${cfg.intervalMinutes}m, includeImages=${cfg.includeImages})`);
+    try {
+      await this.runBackupInternal(cfg, 'auto');
+    } catch (e) {
+      this.logger.error(`GitHub backup auto failed: ${(e as Error).message}`);
+    }
   }
 
   async runManual(userId?: string) {
@@ -138,8 +163,8 @@ export class GithubBackupService implements OnModuleInit {
     });
 
     try {
-      // Build products zip
-      const buffer = await this.productsBackup.buildBackup();
+      // Build products zip - respect includeImages toggle to keep size small when images are many
+      const buffer = await this.productsBackup.buildBackup({ includeImages: cfg.includeImages });
 
       // Check size - GitHub contents API limit 100MB, we warn if > 90MB
       const sizeMB = buffer.length / (1024 * 1024);
@@ -168,8 +193,9 @@ export class GithubBackupService implements OnModuleInit {
       const min = parts.minute;
       const ss = parts.second;
 
-      // Path: backups/2026/09/24/products-2026-09-24_14-30-00.zip
-      const fileName = `products-${yyyy}-${mm}-${dd}_${hh}-${min}-${ss}.zip`;
+      // Path: backups/2026/09/24/products-2026-09-24_14-30-00.zip or products-noimg-...
+      const suffix = cfg.includeImages ? '' : '-noimg';
+      const fileName = `products${suffix}-${yyyy}-${mm}-${dd}_${hh}-${min}-${ss}.zip`;
       const filePath = `${cfg.pathPrefix.replace(/^\/+|\/+$/g, '')}/${yyyy}/${mm}/${dd}/${fileName}`;
 
       // Push to GitHub
@@ -179,7 +205,7 @@ export class GithubBackupService implements OnModuleInit {
         token: cfg.token,
         path: filePath,
         content: buffer,
-        message: `backup: products ${yyyy}-${mm}-${dd} ${hh}:${min}:${ss} Asia/Tehran [${triggeredBy}]`,
+        message: `backup: products${cfg.includeImages ? '' : ' (no images)'} ${yyyy}-${mm}-${dd} ${hh}:${min}:${ss} Asia/Tehran [${triggeredBy}]`,
       });
 
       // Update config with last run info
