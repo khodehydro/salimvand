@@ -2001,7 +2001,8 @@ export function InvoicesPage({
                         </button>
                         {canPay && net(invoice) > Number(invoice.paidAmount) && (
                           <button
-                            className="row-action"
+                            className="row-action invoice-quick-pay"
+                            title="تسویه سریع بدهی این فاکتور - ۳۰ ثانیه"
                             onClick={() => {
                               setPaying(invoice);
                               setPayments([
@@ -2014,7 +2015,7 @@ export function InvoicesPage({
                               ]);
                             }}
                           >
-                            پرداخت
+                            دریافت بدهی
                           </button>
                         )}
                         {canResend && (
@@ -2136,6 +2137,21 @@ export function InvoicesPage({
                     <div className="inv-v2-row"><span>نام</span><b>{viewing.customerName ?? 'مشتری حضوری'}</b></div>
                     <div className="inv-v2-row"><span>آدرس</span><p>{viewing.customerAddress || '—'}</p></div>
                     <div className="inv-v2-row"><span>وضعیت</span><span className={`badge ${viewing.paymentStatus === 'paid' ? 'b-ok' : viewing.paymentStatus === 'partial' ? 'b-warn' : 'b-danger'}`}>{labels[viewing.paymentStatus] ?? viewing.paymentStatus}</span></div>
+                    {net(viewing) > Number(viewing.paidAmount) && (
+                      <div className="inv-v2-row">
+                        <span>اقدام سریع</span>
+                        <button
+                          className="row-action invoice-quick-pay"
+                          onClick={() => {
+                            setViewing(null);
+                            setPaying(viewing);
+                            setPayments([{ method: 'cash', amount: String(Math.max(0, net(viewing) - Number(viewing.paidAmount))) }]);
+                          }}
+                        >
+                          دریافت بدهی {money(net(viewing) - Number(viewing.paidAmount))}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="inv-v2-card">

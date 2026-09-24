@@ -321,9 +321,16 @@ export class NotificationsService implements OnModuleDestroy {
 
   async dueChecksToday() {
     if (!this.prisma) return [];
-    const start = new Date(); start.setHours(0, 0, 0, 0);
-    const end = new Date(start); end.setDate(end.getDate() + 1);
-    return this.prisma.paymentCheck.findMany({ where: { status: 'pending', dueDate: { gte: start, lt: end } }, orderBy: { dueDate: 'asc' }, include: { payment: { include: { invoice: { select: { number: true, customerName: true } } } } } });
+    const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
+    const startOfTomorrow = new Date(startOfToday); startOfTomorrow.setDate(startOfToday.getDate() + 1);
+    const startOfDayAfterTomorrow = new Date(startOfToday); startOfDayAfterTomorrow.setDate(startOfToday.getDate() + 2);
+    const startOfDayAfter2 = new Date(startOfToday); startOfDayAfter2.setDate(startOfToday.getDate() + 3);
+    // Return checks due today, tomorrow (1 day left), and overdue for bell notification
+    return this.prisma.paymentCheck.findMany({
+      where: { status: 'pending', dueDate: { lt: startOfDayAfter2 } },
+      orderBy: { dueDate: 'asc' },
+      include: { payment: { include: { invoice: { select: { number: true, customerName: true, customerMobile: true } } } } },
+    });
   }
 
   async failed(limit = 50) {

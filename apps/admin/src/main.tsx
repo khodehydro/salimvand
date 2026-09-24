@@ -269,7 +269,7 @@ function App() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [notificationItems, setNotificationItems] = useState<NotificationItem[]>([]);
-  const [dueChecks, setDueChecks] = useState<Array<{ id: string; amount: string; invoice: { number: string; customerName?: string | null } }>>([]);
+  const [dueChecks, setDueChecks] = useState<Array<{ id: string; amount: string; dueDate: string; bank?: string | null; checkNumber?: string | null; customerMobile?: string | null; invoice: { id?: string; number: string; customerName?: string | null; customerMobile?: string | null } }>>([]);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
     اصلی: true,
@@ -311,7 +311,7 @@ function App() {
     if (!notificationOpen) return;
     void Promise.all([
       api<{ data: NotificationItem[] }>('/notifications/failed?limit=5'),
-      api<{ data: Array<{ id: string; amount: string; invoice: { number: string; customerName?: string | null } }> }>('/notifications/due-checks'),
+      api<{ data: Array<{ id: string; amount: string; dueDate: string; bank?: string | null; checkNumber?: string | null; customerMobile?: string | null; invoice: { id?: string; number: string; customerName?: string | null; customerMobile?: string | null } }> }>('/notifications/due-checks'),
     ]).then(([failed, checks]) => { setNotificationItems(failed.data ?? []); setDueChecks(checks.data ?? []); }).catch(() => { setNotificationItems([]); setDueChecks([]); });
   }, [notificationOpen]);
   useEffect(() => {
@@ -471,7 +471,38 @@ function App() {
                   <b>اعلان‌ها</b>
                   <small>{notificationItems.length ? `${notificationItems.length} خطای اخیر` : 'وضعیت سیستم'}</small>
                 </div>
-                {dueChecks.map((check) => <button className="notification-item check-notification" key={check.id} onClick={() => navigate('invoices')}><span className="notification-item-icon">چک</span><span><b>سررسید چک امروز</b><small>فاکتور {check.invoice.number} · {check.amount} ریال</small></span></button>)}
+                {(() => {
+                  const todayStr = new Date().toDateString();
+                  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+                  const tomorrowStr = tomorrow.toDateString();
+                  const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+                  const overdue = dueChecks.filter((c) => new Date(c.dueDate) < todayStart);
+                  const today = dueChecks.filter((c) => new Date(c.dueDate).toDateString() === todayStr);
+                  const tomorrowChecks = dueChecks.filter((c) => new Date(c.dueDate).toDateString() === tomorrowStr);
+                  const fmt = (v: string) => new Intl.NumberFormat('fa-IR').format(Number(v));
+                  const groups = [
+                    { label: 'معوق', items: overdue, tone: 'danger' },
+                    { label: 'امروز', items: today, tone: 'danger' },
+                    { label: 'فردا (۱ روز مانده)', items: tomorrowChecks, tone: 'warn' },
+                  ];
+                  return groups.map((g) => g.items.length > 0 ? (
+                    <div key={g.label} className="notif-check-group">
+                      <small className={`notif-check-group-title ${g.tone}`}>{g.label} · {g.items.length} چک</small>
+                      {g.items.map((check) => (
+                        <div className="notification-item check-notification" key={check.id}>
+                          <span className="notification-item-icon">چک</span>
+                          <span><b>فاکتور {check.invoice.number} · {fmt(check.amount)} ریال</b><small>{check.invoice.customerName ?? 'مشتری'} {check.bank ? `· ${check.bank}` : ''} {check.checkNumber ? `· ${check.checkNumber}` : ''}</small></span>
+                          <div className="notif-check-actions">
+                            {(check.customerMobile || check.invoice.customerMobile) && (
+                              <a className="row-action" href={`tel:${check.customerMobile ?? check.invoice.customerMobile}`}>تماس</a>
+                            )}
+                            <button className="row-action" onClick={() => { setNotificationOpen(false); navigate('invoices', check.invoice.id ? { invoice: check.invoice.id } : undefined); }}>فاکتور</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null);
+                })()}
                 {notificationItems.length ? notificationItems.map((item) => (
                   <button className="notification-item" key={item.id} onClick={() => navigate('messaging')}>
                     <span className="notification-item-icon">!</span>

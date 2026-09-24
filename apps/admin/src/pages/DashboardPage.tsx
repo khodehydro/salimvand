@@ -51,7 +51,7 @@ type Summary = {
   todaySales?: string;
   todayReceived?: string;
   todayInvoiceCount?: number;
-  dueChecks?: Array<{ id: string; checkNumber?: string | null; bank?: string | null; amount: string; dueDate: string; invoice: { id: string; number: string; customerName?: string | null } }>;
+  dueChecks?: Array<{ id: string; checkNumber?: string | null; bank?: string | null; amount: string; dueDate: string; invoice: { id: string; number: string; customerName?: string | null; customerMobile?: string | null }; customerMobile?: string | null }>;
   recentTransactions: Array<{
     id: string;
     type: string;
@@ -173,6 +173,9 @@ export function DashboardPage({
   const [health, setHealth] = useState<Health | null>(null);
   const [failedNotifications, setFailedNotifications] = useState<FailedNotification[]>([]);
   const [system, setSystem] = useState<SystemStats | null>(null);
+  const [payingDebtor, setPayingDebtor] = useState<Debtor | null>(null);
+  const [payAmount, setPayAmount] = useState('');
+  const [payMethod, setPayMethod] = useState('cash');
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -305,46 +308,127 @@ export function DashboardPage({
       {loading && !summary && <div className="notice">در حال دریافت اطلاعات داشبورد...</div>}
       {backupOpen && <div className="backup-modal-backdrop" role="dialog" aria-modal="true"><div className="backup-modal-card"><div className="backup-modal-icon">▣</div><h3>پشتیبان‌گیری کامل</h3><p className="backup-modal-description">{backupError || (backupDone ? 'فایل پشتیبان با موفقیت آماده شد.' : 'در حال آماده‌سازی دیتابیس و فایل‌های رسانه‌ای هستیم.')}</p><div className="backup-progress-track"><span style={{ width: `${backupProgress}%` }} /></div><div className="backup-progress-meta"><strong>{faNum(backupProgress)}٪</strong><span>{backupDone ? 'تکمیل شد' : 'لطفاً پنجره را نبندید'}</span></div>{backupDone && <div className="backup-modal-actions"><button className="btn primary" onClick={() => void downloadFile('/settings/backup/download', 'salimvand-backup.tar.gz')}>دانلود فایل پشتیبان</button><button className="btn backup-drive-btn" onClick={async () => { try { const result = await api<{ data: { webViewLink?: string } }>('/settings/backup/google-drive', { method: 'PUT' }); if (result.data.webViewLink) window.open(result.data.webViewLink, '_blank', 'noopener,noreferrer'); } catch (error) { setBackupError((error as Error).message); } }}>ارسال به Google Drive</button></div>}{(backupDone || backupError) && <button className="backup-close-btn" onClick={() => setBackupOpen(false)}>بستن</button>}</div></div>}
 
-      <section className="ops-today-grid" aria-label="خلاصهٔ عملیاتی امروز">
-        <article className="ops-today-card primary"><small>فروش امروز</small><strong>{money(summary?.todaySales ?? 0)}</strong><span>{faNum(summary?.todayInvoiceCount ?? 0)} فاکتور صادرشده</span></article>
-        <article className="ops-today-card success"><small>دریافت‌شده امروز</small><strong>{money(summary?.todayReceived ?? 0)}</strong><span>پرداخت‌های ثبت‌شده امروز</span></article>
-        <article className="ops-today-card warn"><small>فاکتورهای باز</small><strong>{faNum(summary?.unpaidInvoices ?? 0)}</strong><span>نیازمند پیگیری پرداخت</span></article>
-        <article className="ops-today-card danger"><small>چک‌های امروز</small><strong>{faNum(summary?.dueChecks?.filter((check) => new Date(check.dueDate).toDateString() === new Date().toDateString()).length ?? 0)}</strong><span>سررسید امروز</span></article>
-      </section>
+      {(() => {
+        const todayStr = new Date().toDateString();
+        const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+        const tomorrowStr = tomorrow.toDateString();
+        const todayChecks = summary?.dueChecks?.filter((c) => new Date(c.dueDate).toDateString() === todayStr) ?? [];
+        const tomorrowChecks = summary?.dueChecks?.filter((c) => new Date(c.dueDate).toDateString() === tomorrowStr) ?? [];
+        const overdueChecks = summary?.dueChecks?.filter((c) => new Date(c.dueDate) < new Date(new Date().setHours(0,0,0,0))) ?? [];
+        const todayAmount = todayChecks.reduce((sum, c) => sum + Number(c.amount), 0);
+        const tomorrowAmount = tomorrowChecks.reduce((sum, c) => sum + Number(c.amount), 0);
+        const overdueAmount = overdueChecks.reduce((sum, c) => sum + Number(c.amount), 0);
+        return (
+          <>
+            <section className="ops-today-grid" aria-label="خلاصهٔ عملیاتی امروز">
+              <article className="ops-today-card primary"><small>فروش امروز</small><strong>{money(summary?.todaySales ?? 0)}</strong><span>{faNum(summary?.todayInvoiceCount ?? 0)} فاکتور صادرشده</span></article>
+              <article className="ops-today-card success"><small>دریافت‌شده امروز</small><strong>{money(summary?.todayReceived ?? 0)}</strong><span>پرداخت‌های ثبت‌شده امروز</span></article>
+              <article className="ops-today-card warn"><small>فاکتورهای باز</small><strong>{faNum(summary?.unpaidInvoices ?? 0)}</strong><span>نیازمند پیگیری پرداخت</span></article>
+              <article className="ops-today-card danger"><small>چک‌های امروز</small><strong>{faNum(todayChecks.length)}</strong><span>{todayAmount ? money(todayAmount) : 'سررسید امروز'}</span></article>
+              {tomorrowChecks.length > 0 && (
+                <article className="ops-today-card warn"><small>چک‌های فردا (۱ روز مانده)</small><strong>{faNum(tomorrowChecks.length)}</strong><span>{money(tomorrowAmount)}</span></article>
+              )}
+              {overdueChecks.length > 0 && (
+                <article className="ops-today-card danger"><small>چک‌های معوق</small><strong>{faNum(overdueChecks.length)}</strong><span>{money(overdueAmount)}</span></article>
+              )}
+            </section>
 
-      <section className="daily-work" aria-labelledby="daily-work-title">
-        <div className="daily-work-heading">
-          <div>
-            <h3 id="daily-work-title">کارهای امروز</h3>
-            <p>مواردی که بهتر است قبل از پایان روز بررسی شوند.</p>
-          </div>
-          <span className="daily-work-count">{faNum([
-            summary?.lowStock ?? 0,
-            summary?.unpaidInvoices ?? 0,
-            failedNotifications.length,
-            summary?.productsWithoutImages ?? 0,
-            summary?.inventoryWithoutLocation ?? 0,
-            summary?.pendingPurchases ?? 0,
-          ].filter((count) => count > 0).length)} مورد</span>
-        </div>
-        <div className="daily-work-list">
-          {[
-            { label: 'اقلام زیر حداقل موجودی', count: summary?.lowStock ?? 0, page: 'inventory' as AdminPage, tone: 'warn' },
-            { label: 'فاکتور پرداخت‌نشده', count: summary?.unpaidInvoices ?? 0, page: 'invoices' as AdminPage, tone: 'danger' },
-            { label: 'ارسال پیام ناموفق', count: failedNotifications.length, page: 'messaging' as AdminPage, tone: 'danger' },
-            { label: 'محصول بدون تصویر', count: summary?.productsWithoutImages ?? 0, page: 'products' as AdminPage, tone: 'neutral' },
-            { label: 'قلم بدون قفسه', count: summary?.inventoryWithoutLocation ?? 0, page: 'inventory' as AdminPage, tone: 'neutral' },
-            { label: 'خرید نیازمند پیگیری', count: summary?.pendingPurchases ?? 0, page: 'purchases' as AdminPage, tone: 'neutral' },
-          ].map((task) => (
-            <button className={`daily-work-item ${task.tone}`} key={task.label} onClick={() => onNavigate?.(task.page)}>
-              <span className="daily-work-dot" />
-              <span className="daily-work-label">{task.label}</span>
-              <b>{faNum(task.count)}</b>
-              <span className="daily-work-arrow">←</span>
-            </button>
-          ))}
-        </div>
-      </section>
+            <section className="daily-work" aria-labelledby="daily-work-title">
+              <div className="daily-work-heading">
+                <div>
+                  <h3 id="daily-work-title">کارهای امروز</h3>
+                  <p>مواردی که بهتر است قبل از پایان روز بررسی شوند.</p>
+                </div>
+                <span className="daily-work-count">{faNum([
+                  summary?.lowStock ?? 0,
+                  summary?.unpaidInvoices ?? 0,
+                  failedNotifications.length,
+                  summary?.productsWithoutImages ?? 0,
+                  summary?.inventoryWithoutLocation ?? 0,
+                  summary?.pendingPurchases ?? 0,
+                  todayChecks.length,
+                  tomorrowChecks.length,
+                  overdueChecks.length,
+                ].filter((count) => count > 0).length)} مورد</span>
+              </div>
+              <div className="daily-work-list">
+                {[
+                  { label: 'اقلام زیر حداقل موجودی', count: summary?.lowStock ?? 0, page: 'inventory' as AdminPage, tone: 'warn' },
+                  { label: 'فاکتور پرداخت‌نشده', count: summary?.unpaidInvoices ?? 0, page: 'invoices' as AdminPage, tone: 'danger' },
+                  { label: 'چک امروز', count: todayChecks.length, page: 'reports' as AdminPage, tone: 'danger', detail: todayAmount ? money(todayAmount) : undefined },
+                  { label: 'چک فردا (یادآور ۱ روز مانده)', count: tomorrowChecks.length, page: 'reports' as AdminPage, tone: 'warn', detail: tomorrowAmount ? money(tomorrowAmount) : undefined },
+                  { label: 'چک معوق', count: overdueChecks.length, page: 'reports' as AdminPage, tone: 'danger', detail: overdueAmount ? money(overdueAmount) : undefined },
+                  { label: 'ارسال پیام ناموفق', count: failedNotifications.length, page: 'messaging' as AdminPage, tone: 'danger' },
+                  { label: 'محصول بدون تصویر', count: summary?.productsWithoutImages ?? 0, page: 'products' as AdminPage, tone: 'neutral' },
+                  { label: 'قلم بدون قفسه', count: summary?.inventoryWithoutLocation ?? 0, page: 'inventory' as AdminPage, tone: 'neutral' },
+                  { label: 'خرید نیازمند پیگیری', count: summary?.pendingPurchases ?? 0, page: 'purchases' as AdminPage, tone: 'neutral' },
+                ].filter((t) => t.count > 0).map((task) => (
+                  <button className={`daily-work-item ${task.tone}`} key={task.label} onClick={() => onNavigate?.(task.page)}>
+                    <span className="daily-work-dot" />
+                    <span className="daily-work-label">{task.label} {task.detail ? `· ${task.detail}` : ''}</span>
+                    <b>{faNum(task.count)}</b>
+                    <span className="daily-work-arrow">←</span>
+                  </button>
+                ))}
+              </div>
+
+              {(todayChecks.length > 0 || tomorrowChecks.length > 0 || overdueChecks.length > 0) && (
+                <div className="daily-checks-detail">
+                  <h4>جزئیات چک‌ها</h4>
+                  {overdueChecks.length > 0 && (
+                    <div className="daily-checks-group">
+                      <b className="daily-checks-group-title danger">معوق ({faNum(overdueChecks.length)})</b>
+                      {overdueChecks.map((check) => (
+                        <div className="daily-checks-row" key={check.id}>
+                          <span>{check.invoice.customerName ?? 'مشتری'} · فاکتور {check.invoice.number} · {check.bank ?? 'بانک'} · {money(check.amount)}</span>
+                          <div className="daily-checks-actions">
+                            {check.customerMobile || check.invoice.customerMobile ? (
+                              <a className="row-action" href={`tel:${check.customerMobile ?? check.invoice.customerMobile}`}>تماس</a>
+                            ) : null}
+                            <a className="row-action" href={`#/invoices?invoice=${check.invoice.id}`}>فاکتور</a>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {todayChecks.length > 0 && (
+                    <div className="daily-checks-group">
+                      <b className="daily-checks-group-title">امروز ({faNum(todayChecks.length)} · {money(todayAmount)})</b>
+                      {todayChecks.map((check) => (
+                        <div className="daily-checks-row" key={check.id}>
+                          <span>{check.invoice.customerName ?? 'مشتری'} · فاکتور {check.invoice.number} · {check.bank ?? 'بانک'} · {money(check.amount)}</span>
+                          <div className="daily-checks-actions">
+                            {check.customerMobile || check.invoice.customerMobile ? (
+                              <a className="row-action" href={`tel:${check.customerMobile ?? check.invoice.customerMobile}`}>تماس</a>
+                            ) : null}
+                            <a className="row-action" href={`#/invoices?invoice=${check.invoice.id}`}>فاکتور</a>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {tomorrowChecks.length > 0 && (
+                    <div className="daily-checks-group">
+                      <b className="daily-checks-group-title warn">فردا - ۱ روز مانده ({faNum(tomorrowChecks.length)} · {money(tomorrowAmount)})</b>
+                      {tomorrowChecks.map((check) => (
+                        <div className="daily-checks-row" key={check.id}>
+                          <span>{check.invoice.customerName ?? 'مشتری'} · فاکتور {check.invoice.number} · {check.bank ?? 'بانک'} · {money(check.amount)}</span>
+                          <div className="daily-checks-actions">
+                            {check.customerMobile || check.invoice.customerMobile ? (
+                              <a className="row-action" href={`tel:${check.customerMobile ?? check.invoice.customerMobile}`}>تماس</a>
+                            ) : null}
+                            <a className="row-action" href={`#/invoices?invoice=${check.invoice.id}`}>فاکتور</a>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
+          </>
+        );
+      })()}
 
       <section className="data-quality-panel" aria-labelledby="data-quality-title">
         <div className="daily-work-heading">
@@ -520,7 +604,18 @@ export function DashboardPage({
                       <b>{debtor.name}</b>
                       <code dir="ltr">{formatPersianNumber(debtor.mobile)}</code>
                       <b className="num danger">{money(debtor.debt)}</b>
-                      <span>
+                      <span className="row-actions" style={{ display: 'flex', gap: '6px' }}>
+                        <button
+                          className="row-action invoice-quick-pay"
+                          title="دریافت بدهی سریع - ۳۰ ثانیه"
+                          onClick={() => {
+                            setPayingDebtor(debtor);
+                            setPayAmount(String(debtor.debt));
+                            setPayMethod('cash');
+                          }}
+                        >
+                          دریافت بدهی
+                        </button>
                         {canNotify ? (
                           <button
                             className="row-action"
@@ -544,9 +639,7 @@ export function DashboardPage({
                           >
                             پیامک
                           </button>
-                        ) : (
-                          <span className="muted">—</span>
-                        )}
+                        ) : null}
                       </span>
                     </div>
                   ))}

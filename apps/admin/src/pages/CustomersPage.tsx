@@ -408,8 +408,8 @@ export function CustomersPage({
                 </b>
                 <span className="customer-actions">
                   {canPay && Number(customer.debt) > 0 && (
-                    <button className="row-action" onClick={() => setPaymentFor(customer)}>
-                      ثبت پرداخت
+                    <button className="row-action invoice-quick-pay" title="تسویه سریع بدهی مشتری - ۳۰ ثانیه" onClick={() => setPaymentFor(customer)}>
+                      دریافت بدهی
                     </button>
                   )}
                   {canManage && (

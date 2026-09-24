@@ -36,7 +36,19 @@ export class NotificationsController {
   }
   @Get('due-checks') async dueChecks() {
     const rows = await this.notifications.dueChecksToday();
-    return { ok: true, data: rows.map((row) => ({ id: row.id, checkNumber: row.checkNumber, amount: row.amount.toString(), dueDate: row.dueDate, invoice: row.payment.invoice })) };
+    return {
+      ok: true,
+      data: rows.map((row) => ({
+        id: row.id,
+        checkNumber: row.checkNumber,
+        bank: (row as any).bank,
+        amount: row.amount.toString(),
+        dueDate: row.dueDate,
+        status: (row as any).status,
+        invoice: row.payment.invoice,
+        customerMobile: (row.payment.invoice as any).customerMobile,
+      })),
+    };
   }
   @Get('failed') failed(@Query('limit') limit?: string) {
     return this.notifications

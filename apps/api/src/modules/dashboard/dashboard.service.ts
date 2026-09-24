@@ -258,17 +258,20 @@ export class DashboardService {
     ]);
     const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
     const startOfTomorrow = new Date(startOfToday); startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
+    const startOfDayAfterTomorrow = new Date(startOfToday); startOfDayAfterTomorrow.setDate(startOfDayAfterTomorrow.getDate() + 2);
+    const startOfDayAfter2 = new Date(startOfToday); startOfDayAfter2.setDate(startOfDayAfter2.getDate() + 3);
     const [todayInvoices, todayPayments] = await Promise.all([
       this.prisma.invoice.findMany({ where: { status: 'issued', issuedAt: { gte: startOfToday, lt: startOfTomorrow } }, select: { total: true } }),
       this.prisma.payment.findMany({ where: { receivedAt: { gte: startOfToday, lt: startOfTomorrow } }, select: { amount: true } }),
     ]);
     const todaySales = todayInvoices.reduce((sum, row) => sum + row.total, 0n);
     const todayReceived = todayPayments.reduce((sum, row) => sum + row.amount, 0n);
-    const dayAfterTomorrow = new Date(startOfToday); dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 3);
+    // Checks due: overdue + today + tomorrow + day after tomorrow (for 1-day-left notification)
+    // Includes customer mobile for quick call action
     const dueChecks = await this.prisma.paymentCheck.findMany({
-      where: { status: 'pending', dueDate: { gte: new Date(new Date(startOfToday).setDate(startOfToday.getDate() + 1)), lt: dayAfterTomorrow } },
+      where: { status: 'pending', dueDate: { lt: startOfDayAfter2 } },
       orderBy: { dueDate: 'asc' },
-      include: { payment: { include: { invoice: { select: { id: true, number: true, customerName: true } } } } },
+      include: { payment: { include: { invoice: { select: { id: true, number: true, customerName: true, customerMobile: true } } } } },
     });
     const lowStock = lowStockItems.filter(
       (item: { quantity: number; minStock: number | null }) => item.quantity <= (item.minStock ?? 0),
@@ -294,7 +297,7 @@ export class DashboardService {
         todaySales: todaySales.toString(),
         todayReceived: todayReceived.toString(),
         todayInvoiceCount: todayInvoices.length,
-        dueChecks: dueChecks.map((check) => ({ id: check.id, checkNumber: check.checkNumber, bank: check.bank, amount: check.amount.toString(), dueDate: check.dueDate, invoice: check.payment.invoice })),
+        dueChecks: dueChecks.map((check) => ({ id: check.id, checkNumber: check.checkNumber, bank: check.bank, amount: check.amount.toString(), dueDate: check.dueDate, invoice: check.payment.invoice, customerMobile: check.payment.invoice.customerMobile })),
       },
     };
   }
