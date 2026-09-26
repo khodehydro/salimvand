@@ -16,7 +16,9 @@ function makeService(overrides: Record<string, unknown> = {}) {
   const prisma = {
     location: {
       // assertChildren() reads the child types of a node before re-parenting.
-      findMany: vi.fn(async () => []),
+      // The explicit return type keeps the mock's resolved value open instead
+      // of narrowing it to `never[]`.
+      findMany: vi.fn(async (): Promise<Record<string, unknown>[]> => []),
       findFirst: vi.fn(),
       findUnique: vi.fn(),
       count: vi.fn(async () => 0),
@@ -196,7 +198,6 @@ describe('LocationService', () => {
     expect(prisma.location.delete).not.toHaveBeenCalled();
   });
 
-
   /* ——— سبد (basket): the third level of the placement tree ——— */
 
   it('creates a سبد inside a قفسه and rejects one without a shelf', async () => {
@@ -229,7 +230,8 @@ describe('LocationService', () => {
   it('keeps the tree three levels deep: no shelf under a basket, no basket under a basket', async () => {
     const { service, prisma } = makeService();
     prisma.location.findUnique.mockImplementation(async ({ where }: { where: { id?: string } }) => {
-      if (where.id === 'basket-1') return row({ id: 'basket-1', type: 'basket', parentId: 'shelf-1' });
+      if (where.id === 'basket-1')
+        return row({ id: 'basket-1', type: 'basket', parentId: 'shelf-1' });
       if (where.id === 'shelf-1') return row({ id: 'shelf-1', parentId: 'wh-1' });
       return null;
     });
@@ -298,9 +300,7 @@ describe('LocationService.list filters (پیکر قفسه/سبد در اپ)', ()
   it('returns only the requested level of the tree', async () => {
     const { service, findMany } = makeList();
     await service.list({ type: 'basket' });
-    expect(findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { type: 'basket' } }),
-    );
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { type: 'basket' } }));
   });
 
   it('narrows to the children of one location', async () => {

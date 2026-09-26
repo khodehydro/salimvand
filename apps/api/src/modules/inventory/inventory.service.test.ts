@@ -522,8 +522,9 @@ describe('InventoryService placement (قفسه + سبد)', () => {
     };
     const locations = [SHELF, OTHER_SHELF, BASKET];
     const location = {
-      findUnique: vi.fn(async ({ where }: { where: { id: string } }) =>
-        locations.find((row) => row.id === where.id) ?? null,
+      findUnique: vi.fn(
+        async ({ where }: { where: { id: string } }) =>
+          locations.find((row) => row.id === where.id) ?? null,
       ),
     };
     const inventoryItem = {
@@ -540,7 +541,11 @@ describe('InventoryService placement (قفسه + سبد)', () => {
         findUnique: vi.fn(async () => null),
       },
       syncChange: {
-        create: vi.fn(async () => ({ id: 's1' })),
+        create: vi.fn(
+          async (_args: {
+            data: { entityType: string; action: string; entityId: string; payload: unknown };
+          }) => ({ id: 's1' }),
+        ),
         deleteMany: vi.fn(async () => ({ count: 0 })),
       },
       inventoryOperation: { create: vi.fn(), findFirst: vi.fn(async () => null) },
@@ -587,7 +592,12 @@ describe('InventoryService placement (قفسه + سبد)', () => {
   it('rejects a basket that belongs to another shelf — on create and on update', async () => {
     const { service } = makePlacementService();
     await expect(
-      service.create({ productId: 'p1', locationId: 'shelf-2', basketId: 'basket-1', userId: 'u1' }),
+      service.create({
+        productId: 'p1',
+        locationId: 'shelf-2',
+        basketId: 'basket-1',
+        userId: 'u1',
+      }),
     ).rejects.toThrow('سبد انتخاب‌شده متعلق به این قفسه نیست');
     await expect(
       service.updateMetadata({ itemId: 'i1', locationId: 'shelf-2', basketId: 'basket-1' }, 'u1'),
@@ -628,11 +638,9 @@ describe('InventoryService placement (قفسه + سبد)', () => {
     await service.updateMetadata({ itemId: 'i1', basketId: 'basket-1' }, 'u1', 'android-meta-0009');
     // The sync stream — not the audit row — is what the Android client
     // applies into its cache, so the basket must travel in that payload.
-    const change = tx.syncChange.create.mock.calls.at(-1)?.[0] as {
-      data: { entityType: string; action: string; payload: Record<string, unknown> };
-    };
-    expect(change.data.entityType).toBe('inventory_item');
-    expect(change.data.payload).toEqual(
+    const change = tx.syncChange.create.mock.calls.at(-1)?.[0];
+    expect(change?.data.entityType).toBe('inventory_item');
+    expect(change?.data.payload).toEqual(
       expect.objectContaining({ id: 'i1', locationId: 'shelf-1', basketId: 'basket-1' }),
     );
   });
@@ -674,10 +682,7 @@ describe('InventoryService.list location scope (قفسه + سبدها)', () => {
     expect(findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          OR: [
-            { location: { parentId: 'loc-1' } },
-            { basket: { parent: { parentId: 'loc-1' } } },
-          ],
+          OR: [{ location: { parentId: 'loc-1' } }, { basket: { parent: { parentId: 'loc-1' } } }],
         }),
       }),
     );
