@@ -71,11 +71,7 @@ describe('resolvePlacement (قفسه + سبد)', () => {
 
   it('clearing only the basket keeps the shelf', async () => {
     await expect(
-      resolvePlacement(
-        client,
-        { basketId: null },
-        { locationId: 'shelf-1', basketId: 'basket-1' },
-      ),
+      resolvePlacement(client, { basketId: null }, { locationId: 'shelf-1', basketId: 'basket-1' }),
     ).resolves.toEqual({ locationId: 'shelf-1', basketId: null, changed: true });
   });
 
@@ -90,8 +86,10 @@ describe('resolvePlacement (قفسه + سبد)', () => {
   });
 
   it('treats an empty string as «no placement»', async () => {
-    await expect(
-      resolvePlacement(client, { locationId: '', basketId: '' }),
-    ).resolves.toEqual({ locationId: null, basketId: null, changed: false });
+    await expect(resolvePlacement(client, { locationId: '', basketId: '' })).resolves.toEqual({
+      locationId: null,
+      basketId: null,
+      changed: false,
+    });
   });
 });

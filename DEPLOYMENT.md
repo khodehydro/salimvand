@@ -40,6 +40,38 @@ sudo APP_DIR=/opt/salimvand DEPLOY_BRANCH=main ./scripts/deploy.sh
 
 در هر Deploy، اگر vhost پنل (`cms.`) هنوز location مسیر `/uploads/` را نداشته باشد، همین بلاک به‌صورت خودکار به همان server block اضافه و Nginx Reload می‌شود تا پیش‌نمایش تصاویر در کتابخانهٔ رسانه و تنظیمات پنل کار کند. فایل vhost هرگز بازنویسی کامل نمی‌شود تا تغییرات Certbot (بلوک‌های TLS) دست‌نخورده بمانند؛ برای نصب‌های تازه، `setup-server.sh` نسخهٔ کامل داخل `deploy/nginx/salimvand.conf` را می‌گذارد.
 
+## Deploy روی ویندوز (PowerShell)
+
+اگر سرور مقصد ویندوز است (یا پوشه‌ای از پروژه روی آن وجود ندارد و قرار است همه‌چیز مستقیماً از
+گیت‌هاب دریافت شود)، از اسکریپت PowerShell استفاده کنید. این اسکریپت در صورت نبود پوشه، مخزن را
+کلون می‌کند و در غیر این صورت فقط `fetch` + `checkout` انجام می‌دهد؛ سپس نصب، Migration، Seed،
+Build و ری‌استارت سرویس‌ها را انجام می‌دهد:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\deploy\deploy-windows.ps1 -AppDir C:\salimvand -Branch arena/01a0dd70-salimvand
+```
+
+روی سروری که هنوز هیچ پوشه‌ای ندارد، اسکریپت را مستقیماً از گیت‌هاب اجرا کنید:
+
+```powershell
+powershell -ExecutionPolicy Bypass -Command "iwr https://raw.githubusercontent.com/khodehydro/salimvand/arena/01a0dd70-salimvand/deploy/deploy-windows.ps1 -OutFile $env:TEMP\deploy.ps1; & $env:TEMP\deploy.ps1 -AppDir C:\salimvand -Branch arena/01a0dd70-salimvand -InstallPrerequisites"
+```
+
+نکته‌ها:
+
+- بار اول `.env` از `.env.example` ساخته می‌شود و اسکریپت با کد `2` متوقف می‌شود تا مقادیر واقعی
+  (`DATABASE_URL`, `REDIS_URL`, دو Secret طولانی JWT, `APP_URL`, `ADMIN_URL`, `CORS_ORIGINS`,
+  `PUBLIC_SITE_URL`) را پر کنید؛ سپس همان فرمان دوباره اجرا شود.
+- اگر `pm2` نصب باشد، سه سرویس `salimvand-api`، `salimvand-website` و `salimvand-worker` با آن
+  مدیریت و با `pm2 save` ماندگار می‌شوند؛ در غیر این صورت با `Start-Process` بالا می‌آیند و PID
+  آن‌ها در `C:\salimvand\.pids` نوشته می‌شود. برای Production ویندوزی، نصب pm2
+  (`npm i -g pm2`) یا تعریف سرویس با NSSM توصیه می‌شود.
+- Migrationها با `prisma migrate deploy` اجرا می‌شوند؛ ستون سبدها (`inventory_items.basketId`)
+  و نوع محل `basket` هم با همین Migration روی دیتابیس موجود اعمال می‌شود و نیازی به ساخت مجدد
+  دیتابیس نیست.
+- پارامتر `-SkipRestart` فقط دریافت و Build را انجام می‌دهد (برای زمانی که می‌خواهید خودتان
+  سرویس‌ها را ری‌استارت کنید).
+
 ## Smoke Check پس از Deploy
 
 برای بررسی مستقل سلامت سرویس‌ها روی VPS:

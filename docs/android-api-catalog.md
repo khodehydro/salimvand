@@ -105,7 +105,11 @@ GET /inventory/items?status=low
 GET /inventory/items?status=out
 ```
 
-هر ردیف شامل اطلاعات محصول، دسته، برند، بارکد، تعداد، قیمت خرید، قیمت فروش، مکان و قفسه است.
+هر ردیف شامل اطلاعات محصول، دسته، برند، بارکد، تعداد، قیمت خرید، قیمت فروش، قفسه و سبد است.
+
+فیلتر `locationId` با درخت مکان هماهنگ است: اگر شناسهٔ یک **قفسه** باشد، کالاهای داخل سبدهای همان
+قفسه هم برمی‌گردند؛ اگر شناسهٔ یک **سبد** باشد، فقط کالاهای داخل همان سبد برمی‌گردند؛ و اگر
+شناسهٔ یک **انبار** باشد، همهٔ قفسه‌ها و سبدهای آن انبار پوشش داده می‌شود.
 
 ### دریافت مشخصات یک محصول
 
@@ -201,7 +205,7 @@ POST /sync/operations
 }
 ```
 
-### انتقال به قفسه
+### انتقال به قفسه / سبد
 
 ```json
 {
@@ -210,12 +214,17 @@ POST /sync/operations
   "type": "inventory.transfer",
   "payload": {
     "itemId": "inventory-item-id",
-    "locationId": "destination-location-id"
+    "locationId": "destination-shelf-id",
+    "basketId": "destination-basket-id"
   }
 }
 ```
 
-### لیست قفسه‌ها و مکان‌ها
+`basketId` اختیاری است و باید یکی از سبدهای همان قفسهٔ مقصد باشد؛ در غیر این صورت عملیات با
+خطای ۴۰۰ «سبد انتخاب‌شده متعلق به این قفسه نیست» رد می‌شود. حذف فیلد = حفظ سبد قبلی؛ ارسال
+`null` = انتقال فقط به قفسه (بدون سبد).
+
+### لیست قفسه‌ها و سبدها (مکان‌ها)
 
 ```http
 GET /sync/bootstrap
@@ -225,12 +234,24 @@ GET /sync/bootstrap
 `brands`، `products` (با `imageUrl`)، `inventory` و **`customers`** — ۱۰۰ مشتری اخیر با آدرس/توضیحات
 (همان شکل payload سمت pull) تا picker مشتری در اولین لاگین بدون درخواست اضافه پر شود.
 
+درخت مکان‌ها دقیقاً سه سطح دارد و هر کالا **قفسه و سبد خودش** را دارد:
+
+```text
+انبار (warehouse)      ← parentId = null
+  └ قفسه (shelf)       ← parentId = انبار
+      └ سبد (basket)   ← parentId = قفسه
+```
+
+`InventoryItem.locationId` همیشه قفسه است و `InventoryItem.basketId` سبدِ همان قفسه (`null` یعنی
+کالا مستقیماً روی قفسه است). برای نمایش آدرس کامل یک قلم، نام سه سطح را با « · » کنار هم بگذارید:
+«انبار اصلی · A-03 · سبد ۲».
+
 در هر Location این اطلاعات موجود است:
 
 ```text
 id
 parentId
-type
+type      ← warehouse | aisle | shelf | level | box | basket
 code
 name
 ```
@@ -491,6 +512,7 @@ POST /sync/operations
         "salePrice": "2450000",
         "minStock": 3,
         "locationId": "location-id-or-null",
+        "basketId": "basket-id-or-null",
         "initialQuantity": 10
       },
       {
@@ -554,6 +576,7 @@ POST /sync/operations
       "salePrice": "2500000",
       "minStock": 5,
       "locationId": "location-id",
+      "basketId": "basket-id-or-null",
       "barcode": "6261234567890",
       "brandId": "brand-id"
     }
@@ -576,6 +599,7 @@ POST /sync/operations
     "salePrice": "2500000",
     "minStock": 5,
     "locationId": "location-id",
+    "basketId": "basket-id-or-null",
     "barcode": "6261234567890",
     "brandId": "brand-id",
     "notes": "یادداشت اختیاری"
@@ -606,7 +630,7 @@ POST /sync/operations
 | ------------------- | --------------------------- | ------------------------------------------ |
 | دریافت موجودی       | `inventory.receive`         | تراکنش موجودی                              |
 | اصلاح موجودی        | `inventory.adjust`          | تراکنش موجودی                              |
-| انتقال قفسه         | `inventory.transfer`        | تراکنش انتقال                              |
+| انتقال قفسه/سبد     | `inventory.transfer`        | تراکنش انتقال                              |
 | ویرایش metadata قلم | `inventory.update_metadata` | قلم به‌روزشده                              |
 | ایجاد فاکتور        | `invoice.create`            | فاکتور رسمی                                |
 | پرداخت فاکتور       | `invoice.pay`               | پرداخت                                     |
@@ -705,11 +729,16 @@ deleted  → رکورد را با entityId از cache حذف کن
   "salePrice": "2450000",
   "minStock": 3,
   "locationId": "location-id-or-null",
+  "basketId": "basket-id-or-null",
   "isActive": true,
   "priceUpdatedAt": "2026-09-18T08:30:00.000Z",
   "priceUpdatedAtJalali": "۱۴۰۵/۰۶/۲۷"
 }
 ```
+
+`basketId` سبد (ظرف) این قلم در همان قفسه است؛ `null` یعنی کالا روی خود قفسه است. بعد از pull،
+`basketId` را همان‌طور در کش محلی نگه دارید و برای نمایش آدرس، نام قفسه و سبد را از `locations`
+در Bootstrap بخوانید.
 
 `priceUpdatedAt` تاریخ اعمال قیمت فروش فعلی است (ISO یا `null` اگر از زمان فعال‌شدن این قابلیت
 قیمت تغییر نکرده باشد) و `priceUpdatedAtJalali` همان تاریخ با تقویم شمسی — برای بج «قیمت از»

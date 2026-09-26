@@ -66,7 +66,9 @@ export async function resolvePlacement(
     const basket = await tx.location.findUnique({ where: { id: basketId } });
     if (!basket) throw new BadRequestException('سبد انتخاب‌شده پیدا نشد');
     if (!isBasketType(basket.type))
-      throw new BadRequestException('محل انتخاب‌شده برای سبد معتبر نیست — فقط سبدهای داخل قفسه قابل انتخاب است');
+      throw new BadRequestException(
+        'محل انتخاب‌شده برای سبد معتبر نیست — فقط سبدهای داخل قفسه قابل انتخاب است',
+      );
     // A basket always lives inside a shelf; that shelf is the line's shelf.
     if (locationId && locationId !== basket.parentId)
       throw new BadRequestException('سبد انتخاب‌شده متعلق به این قفسه نیست');

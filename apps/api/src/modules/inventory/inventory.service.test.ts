@@ -637,3 +637,57 @@ describe('InventoryService placement (قفسه + سبد)', () => {
     );
   });
 });
+
+describe('InventoryService.list location scope (قفسه + سبدها)', () => {
+  const makeListService = (type: 'warehouse' | 'shelf' | 'basket' | null) => {
+    const findMany = vi.fn().mockResolvedValue([]);
+    const prisma = {
+      inventoryItem: { findMany },
+      location: { findUnique: vi.fn().mockResolvedValue(type ? { id: 'loc-1', type } : null) },
+    };
+    return { service: new InventoryService(prisma as never), findMany, prisma };
+  };
+
+  it('a shelf filter also returns the parts inside its baskets', async () => {
+    const { service, findMany } = makeListService('shelf');
+    await service.list({ locationId: 'loc-1' });
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          OR: [{ locationId: 'loc-1' }, { basket: { parentId: 'loc-1' } }],
+        }),
+      }),
+    );
+  });
+
+  it('a basket filter returns only the parts filed in that basket', async () => {
+    const { service, findMany } = makeListService('basket');
+    await service.list({ locationId: 'loc-1' });
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ basketId: 'loc-1' }) }),
+    );
+  });
+
+  it('a warehouse filter walks down to shelves and baskets', async () => {
+    const { service, findMany } = makeListService('warehouse');
+    await service.list({ locationId: 'loc-1' });
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          OR: [
+            { location: { parentId: 'loc-1' } },
+            { basket: { parent: { parentId: 'loc-1' } } },
+          ],
+        }),
+      }),
+    );
+  });
+
+  it('an unknown id falls back to the plain shelf column', async () => {
+    const { service, findMany } = makeListService(null);
+    await service.list({ locationId: 'loc-1' });
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ locationId: 'loc-1' }) }),
+    );
+  });
+});

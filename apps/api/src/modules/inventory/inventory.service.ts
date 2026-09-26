@@ -86,7 +86,9 @@ export class InventoryService {
         isActive: true,
         product: { deletedAt: null },
         ...(filters.brandId ? { brandId: filters.brandId } : {}),
-        ...(filters.locationId ? { locationId: filters.locationId } : {}),
+        // A shelf filter must not hide the parts filed in its baskets: the
+        // scope follows the placement tree, not just the column.
+        ...(filters.locationId ? await this.locationScope(filters.locationId) : {}),
         ...(statusUniverse
           ? {
               id: {
@@ -202,6 +204,25 @@ export class InventoryService {
           quantity: item.quantity,
         };
       }),
+    };
+  }
+
+  /** Scope of `GET /inventory/items?locationId=…`: filtering by a shelf also
+   * returns the parts inside that shelf's baskets, and filtering by a basket
+   * returns only the parts filed in it. */
+  private async locationScope(locationId: string): Promise<Prisma.InventoryItemWhereInput> {
+    const location = await this.prisma.location.findUnique({ where: { id: locationId } });
+    if (!location) return { locationId };
+    if (location.type === 'basket') return { basketId: location.id };
+    if (location.type === 'warehouse')
+      return {
+        OR: [
+          { location: { parentId: location.id } },
+          { basket: { parent: { parentId: location.id } } },
+        ],
+      };
+    return {
+      OR: [{ locationId: location.id }, { basket: { parentId: location.id } }],
     };
   }
 
