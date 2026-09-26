@@ -287,3 +287,38 @@ describe('LocationService', () => {
     await expect(service.remove('nope')).rejects.toBeInstanceOf(NotFoundException);
   });
 });
+
+describe('LocationService.list filters (پیکر قفسه/سبد در اپ)', () => {
+  const makeList = () => {
+    const findMany = vi.fn().mockResolvedValue([]);
+    const prisma = { location: { findMany }, auditLog: { create: vi.fn() } };
+    return { service: new LocationService(prisma as never), findMany };
+  };
+
+  it('returns only the requested level of the tree', async () => {
+    const { service, findMany } = makeList();
+    await service.list({ type: 'basket' });
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { type: 'basket' } }),
+    );
+  });
+
+  it('narrows to the children of one location', async () => {
+    const { service, findMany } = makeList();
+    await service.list({ parentId: 'shelf-1' });
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { parentId: 'shelf-1' } }),
+    );
+  });
+
+  it('rejects an unknown type instead of silently returning nothing', async () => {
+    const { service } = makeList();
+    await expect(service.list({ type: 'garage' })).rejects.toThrow('نوع محل معتبر نیست');
+  });
+
+  it('returns the whole tree when no filter is sent', async () => {
+    const { service, findMany } = makeList();
+    await service.list();
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: {} }));
+  });
+});

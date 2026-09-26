@@ -228,9 +228,11 @@ POST /sync/operations
 
 ```http
 GET /sync/bootstrap
+GET /locations?type=basket&parentId={shelfId}
 ```
 
-از فیلد `data.locations` استفاده شود. علاوه بر آن، bootstrap این بخش‌ها را برمی‌گرداند: `categories`،
+از فیلد `data.locations` استفاده شود. برای ساخت پیکرِ «انتخاب سبد»، می‌توان فقط یک سطح درخت را
+گرفت: `GET /locations?type=shelf` یا `GET /locations?type=basket&parentId=<شناسهٔ قفسه>`. علاوه بر آن، bootstrap این بخش‌ها را برمی‌گرداند: `categories`،
 `brands`، `products` (با `imageUrl`)، `inventory` و **`customers`** — ۱۰۰ مشتری اخیر با آدرس/توضیحات
 (همان شکل payload سمت pull) تا picker مشتری در اولین لاگین بدون درخواست اضافه پر شود.
 

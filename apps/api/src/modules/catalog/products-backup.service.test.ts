@@ -57,6 +57,15 @@ function makeDb() {
                 ) ?? null,
             }
           : null,
+        basket: i.basketId
+          ? {
+              ...db.locations.find((l) => l.id === i.basketId)!,
+              parent:
+                db.locations.find(
+                  (l) => l.id === db.locations.find((x) => x.id === i.basketId)!.parentId,
+                ) ?? null,
+            }
+          : null,
       })),
   });
 
@@ -227,7 +236,9 @@ function makeDb() {
 /** Seeds a two-product shop: nested category, two brands, warehouse+shelf,
  * one vehicle model, images on disk (fake bytes), compat lines, stock lines
  * (one on a shelf, one brandless without a shelf). */
-function seedShop(db: Record<string, Row[]>, uploadDir: string) {
+/** `withBasket` files the first stock line into a سبد so the archive has to
+ * carry a three-level placement (انبار › قفسه › سبد). */
+function seedShop(db: Record<string, Row[]>, uploadDir: string, withBasket = false) {
   const cat = {
     id: randomUUID(),
     parentId: null,
@@ -264,7 +275,31 @@ function seedShop(db: Record<string, Row[]>, uploadDir: string) {
     code: '1.1',
     name: '۱.۱',
   };
+  // Two baskets with the SAME code under different shelves: the exporter must
+  // keep them apart by path, not by code.
+  const basket = {
+    id: randomUUID(),
+    parentId: shelf.id,
+    type: 'basket',
+    code: '2',
+    name: 'سبد ۲',
+  };
+  const otherShelf = {
+    id: randomUUID(),
+    parentId: warehouse.id,
+    type: 'shelf',
+    code: '1.2',
+    name: '۱.۲',
+  };
+  const twinBasket = {
+    id: randomUUID(),
+    parentId: otherShelf.id,
+    type: 'basket',
+    code: '2',
+    name: 'سبد ۲ (قفسهٔ دیگر)',
+  };
   db.locations.push(warehouse, shelf);
+  if (withBasket) db.locations.push(otherShelf, basket, twinBasket);
   const peugeot = { id: randomUUID(), name: 'پژو' };
   const model206 = {
     id: randomUUID(),
@@ -336,6 +371,8 @@ function seedShop(db: Record<string, Row[]>, uploadDir: string) {
       salePrice: BigInt(1850000),
       minStock: 5,
       locationId: shelf.id,
+      // سبد — filed into a bin of that shelf (only in the withBasket fixture).
+      basketId: withBasket ? basket.id : null,
       notes: 'قفسهٔ جلو',
       isActive: true,
       priceUpdatedAt: new Date('2026-09-01T08:30:00Z'),
@@ -355,7 +392,7 @@ function seedShop(db: Record<string, Row[]>, uploadDir: string) {
       priceUpdatedAt: null,
     },
   );
-  return { p1, p2, imgBytes };
+  return { p1, p2, imgBytes, shelf, basket, otherShelf, twinBasket, warehouse };
 }
 
 const uploadDir = mkdtempSync(join(tmpdir(), 'salimvand-backup-test-'));
@@ -552,6 +589,46 @@ describe('ProductsBackupService', () => {
     expect(db.items.find((i) => i.barcode === '1111111111111')!.quantity).toBe(40);
     expect(db.products.find((p) => p.code === '9999')).toBeTruthy();
     expect(db.products).toHaveLength(3);
+  });
+
+  it('restores every سبد: three-level placement survives the round trip', async () => {
+    // Two baskets share the code «2» under different shelves — only the
+    // exported path can tell them apart on restore.
+    const fresh = makeDb();
+    seedShop(fresh.db, uploadDir, true);
+    const backupService = new ProductsBackupService(fresh.prisma as never);
+    const buffer = await backupService.buildBackup();
+
+    const zip = new AdmZip(buffer);
+    const references = JSON.parse(zip.readAsText('references.json'));
+    const exportedBaskets = references.locations.filter((l: Row) => l.type === 'basket');
+    expect(exportedBaskets).toHaveLength(2);
+    const exportedItem = JSON.parse(zip.readAsText('products.json')).find(
+      (p: Row) => p.code === '1001',
+    ).items[0];
+    expect(exportedItem.basketCode).toBe('2');
+    expect(exportedItem.basketPath).toEqual(['1', '1.1', '2']);
+    expect(exportedItem.locationPath).toEqual(['1', '1.1']);
+
+    // Disaster: wipe everything, then restore from the archive.
+    for (const key of Object.keys(fresh.db)) fresh.db[key] = [];
+    const summary = await backupService.importBackup(buffer, 'user-1');
+    expect(summary.errors).toEqual([]);
+
+    const shelf = fresh.db.locations.find((l) => l.code === '1.1')!;
+    const restoredBasket = fresh.db.locations.find(
+      (l) => l.type === 'basket' && l.parentId === shelf.id,
+    )!;
+    expect(restoredBasket).toBeTruthy();
+    expect(restoredBasket.name).toBe('سبد ۲');
+    // Both same-coded baskets came back, each under its own shelf.
+    const baskets = fresh.db.locations.filter((l) => l.type === 'basket');
+    expect(baskets).toHaveLength(2);
+    expect(new Set(baskets.map((b) => b.parentId)).size).toBe(2);
+    // The stock line is filed back into the right bin of the right shelf.
+    const item = fresh.db.items.find((i) => i.barcode === '1111111111111')!;
+    expect(item.locationId).toBe(shelf.id);
+    expect(item.basketId).toBe(restoredBasket.id);
   });
 
   it('rejects non-zip payloads and archives with a wrong manifest', async () => {

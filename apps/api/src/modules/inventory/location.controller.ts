@@ -1,4 +1,15 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
 import { RolesGuard } from '../../common/auth/roles.guard';
@@ -16,8 +27,8 @@ export class LocationController {
   // the list, but creating/renaming/deleting locations stays a manager task.
   @Roles('manager', 'warehouse')
   @Get()
-  list() {
-    return this.locations.list();
+  list(@Query('type') type?: string, @Query('parentId') parentId?: string) {
+    return this.locations.list({ type, parentId });
   }
   @Post() create(
     @Body() body: { name?: string; code?: string; type?: string; parentId?: string },

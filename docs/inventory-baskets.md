@@ -44,6 +44,7 @@ Migration: `apps/api/prisma/migrations/20260926000000_inventory_baskets/migratio
 | --------------------------------------- | ------------------------------------------------------------------------------------------- |
 | `GET /locations`                        | هر گره علاوه بر فرزندان، تعداد اقلامِ سبدی را هم برمی‌گرداند                                |
 | `POST/PATCH/DELETE /locations`          | نوع `basket` پذیرفته و اعتبارسنجی می‌شود                                                    |
+| `GET /locations?type=basket&parentId=…` | فقط یک سطح درخت (مثلاً سبدهای یک قفسه) — برای پیکرها                                        |
 | `POST /inventory/items`                 | `basketId` اختیاری                                                                          |
 | `PATCH /inventory/items/:id`            | `basketId` اختیاری (`null` = پاک کردن)                                                      |
 | `POST /inventory/transfer`              | `basketId` مقصد اختیاری                                                                     |

@@ -27,10 +27,20 @@ type LocationInput = {
 export class LocationService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list() {
+  /** `type` and `parentId` filters let a client ask for one level of the tree
+   * (e.g. only the baskets of one shelf for a picker) instead of the whole
+   * placement table. */
+  async list(filters: { type?: string; parentId?: string } = {}) {
+    const type = filters.type?.trim();
+    if (type && !LOCATION_TYPES.includes(type as (typeof LOCATION_TYPES)[number]))
+      throw new BadRequestException('نوع محل معتبر نیست');
     return {
       ok: true,
       data: await this.prisma.location.findMany({
+        where: {
+          ...(type ? { type: type as never } : {}),
+          ...(filters.parentId ? { parentId: filters.parentId } : {}),
+        },
         orderBy: { code: 'asc' },
         include: {
           parent: true,
