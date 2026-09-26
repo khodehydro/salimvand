@@ -26,9 +26,11 @@ type ProductRow = {
     quantity: number;
     minStock?: number | null;
     salePrice: string;
+    purchasePrice?: string;
+    barcode?: string | null;
     brand?: { name: string } | null;
-    location?: { code: string; name: string } | null;
-    basket?: { code: string; name: string } | null;
+    location?: { code: string; name: string; parent?: { name: string } | null } | null;
+    basket?: { code: string; name?: string } | null;
   }>;
 };
 type ProductDetail = {
@@ -126,6 +128,16 @@ export function ProductsPage() {
   const [message, setMessage] = useState('');
   const [draft, setDraft] = useState<ProductDetail | null>(null);
   const [tab, setTab] = useState<Tab>('basic');
+  // Which product cards keep their stock table folded away — a long catalogue
+  // stays scannable when only the rows being worked on are expanded.
+  const [collapsedRows, setCollapsedRows] = useState<Set<string>>(new Set());
+  const toggleRow = (id: string) =>
+    setCollapsedRows((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   const load = () =>
     api<{ data: ProductRow[] }>('/products')
@@ -500,144 +512,228 @@ export function ProductsPage() {
 
       {message && <div className="notice">{message}</div>}
 
-      <div className="product-list product-list-table">
-        <div className="product-list-head" aria-hidden="true">
-          <span>محصول</span>
-          <span>وضعیت و دسته</span>
-          <span>برندها و موجودی</span>
-          <span>عملیات</span>
+      <div className="products-table" role="table" aria-label="فهرست محصولات">
+        {/* سطح ۱ — هر محصول یک سطر با ستون‌های واقعی (عکس، دسته، وضعیت،
+            موجودی کل، عملیات). سطح ۲ — جدول قلم‌های انبار همان محصول با
+            ستون‌های جدا برای قفسه و سبد تا آدرس کامل دیده شود. */}
+        <div className="pt-head" role="row">
+          <span role="columnheader">محصول</span>
+          <span role="columnheader">دسته‌بندی</span>
+          <span role="columnheader">نمایش در سایت</span>
+          <span role="columnheader">موجودی کل</span>
+          <span role="columnheader">عملیات</span>
         </div>
-        {visible.map((product) => (
-          <article
-            className={`product-list-card product-row${totalStock(product) === 0 ? ' is-out' : ''}`}
-            key={product.id}
-          >
-            <div className="product-cell product-main-cell">
-              <span className="product-thumb">
-                {product.images?.[0] ? (
-                  <MediaImage
-                    src={product.images[0].path}
-                    alt={product.images[0].alt ?? product.name}
-                  />
-                ) : (
-                  <span>قطعه</span>
-                )}
-              </span>
-              <div className="plc-info">
-                <b>{product.name}</b>
-                <small dir="ltr">
-                  {product.code}
-                  {product.partNumber ? ` · ${product.partNumber}` : ''}
-                </small>
-              </div>
-            </div>
-            <div className="product-cell product-status-cell">
-              <div className="plc-chips">
-                {product.category?.name && <span className="chip">{product.category.name}</span>}
-                <button
-                  type="button"
-                  className={`catalog-switch ${product.status === 'active' ? 'on' : ''}`}
-                  role="switch"
-                  aria-checked={product.status === 'active'}
-                  title="نمایش محصول برای کاربران عمومی سایت"
-                  onClick={async () => {
-                    try {
-                      await api(`/products/${product.id}`, {
-                        method: 'PATCH',
-                        body: JSON.stringify({
-                          status: product.status === 'active' ? 'hidden' : 'active',
-                        }),
-                      });
-                      setMessage(
-                        product.status === 'active'
-                          ? 'نمایش محصول در سایت غیرفعال شد.'
-                          : 'نمایش محصول در سایت فعال شد.',
-                      );
-                      await load();
-                    } catch (error) {
-                      setMessage((error as Error).message);
-                    }
-                  }}
-                >
-                  <span /> {product.status === 'active' ? 'نمایش در سایت' : 'مخفی از سایت'}
-                </button>
-                {vehicleOptions.length > 0 && product.compatibilities?.length ? (
-                  <span className="chip vehicle-chip">
-                    {product.compatibilities.length.toLocaleString('fa-IR')} خودرو
+        {visible.map((product) => {
+          const stock = totalStock(product);
+          const items = product.inventoryItems ?? [];
+          const lowStock = items.some(
+            (entry) => entry.minStock != null && entry.quantity < entry.minStock,
+          );
+          const collapsed = collapsedRows.has(product.id);
+          return (
+            <article className={`pt-card${stock === 0 ? ' is-out' : ''}`} key={product.id}>
+              <div className="pt-row" role="row">
+                <div className="pt-cell pt-product" role="cell" data-label="محصول">
+                  <span className="product-thumb">
+                    {product.images?.[0] ? (
+                      <MediaImage
+                        src={product.images[0].path}
+                        alt={product.images[0].alt ?? product.name}
+                      />
+                    ) : (
+                      <span>قطعه</span>
+                    )}
                   </span>
-                ) : null}
-              </div>
-            </div>
-            <div className="product-cell product-stock-cell">
-              {product.inventoryItems?.length ? (
-                product.inventoryItems.map((entry) => (
-                  <div className="plc-brand" key={entry.id}>
-                    <span
-                      className="brand-name"
-                      title={
-                        entry.location || entry.basket ? placementChip(entry) : undefined
-                      }
-                    >
-                      {entry.brand?.name ?? 'بدون برند'} · {formatRial(Number(entry.salePrice))}
-                      {entry.location || entry.basket ? (
-                        <small> · {placementChip(entry)}</small>
+                  <span className="pt-info">
+                    <b title={product.name}>{product.name}</b>
+                    <small dir="ltr">
+                      {product.code}
+                      {product.partNumber ? ` · ${product.partNumber}` : ''}
+                    </small>
+                    <span className="pt-meta-chips">
+                      {vehicleOptions.length > 0 && product.compatibilities?.length ? (
+                        <span className="chip vehicle-chip">
+                          {product.compatibilities.length.toLocaleString('fa-IR')} خودرو
+                        </span>
+                      ) : null}
+                      {items.length ? (
+                        <button
+                          type="button"
+                          className="pt-collapse"
+                          aria-expanded={!collapsed}
+                          onClick={() => toggleRow(product.id)}
+                        >
+                          {collapsed ? '▸' : '▾'} {items.length.toLocaleString('fa-IR')} قلم انبار
+                        </button>
                       ) : null}
                     </span>
-                    <StockStepper
-                      itemId={entry.id}
-                      quantity={entry.quantity}
-                      onMessage={setMessage}
-                      onSaved={() => void load()}
-                    />
-                  </div>
-                ))
-              ) : (
-                <span className="muted">قلم انباری ثبت نشده</span>
+                  </span>
+                </div>
+                <div className="pt-cell pt-category" role="cell" data-label="دسته‌بندی">
+                  <span className="chip">{product.category?.name ?? 'بدون دسته'}</span>
+                </div>
+                <div className="pt-cell pt-status" role="cell" data-label="نمایش در سایت">
+                  <button
+                    type="button"
+                    className={`catalog-switch ${product.status === 'active' ? 'on' : ''}`}
+                    role="switch"
+                    aria-checked={product.status === 'active'}
+                    title="نمایش محصول برای کاربران عمومی سایت"
+                    onClick={async () => {
+                      try {
+                        await api(`/products/${product.id}`, {
+                          method: 'PATCH',
+                          body: JSON.stringify({
+                            status: product.status === 'active' ? 'hidden' : 'active',
+                          }),
+                        });
+                        setMessage(
+                          product.status === 'active'
+                            ? 'نمایش محصول در سایت غیرفعال شد.'
+                            : 'نمایش محصول در سایت فعال شد.',
+                        );
+                        await load();
+                      } catch (error) {
+                        setMessage((error as Error).message);
+                      }
+                    }}
+                  >
+                    <span aria-hidden="true" />
+                    <span className="pt-switch-text">
+                      {product.status === 'active' ? 'فعال' : 'غیرفعال'}
+                    </span>
+                  </button>
+                </div>
+                <div className="pt-cell pt-total" role="cell" data-label="موجودی کل">
+                  <b className={stock === 0 ? 'pt-stock-empty' : undefined}>
+                    {stock.toLocaleString('fa-IR')}
+                  </b>
+                  {stock === 0 ? (
+                    <small className="pt-warn">ناموجود</small>
+                  ) : lowStock ? (
+                    <small className="pt-warn">کمتر از حداقل</small>
+                  ) : null}
+                </div>
+                <div className="pt-cell pt-actions" role="cell" data-label="عملیات">
+                  <button className="row-action" onClick={() => openEditor(product.id)}>
+                    ویرایش
+                  </button>
+                  <a
+                    className="row-action"
+                    href={`${publicSiteUrl}/product/${encodeURIComponent(product.slug)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    سایت
+                  </a>
+                  <button
+                    className="row-action"
+                    title="ساخت برچسب برای این محصول"
+                    onClick={() => {
+                      window.location.hash = hashForPage('labels', { product: product.id });
+                    }}
+                  >
+                    برچسب
+                  </button>
+                  <button
+                    className="row-action danger-text"
+                    onClick={async () => {
+                      if (!window.confirm('محصول حذف نرم شود؟ از سایت پنهان می‌شود.')) return;
+                      try {
+                        await api(`/products/${product.id}`, { method: 'DELETE' });
+                        setMessage('محصول حذف نرم شد.');
+                        await load();
+                      } catch (error) {
+                        setMessage((error as Error).message);
+                      }
+                    }}
+                  >
+                    حذف
+                  </button>
+                </div>
+              </div>
+
+              {!collapsed && (
+                <div
+                  className="pt-items"
+                  role="table"
+                  aria-label={`قلم‌های انبارِ ${product.name}`}
+                >
+                  {items.length ? (
+                    <>
+                      <div className="pt-items-head" role="row">
+                        <span role="columnheader">برند و بارکد</span>
+                        <span role="columnheader" className="pt-col-buy">
+                          قیمت خرید
+                        </span>
+                        <span role="columnheader">قیمت فروش</span>
+                        <span role="columnheader">موجودی</span>
+                        <span role="columnheader">قفسه</span>
+                        <span role="columnheader">سبد</span>
+                      </div>
+                      {items.map((entry) => (
+                        <div className="pt-item" role="row" key={entry.id}>
+                          <span className="pt-item-brand" role="cell" data-label="برند و بارکد">
+                            <b>{entry.brand?.name ?? 'بدون برند'}</b>
+                            {entry.barcode ? (
+                              <small dir="ltr">{entry.barcode}</small>
+                            ) : (
+                              <small className="pt-dash">بدون بارکد</small>
+                            )}
+                          </span>
+                          <span className="pt-num pt-col-buy" role="cell" data-label="قیمت خرید">
+                            {formatRial(Number(entry.purchasePrice ?? 0))}
+                          </span>
+                          <span className="pt-num pt-sale" role="cell" data-label="قیمت فروش">
+                            {formatRial(Number(entry.salePrice))}
+                          </span>
+                          <span className="pt-item-qty" role="cell" data-label="موجودی">
+                            <StockStepper
+                              itemId={entry.id}
+                              quantity={entry.quantity}
+                              onMessage={setMessage}
+                              onSaved={() => void load()}
+                            />
+                            {entry.minStock != null && entry.quantity < entry.minStock ? (
+                              <small className="pt-warn">
+                                حداقل {entry.minStock.toLocaleString('fa-IR')}
+                              </small>
+                            ) : null}
+                          </span>
+                          {/* قفسه و سبد دو ستون جدا هستند تا آدرس کامل قطعه
+                              (انبار · قفسه · سبد) هیچ‌وقت بریده نشود. */}
+                          <span className="pt-item-place" role="cell" data-label="قفسه">
+                            {entry.location ? (
+                              <span className="place-chip" title={locationLabel(entry.location)}>
+                                {locationChip(entry.location)}
+                              </span>
+                            ) : (
+                              <span className="pt-dash">تعیین نشده</span>
+                            )}
+                          </span>
+                          <span className="pt-item-place" role="cell" data-label="سبد">
+                            {entry.basket ? (
+                              <span className="place-chip is-basket">
+                                {basketLabel(entry.basket)}
+                              </span>
+                            ) : (
+                              <span className="pt-dash">ندارد</span>
+                            )}
+                          </span>
+                        </div>
+                      ))}
+                    </>
+                  ) : (
+                    <p className="pt-items-empty muted">
+                      برای این محصول هنوز قلم انباری (برند/قیمت) ثبت نشده است.
+                    </p>
+                  )}
+                </div>
               )}
-              <span className="plc-total">
-                جمع قطعات: <b>{totalStock(product).toLocaleString('fa-IR')}</b>
-              </span>
-            </div>
-            <div className="product-cell product-actions-cell">
-              <button className="row-action" onClick={() => openEditor(product.id)}>
-                ویرایش
-              </button>
-              <a
-                className="row-action"
-                href={`${publicSiteUrl}/product/${encodeURIComponent(product.slug)}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                سایت
-              </a>
-              <button
-                className="row-action"
-                title="ساخت برچسب برای این محصول"
-                onClick={() => {
-                  window.location.hash = hashForPage('labels', { product: product.id });
-                }}
-              >
-                برچسب
-              </button>
-              <button
-                className="row-action danger-text"
-                onClick={async () => {
-                  if (!window.confirm('محصول حذف نرم شود؟ از سایت پنهان می‌شود.')) return;
-                  try {
-                    await api(`/products/${product.id}`, { method: 'DELETE' });
-                    setMessage('محصول حذف نرم شد.');
-                    await load();
-                  } catch (error) {
-                    setMessage((error as Error).message);
-                  }
-                }}
-              >
-                حذف
-              </button>
-            </div>
-          </article>
-        ))}
-        {!visible.length && <p className="muted">محصولی یافت نشد.</p>}
+            </article>
+          );
+        })}
+        {!visible.length && <p className="muted pt-empty">محصولی یافت نشد.</p>}
       </div>
 
       {draft && (
@@ -1471,7 +1567,11 @@ function ProductEditor({
                               <option disabled>در حال بارگذاری قفسه‌ها...</option>
                             )}
                           </select>
-                          {!shelves.length && <small className="muted">قفسه‌ای یافت نشد — از تب انبار → قفسه‌ها و سبدها، قفسه بسازید</small>}
+                          {!shelves.length && (
+                            <small className="muted">
+                              قفسه‌ای یافت نشد — از تب انبار → قفسه‌ها و سبدها، قفسه بسازید
+                            </small>
+                          )}
                         </label>
                         <label>
                           سبد (اختیاری)
@@ -1589,7 +1689,11 @@ function ProductEditor({
                       <option disabled>در حال بارگذاری قفسه‌ها...</option>
                     )}
                   </select>
-                  {!shelves.length && <small className="muted">قفسه‌ای یافت نشد — از تب انبار → قفسه‌ها و سبدها، قفسه بسازید</small>}
+                  {!shelves.length && (
+                    <small className="muted">
+                      قفسه‌ای یافت نشد — از تب انبار → قفسه‌ها و سبدها، قفسه بسازید
+                    </small>
+                  )}
                 </label>
                 <label>
                   سبد (اختیاری)

@@ -3107,24 +3107,6 @@ body,
   flex: 1;
   min-width: 220px;
 }
-.product-list {
-  display: grid;
-  gap: 10px;
-}
-.product-list-card {
-  background: var(--sv-surface);
-  border: 1px solid var(--sv-border);
-  border-radius: 14px;
-  padding: 14px 16px;
-  display: grid;
-  gap: 10px;
-}
-.plc-main {
-  display: grid;
-  grid-template-columns: 56px 1fr auto;
-  gap: 12px;
-  align-items: center;
-}
 .product-thumb {
   width: 56px;
   height: 56px;
@@ -3145,20 +3127,6 @@ body,
 .product-thumb.placeholder {
   color: var(--sv-text-3);
   font-size: 11px;
-}
-.plc-info {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-.plc-info b {
-  font-size: 14px;
-}
-.plc-info small {
-  color: var(--sv-text-3);
-  font-size: 11px;
-  direction: ltr;
-  text-align: right;
 }
 .plc-chips {
   display: flex;
@@ -3189,39 +3157,6 @@ body,
   background: var(--sv-brand-100);
   color: var(--sv-link);
   border-color: transparent;
-}
-.plc-actions {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-.plc-stock {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 18px;
-  align-items: center;
-  border-top: 1px dashed var(--sv-border);
-  padding-top: 10px;
-}
-.plc-brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.plc-brand .brand-name {
-  font-size: 12px;
-  color: var(--sv-text-2);
-  white-space: nowrap;
-}
-.plc-brand .brand-name small {
-  color: var(--sv-text-3);
-}
-.plc-total {
-  margin-right: auto;
-  color: var(--sv-text-3);
-  font-size: 12px;
 }
 
 /* ============================================================
@@ -3389,16 +3324,6 @@ body,
    editor dialog fills the screen and its footer buttons stretch.
    ============================================================ */
 @media (max-width: 700px) {
-  .plc-main {
-    grid-template-columns: 56px 1fr;
-  }
-  .plc-actions {
-    grid-column: 1 / -1;
-    justify-content: flex-start;
-  }
-  .plc-stock {
-    gap: 8px 12px;
-  }
   .inventory-row {
     grid-template-columns: 1fr auto;
   }
@@ -6200,189 +6125,273 @@ button.btn-primary-lg:hover:not(:disabled) {
   width: 100%;
   max-width: none;
 }
-.product-list-table {
+
+/* ── فهرست محصولات: دو جدول ستون‌بندی‌شده ──────────────────────────────
+   (.products-table فقط مخصوص همین صفحه است؛ .product-table عمومی است و
+   در صفحات مشتریان، فاکتورها، پیام‌ها و … هم به کار می‌رود.) ──────────
+   سطح ۱ — یک سطر برای هر محصول (محصول · دسته‌بندی · نمایش در سایت ·
+   موجودی کل · عملیات). سطح ۲ — جدول قلم‌های انبار همان محصول با ستون‌های
+   جداگانه برای برند، قیمت‌ها، موجودی، قفسه و سبد؛ جدا بودن قفسه و سبد
+   باعث می‌شود آدرس کامل قطعه هیچ‌وقت بریده نشود. */
+.products-table {
   display: block;
   overflow: hidden;
   background: var(--sv-surface);
   border: 1px solid var(--sv-border);
   border-radius: var(--sv-radius-card);
 }
-.product-list-head {
+.pt-head,
+.pt-row {
   display: grid;
-  grid-template-columns: minmax(240px, 1.4fr) minmax(130px, .8fr) minmax(260px, 1.4fr) minmax(170px, .8fr);
-  gap: 14px;
-  padding: 10px 16px;
+  grid-template-columns:
+    minmax(240px, 1.9fr) minmax(120px, 0.75fr) minmax(130px, 0.85fr)
+    minmax(90px, 0.6fr) minmax(160px, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+.pt-head {
+  padding: 9px 16px;
   background: var(--sv-surface-2);
   border-bottom: 1px solid var(--sv-border);
   color: var(--sv-text-3);
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
 }
-.product-list-table .product-row {
-  display: grid;
-  gap: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
+.pt-card {
   border-bottom: 1px solid var(--sv-border);
-  box-shadow: none;
+  background: var(--sv-surface);
 }
-.product-list-table .product-row:last-of-type {
+.pt-card:last-of-type {
   border-bottom: 0;
 }
-.product-list-table .plc-main,
-.product-list-table .plc-stock {
-  padding: 12px 16px;
+.pt-row {
+  padding: 10px 16px;
 }
-.product-list-table .plc-main {
-  grid-template-columns: 52px minmax(200px, 1fr) minmax(170px, auto);
-  align-items: center;
-  gap: 14px;
-}
-.product-list-table .plc-actions {
-  justify-content: flex-start;
-}
-.product-list-table .plc-stock {
-  display: flex;
-  align-items: center;
-  gap: 8px 14px;
-  padding-top: 0;
-  background: var(--sv-surface-2);
-  border-top: 1px solid var(--sv-border);
-}
-.product-list-table .plc-brand {
-  padding: 0;
-}
-@media (max-width: 900px) {
-  .product-list-head {
-    display: none;
-  }
-  .product-list-table .plc-main {
-    grid-template-columns: 52px 1fr auto;
-  }
-  .product-list-table .plc-info .plc-chips {
-    display: flex;
-  }
-  .product-list-table .plc-stock {
-    flex-wrap: wrap;
-    padding: 8px 16px;
-  }
-}
-@media (max-width: 700px) {
-  .product-filter-toolbar {
-    align-items: stretch;
-  }
-  .product-list-table .plc-main {
-    grid-template-columns: 44px 1fr;
-    gap: 10px;
-  }
-  .product-list-table .plc-actions {
-    grid-column: 1 / -1;
-    justify-content: flex-start;
-  }
-}
-
-/* Product list rows use one grid with real columns. Keeping the four cells at
-   the row root prevents status, stock and actions from drifting underneath
-   the product name. */
-.product-list-table .product-row {
-  grid-template-columns: minmax(280px, 1.35fr) minmax(150px, .8fr) minmax(250px, 1.35fr) minmax(190px, .9fr);
-  align-items: center;
-}
-.product-list-table .product-cell {
+.pt-cell {
   min-width: 0;
-  padding: 12px 16px;
-}
-.product-main-cell {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+}
+.pt-product {
   gap: 12px;
 }
-.product-main-cell .plc-info {
+.pt-product .product-thumb {
+  flex: 0 0 auto;
+}
+.pt-info {
   min-width: 0;
   display: grid;
-  gap: 4px;
+  gap: 3px;
 }
-.product-main-cell .plc-info b {
+.pt-info b {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.product-main-cell .plc-info small {
+.pt-info small {
   color: var(--sv-text-3);
   font-family: ui-monospace, monospace;
-  direction: ltr;
+  font-size: 11px;
 }
-.product-status-cell {
-  border-inline-start: 1px solid var(--sv-border);
-}
-.product-status-cell .plc-chips {
-  justify-content: flex-start;
-}
-.product-stock-cell {
-  display: grid;
-  gap: 6px;
-  border-inline-start: 1px solid var(--sv-border);
-}
-.product-stock-cell .plc-brand {
+.pt-meta-chips {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  min-width: 0;
-  padding: 0;
+  flex-wrap: wrap;
+  gap: 6px;
 }
-.product-stock-cell .brand-name {
+/* باز/بسته کردن جدول قلم‌ها — فهرست‌های طولانی قابل اسکن می‌مانند. */
+.pt-collapse {
+  border: 1px solid var(--sv-border);
+  background: var(--sv-surface-2);
+  color: var(--sv-text-2);
+  border-radius: 999px;
+  padding: 2px 9px;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.pt-collapse:hover {
+  color: var(--sv-link);
+  border-color: var(--sv-link);
+}
+.pt-status .catalog-switch {
+  gap: 7px;
+}
+.pt-switch-text {
+  font-size: 11.5px;
+}
+.pt-total b {
+  font-size: 15px;
+}
+.pt-total .pt-stock-empty {
+  color: var(--sv-danger);
+}
+.pt-warn {
+  color: var(--sv-warn);
+  font-size: 10.5px;
+  font-weight: 700;
+}
+.pt-actions {
+  gap: 6px;
+}
+.pt-actions .row-action {
+  padding: 6px 10px;
+}
+
+/* سطح ۲ — قلم‌های انبار */
+.pt-items {
+  border-top: 1px solid var(--sv-border);
+  background: var(--sv-surface-2);
+}
+.pt-items-head,
+.pt-item {
+  display: grid;
+  grid-template-columns:
+    minmax(140px, 1.2fr) minmax(105px, 0.75fr) minmax(115px, 0.85fr)
+    minmax(120px, 0.9fr) minmax(115px, 1fr) minmax(85px, 0.7fr);
+  gap: 12px;
+  align-items: center;
+  padding: 8px 16px;
+}
+.pt-items-head {
+  color: var(--sv-text-3);
+  font-size: 10.5px;
+  font-weight: 700;
+  border-bottom: 1px solid var(--sv-border);
+  background: var(--sv-surface-3);
+}
+.pt-item {
+  border-bottom: 1px solid var(--sv-border);
+  font-size: 12px;
+}
+.pt-item:last-child {
+  border-bottom: 0;
+}
+.pt-item:hover {
+  background: color-mix(in srgb, var(--sv-link) 5%, transparent);
+}
+.pt-item-brand {
   min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.pt-item-brand b {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.product-stock-cell .brand-name small {
+.pt-item-brand small {
   color: var(--sv-text-3);
+  font-family: ui-monospace, monospace;
   font-size: 10px;
+  direction: ltr;
 }
-.product-stock-cell .plc-total {
+.pt-num {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.pt-sale {
+  font-weight: 700;
+}
+.pt-item-qty {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.pt-item-place {
+  min-width: 0;
+  display: flex;
+}
+/* آدرس انبار: چیپِ هر سطح در ستون خودش، با متن کامل در title. */
+.place-chip {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: 8px;
+  padding: 3px 8px;
+  background: var(--sv-surface);
+  border: 1px solid var(--sv-border);
   color: var(--sv-text-2);
+  font-size: 11.5px;
+}
+.place-chip.is-basket {
+  background: var(--sv-brand-100);
+  border-color: transparent;
+  color: var(--sv-link);
+  font-weight: 700;
+}
+.pt-dash {
+  color: var(--sv-text-3);
   font-size: 11px;
 }
-.product-actions-cell {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 6px;
+.pt-items-empty {
+  margin: 0;
+  padding: 10px 16px;
+  font-size: 11.5px;
 }
-.product-actions-cell .row-action {
-  padding: 6px 9px;
+.pt-empty {
+  padding: 16px;
+}
+@media (max-width: 1280px) {
+  .pt-col-buy {
+    display: none;
+  }
+  .pt-items-head,
+  .pt-item {
+    grid-template-columns:
+      minmax(130px, 1.2fr) minmax(110px, 0.85fr) minmax(115px, 0.9fr)
+      minmax(110px, 1fr) minmax(85px, 0.7fr);
+  }
 }
 @media (max-width: 1000px) {
-  .product-list-table .product-row {
-    grid-template-columns: minmax(220px, 1.2fr) minmax(125px, .7fr) minmax(190px, 1fr);
+  .pt-head {
+    display: none;
   }
-  .product-actions-cell {
+  .pt-row {
+    grid-template-columns: minmax(0, 1.7fr) minmax(0, 0.8fr) minmax(0, 0.9fr);
+  }
+  .pt-actions {
     grid-column: 1 / -1;
-    border-top: 1px solid var(--sv-border);
+    border-top: 1px dashed var(--sv-border);
     padding-top: 8px;
   }
 }
-@media (max-width: 700px) {
-  .product-list-table .product-row {
+/* موبایل: هر سطر به کارتِ برچسب‌دار تبدیل می‌شود (ستون‌ها می‌روند، برچسب‌ها
+   می‌مانند) تا آدرس قفسه/سبد باز هم کامل دیده شود. */
+@media (max-width: 760px) {
+  .pt-row,
+  .pt-item {
     display: grid;
     grid-template-columns: 1fr;
+    gap: 6px;
+    padding: 10px 14px;
   }
-  .product-list-table .product-cell {
-    border-inline-start: 0;
-    border-bottom: 1px solid var(--sv-border);
-    padding: 10px 12px;
+  .pt-items-head {
+    display: none;
   }
-  .product-list-table .product-cell:last-child {
-    border-bottom: 0;
+  .pt-cell,
+  .pt-item > span {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 8px;
+    padding: 2px 0;
   }
-  .product-status-cell,
-  .product-stock-cell,
-  .product-actions-cell {
-    grid-column: auto;
+  .pt-cell::before,
+  .pt-item > span::before {
+    content: attr(data-label);
+    flex: 0 0 92px;
+    color: var(--sv-text-3);
+    font-size: 10.5px;
+    font-weight: 700;
+  }
+  .pt-item {
+    border-top: 1px dashed var(--sv-border);
   }
 }
 
@@ -8237,7 +8246,7 @@ html[data-theme='dark'] {
 
 /* — موجودی صفر: پس‌زمینهٔ قرمز ملایم کارت (لیست محصولات و لیست انبار) —
    از توکن تم استفاده می‌شود تا در دارک مود هم خوانا بماند. */
-.product-list-card.is-out,
+.pt-card.is-out,
 .inventory-flat-row.is-out {
   background: var(--sv-danger-soft);
   border-color: color-mix(in srgb, var(--sv-danger) 30%, transparent);
