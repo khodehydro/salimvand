@@ -47,24 +47,31 @@ const ZOOMS = [2, 3, 4] as const;
  * labels printed from the locations tree created in «انبار و موجودی». */
 const labelTabs = [
   { id: 'products', label: 'برچسب محصولات', hint: 'بارکد قابل اسکن برای هر کالای انبار' },
-  { id: 'shelves', label: 'برچسب قفسه‌ها', hint: 'نام و کد قفسه‌ها — چاپ و نصب روی قفسه' },
+  {
+    id: 'shelves',
+    label: 'برچسب قفسه‌ها و سبدها',
+    hint: 'نام و کد قفسه‌ها و سبدها — چاپ و نصب روی قفسه',
+  },
 ] as const;
 type LabelTab = (typeof labelTabs)[number]['id'];
 
-/** Raw location node from GET /locations — a two-level tree (warehouses hold
- * shelves); legacy flat locations appear as shelves without a warehouse. */
+/** Raw location node from GET /locations — a three-level tree (warehouses
+ * hold shelves, shelves hold baskets); legacy flat locations appear as
+ * shelves without a warehouse. */
 type LocationNode = {
   id: string;
   name: string;
   code: string;
   type: string;
-  parent?: { name: string } | null;
+  parentId?: string | null;
+  parent?: { id: string; name: string } | null;
   children?: LocationNode[];
-  _count?: { items: number };
+  _count?: { items: number; basketItems?: number };
 };
 
-/** A labelable shelf: any non-warehouse location, flattened with its owning
- * warehouse name so the label and the batch list can show «انبار · قفسه». */
+/** A labelable location: a قفسه (flattened with its owning warehouse) or a
+ * سبد (flattened with its owning shelf). `group` is what the label chip and
+ * the batch list group by — «انبار اصلی» or «قفسه A-03». */
 type ShelfRow = { id: string; name: string; code: string; warehouse: string; items: number };
 
 export function LabelsPage() {
@@ -97,8 +104,11 @@ export function LabelsPage() {
   const [showMeta, setShowMeta] = useState(false);
   const [showFoot, setShowFoot] = useState(true);
   const [count, setCount] = useState('18');
-  // — تب برچسب قفسه‌ها —
+  // — تب برچسب قفسه‌ها و سبدها —
   const [shelves, setShelves] = useState<ShelfRow[]>([]);
+  const [baskets, setBaskets] = useState<ShelfRow[]>([]);
+  /** Which level of the placement tree the label tab is printing. */
+  const [placementKind, setPlacementKind] = useState<'shelf' | 'basket'>('shelf');
   const [shelfFilter, setShelfFilter] = useState('');
   const [selectedShelfId, setSelectedShelfId] = useState('');
   const [shelfName, setShelfName] = useState('');
@@ -142,11 +152,29 @@ export function LabelsPage() {
     // shelf row carrying its warehouse name for the label chip.
     api<{ data: LocationNode[] }>('/locations')
       .then((result) => {
-        const rows: ShelfRow[] = [];
-        const walk = (nodes: LocationNode[], warehouse: string, nested: boolean) => {
+        const shelfRows: ShelfRow[] = [];
+        const basketRows: ShelfRow[] = [];
+        const walk = (
+          nodes: LocationNode[],
+          warehouse: string,
+          shelf: string,
+          nested: boolean,
+        ) => {
           for (const node of nodes) {
             if (node.type === 'warehouse') {
-              walk(node.children ?? [], node.name, true);
+              walk(node.children ?? [], node.name, shelf, true);
+              continue;
+            }
+            if (node.type === 'basket') {
+              // A basket's chip names its shelf («قفسه A-03») so the printed
+              // label reads «سبد ۲ — inside قفسه A-03».
+              basketRows.push({
+                id: node.id,
+                name: node.name,
+                code: node.code,
+                warehouse: shelf ? `قفسه ${shelf}` : '',
+                items: node._count?.basketItems ?? 0,
+              });
               continue;
             }
             // The API returns every location flat at the top level too — a
@@ -154,7 +182,7 @@ export function LabelsPage() {
             // warehouse's children; pushing it again here would print every
             // label twice. Only nested shelves and parentless legacy rows count.
             if (nested || !node.parent) {
-              rows.push({
+              shelfRows.push({
                 id: node.id,
                 name: node.name,
                 code: node.code,
@@ -162,23 +190,24 @@ export function LabelsPage() {
                 items: node._count?.items ?? 0,
               });
             }
-            walk(node.children ?? [], warehouse, true);
+            walk(node.children ?? [], warehouse, node.name, true);
           }
         };
-        walk(result.data, '', false);
+        walk(result.data, '', '', false);
         // Real warehouses first (alphabetically), legacy warehouse-less
         // shelves last — so the first preview and the first optgroup are a
         // proper shelf, not pre-grouping leftovers. numeric:true keeps the
         // shelf.row codes in human order (۱.۱ … ۲.۷ … ۱۰.۱ … ۲۰.۷).
-        rows.sort(
-          (a, b) =>
-            Number(Boolean(b.warehouse)) - Number(Boolean(a.warehouse)) ||
-            a.warehouse.localeCompare(b.warehouse, 'fa') ||
-            a.code.localeCompare(b.code, 'en', { numeric: true }),
-        );
-        setShelves(rows);
-        setPicked(new Set(rows.map((row) => row.id)));
-        if (rows[0]) loadShelf(rows[0]);
+        const byPlacement = (a: ShelfRow, b: ShelfRow) =>
+          Number(Boolean(b.warehouse)) - Number(Boolean(a.warehouse)) ||
+          a.warehouse.localeCompare(b.warehouse, 'fa') ||
+          a.code.localeCompare(b.code, 'en', { numeric: true });
+        shelfRows.sort(byPlacement);
+        basketRows.sort(byPlacement);
+        setShelves(shelfRows);
+        setBaskets(basketRows);
+        setPicked(new Set(shelfRows.map((row) => row.id)));
+        if (shelfRows[0]) loadShelf(shelfRows[0]);
       })
       .catch(() => undefined);
     const onHash = () => {
@@ -205,11 +234,29 @@ export function LabelsPage() {
     setCode(type === 'ean13' ? item.barcode || ean13FromSku(item.sku) : item.sku);
   };
 
-  /** Fills the shelf-label fields from a location row — same one-click start. */
+  /** Fills the shelf/basket label fields from a location row — the same
+   * one-click start for both levels of the placement tree. */
   const loadShelf = (row: ShelfRow) => {
     setSelectedShelfId(row.id);
     setShelfName(row.name);
     setShelfWarehouse(row.warehouse);
+  };
+
+  /** Switches between «قفسه» and «سبد» labels: the preview, the batch list and
+   * the selection all follow the chosen level. */
+  const switchPlacementKind = (kind: 'shelf' | 'basket') => {
+    if (kind === placementKind) return;
+    setPlacementKind(kind);
+    setShelfFilter('');
+    const rows = kind === 'basket' ? baskets : shelves;
+    setPicked(new Set(rows.map((row) => row.id)));
+    const first = rows[0];
+    if (first) loadShelf(first);
+    else {
+      setSelectedShelfId('');
+      setShelfName('');
+      setShelfWarehouse('');
+    }
   };
 
   const filtered = useMemo(() => {
@@ -250,31 +297,35 @@ export function LabelsPage() {
     frame.srcdoc = sheet;
   };
 
-  /* ——— تب برچسب قفسه‌ها ——— */
+  /* ——— تب برچسب قفسه‌ها و سبدها ——— */
+  /** The level being printed — shelves or the baskets inside them. */
+  const placementRows = placementKind === 'basket' ? baskets : shelves;
   const filteredShelves = useMemo(() => {
     const query = shelfFilter.trim().toLocaleLowerCase('fa');
-    if (!query) return shelves;
-    return shelves.filter(
+    if (!query) return placementRows;
+    return placementRows.filter(
       (row) =>
         row.name.toLocaleLowerCase('fa').includes(query) ||
         row.code.toLocaleLowerCase('en').includes(query) ||
         row.warehouse.toLocaleLowerCase('fa').includes(query),
     );
-  }, [shelves, shelfFilter]);
+  }, [placementRows, shelfFilter]);
 
-  /** Shelves grouped by warehouse for the select and the batch checklist. */
+  /** Grouped by warehouse (shelves) or by shelf (baskets) for the select and
+   * the batch checklist. */
   const shelfGroups = useMemo(() => {
     const map = new Map<string, ShelfRow[]>();
     for (const row of filteredShelves) {
-      const key = row.warehouse || 'قفسه‌های بدون انبار';
+      const key =
+        row.warehouse || (placementKind === 'basket' ? 'سبدهای بدون قفسه' : 'قفسه‌های بدون انبار');
       const list = map.get(key);
       if (list) list.push(row);
       else map.set(key, [row]);
     }
     return [...map.entries()];
-  }, [filteredShelves]);
+  }, [filteredShelves, placementKind]);
 
-  const selectedShelf = shelves.find((row) => row.id === selectedShelfId);
+  const selectedShelf = placementRows.find((row) => row.id === selectedShelfId);
   const shelfOptions: ShelfLabelOptions = {
     name: shelfName,
     warehouse: shelfWarehouse,
@@ -285,11 +336,11 @@ export function LabelsPage() {
   };
   const currentShelfHTML = renderShelfLabelHTML(shelfOptions);
 
-  /** One label per picked shelf — هر آدرس یک قفسه است، پس خروجی کلی یعنی
-   * یک برچسب از هر قفسهٔ انتخابی، بدون نسخه‌های تکراری. */
+  /** One label per picked location — هر آدرس یک قفسه/سبد است، پس خروجی کلی
+   * یعنی یک برچسب از هر قفسه یا سبد انتخابی، بدون نسخهٔ تکراری. */
   const pickedShelves = useMemo(
-    () => shelves.filter((row) => picked.has(row.id)),
-    [shelves, picked],
+    () => placementRows.filter((row) => picked.has(row.id)),
+    [placementRows, picked],
   );
   const printShelfBatch = () => {
     if (!pickedShelves.length) return;
@@ -332,10 +383,10 @@ export function LabelsPage() {
 
       <div className="page-title">
         <div>
-          <h1>{tab === 'shelves' ? 'برچسب قفسه‌ها' : 'برچسب محصولات'}</h1>
+          <h1>{tab === 'shelves' ? 'برچسب قفسه‌ها و سبدها' : 'برچسب محصولات'}</h1>
           <p className="muted">
             {tab === 'shelves'
-              ? 'برچسب نام هر قفسه بر اساس انبارها و قفسه‌های تعریف‌شده — چاپ کنید و روی قفسه نصب کنید.'
+              ? 'برچسب نام هر قفسه و هر سبد بر اساس درخت انبار تعریف‌شده — چاپ کنید و روی قفسه یا سبد نصب کنید.'
               : 'برچسب آماده برای هر کالای انبار — با بارکد قابل اسکن، در سه اندازه و سه سبک؛ انتخاب محصول، تعداد و چاپ برگهٔ A4.'}
           </p>
         </div>
@@ -688,7 +739,31 @@ export function LabelsPage() {
               </div>
               <div className="lbl-card-b">
                 <div className="lbl-field">
-                  <label>انتخاب قفسه از انبار</label>
+                  <label>نوع برچسب</label>
+                  <div className="seg lbl-seg">
+                    <button
+                      type="button"
+                      className={placementKind === 'shelf' ? 'on' : ''}
+                      onClick={() => switchPlacementKind('shelf')}
+                    >
+                      قفسه
+                    </button>
+                    <button
+                      type="button"
+                      className={placementKind === 'basket' ? 'on' : ''}
+                      onClick={() => switchPlacementKind('basket')}
+                    >
+                      سبد
+                    </button>
+                  </div>
+                  <small className="lbl-hint">
+                    {placementKind === 'basket'
+                      ? `${persianDigits(baskets.length)} سبد — برچسب هر سبد نام سبد و قفسهٔ آن را نشان می‌دهد`
+                      : `${persianDigits(shelves.length)} قفسه — برچسب هر قفسه نام قفسه و انبار آن را نشان می‌دهد`}
+                  </small>
+                </div>
+                <div className="lbl-field">
+                  <label>{placementKind === 'basket' ? 'انتخاب سبد' : 'انتخاب قفسه از انبار'}</label>
                   <input
                     placeholder="جست‌وجوی نام، کد یا انبار…"
                     value={shelfFilter}
@@ -710,22 +785,28 @@ export function LabelsPage() {
                         ))}
                       </optgroup>
                     ))}
-                    {!shelves.length && <option value="">قفسه‌ای ثبت نشده است</option>}
+                    {!placementRows.length && (
+                      <option value="">
+                        {placementKind === 'basket' ? 'سبدی ثبت نشده است' : 'قفسه‌ای ثبت نشده است'}
+                      </option>
+                    )}
                   </select>
                   {selectedShelf && (
                     <small className="lbl-hint">
-                      {selectedShelf.warehouse || 'بدون انبار'} ·{' '}
-                      {persianDigits(selectedShelf.items)} کالا روی این قفسه
+                      {selectedShelf.warehouse ||
+                        (placementKind === 'basket' ? 'بدون قفسه' : 'بدون انبار')}{' '}
+                      · {persianDigits(selectedShelf.items)} کالا{' '}
+                      {placementKind === 'basket' ? 'در این سبد' : 'روی این قفسه'}
                     </small>
                   )}
                 </div>
 
                 <div className="lbl-field">
-                  <label>نام قفسه</label>
+                  <label>{placementKind === 'basket' ? 'نام سبد' : 'نام قفسه'}</label>
                   <input value={shelfName} onChange={(event) => setShelfName(event.target.value)} />
                 </div>
                 <div className="lbl-field">
-                  <label>انبار / گروه</label>
+                  <label>{placementKind === 'basket' ? 'قفسهٔ سبد' : 'انبار / گروه'}</label>
                   <input
                     value={shelfWarehouse}
                     onChange={(event) => setShelfWarehouse(event.target.value)}
@@ -772,11 +853,13 @@ export function LabelsPage() {
                 <hr className="lbl-hr" />
 
                 <div className="lbl-field">
-                  <label>خروجی کلی — یک برچسب برای هر قفسه</label>
+                  <label>
+                    خروجی کلی — یک برچسب برای هر {placementKind === 'basket' ? 'سبد' : 'قفسه'}
+                  </label>
                   <div className="sl-pick-head">
                     <button
                       type="button"
-                      onClick={() => setPicked(new Set(shelves.map((row) => row.id)))}
+                      onClick={() => setPicked(new Set(placementRows.map((row) => row.id)))}
                     >
                       انتخاب همه
                     </button>
@@ -784,7 +867,8 @@ export function LabelsPage() {
                       پاک کردن
                     </button>
                     <span>
-                      {persianDigits(pickedShelves.length)} از {persianDigits(shelves.length)}
+                      {persianDigits(pickedShelves.length)} از{' '}
+                      {persianDigits(placementRows.length)}
                     </span>
                   </div>
                   <div className="sl-pick-list">
@@ -804,22 +888,25 @@ export function LabelsPage() {
                         ))}
                       </div>
                     ))}
-                    {!shelves.length && (
+                    {!placementRows.length && (
                       <small className="lbl-hint">
-                        هنوز قفسه‌ای ثبت نشده؛ از «انبار و موجودی ← قفسه‌ها» اضافه کنید.
+                        هنوز {placementKind === 'basket' ? 'سبدی' : 'قفسه‌ای'} ثبت نشده؛ از
+                        «انبار و موجودی ← قفسه‌ها و سبدها» اضافه کنید.
                       </small>
                     )}
                   </div>
                   <small className="lbl-hint">
-                    هر قفسه فقط یک برچسب می‌گیرد (برخلاف کالاها، نسخهٔ تکراری ندارد)؛ برچسب‌ها از
-                    نام و انبار خود قفسه‌ها ساخته می‌شوند.
+                    هر {placementKind === 'basket' ? 'سبد' : 'قفسه'} فقط یک برچسب می‌گیرد
+                    (برخلاف کالاها، نسخهٔ تکراری ندارد)؛ برچسب‌ها از نام و محل خود{' '}
+                    {placementKind === 'basket' ? 'سبدها' : 'قفسه‌ها'} ساخته می‌شوند.
                   </small>
                   <button
                     className="button-primary lbl-print-inline"
                     onClick={printShelfBatch}
                     disabled={!pickedShelves.length}
                   >
-                    ⎙ خروجی PDF قفسه‌ها ({persianDigits(pickedShelves.length)} برچسب)
+                    ⎙ خروجی PDF {placementKind === 'basket' ? 'سبدها' : 'قفسه‌ها'} (
+                    {persianDigits(pickedShelves.length)} برچسب)
                   </button>
                 </div>
               </div>
@@ -913,8 +1000,8 @@ export function LabelsPage() {
             </div>
 
             <p className="lbl-foot-note">
-              برچسب قفسه از همان قفسه‌هایی ساخته می‌شود که در «انبار و موجودی ← قفسه‌ها» تعریف
-              کرده‌اید — فقط نام قفسه و انبار آن، با درشت‌ترین فونت ممکن. آدرس{' '}
+              برچسب قفسه و سبد از همان درختی ساخته می‌شود که در «انبار و موجودی ← قفسه‌ها و سبدها»
+              تعریف کرده‌اید — فقط نام محل و والد آن، با درشت‌ترین فونت ممکن. آدرس{' '}
               <span dir="ltr">{STORE_SITE}</span> روی همهٔ برچسب‌ها درج می‌شود.
             </p>
           </main>

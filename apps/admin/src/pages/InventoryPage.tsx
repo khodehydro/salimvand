@@ -7,7 +7,7 @@ import { ProductCreateModal } from '../components/ProductCreateModal';
 import { BarcodeSvg } from '../components/BarcodeSvg';
 import { formatJalaliDate, formatPersianNumber, formatRial } from '@salimvand/shared';
 import { FaNumberInput } from '../components/FaNumberInput';
-import { locationLabel } from '../lib/location-label';
+import { basketLabel, locationLabel, placementLabel } from '../lib/location-label';
 
 const BarcodeScanner = lazy(() =>
   import('../components/BarcodeScanner').then((module) => ({ default: module.BarcodeScanner })),
@@ -32,6 +32,8 @@ type Item = {
   };
   brand?: { name: string };
   location?: { id: string; name: string; code: string; parent?: { name: string } | null };
+  /** سبد — the basket (bin) this line is filed in, when it has one. */
+  basket?: { id: string; name: string; code: string } | null;
 };
 type Option = { id: string; name: string };
 type Location = {
@@ -41,8 +43,8 @@ type Location = {
   type: string;
   parentId?: string | null;
   parent?: { id: string; name: string } | null;
-  children?: Array<Location & { _count?: { items: number } }>;
-  _count?: { items: number };
+  children?: Array<Location & { _count?: { items: number; basketItems?: number } }>;
+  _count?: { items: number; basketItems?: number };
 };
 type VehicleMake = {
   id: string;
@@ -69,9 +71,17 @@ const priceSourceLabels: Record<string, string> = {
 const tabs = [
   { id: 'stock', label: 'لیست انبار', hint: 'جست‌وجوی لحظه‌ای، بارکدخوان و اصلاح سریع موجودی' },
   { id: 'register', label: 'ثبت محصول', hint: 'انبار + کاتالوگ + سایت، همه در یک پنجره' },
-  { id: 'shelves', label: 'قفسه‌ها', hint: 'انبارها و گروه‌بندی قفسه‌ها — ایجاد، ویرایش و حذف' },
+  {
+    id: 'shelves',
+    label: 'قفسه‌ها و سبدها',
+    hint: 'انبارها، قفسه‌ها و سبدهای هر قفسه — ایجاد، ویرایش و حذف',
+  },
 ] as const;
 type Tab = (typeof tabs)[number]['id'];
+
+/** Depth in the placement tree: انبار = 0، قفسه = 1، سبد = 2. */
+const locationDepth = (location: { type: string }) =>
+  location.type === 'warehouse' ? 0 : location.type === 'basket' ? 2 : 1;
 
 const locationTypeLabels: Record<string, string> = {
   warehouse: 'انبار',
@@ -79,6 +89,7 @@ const locationTypeLabels: Record<string, string> = {
   shelf: 'قفسه',
   level: 'طبقه',
   box: 'باکس',
+  basket: 'سبد',
 };
 
 /** Stock rows grouped per product: «۲ قلم · ۷ قطعه» aggregates the item
@@ -131,6 +142,7 @@ export function InventoryPage() {
   const [history, setHistory] = useState<Transaction[]>([]);
   const [priceHistory, setPriceHistory] = useState<PriceHistoryRow[]>([]);
   const [transferLocation, setTransferLocation] = useState('');
+  const [transferBasket, setTransferBasket] = useState('');
   const [receiveQty, setReceiveQty] = useState('');
   const [busy, setBusy] = useState(false);
   // Shelves tab: warehouses (groups) and shelves are managed separately —
@@ -140,6 +152,11 @@ export function InventoryPage() {
   const [editingWarehouse, setEditingWarehouse] = useState<Location | null>(null);
   const [shelfForm, setShelfForm] = useState({ name: '', code: '', parentId: '' });
   const [editingShelf, setEditingShelf] = useState<Location | null>(null);
+  // سبدها — bins inside one shelf. The third level of the placement tree:
+  // انبار › قفسه › سبد. A part may be filed straight on a shelf or into one
+  // of its baskets, so both are managed here.
+  const [basketForm, setBasketForm] = useState({ name: '', code: '', parentId: '' });
+  const [editingBasket, setEditingBasket] = useState<Location | null>(null);
   const [locationError, setLocationError] = useState('');
   // نمای فعلی لیست اقلام — برای هایلایت سگمنت «همه اقلام / کم‌موجود»
   const [stockView, setStockView] = useState<'all' | 'low'>('all');
@@ -161,7 +178,9 @@ export function InventoryPage() {
         setLocations(
           [...r.data].sort(
             (a, b) =>
-              Number(b.type === 'warehouse') - Number(a.type === 'warehouse') ||
+              // انبار › قفسه › سبد — depth first, then the human code order
+              // (۱.۱ … ۱۰.۱ … ۲۰.۷) inside each level.
+              locationDepth(a) - locationDepth(b) ||
               a.code.localeCompare(b.code, 'en', { numeric: true }),
           ),
         ),
@@ -237,6 +256,7 @@ export function InventoryPage() {
   const openDetail = async (item: Item) => {
     setDetail(item);
     setTransferLocation(item.location?.id ?? '');
+    setTransferBasket(item.basket?.id ?? '');
     setReceiveQty('');
     setHistory([]);
     setPriceHistory([]);
@@ -268,15 +288,28 @@ export function InventoryPage() {
   };
 
   const transfer = async () => {
-    if (!detail || !transferLocation) return setMessage('محل مقصد را انتخاب کنید');
+    if (!detail || !transferLocation) return setMessage('قفسهٔ مقصد را انتخاب کنید');
+    // A basket must belong to the destination shelf — the select is filtered,
+    // but switching the shelf after picking a basket would otherwise post a
+    // placement the API rejects.
+    if (transferBasket && basketsOf(transferLocation).every((row) => row.id !== transferBasket))
+      return setMessage('سبد انتخاب‌شده متعلق به این قفسه نیست');
     setBusy(true);
     try {
       await api('/inventory/transfer', {
         method: 'POST',
-        body: JSON.stringify({ itemId: detail.id, locationId: transferLocation }),
+        body: JSON.stringify({
+          itemId: detail.id,
+          locationId: transferLocation,
+          basketId: transferBasket || null,
+        }),
       });
-      setMessage('انتقال قفسه ثبت شد');
-      await openDetail({ ...detail, location: locations.find((l) => l.id === transferLocation) });
+      setMessage(transferBasket ? 'انتقال قفسه و سبد ثبت شد' : 'انتقال قفسه ثبت شد');
+      await openDetail({
+        ...detail,
+        location: locations.find((l) => l.id === transferLocation),
+        basket: baskets.find((row) => row.id === transferBasket) ?? null,
+      });
       await load();
     } catch (e) {
       setMessage((e as Error).message);
@@ -321,10 +354,16 @@ export function InventoryPage() {
     (location) => !location.parentId && location.type === 'warehouse',
   );
   const shelves = locations.filter(
-    (location) => location.parentId || location.type !== 'warehouse',
+    (location) =>
+      location.type !== 'basket' && (location.parentId || location.type !== 'warehouse'),
   );
   const shelvesOf = (parentId: string | null) =>
     shelves.filter((location) => (location.parentId ?? null) === parentId);
+  /** سبدها — bins of one shelf (parentId always points at a shelf). */
+  const baskets = locations.filter((location) => location.type === 'basket');
+  const basketsOf = (shelfId: string | null) =>
+    baskets.filter((location) => (location.parentId ?? null) === shelfId);
+  const itemsInBasket = (basket: Location) => basket._count?.basketItems ?? 0;
   const startWarehouseEdit = (warehouse: Location) => {
     setEditingWarehouse(warehouse);
     setLocationError('');
@@ -395,14 +434,57 @@ export function InventoryPage() {
       setBusy(false);
     }
   };
+  const startBasketEdit = (basket: Location) => {
+    setEditingBasket(basket);
+    setLocationError('');
+    setBasketForm({ name: basket.name, code: basket.code, parentId: basket.parentId ?? '' });
+  };
+  const saveBasket = async () => {
+    if (!basketForm.name.trim() || !basketForm.code.trim())
+      return setLocationError('نام و کد سبد الزامی است');
+    if (!basketForm.parentId) return setLocationError('سبد باید داخل یک قفسه تعریف شود');
+    setLocationError('');
+    setBusy(true);
+    try {
+      if (editingBasket) {
+        await api(`/locations/${editingBasket.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            name: basketForm.name,
+            code: basketForm.code,
+            parentId: basketForm.parentId,
+          }),
+        });
+        setMessage('سبد ویرایش شد');
+      } else {
+        await api('/locations', {
+          method: 'POST',
+          body: JSON.stringify({ ...basketForm, type: 'basket' }),
+        });
+        setMessage('سبد ایجاد شد');
+      }
+      setBasketForm({ name: '', code: '', parentId: '' });
+      setEditingBasket(null);
+      await loadLocations();
+    } catch (e) {
+      setMessage((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
   const removeLocation = async (location: Location) => {
-    const items = location._count?.items ?? 0;
     const isWarehouse = !location.parentId && location.type === 'warehouse';
+    const isBasket = location.type === 'basket';
+    const items = isBasket ? itemsInBasket(location) : (location._count?.items ?? 0);
     const question = isWarehouse
       ? `انبار «${location.name}» حذف شود؟`
-      : items > 0
-        ? `قفسهٔ «${location.name}» حذف شود؟ ${formatPersianNumber(items)} قلم کالا بدون قفسه می‌شوند — موجودی آن‌ها حذف نمی‌شود.`
-        : `قفسهٔ «${location.name}» حذف شود؟`;
+      : isBasket
+        ? items > 0
+          ? `سبد «${location.name}» حذف شود؟ ${formatPersianNumber(items)} قلم کالا از سبد خارج می‌شوند (روی قفسه می‌مانند) — موجودی آن‌ها حذف نمی‌شود.`
+          : `سبد «${location.name}» حذف شود؟`
+        : items > 0
+          ? `قفسهٔ «${location.name}» حذف شود؟ ${formatPersianNumber(items)} قلم کالا بدون قفسه می‌شوند — موجودی آن‌ها حذف نمی‌شود.`
+          : `قفسهٔ «${location.name}» حذف شود؟`;
     if (!window.confirm(question)) return;
     setBusy(true);
     try {
@@ -411,7 +493,9 @@ export function InventoryPage() {
       });
       setMessage(
         result.data.detachedItems > 0
-          ? `محل حذف شد؛ ${formatPersianNumber(result.data.detachedItems)} قلم بدون قفسه شدند`
+          ? `محل حذف شد؛ ${formatPersianNumber(result.data.detachedItems)} قلم ${
+              isBasket ? 'از سبد خارج شدند' : 'بدون قفسه شدند'
+            }`
           : 'محل حذف شد',
       );
       await loadLocations();
@@ -875,8 +959,21 @@ export function InventoryPage() {
                             <StockStepper itemId={item.id} quantity={item.quantity} onMessage={setMessage} onSaved={() => void load()} />
                           </div>
                           <div className="ibr-location">
-                            <span className="inv-shelf" title={item.location ? locationLabel(item.location) : 'بدون قفسه'}>
-                              {item.location ? `📦 ${locationLabel(item.location)}` : 'بدون قفسه'}
+                            <span
+                              className="inv-shelf"
+                              title={
+                                item.location || item.basket
+                                  ? placementLabel(item)
+                                  : 'بدون قفسه'
+                              }
+                            >
+                              {item.location || item.basket ? (
+                                <>
+                                  📦 {placementLabel(item)}
+                                </>
+                              ) : (
+                                'بدون قفسه'
+                              )}
                             </span>
                             <div className="inventory-price">
                               <b>{salePrice > 0 ? formatRial(salePrice) : '—'}</b>
@@ -958,11 +1055,12 @@ export function InventoryPage() {
                     {formatPersianNumber(warehouse.children?.length ?? 0)} قفسه ·{' '}
                     {formatPersianNumber(
                       (warehouse.children ?? []).reduce(
-                        (sum, child) => sum + (child._count?.items ?? 0),
+                        (sum, child) =>
+                          sum + (child.children?.length ?? 0) + (child._count?.items ?? 0),
                         warehouse._count?.items ?? 0,
                       ),
                     )}{' '}
-                    قلم
+                    محل/قلم
                   </span>
                   <div className="inv-actions">
                     <button className="row-action" onClick={() => startWarehouseEdit(warehouse)}>
@@ -1042,7 +1140,8 @@ export function InventoryPage() {
                         </div>
                         <span className="chip">{locationTypeLabels[shelf.type] ?? shelf.type}</span>
                         <span className="muted">
-                          {formatPersianNumber(shelf._count?.items ?? 0)} قلم
+                          {formatPersianNumber(shelf._count?.items ?? 0)} قلم ·{' '}
+                          {formatPersianNumber(shelf.children?.length ?? 0)} سبد
                         </span>
                         <div className="inv-actions">
                           <button className="row-action" onClick={() => startShelfEdit(shelf)}>
@@ -1063,6 +1162,96 @@ export function InventoryPage() {
               );
             })}
             {!shelves.length && <p className="muted">هنوز قفسه‌ای ثبت نشده است.</p>}
+          </div>
+
+          {/* Baskets (سبدها) — bins inside one shelf; each part may be filed
+              in one of them instead of straight onto the shelf. */}
+          <div className="shelves-box">
+            <h2>{editingBasket ? `ویرایش سبد «${editingBasket.name}»` : 'سبدها'}</h2>
+            <p className="muted">
+              هر سبد یک ظرفِ مشخص داخل یک قفسه است — «قفسه A-03، سبد ۲». کالا می‌تواند مستقیماً روی
+              قفسه باشد یا داخل یکی از سبدهای همان قفسه.
+            </p>
+            <div className="shelves-form">
+              <input
+                value={basketForm.name}
+                onChange={(e) => setBasketForm({ ...basketForm, name: e.target.value })}
+                placeholder="نام سبد (مثلاً سبد ۲)"
+              />
+              <input
+                value={basketForm.code}
+                onChange={(e) => setBasketForm({ ...basketForm, code: e.target.value })}
+                placeholder="کد مثل B-2"
+                dir="ltr"
+              />
+              <select
+                value={basketForm.parentId}
+                onChange={(e) => setBasketForm({ ...basketForm, parentId: e.target.value })}
+              >
+                <option value="">قفسه را انتخاب کنید…</option>
+                {shelves.map((shelf) => (
+                  <option key={shelf.id} value={shelf.id}>
+                    {locationLabel(shelf)}
+                  </option>
+                ))}
+              </select>
+              <button className="button-primary" disabled={busy} onClick={() => void saveBasket()}>
+                {editingBasket ? 'ذخیرهٔ ویرایش' : 'افزودن سبد'}
+              </button>
+              {editingBasket && (
+                <button
+                  className="outline"
+                  onClick={() => {
+                    setEditingBasket(null);
+                    setBasketForm({ name: '', code: '', parentId: '' });
+                  }}
+                >
+                  انصراف
+                </button>
+              )}
+            </div>
+            {[
+              ...shelves.map((shelf) => ({ id: shelf.id, name: locationLabel(shelf) })),
+            ].map((bucket) => {
+              const rows = basketsOf(bucket.id);
+              if (!rows.length) return null;
+              return (
+                <div className="shelf-group" key={bucket.id}>
+                  <h3>{bucket.name}</h3>
+                  <div className="inventory-list">
+                    {rows.map((basket) => (
+                      <div className="inventory-row" key={basket.id}>
+                        <div className="inv-info">
+                          <b>{basket.name}</b>
+                          <small dir="ltr">{basket.code}</small>
+                        </div>
+                        <span className="chip">سبد</span>
+                        <span className="muted">
+                          {formatPersianNumber(itemsInBasket(basket))} قلم
+                        </span>
+                        <div className="inv-actions">
+                          <button className="row-action" onClick={() => startBasketEdit(basket)}>
+                            ویرایش
+                          </button>
+                          <button
+                            className="row-action danger-text"
+                            disabled={busy}
+                            onClick={() => void removeLocation(basket)}
+                          >
+                            حذف
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+            {!baskets.length && (
+              <p className="muted">
+                هنوز سبدی ثبت نشده است — کالاها فعلاً مستقیماً روی قفسه‌ها هستند.
+              </p>
+            )}
           </div>
         </div>
       )}
@@ -1116,7 +1305,13 @@ export function InventoryPage() {
               </div>
               <div>
                 <dt>محل نگهداری</dt>
-                <dd>{detail.location ? locationLabel(detail.location) : 'بدون قفسه'}</dd>
+                <dd>
+                  {detail.location || detail.basket ? (
+                    placementLabel(detail)
+                  ) : (
+                    'بدون قفسه'
+                  )}
+                </dd>
               </div>
               <div>
                 <dt>موجودی فعلی</dt>
@@ -1173,12 +1368,31 @@ export function InventoryPage() {
                 انتقال به قفسه
                 <select
                   value={transferLocation}
-                  onChange={(e) => setTransferLocation(e.target.value)}
+                  onChange={(e) => {
+                    setTransferLocation(e.target.value);
+                    // A basket only makes sense inside the new shelf.
+                    setTransferBasket('');
+                  }}
                 >
                   <option value="">بدون قفسه</option>
-                  {locations.map((location) => (
+                  {shelves.map((location) => (
                     <option key={location.id} value={location.id}>
                       {locationLabel(location)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                سبد مقصد (اختیاری)
+                <select
+                  value={transferBasket}
+                  disabled={!transferLocation}
+                  onChange={(e) => setTransferBasket(e.target.value)}
+                >
+                  <option value="">بدون سبد (روی قفسه)</option>
+                  {basketsOf(transferLocation || null).map((basket) => (
+                    <option key={basket.id} value={basket.id}>
+                      {basketLabel(basket)}
                     </option>
                   ))}
                 </select>

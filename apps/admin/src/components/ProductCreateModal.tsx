@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createEan13, formatPersianNumber } from '@salimvand/shared';
 import { FaNumberInput } from './FaNumberInput';
-import { locationLabel } from '../lib/location-label';
+import { basketLabel, locationLabel } from '../lib/location-label';
 import { api } from '../lib/api';
 import { MediaImage } from './MediaImage';
 import { MediaPicker, type PickerItem } from './MediaPicker';
@@ -22,7 +22,14 @@ import { MediaPicker, type PickerItem } from './MediaPicker';
  *  - the save bar stays pinned in the footer in both modal and inline modes.
  */
 type Option = { id: string; name: string };
-type Location = { id: string; name: string; code: string; parent?: { name: string } | null };
+type Location = {
+  id: string;
+  name: string;
+  code: string;
+  type: string;
+  parentId?: string | null;
+  parent?: { name: string } | null;
+};
 type VehicleMake = {
   id: string;
   name: string;
@@ -47,6 +54,7 @@ const emptyItem = {
   purchasePrice: '',
   minStock: '',
   locationId: '',
+  basketId: '',
   initialQuantity: '',
 };
 
@@ -96,6 +104,18 @@ export function ProductCreateModal({
     () => vehicles.flatMap((make) => make.models.map((model) => ({ ...model, make: make.name }))),
     [vehicles],
   );
+  // Placement: shelves are every non-basket location, and a basket can only
+  // be chosen for the shelf that owns it.
+  const shelves = useMemo(
+    () => locations.filter((location) => location.type !== 'basket'),
+    [locations],
+  );
+  const baskets = useMemo(
+    () => locations.filter((location) => location.type === 'basket'),
+    [locations],
+  );
+  const basketsOf = (shelfId: string) =>
+    baskets.filter((basket) => (basket.parentId ?? null) === (shelfId || null));
   const trims = useMemo(
     () =>
       vehicles.flatMap((make) => make.models).find((model) => model.id === pickModel)?.trims ?? [],
@@ -211,6 +231,7 @@ export function ProductCreateModal({
             salePrice: Number(item.salePrice) || 0,
             minStock: item.minStock ? Number(item.minStock) : undefined,
             locationId: item.locationId || undefined,
+            basketId: item.basketId || undefined,
             initialQuantity: item.initialQuantity ? Number(item.initialQuantity) : 0,
           }),
         });
@@ -516,7 +537,7 @@ export function ProductCreateModal({
                   </span>
                   <div>
                     <h3>برندها و انبار</h3>
-                    <p>برای هر برند، قیمت، بارکد، قفسه و موجودی مستقل ثبت کنید.</p>
+                    <p>برای هر برند، قیمت، بارکد، قفسه، سبد و موجودی مستقل ثبت کنید.</p>
                   </div>
                   <span className="pc-section-count">{formatPersianNumber(items.length)} قلم</span>
                 </div>
@@ -574,13 +595,33 @@ export function ProductCreateModal({
                             <select
                               value={item.locationId}
                               onChange={(event) =>
-                                updateItem(index, { locationId: event.target.value })
+                                updateItem(index, {
+                                  locationId: event.target.value,
+                                  basketId: '',
+                                })
                               }
                             >
                               <option value="">بدون قفسه</option>
-                              {locations.map((location) => (
+                              {shelves.map((location) => (
                                 <option value={location.id} key={location.id}>
                                   {locationLabel(location)}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="pc-s2">
+                            سبد (اختیاری)
+                            <select
+                              value={item.basketId}
+                              disabled={!item.locationId}
+                              onChange={(event) =>
+                                updateItem(index, { basketId: event.target.value })
+                              }
+                            >
+                              <option value="">بدون سبد (روی قفسه)</option>
+                              {basketsOf(item.locationId).map((basket) => (
+                                <option value={basket.id} key={basket.id}>
+                                  {basketLabel(basket)}
                                 </option>
                               ))}
                             </select>

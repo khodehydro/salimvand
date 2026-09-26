@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { createEan13, formatJalaliDate, formatRial } from '@salimvand/shared';
 import { FaNumberInput } from '../components/FaNumberInput';
-import { locationChip, locationLabel } from '../lib/location-label';
+import { basketLabel, locationChip, locationLabel, placementChip } from '../lib/location-label';
 import { api, downloadFile } from '../lib/api';
 import { hashForPage } from '../lib/admin-route';
 import { publicSiteUrl } from '../lib/public-site';
@@ -28,6 +28,7 @@ type ProductRow = {
     salePrice: string;
     brand?: { name: string } | null;
     location?: { code: string; name: string } | null;
+    basket?: { code: string; name: string } | null;
   }>;
 };
 type ProductDetail = {
@@ -68,6 +69,8 @@ type ProductDetail = {
     priceUpdatedAt?: string | null;
     brand?: { id: string; name: string } | null;
     location?: { id: string; code: string; name: string } | null;
+    /** سبد — the basket of this line inside its shelf. */
+    basket?: { id: string; code: string; name: string } | null;
   }>;
 };
 type Category = { id: string; name: string };
@@ -77,7 +80,8 @@ type Location = {
   code: string;
   name: string;
   type: string;
-  parent?: { name: string } | null;
+  parentId?: string | null;
+  parent?: { id: string; name: string } | null;
 };
 type VehicleMake = {
   id: string;
@@ -570,10 +574,14 @@ export function ProductsPage() {
                   <div className="plc-brand" key={entry.id}>
                     <span
                       className="brand-name"
-                      title={entry.location ? locationChip(entry.location) : undefined}
+                      title={
+                        entry.location || entry.basket ? placementChip(entry) : undefined
+                      }
                     >
                       {entry.brand?.name ?? 'بدون برند'} · {formatRial(Number(entry.salePrice))}
-                      {entry.location ? <small> · {locationChip(entry.location)}</small> : null}
+                      {entry.location || entry.basket ? (
+                        <small> · {placementChip(entry)}</small>
+                      ) : null}
                     </span>
                     <StockStepper
                       itemId={entry.id}
@@ -730,13 +738,20 @@ function ProductEditor({
     purchasePrice: '',
     minStock: '',
     locationId: '',
+    basketId: '',
     initialQuantity: '',
   });
   /** Inline edits for existing inventory items (price/minStock/shelf). */
   const [itemEdits, setItemEdits] = useState<
     Record<
       string,
-      { salePrice: string; purchasePrice: string; minStock: string; locationId: string }
+      {
+        salePrice: string;
+        purchasePrice: string;
+        minStock: string;
+        locationId: string;
+        basketId: string;
+      }
     >
   >({});
   const [busy, setBusy] = useState(false);
@@ -757,6 +772,18 @@ function ProductEditor({
       vehicles.flatMap((make) => make.models).find((model) => model.id === pickModel)?.trims ?? [],
     [vehicles, pickModel],
   );
+  // Placement tree in the editor: every location that is not a basket is a
+  // shelf, and a basket may only be picked for the shelf it belongs to.
+  const shelves = useMemo(
+    () => locations.filter((location) => location.type !== 'basket'),
+    [locations],
+  );
+  const baskets = useMemo(
+    () => locations.filter((location) => location.type === 'basket'),
+    [locations],
+  );
+  const basketsOf = (shelfId: string) =>
+    baskets.filter((basket) => (basket.parentId ?? null) === (shelfId || null));
 
   // Saves report success so the header save button can close the editor
   // only when the change actually landed (failures keep it open + noticed).
@@ -871,6 +898,7 @@ function ProductEditor({
           purchasePrice: Number(item.purchasePrice) || 0,
           minStock: item.minStock ? Number(item.minStock) : undefined,
           locationId: item.locationId || undefined,
+          basketId: item.basketId || undefined,
           initialQuantity: item.initialQuantity ? Number(item.initialQuantity) : 0,
         }),
       });
@@ -905,6 +933,7 @@ function ProductEditor({
           purchasePrice: Number(edit.purchasePrice) || 0,
           minStock: edit.minStock === '' ? null : Number(edit.minStock),
           locationId: edit.locationId || null,
+          basketId: edit.basketId || null,
         }),
       });
       setItemEdits((current) => {
@@ -929,6 +958,7 @@ function ProductEditor({
       purchasePrice: String(entry.purchasePrice),
       minStock: entry.minStock == null ? '' : String(entry.minStock),
       locationId: entry.location?.id ?? '',
+      basketId: entry.basket?.id ?? '',
     };
   const setItemEdit = (
     entry: NonNullable<ProductDetail['inventoryItems']>[number],
@@ -937,6 +967,7 @@ function ProductEditor({
       purchasePrice: string;
       minStock: string;
       locationId: string;
+      basketId: string;
     }>,
   ) =>
     setItemEdits((current) => ({
@@ -1423,12 +1454,15 @@ function ProductEditor({
                           <select
                             value={edit.locationId}
                             onChange={(event) =>
-                              setItemEdit(entry, { locationId: event.target.value })
+                              setItemEdit(entry, {
+                                locationId: event.target.value,
+                                basketId: '',
+                              })
                             }
                           >
                             <option value="">بدون قفسه</option>
-                            {locations.length ? (
-                              locations.map((location) => (
+                            {shelves.length ? (
+                              shelves.map((location) => (
                                 <option value={location.id} key={location.id}>
                                   {locationLabel(location)}
                                 </option>
@@ -1437,7 +1471,29 @@ function ProductEditor({
                               <option disabled>در حال بارگذاری قفسه‌ها...</option>
                             )}
                           </select>
-                          {!locations.length && <small className="muted">قفسه‌ای یافت نشد — از تب انبار → قفسه‌ها، قفسه بسازید</small>}
+                          {!shelves.length && <small className="muted">قفسه‌ای یافت نشد — از تب انبار → قفسه‌ها و سبدها، قفسه بسازید</small>}
+                        </label>
+                        <label>
+                          سبد (اختیاری)
+                          <select
+                            value={edit.basketId}
+                            disabled={!edit.locationId}
+                            onChange={(event) =>
+                              setItemEdit(entry, { basketId: event.target.value })
+                            }
+                          >
+                            <option value="">بدون سبد (روی قفسه)</option>
+                            {basketsOf(edit.locationId).map((basket) => (
+                              <option value={basket.id} key={basket.id}>
+                                {basketLabel(basket)}
+                              </option>
+                            ))}
+                          </select>
+                          {edit.locationId && basketsOf(edit.locationId).length === 0 && (
+                            <small className="muted">
+                              این قفسه سبدی ندارد — از تب انبار → قفسه‌ها و سبدها اضافه کنید
+                            </small>
+                          )}
                         </label>
                         <button
                           className={dirty ? 'button-primary' : 'outline'}
@@ -1518,11 +1574,13 @@ function ProductEditor({
                   قفسه
                   <select
                     value={item.locationId}
-                    onChange={(event) => setItem({ ...item, locationId: event.target.value })}
+                    onChange={(event) =>
+                      setItem({ ...item, locationId: event.target.value, basketId: '' })
+                    }
                   >
                     <option value="">بدون قفسه</option>
-                    {locations.length ? (
-                      locations.map((location) => (
+                    {shelves.length ? (
+                      shelves.map((location) => (
                         <option value={location.id} key={location.id}>
                           {locationLabel(location)}
                         </option>
@@ -1531,7 +1589,22 @@ function ProductEditor({
                       <option disabled>در حال بارگذاری قفسه‌ها...</option>
                     )}
                   </select>
-                  {!locations.length && <small className="muted">قفسه‌ای یافت نشد — از تب انبار → قفسه‌ها، قفسه بسازید</small>}
+                  {!shelves.length && <small className="muted">قفسه‌ای یافت نشد — از تب انبار → قفسه‌ها و سبدها، قفسه بسازید</small>}
+                </label>
+                <label>
+                  سبد (اختیاری)
+                  <select
+                    value={item.basketId}
+                    disabled={!item.locationId}
+                    onChange={(event) => setItem({ ...item, basketId: event.target.value })}
+                  >
+                    <option value="">بدون سبد (روی قفسه)</option>
+                    {basketsOf(item.locationId).map((basket) => (
+                      <option value={basket.id} key={basket.id}>
+                        {basketLabel(basket)}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <label>
                   موجودی اولیه

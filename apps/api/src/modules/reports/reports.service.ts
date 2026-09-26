@@ -96,6 +96,7 @@ export class ReportsService {
         product: { select: { name: true, code: true } },
         brand: { select: { name: true } },
         location: { select: { code: true, name: true } },
+        basket: { select: { code: true, name: true } },
       },
       orderBy: { quantity: 'asc' },
     });
@@ -104,7 +105,7 @@ export class ReportsService {
       return /^[=+\-@]/.test(text) ? `'${text}` : `"${text.replaceAll('"', '""')}"`;
     };
     return [
-      'محصول,کد,برند,بارکد,موجودی,حداقل,قیمت فروش,قفسه',
+      'محصول,کد,برند,بارکد,موجودی,حداقل,قیمت فروش,قفسه,سبد',
       ...items.map((item: {
         product: { name: string; code: string | null };
         brand?: { name: string } | null;
@@ -113,6 +114,7 @@ export class ReportsService {
         minStock: number | null;
         salePrice: bigint;
         location: { code: string; name: string } | null;
+        basket?: { code: string; name: string } | null;
       }) =>
         [
           item.product.name,
@@ -123,6 +125,7 @@ export class ReportsService {
           item.minStock ?? '',
           item.salePrice,
           item.location ? `${item.location.code} ${item.location.name}` : '',
+          item.basket ? `${item.basket.code} ${item.basket.name}` : '',
         ]
           .map(cell)
           .join(','),
@@ -141,6 +144,7 @@ export class ReportsService {
         salePrice: true,
         product: { select: { name: true, code: true } },
         location: { select: { code: true, name: true, parent: { select: { name: true } } } },
+        basket: { select: { code: true, name: true } },
       },
       orderBy: [{ product: { name: 'asc' } }, { barcode: 'asc' }],
     });
@@ -166,10 +170,18 @@ export class ReportsService {
       salePrice: bigint;
       product: { name: string; code: string | null };
       location: { code: string; name: string; parent: { name: string } | null } | null;
+      basket?: { code: string; name: string } | null;
     }>) {
-      const location = item.location
-        ? [item.location.parent?.name, item.location.name, item.location.code].filter(Boolean).join(' / ')
-        : '';
+      // «انبار / قفسه / کد» plus the basket, so an exported sheet still says
+      // exactly where to walk to.
+      const location = [
+        item.location?.parent?.name,
+        item.location?.name,
+        item.location?.code,
+        item.basket ? item.basket.name : '',
+      ]
+        .filter(Boolean)
+        .join(' / ');
       sheet.addRow([
         item.product.name, item.product.code ?? '', item.barcode, 'عدد', '', '',
         item.purchasePrice?.toString() ?? '', '', item.salePrice.toString(), '', '', '',
