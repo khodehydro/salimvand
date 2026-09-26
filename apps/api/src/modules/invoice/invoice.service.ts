@@ -1526,7 +1526,7 @@ export class InvoiceService {
         items: {
           include: {
             inventoryItem: {
-              include: { product: true, brand: true, location: { include: { parent: true } } },
+              include: { product: true, brand: true, location: { include: { parent: true } }, basket: true },
             },
           },
         },

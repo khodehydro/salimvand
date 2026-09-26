@@ -169,6 +169,7 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
             salePrice: true,
             minStock: true,
             locationId: true,
+            basketId: true,
             priceUpdatedAt: true,
           },
         }),
@@ -615,6 +616,14 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
               : typeof payload.locationId === 'string'
                 ? payload.locationId
                 : undefined,
+          // سبد — optional; when sent without a shelf the shelf is filled in
+          // from the basket, and a basket of another shelf is rejected.
+          basketId:
+            payload.basketId === null
+              ? null
+              : typeof payload.basketId === 'string'
+                ? payload.basketId
+                : undefined,
           barcode: typeof payload.barcode === 'string' ? payload.barcode : undefined,
           brandId:
             payload.brandId === null
@@ -631,7 +640,13 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
     if (input.type === 'inventory.transfer') {
       const locationId = typeof payload.locationId === 'string' ? payload.locationId : '';
       if (!locationId) throw new BadRequestException('locationId عملیات الزامی است');
-      return this.inventory.transfer(itemId, locationId, userId, input.operationId);
+      const basketId =
+        payload.basketId === null
+          ? null
+          : typeof payload.basketId === 'string'
+            ? payload.basketId
+            : undefined;
+      return this.inventory.transfer(itemId, locationId, userId, input.operationId, basketId);
     }
     if (input.type === 'product.create')
       return this.catalog.create(payload, userId, undefined, input.operationId);

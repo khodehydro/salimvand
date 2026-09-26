@@ -470,6 +470,25 @@ describe('SyncService.applyOperation routing', () => {
     );
   });
 
+  it('routes inventory.transfer with the destination shelf and سبد for the offline queue', async () => {
+    const { service, inventory } = makeService();
+    inventory.transfer.mockResolvedValue({ ok: true, data: { item: { id: 'i1' } } });
+    const result = await service.queueOperation(USER_ID, {
+      operationId: 'android-device-move-000001',
+      deviceId: 'android-device',
+      type: 'inventory.transfer',
+      payload: { itemId: 'i1', locationId: 'shelf-2', basketId: 'basket-5' },
+    });
+    expect(result.data.status).toBe('applied');
+    expect(inventory.transfer).toHaveBeenCalledWith(
+      'i1',
+      'shelf-2',
+      USER_ID,
+      'android-device-move-000001',
+      'basket-5',
+    );
+  });
+
   it('routes inventory.update_metadata with idempotency and the caller identity', async () => {
     const { service, inventory } = makeService();
     inventory.updateMetadata.mockResolvedValue({ ok: true, data: { id: 'i1' } });
@@ -482,6 +501,8 @@ describe('SyncService.applyOperation routing', () => {
         salePrice: '2000',
         minStock: 4,
         locationId: 'shelf-9',
+        // سبد — the app may file the part into a basket of that shelf.
+        basketId: 'basket-3',
         barcode: '6260000000123',
       },
     });
@@ -492,6 +513,7 @@ describe('SyncService.applyOperation routing', () => {
         salePrice: '2000',
         minStock: 4,
         locationId: 'shelf-9',
+        basketId: 'basket-3',
         barcode: '6260000000123',
         purchasePrice: undefined,
         brandId: undefined,
@@ -616,6 +638,7 @@ describe('SyncService.resolveConflict', () => {
       salePrice: '120',
       minStock: null,
       locationId: null,
+      basketId: null,
       isActive: true,
       priceUpdatedAt: null,
       priceUpdatedAtJalali: null,
@@ -777,6 +800,56 @@ describe('SyncService.bootstrap', () => {
     );
     expect(result.data.products[0].thumbUrl).toBe(
       'https://salimvand.ir/uploads/products/img-1/small.webp',
+    );
+  });
+  it('ships every location (انبار، قفسه و سبد) and the basket of each stock line', async () => {
+    const made = makeService({
+      category: { findMany: vi.fn().mockResolvedValue([]) },
+      brand: { findMany: vi.fn().mockResolvedValue([]) },
+      location: {
+        findMany: vi.fn().mockResolvedValue([
+          { id: 'wh-1', parentId: null, type: 'warehouse', code: 'W-1', name: 'انبار اصلی' },
+          { id: 'shelf-1', parentId: 'wh-1', type: 'shelf', code: 'A-03', name: 'قفسه جلو' },
+          { id: 'basket-1', parentId: 'shelf-1', type: 'basket', code: 'B-2', name: 'سبد ۲' },
+        ]),
+      },
+      product: { findMany: vi.fn().mockResolvedValue([]) },
+      customer: { findMany: vi.fn().mockResolvedValue([]), findUnique: vi.fn().mockResolvedValue(null) },
+      inventoryItem: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: 'i1',
+            productId: 'p1',
+            brandId: null,
+            barcode: '6260000000123',
+            quantity: 3,
+            purchasePrice: 100n,
+            salePrice: 120n,
+            minStock: null,
+            locationId: 'shelf-1',
+            basketId: 'basket-1',
+            priceUpdatedAt: null,
+          },
+        ]),
+      },
+      syncChange: { aggregate: vi.fn().mockResolvedValue({ _max: { revision: 7n } }) },
+    });
+    const result = await made.service.bootstrap(USER_ID, 'android-device');
+    // The three-level tree arrives as-is, so the app can render
+    // «انبار اصلی › قفسه جلو › سبد ۲» offline.
+    expect(result.data.locations.map((row: { id: string }) => row.id)).toEqual([
+      'wh-1',
+      'shelf-1',
+      'basket-1',
+    ]);
+    expect(result.data.inventory[0]).toMatchObject({
+      id: 'i1',
+      locationId: 'shelf-1',
+      basketId: 'basket-1',
+    });
+    // …and the inventory select asks for the basket column explicitly.
+    expect(made.prisma.inventoryItem.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ select: expect.objectContaining({ basketId: true }) }),
     );
   });
 });

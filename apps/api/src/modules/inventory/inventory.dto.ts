@@ -14,6 +14,7 @@ export class CreateInventoryItemDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(9_000_000_000_000_000) salePrice?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(1_000_000) minStock?: number;
   @IsOptional() @IsUUID() locationId?: string;
+  @IsOptional() @IsUUID() basketId?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(1_000_000) initialQuantity?: number;
 }
 
@@ -31,6 +32,8 @@ export class ReceiveInventoryDto {
 export class TransferInventoryDto {
   @IsUUID() itemId!: string;
   @IsUUID() locationId!: string;
+  /** Optional destination basket (سبد) — must belong to the destination shelf. */
+  @IsOptional() @IsUUID() basketId?: string;
 }
 
 export class UpdateInventoryItemDto {
@@ -43,5 +46,6 @@ export class UpdateInventoryItemDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(9_000_000_000_000_000) salePrice?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(1_000_000) minStock?: number;
   @IsOptional() @IsUUID() locationId?: string;
+  @IsOptional() @IsUUID() basketId?: string;
   @IsOptional() @IsString() @MaxLength(255) notes?: string;
 }

@@ -94,7 +94,7 @@ export function buildInventoryItemSyncPayload(
     | 'minStock'
     | 'locationId'
     | 'isActive'
-  > & { priceUpdatedAt?: Date | null },
+  > & { priceUpdatedAt?: Date | null; basketId?: string | null },
 ) {
   return {
     id: item.id,
@@ -106,6 +106,8 @@ export function buildInventoryItemSyncPayload(
     salePrice: money(item.salePrice),
     minStock: item.minStock,
     locationId: item.locationId,
+    // سبد — the basket of this line (null = filed straight on the shelf).
+    basketId: item.basketId ?? null,
     isActive: item.isActive,
     // When the current sale price took effect — the offline price badge.
     priceUpdatedAt: item.priceUpdatedAt instanceof Date ? item.priceUpdatedAt.toISOString() : null,

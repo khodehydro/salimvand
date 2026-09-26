@@ -6,6 +6,7 @@ import { calculateNextQuantity } from './inventory.rules';
 import { writeAudit, writeSyncChange } from '../../common/audit/audit-log';
 import { buildInventoryItemSyncPayload } from '../../common/sync/sync-payloads';
 import { recordSalePriceChange } from '../../common/inventory/price-history';
+import { resolvePlacement } from '../../common/inventory/placement';
 
 export type StockMutation = {
   itemId: string;
@@ -114,8 +115,10 @@ export class InventoryService {
       include: {
         brand: true,
         // parent = the warehouse (انبار) of the shelf — the panel always
-        // shows placement as «انبار · قفسه».
+        // shows placement as «انبار · قفسه · سبد».
         location: { include: { parent: true } },
+        // The basket (سبد) the part is filed in, if any.
+        basket: true,
         // Primary image first so the panel's grouped stock list can show a
         // thumbnail without pulling every image of every product; category
         // and compatibilities feed the richer list chips.
@@ -210,6 +213,7 @@ export class InventoryService {
     salePrice?: number;
     minStock?: number;
     locationId?: string;
+    basketId?: string;
     initialQuantity?: number;
     userId?: string;
   }) {
@@ -238,6 +242,12 @@ export class InventoryService {
       throw new BadRequestException('کاربر ثبت‌کنندهٔ موجودی الزامی است');
     const result = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const salePrice = BigInt(input.salePrice ?? 0);
+      // Shelf + basket are validated together: a basket must belong to the
+      // line's shelf, and picking only a basket fills the shelf in.
+      const placement = await resolvePlacement(tx, {
+        locationId: input.locationId,
+        basketId: input.basketId,
+      });
       const item = await tx.inventoryItem.create({
         data: {
           productId: input.productId!,
@@ -247,7 +257,8 @@ export class InventoryService {
           purchasePrice: BigInt(input.purchasePrice ?? 0),
           salePrice,
           minStock: input.minStock,
-          locationId: input.locationId,
+          locationId: placement.locationId,
+          basketId: placement.basketId,
           // Opening price entry — only when a price was actually set.
           ...(salePrice > 0n ? { priceUpdatedAt: new Date() } : {}),
         },
@@ -362,6 +373,7 @@ export class InventoryService {
       salePrice?: string | number;
       minStock?: number | null;
       locationId?: string | null;
+      basketId?: string | null;
       barcode?: string;
       brandId?: string | null;
       notes?: string;
@@ -411,12 +423,23 @@ export class InventoryService {
         }
         data.barcode = barcode;
       }
-      if (input.locationId !== undefined) {
-        if (input.locationId) {
-          const location = await tx.location.findUnique({ where: { id: input.locationId } });
+      // Shelf + basket are resolved as one placement: the basket must belong
+      // to the resulting shelf, and clearing the shelf clears the basket too
+      // (a basket without its shelf is not a real address).
+      const placement = await resolvePlacement(
+        tx,
+        { locationId: input.locationId, basketId: input.basketId },
+        { locationId: existing.locationId, basketId: existing.basketId },
+      );
+      if (input.locationId !== undefined || input.basketId !== undefined) {
+        if (placement.locationId) {
+          const location = await tx.location.findUnique({
+            where: { id: placement.locationId },
+          });
           if (!location) throw new BadRequestException('موقعیت انبار نامعتبر است');
         }
-        data.locationId = input.locationId;
+        data.locationId = placement.locationId;
+        data.basketId = placement.basketId;
       }
       for (const key of ['purchasePrice', 'salePrice'] as const) {
         const value = input[key];
@@ -443,7 +466,12 @@ export class InventoryService {
       const item = await tx.inventoryItem.update({
         where: { id: input.itemId },
         data: data as never,
-        include: { product: true, brand: true, location: { include: { parent: true } } },
+        include: {
+          product: true,
+          brand: true,
+          location: { include: { parent: true } },
+          basket: true,
+        },
       });
       await recordSalePriceChange(tx, {
         itemId: input.itemId,
@@ -467,6 +495,7 @@ export class InventoryService {
           salePrice: existing.salePrice.toString(),
           minStock: existing.minStock,
           locationId: existing.locationId,
+          basketId: existing.basketId,
           barcode: existing.barcode,
         },
         after: {
@@ -474,6 +503,7 @@ export class InventoryService {
           salePrice: item.salePrice.toString(),
           minStock: item.minStock,
           locationId: item.locationId,
+          basketId: item.basketId,
           barcode: item.barcode,
         },
         syncPayload: buildInventoryItemSyncPayload(item),
@@ -482,7 +512,15 @@ export class InventoryService {
     });
   }
 
-  async transfer(itemId: string, locationId: string, userId: string, operationId?: string) {
+  /** Moves a stock line to another shelf and, when given, another basket of
+   * that shelf — «انتقال قفسه/سبد». */
+  async transfer(
+    itemId: string,
+    locationId: string,
+    userId: string,
+    operationId?: string,
+    basketId?: string | null,
+  ) {
     return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       if (operationId) {
         const previous = await tx.inventoryTransaction.findUnique({ where: { operationId } });
@@ -493,11 +531,21 @@ export class InventoryService {
       }
       const current = await tx.inventoryItem.findUnique({ where: { id: itemId } });
       if (!current) throw new NotFoundException('قلم موجودی پیدا نشد');
-      if (locationId) {
-        const location = await tx.location.findUnique({ where: { id: locationId } });
+      // A transfer always targets a shelf; an optional basket must be one of
+      // that shelf's baskets (resolvePlacement enforces it).
+      const placement = await resolvePlacement(
+        tx,
+        { locationId: locationId || null, basketId: basketId ?? null },
+        { locationId: current.locationId, basketId: current.basketId },
+      );
+      if (placement.locationId) {
+        const location = await tx.location.findUnique({ where: { id: placement.locationId } });
         if (!location) throw new BadRequestException('موقعیت انبار نامعتبر است');
       }
-      const item = await tx.inventoryItem.update({ where: { id: itemId }, data: { locationId } });
+      const item = await tx.inventoryItem.update({
+        where: { id: itemId },
+        data: { locationId: placement.locationId, basketId: placement.basketId },
+      });
       const transaction = await tx.inventoryTransaction.create({
         data: {
           itemId,
@@ -505,7 +553,9 @@ export class InventoryService {
           quantityChange: 0,
           quantityAfter: current.quantity,
           userId,
-          reason: `انتقال به موقعیت ${locationId}`,
+          reason: `انتقال به موقعیت ${placement.locationId ?? '—'}${
+            placement.basketId ? ` / سبد ${placement.basketId}` : ''
+          }`,
           operationId,
         },
       });
@@ -514,8 +564,8 @@ export class InventoryService {
         action: 'update',
         entityType: 'inventory_item',
         entityId: itemId,
-        before: { locationId: current.locationId },
-        after: { locationId: item.locationId },
+        before: { locationId: current.locationId, basketId: current.basketId },
+        after: { locationId: item.locationId, basketId: item.basketId },
         syncPayload: buildInventoryItemSyncPayload(item),
       });
       return { ok: true, data: { item, transaction } };
@@ -537,6 +587,7 @@ export class InventoryService {
       include: {
         brand: true,
         location: { include: { parent: true } },
+        basket: true,
         product: {
           include: {
             images: { orderBy: [{ isPrimary: 'desc' }, { sort: 'asc' }], take: 1 },
@@ -556,7 +607,7 @@ export class InventoryService {
   async byBarcode(barcode: string) {
     const item = await this.prisma.inventoryItem.findUnique({
       where: { barcode },
-      include: { product: true, brand: true, location: { include: { parent: true } } },
+      include: { product: true, brand: true, location: { include: { parent: true } }, basket: true },
     });
     if (!item) throw new NotFoundException('بارکد پیدا نشد');
     return { ok: true, data: item };
@@ -620,6 +671,7 @@ export class InventoryService {
     data: {
       minStock?: number;
       locationId?: string | null;
+      basketId?: string | null;
       salePrice?: number;
       purchasePrice?: number;
       isActive?: boolean;
@@ -629,6 +681,14 @@ export class InventoryService {
   ) {
     const existing = await this.prisma.inventoryItem.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('قلم موجودی پیدا نشد');
+    // Shelf + basket travel together: validate the pair before the write so
+    // a stale basket from another shelf can never be saved.
+    const placement = await resolvePlacement(
+      this.prisma,
+      { locationId: data.locationId, basketId: data.basketId },
+      { locationId: existing.locationId, basketId: existing.basketId },
+    );
+    const placementTouched = data.locationId !== undefined || data.basketId !== undefined;
 
     const updated = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const nextSalePrice =
@@ -637,14 +697,20 @@ export class InventoryService {
         where: { id },
         data: {
           minStock: data.minStock !== undefined ? data.minStock : undefined,
-          locationId: data.locationId !== undefined ? data.locationId : undefined,
+          locationId: placementTouched ? placement.locationId : undefined,
+          basketId: placementTouched ? placement.basketId : undefined,
           salePrice: data.salePrice !== undefined ? BigInt(data.salePrice) : undefined,
           purchasePrice: data.purchasePrice !== undefined ? BigInt(data.purchasePrice) : undefined,
           isActive: data.isActive !== undefined ? data.isActive : undefined,
           notes: data.notes !== undefined ? data.notes : undefined,
           ...(nextSalePrice !== existing.salePrice ? { priceUpdatedAt: new Date() } : {}),
         },
-        include: { product: true, brand: true, location: { include: { parent: true } } },
+        include: {
+          product: true,
+          brand: true,
+          location: { include: { parent: true } },
+          basket: true,
+        },
       });
       await recordSalePriceChange(tx, {
         itemId: id,
@@ -663,12 +729,14 @@ export class InventoryService {
           before: {
             minStock: existing.minStock,
             locationId: existing.locationId,
+            basketId: existing.basketId,
             salePrice: String(existing.salePrice),
             purchasePrice: String(existing.purchasePrice),
           },
           after: {
             minStock: item.minStock,
             locationId: item.locationId,
+            basketId: item.basketId,
             salePrice: String(item.salePrice),
             purchasePrice: String(item.purchasePrice),
           },

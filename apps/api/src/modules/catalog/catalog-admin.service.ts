@@ -8,6 +8,7 @@ import {
   buildProductSyncPayload,
 } from '../../common/sync/sync-payloads';
 import { recordSalePriceChange } from '../../common/inventory/price-history';
+import { resolvePlacement } from '../../common/inventory/placement';
 
 /** Inventory fields accepted inside product.create — brand, barcode, prices,
  * shelf and the opening stock, applied in the same transaction as the catalog
@@ -19,6 +20,7 @@ type ProductCreateInventoryInput = {
   salePrice?: bigint;
   minStock?: number;
   locationId?: string | null;
+  basketId?: string | null;
   initialQuantity: number;
 };
 
@@ -32,6 +34,7 @@ type ProductUpdateInventoryInput = {
   salePrice?: bigint;
   minStock?: number | null;
   locationId?: string | null;
+  basketId?: string | null;
   notes?: string;
 };
 
@@ -92,7 +95,9 @@ export class CatalogAdminService {
       orderBy: { createdAt: 'desc' },
       include: {
         category: true,
-        inventoryItems: { include: { brand: true, location: { include: { parent: true } } } },
+        inventoryItems: {
+          include: { brand: true, location: { include: { parent: true } }, basket: true },
+        },
         // Primary image first so the panel list can show a thumbnail without
         // pulling every image of every product.
         images: { orderBy: [{ isPrimary: 'desc' }, { sort: 'asc' }], take: 1 },
@@ -138,7 +143,9 @@ export class CatalogAdminService {
         category: true,
         images: { orderBy: [{ isPrimary: 'desc' }, { sort: 'asc' }] },
         compatibilities: { include: { model: { include: { make: true } }, trim: true } },
-        inventoryItems: { include: { brand: true, location: { include: { parent: true } } } },
+        inventoryItems: {
+          include: { brand: true, location: { include: { parent: true } }, basket: true },
+        },
       },
     });
     if (!product) throw new NotFoundException('محصول پیدا نشد');
@@ -208,6 +215,7 @@ export class CatalogAdminService {
         input: ProductCreateInventoryInput;
         brandId: string | null;
         locationId: string | null;
+        basketId: string | null;
         barcode: string;
       }> = [];
       const explicitBarcodes = new Set<string>();
@@ -224,6 +232,14 @@ export class CatalogAdminService {
           if (!location) throw new BadRequestException('موقعیت انبار نامعتبر است');
           locationId = location.id;
         }
+        // Shelf + basket are resolved together: the basket must belong to the
+        // shelf, and sending only a basket fills its shelf in.
+        const placement = await resolvePlacement(tx, {
+          locationId,
+          basketId: item.basketId ?? null,
+        });
+        locationId = placement.locationId;
+        const basketId = placement.basketId;
         let barcode = item.barcode?.trim() ?? '';
         if (barcode) {
           if (!/^\d{4,20}$/.test(barcode))
@@ -236,7 +252,7 @@ export class CatalogAdminService {
         } else {
           barcode = await this.uniqueBarcode(tx);
         }
-        resolvedItems.push({ input: item, brandId, locationId, barcode });
+        resolvedItems.push({ input: item, brandId, locationId, basketId, barcode });
       }
       const created = await tx.product.create({
         data: {
@@ -272,6 +288,7 @@ export class CatalogAdminService {
             salePrice: item.salePrice,
             minStock: item.minStock,
             locationId: resolved.locationId,
+            basketId: resolved.basketId,
             // Opening price entry — only when a price was actually set.
             ...(item.salePrice && item.salePrice > 0n ? { priceUpdatedAt: new Date() } : {}),
           },
@@ -580,6 +597,11 @@ export class CatalogAdminService {
         throw new BadRequestException('locationId باید شناسهٔ معتبر موقعیت باشد');
       input.locationId = raw.locationId;
     }
+    if (raw.basketId !== undefined && raw.basketId !== null) {
+      if (typeof raw.basketId !== 'string' || !this.uuidValue(raw.basketId))
+        throw new BadRequestException('basketId باید شناسهٔ معتبر سبد باشد');
+      input.basketId = raw.basketId;
+    }
     input.purchasePrice = this.priceValue(raw.purchasePrice, 'قیمت خرید');
     input.salePrice = this.priceValue(raw.salePrice, 'قیمت فروش');
     if (raw.minStock !== undefined && raw.minStock !== null) {
@@ -601,6 +623,7 @@ export class CatalogAdminService {
       'salePrice',
       'minStock',
       'locationId',
+      'basketId',
       'initialQuantity',
     ].filter((key) => raw[key] !== undefined && raw[key] !== null);
     if (!provided.length)
@@ -657,6 +680,12 @@ export class CatalogAdminService {
         input.locationId = raw.locationId;
       else throw new BadRequestException('locationId باید شناسهٔ معتبر موقعیت باشد');
     }
+    if (raw.basketId !== undefined) {
+      if (raw.basketId === null) input.basketId = null;
+      else if (typeof raw.basketId === 'string' && this.uuidValue(raw.basketId))
+        input.basketId = raw.basketId;
+      else throw new BadRequestException('basketId باید شناسهٔ معتبر سبد باشد');
+    }
     if (raw.purchasePrice !== undefined)
       input.purchasePrice = this.priceValue(raw.purchasePrice, 'قیمت خرید', true);
     if (raw.salePrice !== undefined)
@@ -711,12 +740,19 @@ export class CatalogAdminService {
       }
       data.barcode = barcode;
     }
-    if (input.locationId !== undefined) {
-      if (input.locationId) {
-        const location = await tx.location.findUnique({ where: { id: input.locationId } });
+    const placementTouched = input.locationId !== undefined || input.basketId !== undefined;
+    if (placementTouched) {
+      const placement = await resolvePlacement(
+        tx,
+        { locationId: input.locationId, basketId: input.basketId },
+        { locationId: existing.locationId, basketId: existing.basketId },
+      );
+      if (placement.locationId) {
+        const location = await tx.location.findUnique({ where: { id: placement.locationId } });
         if (!location) throw new BadRequestException('موقعیت انبار نامعتبر است');
       }
-      data.locationId = input.locationId;
+      data.locationId = placement.locationId;
+      data.basketId = placement.basketId;
     }
     if (input.purchasePrice !== undefined) data.purchasePrice = input.purchasePrice;
     if (input.salePrice !== undefined) data.salePrice = input.salePrice;

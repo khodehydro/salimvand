@@ -21,6 +21,10 @@ enum LocationType {
   shelf
   level
   box
+  /// «سبد» — a bin placed inside a shelf (third level of the placement
+  /// tree: انبار › قفسه › سبد). Stock lines point at a shelf AND,
+  /// optionally, at one basket of that shelf.
+  basket
 }
 enum InventoryTransactionType {
   initial
@@ -218,6 +222,10 @@ model ProductVehicleCompat {
   @@map("product_vehicle_compat")
 }
 
+/// Placement tree — exactly three levels deep:
+///   انبار (warehouse, top level) › قفسه (shelf) › سبد (basket).
+/// Stock lines reference a shelf (`InventoryItem.location`) and, when the
+/// part sits in a bin, one basket of that shelf (`InventoryItem.basket`).
 model Location {
   id       String      @id @default(uuid()) @db.Uuid
   parentId String?     @db.Uuid
@@ -226,7 +234,9 @@ model Location {
   name     String      @db.VarChar(100)
   parent   Location?   @relation("LocationTree", fields: [parentId], references: [id])
   children Location[]  @relation("LocationTree")
-  items    InventoryItem[]
+  items    InventoryItem[] @relation("ItemShelf")
+  /// Stock lines filed directly into this basket («سبد»).
+  basketItems InventoryItem[] @relation("ItemBasket")
   @@unique([parentId, code])
   @@map("locations")
 }
@@ -240,14 +250,19 @@ model InventoryItem {
   purchasePrice BigInt                @default(0)
   salePrice    BigInt                 @default(0)
   minStock     Int?
+  /// قفسه — the shelf this stock line lives on.
   locationId   String?                @db.Uuid
+  /// سبد — the basket (bin) inside the shelf; null means «on the shelf,
+  /// no basket». Always null unless it belongs to this line's shelf.
+  basketId     String?                @db.Uuid
   notes        String?
   isActive     Boolean                @default(true)
   /// When the current salePrice took effect — feeds the Shamsi price badges.
   priceUpdatedAt DateTime?            @db.Timestamptz(6)
   product      Product                @relation(fields: [productId], references: [id])
   brand        Brand?                 @relation(fields: [brandId], references: [id])
-  location     Location?              @relation(fields: [locationId], references: [id])
+  location     Location?              @relation("ItemShelf", fields: [locationId], references: [id])
+  basket       Location?              @relation("ItemBasket", fields: [basketId], references: [id])
   transactions InventoryTransaction[]
   invoiceItems InvoiceItem[]
   purchaseItems PurchaseInvoiceItem[]
@@ -255,6 +270,7 @@ model InventoryItem {
   @@unique([productId, brandId])
   @@index([productId])
   @@index([locationId])
+  @@index([basketId])
   @@map("inventory_items")
 }
 

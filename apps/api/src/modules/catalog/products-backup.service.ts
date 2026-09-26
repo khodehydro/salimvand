@@ -51,6 +51,12 @@ type BackupProduct = {
     minStock: number | null;
     locationCode: string | null;
     locationParentCode: string | null;
+    /** Full placement path (root…leaf codes) — survives repeated codes such
+     * as «سبد ۲» living under several shelves. Older archives omit it. */
+    locationPath: string[] | null;
+    basketCode: string | null;
+    basketParentCode: string | null;
+    basketPath: string[] | null;
     notes: string | null;
     isActive: boolean;
     priceUpdatedAt: string | null;
@@ -67,7 +73,14 @@ type BackupReferences = {
     parentCode: string | null;
   }>;
   brands: Array<{ name: string; isActive: boolean }>;
-  locations: Array<{ code: string; name: string; type: string; parentCode: string | null }>;
+  locations: Array<{
+    code: string;
+    name: string;
+    type: string;
+    parentCode: string | null;
+    /** Root…leaf chain of codes (انبار › قفسه › سبد); older archives omit it. */
+    path?: string[];
+  }>;
   vehicles: Array<{
     make: string;
     models: Array<{
@@ -116,7 +129,13 @@ export class ProductsBackupService {
           category: true,
           images: { orderBy: { sort: 'asc' } },
           compatibilities: { include: { model: { include: { make: true } }, trim: true } },
-          inventoryItems: { include: { brand: true, location: { include: { parent: true } } } },
+          inventoryItems: {
+            include: {
+              brand: true,
+              location: { include: { parent: true } },
+              basket: { include: { parent: true } },
+            },
+          },
         },
       }),
       this.prisma.category.findMany({ orderBy: { sort: 'asc' } }),
@@ -126,6 +145,32 @@ export class ProductsBackupService {
         include: { models: { include: { trims: true }, orderBy: { name: 'asc' } } },
       }),
     ]);
+
+    // Placement paths are resolved by id, never by code: basket codes repeat
+    // across shelves («سبد ۱» under every قفسه), so a code→row map would
+    // collapse them into one entry and a restore would file parts in the
+    // wrong bin.
+    const locationById = new Map(locations.map((location) => [location.id, location]));
+    const codeById = new Map(locations.map((location) => [location.id, location.code]));
+    const locationPathById = new Map<string, string[]>();
+    const pathOf = (id: string): string[] => {
+      const cached = locationPathById.get(id);
+      if (cached) return cached;
+      const row = locationById.get(id);
+      if (!row) return [];
+      // A corrupted tree must not hang the backup: cap the walk at the row
+      // count so a parent cycle stops instead of recursing forever.
+      const chain: string[] = [];
+      let cursor: (typeof locations)[number] | undefined = row;
+      const guard = locations.length + 1;
+      for (let step = 0; cursor && step < guard; step += 1) {
+        chain.unshift(cursor.code);
+        cursor = cursor.parentId ? locationById.get(cursor.parentId) : undefined;
+      }
+      locationPathById.set(id, chain);
+      return chain;
+    };
+    for (const location of locations) pathOf(location.id);
 
     const serialized: BackupProduct[] = products.map((product) => ({
       code: product.code,
@@ -168,6 +213,10 @@ export class ProductsBackupService {
         minStock: item.minStock,
         locationCode: item.location?.code ?? null,
         locationParentCode: item.location?.parent?.code ?? null,
+        locationPath: item.location ? locationPathById.get(item.location.id) ?? null : null,
+        basketCode: item.basket?.code ?? null,
+        basketParentCode: item.basket?.parent?.code ?? null,
+        basketPath: item.basket ? locationPathById.get(item.basket.id) ?? null : null,
         notes: item.notes,
         isActive: item.isActive,
         priceUpdatedAt: item.priceUpdatedAt?.toISOString() ?? null,
@@ -188,7 +237,10 @@ export class ProductsBackupService {
         code: location.code,
         name: location.name,
         type: location.type,
-        parentCode: null,
+        parentCode: location.parentId ? codeById.get(location.parentId) ?? null : null,
+        // Full «انبار › قفسه › سبد» chain — the only key that stays unique
+        // when basket codes repeat across shelves.
+        path: locationPathById.get(location.id) ?? [location.code],
       })),
       vehicles: makes.map((make) => ({
         make: make.name,
@@ -207,11 +259,7 @@ export class ProductsBackupService {
     for (const entry of references.categories)
       entry.parentCode =
         categoryById.get(categoryByCode.get(entry.code)?.parentId ?? '')?.code ?? null;
-    const locationById = new Map(locations.map((location) => [location.id, location]));
-    const locationByCode = new Map(locations.map((location) => [location.code, location]));
-    for (const entry of references.locations)
-      entry.parentCode =
-        locationById.get(locationByCode.get(entry.code)?.parentId ?? '')?.code ?? null;
+
 
     const zip = new AdmZip();
 
@@ -466,41 +514,68 @@ export class ProductsBackupService {
         summary.brandsCreated += 1;
       }
 
-      // Locations — warehouses before shelves (parentCode chain), same trick.
+      // Locations — انبار › قفسه › سبد, created root-first. Archives written
+      // after the basket feature carry a `path` (root…leaf codes); that path is
+      // the only key that survives repeated codes («سبد ۲» under many
+      // shelves). Older archives fall back to the “<parentCode>><code>” key.
+      type LocationRef = (typeof references.locations)[number];
       const locByCode = new Map(references.locations.map((entry) => [entry.code, entry]));
-      const locChain = (entry: (typeof references.locations)[number]): string[] => {
+      const locChain = (entry: LocationRef): string[] => {
         const chain: string[] = [];
-        let cursor: typeof entry | undefined = entry;
-        while (cursor) {
+        let cursor: LocationRef | undefined = entry;
+        const guard = references.locations.length + 1;
+        for (let step = 0; cursor && step < guard; step += 1) {
           chain.unshift(cursor.code);
           cursor = cursor.parentCode ? locByCode.get(cursor.parentCode) : undefined;
         }
         return chain;
       };
-      for (const entry of references.locations) {
-        for (const code of locChain(entry)) {
-          const key = `${locByCode.get(code)?.parentCode ?? ''}>${code}`;
-          if (locationId.has(key)) continue;
-          const source = locByCode.get(code)!;
-          // A location's map key is “<parentCode>><code>” — so the parent's
-          // own key is “<grandparentCode>><parentCode>”. The chain loop has
-          // already stored every ancestor by the time we get here.
-          const parentKey = source.parentCode
-            ? `${locByCode.get(source.parentCode)?.parentCode ?? ''}>${source.parentCode}`
-            : '';
-          const parentId = source.parentCode ? (locationId.get(parentKey) ?? null) : null;
-          // @@unique([parentId, code]) — reuse the row if this (parent, code)
-          // slot already exists under a different id.
-          const existing = await tx.location.findFirst({ where: { parentId, code } });
-          if (existing) {
-            locationId.set(key, existing.id);
-            continue;
-          }
-          const created = await tx.location.create({
-            data: { code: source.code, name: source.name, type: source.type as never, parentId },
-          });
-          locationId.set(key, created.id);
-          summary.locationsCreated += 1;
+      const ensureLocation = async (
+        source: LocationRef,
+        parentId: string | null,
+      ): Promise<string> => {
+        // @@unique([parentId, code]) — reuse the row when this (parent, code)
+        // slot already exists under a different id.
+        const existing = await tx.location.findFirst({ where: { parentId, code: source.code } });
+        if (existing) return existing.id;
+        const created = await tx.location.create({
+          data: { code: source.code, name: source.name, type: source.type as never, parentId },
+        });
+        summary.locationsCreated += 1;
+        return created.id;
+      };
+      const ordered = [...references.locations].sort(
+        (a, b) => (a.path?.length ?? locChain(a).length) - (b.path?.length ?? locChain(b).length),
+      );
+      const done = new Set<LocationRef>();
+      for (const entry of ordered) {
+        const chain = entry.path?.length ? entry.path : locChain(entry);
+        // Create every missing ancestor first so a basket always lands under
+        // its own shelf, not under a same-coded shelf of another warehouse.
+        for (let depth = 1; depth <= chain.length; depth += 1) {
+          const path = chain.slice(0, depth);
+          const key = path.join('>');
+          const code = path[path.length - 1]!;
+          if (locationId.has(key) && depth === chain.length) break;
+          const source =
+            depth === chain.length
+              ? entry
+              : (references.locations.find(
+                  (candidate) =>
+                    candidate.code === code &&
+                    (candidate.path?.join('>') ?? '') === key,
+                ) ?? locByCode.get(code));
+          if (!source) continue;
+          if (done.has(source) && locationId.has(key)) continue;
+          const parentKey = path.length > 1 ? path.slice(0, -1).join('>') : '';
+          const parentId = parentKey ? (locationId.get(parentKey) ?? null) : null;
+          const id = await ensureLocation(source, parentId);
+          done.add(source);
+          locationId.set(key, id);
+          // Back-compat: pre-basket archives (and every two-level consumer)
+          // look locations up as “<parentCode>><code>”.
+          const legacyKey = `${source.parentCode ?? ''}>${source.code}`;
+          if (path.length <= 2) locationId.set(legacyKey, id);
         }
       }
 
@@ -791,10 +866,21 @@ export class ProductsBackupService {
               summary.errors.push(`${entry.code}: برند «${item.brandName}» بازسازی نشد`);
               continue;
             }
+            // Prefer the exported path («انبار>قفسه»); fall back to the old
+            // “<parentCode>><code>” key for archives written before baskets.
             const locationKey = item.locationCode
               ? `${item.locationParentCode ?? ''}>${item.locationCode}`
               : null;
-            const locationId = locationKey ? (maps.locationId.get(locationKey) ?? null) : null;
+            const locationId = item.locationCode
+              ? (maps.locationId.get((item.locationPath ?? []).join('>')) ??
+                maps.locationId.get(locationKey ?? '') ??
+                null)
+              : null;
+            const basketId = item.basketCode
+              ? (maps.locationId.get((item.basketPath ?? []).join('>')) ??
+                maps.locationId.get(`${item.basketParentCode ?? ''}>${item.basketCode}`) ??
+                null)
+              : null;
 
             const existingItem = await tx.inventoryItem.findUnique({
               where: { barcode: item.barcode },
@@ -807,6 +893,7 @@ export class ProductsBackupService {
               salePrice: BigInt(item.salePrice),
               minStock: item.minStock,
               locationId,
+              basketId,
               notes: item.notes,
               isActive: item.isActive,
               priceUpdatedAt: item.priceUpdatedAt ? new Date(item.priceUpdatedAt) : null,

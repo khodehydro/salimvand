@@ -268,6 +268,30 @@ export interface SyncOperationEnvelope<TPayload = Record<string, unknown>> {
   type: SyncOperationType;
   payload: TPayload;
 }
+/** Placement tree node types — the warehouse is the group, the shelf hangs
+ * under it and a basket (سبد) sits inside a shelf: انبار › قفسه › سبد. */
+export const LOCATION_TYPES = ['warehouse', 'aisle', 'shelf', 'level', 'box', 'basket'] as const;
+export type LocationType = (typeof LOCATION_TYPES)[number];
+export const BASKET_LOCATION_TYPE = 'basket';
+export const WAREHOUSE_LOCATION_TYPE = 'warehouse';
+
+export const isBasketLocation = (location?: { type?: string | null } | null): boolean =>
+  location?.type === BASKET_LOCATION_TYPE;
+export const isWarehouseLocation = (location?: { type?: string | null } | null): boolean =>
+  location?.type === WAREHOUSE_LOCATION_TYPE;
+/** Anything that is neither a warehouse nor a basket behaves as a shelf. */
+export const isShelfLocation = (location?: { type?: string | null } | null): boolean =>
+  Boolean(location?.type) && !isBasketLocation(location) && !isWarehouseLocation(location);
+
+/** Joins the placement parts of a stock line into «انبار · قفسه · سبد».
+ * Empty parts are skipped, so a line without a basket reads «انبار · قفسه». */
+export function formatPlacement(parts: ReadonlyArray<string | null | undefined>): string {
+  return parts
+    .map((part) => (part ?? '').trim())
+    .filter(Boolean)
+    .join(' · ');
+}
+
 export interface InventoryReceivePayload {
   itemId: string;
   quantity: number;
@@ -277,6 +301,8 @@ export interface InventoryAdjustPayload extends InventoryReceivePayload {}
 export interface InventoryTransferPayload {
   itemId: string;
   locationId: string;
+  /** سبد — optional basket of the destination shelf. */
+  basketId?: string | null;
 }
 /** Metadata-only inventory edit (prices, shelf, barcode, brand). `quantity`
  * stays command-only: it may only change through receive/adjust. */
@@ -286,6 +312,8 @@ export interface InventoryUpdateMetadataPayload {
   salePrice?: string;
   minStock?: number;
   locationId?: string | null;
+  /** سبد — basket inside the line's shelf; null clears it. */
+  basketId?: string | null;
   barcode?: string;
   brandId?: string | null;
   notes?: string;
@@ -300,6 +328,8 @@ export interface ProductCreateInventoryPayload {
   salePrice?: string;
   minStock?: number;
   locationId?: string | null;
+  /** سبد — basket inside the shelf; the shelf is filled in when omitted. */
+  basketId?: string | null;
   initialQuantity?: number;
 }
 export interface ProductCreatePayload {

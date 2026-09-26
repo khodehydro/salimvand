@@ -107,6 +107,8 @@ export class InventoryController {
       body.itemId ?? '',
       body.locationId ?? '',
       request.user?.id ?? '',
+      undefined,
+      body.basketId ?? null,
     );
   }
   @Get('low-stock') lowStock() {

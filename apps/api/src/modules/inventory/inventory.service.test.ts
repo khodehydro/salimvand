@@ -496,3 +496,144 @@ describe('InventoryService.updateMetadata (offline command inventory.update_meta
     ).rejects.toThrow('تغییری ارسال نشده است');
   });
 });
+
+/* ——— سبد (basket): every stock line owns its shelf AND its basket ——— */
+
+describe('InventoryService placement (قفسه + سبد)', () => {
+  const SHELF = { id: 'shelf-1', type: 'shelf', parentId: 'wh-1' };
+  const OTHER_SHELF = { id: 'shelf-2', type: 'shelf', parentId: 'wh-1' };
+  const BASKET = { id: 'basket-1', type: 'basket', parentId: 'shelf-1' };
+
+  /** Service whose `locations` table holds the fixture tree above. */
+  function makePlacementService(item: Record<string, unknown> = {}) {
+    const line = {
+      id: 'i1',
+      productId: 'p1',
+      brandId: null,
+      barcode: '6260000000123',
+      quantity: 4,
+      purchasePrice: 0n,
+      salePrice: 0n,
+      minStock: null,
+      locationId: null,
+      basketId: null,
+      isActive: true,
+      ...item,
+    };
+    const locations = [SHELF, OTHER_SHELF, BASKET];
+    const location = {
+      findUnique: vi.fn(async ({ where }: { where: { id: string } }) =>
+        locations.find((row) => row.id === where.id) ?? null,
+      ),
+    };
+    const inventoryItem = {
+      findUnique: vi.fn(async () => line),
+      update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({ ...line, ...data })),
+      findFirst: vi.fn(async () => null),
+      create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({ ...line, ...data })),
+    };
+    const tx = {
+      inventoryItem,
+      location,
+      inventoryTransaction: {
+        create: vi.fn(async () => ({ id: 't1' })),
+        findUnique: vi.fn(async () => null),
+      },
+      syncChange: {
+        create: vi.fn(async () => ({ id: 's1' })),
+        deleteMany: vi.fn(async () => ({ count: 0 })),
+      },
+      inventoryOperation: { create: vi.fn(), findFirst: vi.fn(async () => null) },
+      inventoryPriceHistory: { create: vi.fn(async () => ({ id: 1n })) },
+      brand: { findUnique: vi.fn(async () => null) },
+      auditLog: { create: vi.fn(async () => ({})) },
+    };
+    const prisma = {
+      inventoryItem,
+      location,
+      product: { findFirst: vi.fn(async () => ({ id: 'p1' })) },
+      $transaction: vi.fn(async (callback: (value: typeof tx) => unknown) => callback(tx)),
+      syncChange: { aggregate: vi.fn(async () => ({ _max: { revision: 1n } })) },
+    };
+    return { service: new InventoryService(prisma as never), tx, prisma };
+  }
+
+  it('creates a stock line with its shelf and its basket', async () => {
+    const { service, tx } = makePlacementService();
+    const result = await service.create({
+      productId: 'p1',
+      locationId: 'shelf-1',
+      basketId: 'basket-1',
+      userId: 'u1',
+    });
+    expect(tx.inventoryItem.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ locationId: 'shelf-1', basketId: 'basket-1' }),
+      }),
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  it('fills the shelf in when only a basket is sent', async () => {
+    const { service, tx } = makePlacementService();
+    await service.create({ productId: 'p1', basketId: 'basket-1', userId: 'u1' });
+    expect(tx.inventoryItem.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ basketId: 'basket-1', locationId: 'shelf-1' }),
+      }),
+    );
+  });
+
+  it('rejects a basket that belongs to another shelf — on create and on update', async () => {
+    const { service } = makePlacementService();
+    await expect(
+      service.create({ productId: 'p1', locationId: 'shelf-2', basketId: 'basket-1', userId: 'u1' }),
+    ).rejects.toThrow('سبد انتخاب‌شده متعلق به این قفسه نیست');
+    await expect(
+      service.updateMetadata({ itemId: 'i1', locationId: 'shelf-2', basketId: 'basket-1' }, 'u1'),
+    ).rejects.toThrow('سبد انتخاب‌شده متعلق به این قفسه نیست');
+  });
+
+  it('rejects a shelf (or a missing row) used as a basket', async () => {
+    const { service } = makePlacementService();
+    await expect(
+      service.updateMetadata({ itemId: 'i1', basketId: 'shelf-1' }, 'u1'),
+    ).rejects.toThrow('محل انتخاب‌شده برای سبد معتبر نیست');
+    await expect(
+      service.updateMetadata({ itemId: 'i1', basketId: 'basket-void' }, 'u1'),
+    ).rejects.toThrow('سبد انتخاب‌شده پیدا نشد');
+  });
+
+  it('moves a line to another shelf and basket through transfer (Android inventory.transfer)', async () => {
+    const { service, tx } = makePlacementService({ locationId: 'shelf-2' });
+    await service.transfer('i1', 'shelf-1', 'u1', 'android-transfer-1', 'basket-1');
+    expect(tx.inventoryItem.update).toHaveBeenCalledWith({
+      where: { id: 'i1' },
+      data: { locationId: 'shelf-1', basketId: 'basket-1' },
+    });
+  });
+
+  it('clears the basket when the operator clears the shelf', async () => {
+    const { service, tx } = makePlacementService({ locationId: 'shelf-1', basketId: 'basket-1' });
+    await service.updateMetadata({ itemId: 'i1', locationId: null }, 'u1');
+    expect(tx.inventoryItem.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ locationId: null, basketId: null }),
+      }),
+    );
+  });
+
+  it('publishes the basket to the offline clients (sync payload)', async () => {
+    const { service, tx } = makePlacementService();
+    await service.updateMetadata({ itemId: 'i1', basketId: 'basket-1' }, 'u1', 'android-meta-0009');
+    // The sync stream — not the audit row — is what the Android client
+    // applies into its cache, so the basket must travel in that payload.
+    const change = tx.syncChange.create.mock.calls.at(-1)?.[0] as {
+      data: { entityType: string; action: string; payload: Record<string, unknown> };
+    };
+    expect(change.data.entityType).toBe('inventory_item');
+    expect(change.data.payload).toEqual(
+      expect.objectContaining({ id: 'i1', locationId: 'shelf-1', basketId: 'basket-1' }),
+    );
+  });
+});

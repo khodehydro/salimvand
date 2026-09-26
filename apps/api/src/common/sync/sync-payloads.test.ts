@@ -81,6 +81,7 @@ describe('sync payload builders (Android pull contract)', () => {
         salePrice: 2450000n,
         minStock: 3,
         locationId: null,
+        basketId: null,
         isActive: true,
         priceUpdatedAt: null,
       }),
@@ -94,10 +95,51 @@ describe('sync payload builders (Android pull contract)', () => {
       salePrice: '2450000',
       minStock: 3,
       locationId: null,
+      basketId: null,
       isActive: true,
       priceUpdatedAt: null,
       priceUpdatedAtJalali: null,
     });
+  });
+
+  it('ships the سبد (basket) with every inventory row so the app can address the part', () => {
+    expect(
+      buildInventoryItemSyncPayload({
+        id: 'i3',
+        productId: 'p1',
+        brandId: 'b1',
+        barcode: '6261234567899',
+        quantity: 2,
+        purchasePrice: 10n,
+        salePrice: 20n,
+        minStock: null,
+        locationId: 'shelf-1',
+        basketId: 'basket-4',
+        isActive: true,
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        id: 'i3',
+        locationId: 'shelf-1',
+        basketId: 'basket-4',
+      }),
+    );
+    // Rows selected before the basket column existed must not crash the
+    // audit path — they simply report «no basket».
+    expect(
+      buildInventoryItemSyncPayload({
+        id: 'i4',
+        productId: 'p1',
+        brandId: null,
+        barcode: '6261234567898',
+        quantity: 1,
+        purchasePrice: 0n,
+        salePrice: 0n,
+        minStock: null,
+        locationId: 'shelf-1',
+        isActive: true,
+      }).basketId,
+    ).toBeNull();
   });
 
   it('carries the sale-price stamp as ISO plus pre-formatted Shamsi', () => {
