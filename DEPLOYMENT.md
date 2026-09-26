@@ -40,6 +40,32 @@ sudo APP_DIR=/opt/salimvand DEPLOY_BRANCH=main ./scripts/deploy.sh
 
 در هر Deploy، اگر vhost پنل (`cms.`) هنوز location مسیر `/uploads/` را نداشته باشد، همین بلاک به‌صورت خودکار به همان server block اضافه و Nginx Reload می‌شود تا پیش‌نمایش تصاویر در کتابخانهٔ رسانه و تنظیمات پنل کار کند. فایل vhost هرگز بازنویسی کامل نمی‌شود تا تغییرات Certbot (بلوک‌های TLS) دست‌نخورده بمانند؛ برای نصب‌های تازه، `setup-server.sh` نسخهٔ کامل داخل `deploy/nginx/salimvand.conf` را می‌گذارد.
 
+## Deploy از ویندوز روی سرور لینوکس (PowerShell + SSH)
+
+اگر سرور شما لینوکس است و فقط از ویندوز به آن وصل می‌شوید، این اسکریپت روی **کامپیوتر شما** اجرا
+می‌شود و با SSH روی سرور، آخرین تغییرات را از گیت‌هاب می‌گیرد و دیپلوی می‌کند. روی سرور نیازی به
+پوشهٔ از‌پیش‌ساخته نیست: اگر `/opt/salimvand` نباشد، مخزن کلون می‌شود؛ وگرنه فقط `fetch` و
+`checkout` انجام می‌شود و بعد همان `scripts/deploy.sh` اجرا می‌گردد:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\deploy\deploy-remote.ps1 -Host root@IP-SERVER
+```
+
+با شاخه و کلید SSH دلخواه:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\deploy\deploy-remote.ps1 `
+    -Host root@IP-SERVER -Branch arena/01a0dd70-salimvand `
+    -SshKey "$HOME\.ssh\id_ed25519"
+```
+
+مراحل روی سرور: کلون/fetch شاخه → ساخت `.env` در صورت نبود (خروج با کد `2` تا آن را پر کنید) →
+`pnpm install` → `prisma generate` → `migrate deploy` → `seed` → `typecheck` → `build` →
+ری‌استارت `salimvand-api`، `salimvand-website` و `salimvand-worker` → بررسی سلامت
+`/api/v1/health/ready`. خروجی هر مرحله دستور در ترمینال شما چاپ می‌شود، بنابراین همه‌چیز قابل
+ردیابی است. `-SkipRestart` (معادل `SKIP_RESTART=1` در `scripts/deploy.sh`) فقط دریافت و Build را
+انجام می‌دهد و سرویس‌ها را ری‌استارت نمی‌کند.
+
 ## Deploy روی ویندوز (PowerShell)
 
 اگر سرور مقصد ویندوز است (یا پوشه‌ای از پروژه روی آن وجود ندارد و قرار است همه‌چیز مستقیماً از

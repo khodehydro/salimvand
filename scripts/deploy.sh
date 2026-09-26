@@ -243,6 +243,12 @@ if command -v fail2ban-client >/dev/null 2>&1; then
   systemctl enable --now fail2ban
   fail2ban-client reload
 fi
+# Build-only releases (staged for a restart window) are requested from the
+# remote PowerShell wrapper with SKIP_RESTART=1.
+if [[ "${SKIP_RESTART:-0}" == "1" ]]; then
+  echo "SKIP_RESTART=1 — services left running; release $(git rev-parse --short HEAD) is built and staged."
+  exit 0
+fi
 systemctl restart salimvand-api.service salimvand-website.service salimvand-worker.service
 
 for attempt in $(seq 1 30); do
