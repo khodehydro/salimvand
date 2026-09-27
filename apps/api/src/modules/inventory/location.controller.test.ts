@@ -24,6 +24,10 @@ describe('LocationController', () => {
     await controller.list();
     expect(list).toHaveBeenCalledTimes(1);
 
+    // The mobile pickers ask for one level of the tree: the query is forwarded.
+    await controller.list('basket', 'shelf-1');
+    expect(list).toHaveBeenLastCalledWith({ type: 'basket', parentId: 'shelf-1' });
+
     await controller.create({ name: 'انبار دوم', code: 'W-02' }, request);
     expect(create).toHaveBeenCalledWith(
       expect.objectContaining({

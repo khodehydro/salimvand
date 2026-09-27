@@ -75,3 +75,29 @@ export async function api<T>(path: string, options: RequestInit = {}, retry = tr
     );
   return body;
 }
+
+/** Cursor-paginated list endpoints answer one page at a time; this drains the
+ * cursor chain so the list pages keep their "everything is searchable
+ * client-side" behaviour. The hard page cap keeps a broken cursor loop from
+ * running forever. */
+export async function fetchAllPages<T>(
+  path: string,
+  options: { limit?: number; maxPages?: number } = {},
+): Promise<T[]> {
+  const limit = options.limit ?? 200;
+  const maxPages = options.maxPages ?? 50;
+  const rows: T[] = [];
+  let cursor: string | null = null;
+  for (let page = 0; page < maxPages; page += 1) {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (cursor) params.set('cursor', cursor);
+    const joiner = path.includes('?') ? '&' : '?';
+    const result = await api<{ data: T[]; nextCursor: string | null }>(
+      `${path}${joiner}${params.toString()}`,
+    );
+    rows.push(...result.data);
+    if (!result.nextCursor) return rows;
+    cursor = result.nextCursor;
+  }
+  return rows;
+}

@@ -1,6 +1,12 @@
-import { formatPersianNumber, formatRial } from '@salimvand/shared';
+import {
+  baladDirectionsUrl,
+  formatPersianNumber,
+  formatRial,
+  normalizeDigits,
+} from '@salimvand/shared';
 import QRCode from 'qrcode';
 import { InvoiceActions } from './InvoiceActions';
+import { getStoreInfo, primaryPhone } from './store-info';
 
 export type PublicInvoice = {
   number: string;
@@ -9,10 +15,12 @@ export type PublicInvoice = {
   customerAddress?: string | null;
   storeAddress?: string | null;
   storePhone?: string | null;
+  storeLogoUrl?: string | null;
   vehicle?: string | null;
   salesPerson?: string | null;
   subtotal: string | number;
   discount: string | number;
+  discountPercent?: number | null;
   total: string | number;
   /** Sum of every partial return — what the invoice shrinks by. */
   returnedTotal?: string | number;
@@ -94,13 +102,23 @@ export async function InvoiceDocument({
   const status = invoice.paymentStatus ?? 'unpaid';
   const qr = await QRCode.toDataURL(shareUrl, { errorCorrectionLevel: 'M', width: 260, margin: 1 });
   const expiry = invoice.linkExpiresAt ? shamsi(invoice.linkExpiresAt) : '۳۰ روز از تاریخ صدور';
+  // Store contact for the bottom actions: the invoice's own store phone wins,
+  // the site's primary phone is the fallback.
+  const info = await getStoreInfo();
+  const phone = invoice.storePhone || primaryPhone(info);
+  const dialable = normalizeDigits(phone ?? '').replace(/[^0-9+]/g, '');
+  const callHref = dialable ? `tel:${dialable}` : null;
+  const navHref =
+    info.nav.lat != null && info.nav.lng != null
+      ? baladDirectionsUrl(info.nav.lat, info.nav.lng)
+      : null;
 
   return (
     <main className="invoice-shell">
       {/* Dark brand band — header of the document */}
       <header className="inv-band">
         <a href="/" className="inv-brand">
-          <span className="brand-mark">س</span>
+          {invoice.storeLogoUrl ? <img className="invoice-brand-logo" src={invoice.storeLogoUrl} alt="" /> : <span className="brand-mark">س</span>}
           <span>
             <b>فروشگاه سلیم وند</b>
             <small>آذین خودرو · میاندوآب</small>
@@ -259,7 +277,12 @@ export async function InvoiceDocument({
               <b>{money(invoice.subtotal)}</b>
             </div>
             <div>
-              <span>تخفیف فاکتور</span>
+              <span>
+                تخفیف فاکتور
+                {Number(invoice.discountPercent ?? 0) > 0
+                  ? ` (${formatPersianNumber(invoice.discountPercent ?? 0)}٪)`
+                  : ''}
+              </span>
               <b>− {money(invoice.discount)}</b>
             </div>
             {returnedTotal > 0 && (
@@ -289,6 +312,31 @@ export async function InvoiceDocument({
             این صفحه با توکن امن نمایش داده می‌شود و فاکتور با همین لینک قابل پیگیری است.
           </small>
         </div>
+
+        {/* Bottom contact actions — part of the document flow: unlike the
+            site's floating bars they do NOT follow the scroll, and unlike
+            those they render on every screen size (mobile + desktop). */}
+        {(callHref || navHref) && (
+          <div className="inv-contact-actions">
+            {callHref && (
+              <a className="inv-contact-btn call" href={callHref}>
+                <b>تماس با فروشگاه</b>
+                <small dir="ltr">{formatPersianNumber(dialable)}</small>
+              </a>
+            )}
+            {navHref && (
+              <a
+                className="inv-contact-btn nav"
+                href={navHref}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <b>مسیریابی سریع</b>
+                <small>مسیر تا فروشگاه با بلد</small>
+              </a>
+            )}
+          </div>
+        )}
       </div>
 
       <footer className="invoice-footer">

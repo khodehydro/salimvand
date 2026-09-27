@@ -119,7 +119,7 @@ export function ReferencesPage() {
         <span className="count">{formatPersianNumber(categories.length + brands.length)} مرجع</span>
       </div>
       {message && <div className="notice">{message}</div>}
-      <div className="tabs reference-tabs">
+      <div className="tabs reference-tabs seg-tabs">
         <button
           className={tab === 'categories' ? 'active' : ''}
           onClick={() => setTab('categories')}

@@ -3,10 +3,13 @@ import { DashboardService } from './dashboard.service';
 
 function makeService() {
   const prisma = {
-    product: { count: vi.fn() },
     inventoryItem: { count: vi.fn(), findMany: vi.fn() },
     inventoryTransaction: { findMany: vi.fn() },
-    invoice: { findMany: vi.fn() },
+    invoice: { findMany: vi.fn().mockResolvedValue([]), count: vi.fn().mockResolvedValue(0) },
+    product: { count: vi.fn().mockResolvedValue(0) },
+    payment: { findMany: vi.fn().mockResolvedValue([]) },
+    paymentCheck: { findMany: vi.fn().mockResolvedValue([]) },
+    purchaseInvoice: { count: vi.fn().mockResolvedValue(0) },
   };
   return { service: new DashboardService(prisma as never), prisma };
 }
@@ -44,7 +47,7 @@ describe('DashboardService', () => {
         { quantity: 8, product: { category: null } },
       ]);
     prisma.inventoryTransaction.findMany.mockResolvedValue([{ id: '1', quantityChange: 2 }]);
-    await expect(service.summary()).resolves.toEqual({
+    await expect(service.summary()).resolves.toMatchObject({
       ok: true,
       data: {
         products: 12,
@@ -79,6 +82,7 @@ describe('DashboardService', () => {
   it('groups the sales trend by day and returns JSON-safe amounts', async () => {
     const { service, prisma } = makeService();
     prisma.invoice = {
+      count: vi.fn().mockResolvedValue(0),
       findMany: vi.fn().mockResolvedValue([
         { issuedAt: new Date('2026-08-01T10:00:00Z'), total: 1000n, paidAmount: 400n },
         { issuedAt: new Date('2026-08-01T15:00:00Z'), total: 500n, paidAmount: 500n },

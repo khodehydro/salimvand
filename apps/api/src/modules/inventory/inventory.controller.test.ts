@@ -46,7 +46,10 @@ describe('InventoryController', () => {
     } as never);
     await controller.adjust('item-1', { quantity: '-2', reason: 'شمارش' } as never, request);
     await controller.receive({ itemId: 'item-1', quantity: 3, reason: 'خرید' } as never, request);
-    await controller.transfer({ itemId: 'item-1', locationId: 'location-2' } as never, request);
+    await controller.transfer(
+      { itemId: 'item-1', locationId: 'location-2', basketId: 'basket-9' } as never,
+      request,
+    );
     await controller.transactions('item-1');
     await controller.updateItem('item-1', { minStock: 5 } as never, request);
     await controller.reconciliation();
@@ -62,7 +65,8 @@ describe('InventoryController', () => {
       userId: 'user-1',
       reason: 'خرید',
     });
-    expect(transfer).toHaveBeenCalledWith('item-1', 'location-2', 'user-1');
+    // A transfer may carry the destination basket (سبد) alongside the shelf.
+    expect(transfer).toHaveBeenCalledWith('item-1', 'location-2', 'user-1', undefined, 'basket-9');
     expect(transactions).toHaveBeenCalledWith('item-1');
     expect(updateItem).toHaveBeenCalledWith('item-1', { minStock: 5 }, 'user-1');
     expect(reconciliation).toHaveBeenCalled();

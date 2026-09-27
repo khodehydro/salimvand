@@ -601,6 +601,14 @@ p {
   font-size: 13px;
   font-weight: 700;
 }
+/* Shamsi stamp of when this price took effect — the anti-inflation badge. */
+.card-price-date {
+  display: block;
+  color: var(--text-3);
+  font-size: 10px;
+  font-weight: 400;
+  margin-top: 2px;
+}
 .card-footer b {
   font-size: 15px;
 }
@@ -783,8 +791,15 @@ p {
   .hero-section h1 {
     font-size: 35px;
   }
-  .hero-copy > p {
-    font-size: 14px;
+  /* Mobile hero keeps only the headline and trust badge — the subheadline
+     and the two CTA buttons are phone-only clutter; the page-bottom call
+     CTA still covers contact. */
+  .hero-copy > p,
+  .hero-actions {
+    display: none;
+  }
+  .hero-trust {
+    margin-top: 22px;
   }
   .trust-strip {
     gap: 15px;
@@ -860,6 +875,21 @@ p {
     box-shadow: var(--shadow-card);
     font-size: 13px;
   }
+  /* Both fixed bars slide in only after the first scroll (html.is-scrolled,
+     set by the layout bootstrap script): on the initial viewport the sticky
+     catalog search sits exactly where these bars would be, and they used to
+     end up hidden underneath it. */
+  .mobile-contact-bar,
+  .mobile-quick-nav {
+    /* px, not %: percentage translates against the bar's own (short) height
+       and barely moves it; 140px clears both stacked bars below the fold. */
+    transform: translateY(140px);
+    transition: transform 0.28s ease;
+  }
+  html.is-scrolled .mobile-contact-bar,
+  html.is-scrolled .mobile-quick-nav {
+    transform: none;
+  }
   .mobile-contact-bar span {
     color: var(--brand-200);
     font-size: 10px;
@@ -888,6 +918,10 @@ p {
     text-decoration: none;
     box-shadow: var(--shadow-card);
     font-size: 13px;
+    /* Slide in only after the first scroll (html.is-scrolled, set by the
+       layout bootstrap script): on the initial viewport the sticky catalog
+       search sits exactly where these bars would be, and they used to end
+       up hidden underneath it. */
     font-weight: 700;
   }
   .mobile-quick-nav span {
@@ -1274,6 +1308,47 @@ p {
   color: var(--text-3);
   font-size: 10.5px;
 }
+/* Bottom contact & navigation actions. Deliberately STATIC — they belong to
+ * the document flow at the end of the invoice (unlike the site's fixed
+ * mobile bars that follow the scroll) and render on every screen size. */
+.inv-contact-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  padding: 16px 4px 8px;
+}
+.inv-contact-btn {
+  display: grid;
+  gap: 3px;
+  justify-items: center;
+  padding: 13px 16px;
+  border-radius: 12px;
+  text-decoration: none;
+  text-align: center;
+  box-shadow: var(--shadow-card);
+}
+.inv-contact-btn b {
+  font-size: 14px;
+}
+.inv-contact-btn small {
+  font-size: 10.5px;
+}
+/* Call mirrors the site's quick-call bar (navy), navigation is green like
+ * the site's «مسیریابی سریع» link. */
+.inv-contact-btn.call {
+  background: var(--navy);
+  color: var(--on-brand);
+}
+.inv-contact-btn.call small {
+  color: var(--brand-200);
+}
+.inv-contact-btn.nav {
+  background: var(--ok);
+  color: #fff;
+}
+.inv-contact-btn.nav small {
+  color: rgba(255, 255, 255, 0.85);
+}
 .invoice-empty {
   text-align: center;
   display: grid;
@@ -1313,7 +1388,8 @@ p {
     print-color-adjust: exact;
   }
   .invoice-actions,
-  .inv-actions-row {
+  .inv-actions-row,
+  .inv-contact-actions {
     display: none;
   }
   .inv-card {
@@ -1347,8 +1423,11 @@ p {
   .inv-w {
     padding: 0 12px 10px;
   }
+  /* Keep the generous bottom padding: .inv-top overlaps the band by -18px, so
+     a plain 14px bottom padding let the specs card drop onto the band's action
+     buttons on mobile (the exact overlap this rule fixes). */
   .inv-band {
-    padding: 14px 16px;
+    padding: 14px 16px 34px;
   }
   .inv-band-sub {
     display: none;
@@ -1954,6 +2033,18 @@ p {
   color: var(--text-3);
   font-size: 11px;
 }
+/* «قیمت به‌روز: ۱۴۰۵/۰۶/۲۷» — when the displayed number took effect. */
+.product-price .price-update-badge {
+  justify-self: center;
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-2);
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 11px;
+  line-height: 1.6;
+}
 /* The product page shows the phone number alone — one tap dials the store. */
 .product-phone {
   display: grid;
@@ -2200,4 +2291,52 @@ p {
 }
 .product-layout .product-video-head h2 {
   font-size: 17px;
+}
+
+.product-share-box { display: flex; align-items: flex-start; gap: 10px; flex-wrap: wrap; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line, #e4e8ee); }
+.product-share-actions { display: flex; gap: 7px; flex-wrap: wrap; }
+.product-share-actions .button { border: 0; cursor: pointer; font: inherit; font-size: 12px; text-decoration: none; }
+.button-copy { background: #eef2f7; color: #26364a; }
+.button-whatsapp { background: #25d366; color: #fff; }
+.product-share-box details { font-size: 12px; }
+.product-share-box summary { cursor: pointer; padding: 8px 10px; border: 1px solid #d9e0e8; border-radius: 8px; }
+.product-share-box details img { display: block; margin-top: 8px; border: 6px solid #fff; box-shadow: 0 2px 12px #0002; }
+
+.gallery-prev { left: 10px; right: auto; }
+.gallery-next { right: 10px; left: auto; }
+@media (max-width: 700px) { .product-page { padding-bottom: 155px; } }
+.invoice-brand-logo { width: 38px; height: 38px; object-fit: contain; border-radius: 8px; background: rgba(255,255,255,.12); padding: 4px; }
+.clear-filter { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 38px; padding: 8px 14px; border: 1px solid #d5dee8; border-radius: 9px; background: #fff; color: #29445d; font: 600 13px Vazirmatn, Tahoma, sans-serif; text-decoration: none; }
+.clear-filter:hover { background: #eef5fb; color: #123a61; }
+
+/* Keep catalog search and filters available while browsing on mobile too. */
+@media (max-width: 620px) {
+  .catalog-filters {
+    position: sticky;
+    top: 8px;
+    z-index: 20;
+    background: color-mix(in srgb, var(--surface) 96%, transparent);
+    box-shadow: 0 8px 25px #0b1c2f18;
+  }
+}
+
+/* Product imagery stays square and fully visible across the home catalog and
+   the catalog listing. Contain prevents wide/tall product photos from being
+   cropped inside the 1:1 card frame. */
+.product-image {
+  height: auto;
+  aspect-ratio: 1 / 1;
+}
+.product-image img {
+  object-fit: contain;
+  object-position: center;
+}
+@media (max-width: 620px) {
+  .product-image { height: auto; aspect-ratio: 1 / 1; }
+}
+.catalog .product-card > img,
+.catalog .image-placeholder {
+  height: auto;
+  aspect-ratio: 1 / 1;
+  object-fit: contain;
 }

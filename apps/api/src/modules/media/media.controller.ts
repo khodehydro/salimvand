@@ -57,6 +57,12 @@ export class MediaController {
   ) {
     return this.media.selectExisting(productId, body.imageId ?? '', body.alt);
   }
+  @Patch('products/:productId/reorder') reorder(
+    @Param('productId') productId: string,
+    @Body() body: { imageIds?: string[] },
+  ) {
+    return this.media.reorder(productId, body.imageIds ?? []);
+  }
   @Patch('products/:productId/:imageId/primary') primary(
     @Param('productId') productId: string,
     @Param('imageId') imageId: string,

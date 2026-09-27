@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Put, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Post, Put, Req, StreamableFile, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
 import { RolesGuard } from '../../common/auth/roles.guard';
@@ -20,6 +21,31 @@ export class SettingsController {
   }
   @Get('backup/jobs') backupJobs() {
     return this.settings.backupJobs();
+  }
+  @Post('backup/inspect')
+  @UseInterceptors(FileInterceptor('file'))
+  inspectBackup(@UploadedFile() file: { buffer: Buffer; originalname: string }) {
+    if (!file?.buffer) throw new BadRequestException('فایل Backup انتخاب نشده است');
+    return this.settings.inspectBackup(file);
+  }
+  @Put('backup/google-drive')
+  uploadBackupToDrive() {
+    return this.settings.uploadBackupToDrive();
+  }
+  @Post('backup/restore')
+  @UseInterceptors(FileInterceptor('file'))
+  restoreBackup(@UploadedFile() file: { buffer: Buffer; originalname: string }, @Req() request: AuthRequest) {
+    if (!file?.buffer) throw new BadRequestException('فایل Backup انتخاب نشده است');
+    return this.settings.restoreBackup(file, request.user?.id);
+  }
+  @Get('backup/download')
+  async downloadBackup() {
+    const file = await this.settings.openBackupDownload();
+    return new StreamableFile(file.stream, {
+      type: file.filename.endsWith('.gpg') ? 'application/octet-stream' : 'application/gzip',
+      disposition: `attachment; filename="${file.filename}"`,
+      length: file.size,
+    });
   }
   @Put('backup/run') runBackup(@Req() request: AuthRequest) {
     return this.settings.runBackup(request.user?.id);

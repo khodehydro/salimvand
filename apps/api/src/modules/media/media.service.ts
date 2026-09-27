@@ -5,6 +5,8 @@ import { basename, join } from 'node:path';
 import sharp = require('sharp');
 import { PrismaService } from '../../prisma.service';
 import { Prisma } from '@prisma/client';
+import { writeSyncChange } from '../../common/audit/audit-log';
+import { buildProductSyncPayload } from '../../common/sync/sync-payloads';
 
 /** Allowed image types for the site logo / favicon (SVG is rejected on
  * purpose: served same-origin from /uploads it would allow script injection). */
@@ -125,6 +127,7 @@ export class MediaService {
     if (file.buffer.length > 5 * 1024 * 1024)
       throw new BadRequestException('حجم تصویر نباید بیشتر از ۵ مگابایت باشد');
     await this.ensureProduct(productId);
+    const isPrimary = await this.firstImageBecomesPrimary(productId);
     const id = randomUUID();
     const dir = join(this.uploadRoot, id);
     await mkdir(dir, { recursive: true });
@@ -140,8 +143,9 @@ export class MediaService {
       .toFile(join(dir, 'small.webp'));
     const path = `/uploads/products/${id}/large.webp`;
     const image = await this.prisma.productImage.create({
-      data: { productId, path, alt: alt?.trim() || undefined, sort: 0, isPrimary: false },
+      data: { productId, path, alt: alt?.trim() || undefined, sort: 0, isPrimary },
     });
+    await this.publishProductImageChange(productId);
     return { ok: true, data: image };
   }
 
@@ -149,35 +153,57 @@ export class MediaService {
     if (!/^https:\/\//i.test(url))
       throw new BadRequestException('آدرس تصویر باید با https شروع شود');
     await this.ensureProduct(productId);
-    return {
-      ok: true,
-      data: await this.prisma.productImage.create({
-        data: { productId, path: url, alt: alt?.trim() || undefined, sort: 0, isPrimary: false },
-      }),
-    };
+    const isPrimary = await this.firstImageBecomesPrimary(productId);
+    const image = await this.prisma.productImage.create({
+      data: { productId, path: url, alt: alt?.trim() || undefined, sort: 0, isPrimary },
+    });
+    await this.publishProductImageChange(productId);
+    return { ok: true, data: image };
   }
 
   async selectExisting(productId: string, imageId: string, alt?: string) {
     await this.ensureProduct(productId);
+    const isPrimary = await this.firstImageBecomesPrimary(productId);
     const source = await this.prisma.productImage.findUnique({ where: { id: imageId } });
     if (!source) throw new NotFoundException('رسانه پیدا نشد');
-    return {
-      ok: true,
-      data: await this.prisma.productImage.create({
-        data: {
-          productId,
-          path: source.path,
-          alt: alt?.trim() || source.alt || undefined,
-          sort: 0,
-          isPrimary: false,
-        },
-      }),
-    };
+    const image = await this.prisma.productImage.create({
+      data: {
+        productId,
+        path: source.path,
+        alt: alt?.trim() || source.alt || undefined,
+        sort: 0,
+        isPrimary,
+      },
+    });
+    await this.publishProductImageChange(productId);
+    return { ok: true, data: image };
+  }
+
+  async reorder(productId: string, imageIds: string[]) {
+    await this.ensureProduct(productId);
+    const images = await this.prisma.productImage.findMany({
+      where: { productId },
+      select: { id: true },
+    });
+    const valid = new Set(images.map((image: { id: string }) => image.id));
+    if (
+      imageIds.length !== images.length ||
+      imageIds.some((id) => !valid.has(id)) ||
+      new Set(imageIds).size !== imageIds.length
+    )
+      throw new BadRequestException('ترتیب تصاویر نامعتبر است');
+    await this.prisma.$transaction(
+      imageIds.map((id, sort) =>
+        this.prisma.productImage.update({ where: { id }, data: { sort } }),
+      ),
+    );
+    await this.publishProductImageChange(productId);
+    return { ok: true, data: { imageIds } };
   }
 
   async makePrimary(productId: string, imageId: string) {
     await this.ensureProduct(productId);
-    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const result = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.productImage.updateMany({ where: { productId }, data: { isPrimary: false } });
       const image = await tx.productImage.update({
         where: { id: imageId, productId },
@@ -185,12 +211,15 @@ export class MediaService {
       });
       return { ok: true, data: image };
     });
+    await this.publishProductImageChange(productId);
+    return result;
   }
 
   async remove(productId: string, imageId: string) {
     const image = await this.prisma.productImage.findFirst({ where: { id: imageId, productId } });
     if (!image) throw new NotFoundException('تصویر پیدا نشد');
     await this.prisma.productImage.delete({ where: { id: imageId } });
+    await this.publishProductImageChange(productId);
     return { ok: true, data: { id: imageId } };
   }
 
@@ -199,5 +228,33 @@ export class MediaService {
       where: { id: productId, deletedAt: null },
     });
     if (!product) throw new NotFoundException('محصول پیدا نشد');
+  }
+
+  /** The first image attached to a product becomes its primary one
+   * automatically: sync events and bootstrap only carry the primary image
+   * (imageUrl), so a product whose first image stayed non-primary would
+   * never show a picture on offline clients. */
+  private async firstImageBecomesPrimary(productId: string) {
+    const primary = await this.prisma.productImage.findFirst({
+      where: { productId, isPrimary: true },
+      select: { id: true },
+    });
+    return !primary;
+  }
+
+  /** Offline caches key products by their primary image (bootstrap sends
+   * imageUrl), so every image mutation publishes a product change row. */
+  private async publishProductImageChange(productId: string) {
+    const product = await this.prisma.product.findFirst({
+      where: { id: productId },
+      include: { images: { where: { isPrimary: true }, orderBy: { sort: 'asc' }, take: 1 } },
+    });
+    if (!product) return;
+    await writeSyncChange(this.prisma, {
+      entityType: 'product',
+      entityId: productId,
+      action: 'updated',
+      payload: buildProductSyncPayload(product, product.images[0]),
+    });
   }
 }

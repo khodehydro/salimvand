@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import { extractMapEmbedUrl, formatPersianNumber } from '@salimvand/shared';
 import { FaNumberInput } from '../components/FaNumberInput';
 import { api } from '../lib/api';
+import { applyStoreFavicon } from '../lib/favicon';
 import { isValidIranMobile } from '../lib/invoice-math';
 import { MediaPicker, type PickerItem } from '../components/MediaPicker';
 import { MediaImage } from '../components/MediaImage';
@@ -16,6 +17,50 @@ type BackupJob = {
   finishedAt?: string | null;
   error?: string | null;
 };
+type GithubBackupConfig = {
+  enabled: boolean;
+  repo: string;
+  branch: string;
+  token?: string;
+  tokenMasked?: string;
+  hasToken?: boolean;
+  intervalMinutes: number;
+  pathPrefix: string;
+  includeImages?: boolean;
+  lastRunAt?: string | null;
+  lastFile?: string | null;
+  lastStatus?: string | null;
+  lastError?: string | null;
+  /** Scheduler diagnostics written by the API on every tick. */
+  lastTrigger?: string | null;
+  lastTickAt?: string | null;
+  nextRunAt?: string | null;
+  lastSkipReason?: string | null;
+  schedulerBootedAt?: string | null;
+  tickCount?: number;
+  schedulerAlive?: boolean;
+  schedulerOwnedHere?: boolean;
+};
+
+/** Live scheduler health (polled) — kept apart from the editable config so a
+ *  refresh never overwrites half-typed settings. */
+type GithubBackupStatus = {
+  enabled: boolean;
+  intervalMinutes: number;
+  lastRunAt?: string | null;
+  lastRunStatus?: string | null;
+  lastError?: string | null;
+  lastFile?: string | null;
+  lastTrigger?: string | null;
+  lastTickAt?: string | null;
+  nextRunAt?: string | null;
+  lastSkipReason?: string | null;
+  tickCount?: number;
+  schedulerBootedAt?: string | null;
+  schedulerAlive?: boolean;
+  schedulerOwnedHere?: boolean;
+};
+
 type Settings = {
   'store.profile'?: {
     name?: string;
@@ -41,6 +86,10 @@ type Settings = {
       navCatalog?: string;
       navVideo?: string;
       navContact?: string;
+      heroHeadline?: string;
+      heroSubheadline?: string;
+      experienceYears?: string;
+      experienceLabel?: string;
     };
   };
   'store.trust_video'?: string;
@@ -70,7 +119,17 @@ const initial: Settings = {
     navLng: '',
     navApp: 'both',
     instagram: '',
-    header: { tagline: '', cta: '', navCatalog: '', navVideo: '', navContact: '' },
+    header: {
+      tagline: '',
+      cta: '',
+      navCatalog: '',
+      navVideo: '',
+      navContact: '',
+      heroHeadline: '',
+      heroSubheadline: '',
+      experienceYears: '',
+      experienceLabel: '',
+    },
   },
   'store.trust_video': '',
   'store.pricing': { showPrices: false },
@@ -80,6 +139,22 @@ const initial: Settings = {
   'inventory.default_min_stock': 3,
   'backup.schedule': { enabled: true },
 };
+
+/** «۳ دقیقه پیش» — برای نمایش وضعیت زمان‌بندِ بکاپ. */
+const relativeTime = (value?: string | null) => {
+  if (!value) return 'هرگز';
+  const diff = Date.now() - new Date(value).getTime();
+  const minutes = Math.round(diff / 60_000);
+  if (minutes < 1) return 'همین لحظه';
+  if (minutes < 60) return `${minutes.toLocaleString('fa-IR')} دقیقه پیش`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours.toLocaleString('fa-IR')} ساعت پیش`;
+  return `${Math.round(hours / 24).toLocaleString('fa-IR')} روز پیش`;
+};
+
+const tehranTime = (value?: string | null) =>
+  value ? new Date(value).toLocaleString('fa-IR', { timeZone: 'Asia/Tehran', hour12: false }) : '—';
+
 export function SettingsPage() {
   const [testChannel, setTestChannel] = useState('sms');
   const [testMobile, setTestMobile] = useState('');
@@ -87,12 +162,28 @@ export function SettingsPage() {
   const [testSending, setTestSending] = useState(false);
   const [backupJobs, setBackupJobs] = useState<BackupJob[]>([]);
   const [backupRunning, setBackupRunning] = useState(false);
+  const [importInspecting, setImportInspecting] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importRestoring, setImportRestoring] = useState(false);
+  const [importPreview, setImportPreview] = useState<{
+    filename: string;
+    sizeBytes: number;
+    entries: number;
+    version: number | null;
+    mediaIncluded: boolean;
+  } | null>(null);
   const [backupStatus, setBackupStatus] = useState<{
     status: string;
     createdAt: string;
     file: string;
     encrypted: boolean;
   } | null>(null);
+  const [githubCfg, setGithubCfg] = useState<GithubBackupConfig | null>(null);
+  const [githubJobs, setGithubJobs] = useState<BackupJob[]>([]);
+  const [githubStatus, setGithubStatus] = useState<GithubBackupStatus | null>(null);
+  const [githubRunning, setGithubRunning] = useState(false);
+  const [githubChecking, setGithubChecking] = useState(false);
+  const [githubTokenInput, setGithubTokenInput] = useState('');
   const [settings, setSettings] = useState<Settings>(initial);
   // Settings are grouped into focused tabs so a first-time operator lands on
   // one clear task at a time instead of a wall of mixed fields.
@@ -124,10 +215,17 @@ export function SettingsPage() {
   >([]);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
+  // When /settings fails to load (network blip, expired session, API restart
+  // mid-deploy) the form must NOT render with the in-code defaults — saving
+  // that state would wipe the operator's real settings back to defaults.
+  const [loadFailed, setLoadFailed] = useState(false);
   useEffect(() => {
     void api<{ data: Settings }>('/settings')
       .then((result) => setSettings({ ...initial, ...result.data }))
-      .catch((error: Error) => setMessage(error.message))
+      .catch((error: Error) => {
+        setLoadFailed(true);
+        setMessage(error.message);
+      })
       .finally(() => setLoading(false));
     void api<{ data: typeof integrationHealth }>('/notifications/health')
       .then((result) => {
@@ -144,6 +242,24 @@ export function SettingsPage() {
     void api<{ data: typeof failedJobs }>('/notifications/failed')
       .then((result) => setFailedJobs(result.data))
       .catch(() => undefined);
+    void api<{ data: GithubBackupConfig }>('/settings/github-backup')
+      .then((result) => setGithubCfg(result.data))
+      .catch(() => undefined);
+    void api<{ data: BackupJob[] }>('/settings/github-backup/jobs')
+      .then((result) => setGithubJobs(result.data))
+      .catch(() => undefined);
+  }, []);
+
+  // The GitHub scheduler status is polled separately: refreshing the editable
+  // config mid-typing would throw away the operator's input.
+  useEffect(() => {
+    const load = () =>
+      void api<{ data: GithubBackupStatus }>('/settings/github-backup/status')
+        .then((result) => setGithubStatus(result.data))
+        .catch(() => undefined);
+    load();
+    const poll = setInterval(load, 30_000);
+    return () => clearInterval(poll);
   }, []);
   useEffect(() => {
     if (!backupJobs.some((job) => job.status === 'running')) return;
@@ -219,10 +335,132 @@ export function SettingsPage() {
       setBackupRunning(false);
     }
   };
+
+  const saveGithubConfig = async () => {
+    if (!githubCfg) return;
+    try {
+      const payload: any = {
+        enabled: githubCfg.enabled,
+        repo: githubCfg.repo,
+        branch: githubCfg.branch,
+        intervalMinutes: githubCfg.intervalMinutes,
+        pathPrefix: githubCfg.pathPrefix,
+        includeImages: githubCfg.includeImages ?? true,
+      };
+      if (githubTokenInput.trim()) payload.token = githubTokenInput.trim();
+      const result = await api<{ data: GithubBackupConfig }>('/settings/github-backup', {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+      setGithubCfg(result.data);
+      setGithubTokenInput('');
+      setMessage('تنظیمات بکاپ گیت‌هاب ذخیره شد.');
+    } catch (error) {
+      setMessage((error as Error).message);
+    }
+  };
+
+  const checkGithubSchedule = async () => {
+    setGithubChecking(true);
+    try {
+      const result = await api<{ data: { ran: boolean; reason: string | null } }>(
+        '/settings/github-backup/tick',
+        { method: 'POST' },
+      );
+      const reasons: Record<string, string> = {
+        'not-due': 'هنوز زمانِ بکاپ بعدی نرسیده — طبق زمان‌بندی صبر کنید.',
+        disabled: 'بکاپ خودکار غیرفعال است.',
+        'missing-config': 'توکن یا ریپازیتوری تنظیم نشده است.',
+        busy: 'یک بکاپ هم‌اکنون در حال اجرا است.',
+        failed: 'اجرا شد اما خطا خورد — پیام خطا را در بالا ببینید.',
+        'config-error': 'خواندن تنظیمات از دیتابیس ناموفق بود.',
+      };
+      setMessage(
+        result.data.ran
+          ? 'زمان‌بند بکاپ را اجرا کرد — فایل جدید در ریپازیتوری قرار گرفت.'
+          : `زمان‌بند اجرا نکرد: ${reasons[result.data.reason ?? ''] ?? result.data.reason}`,
+      );
+      void api<{ data: GithubBackupConfig }>('/settings/github-backup')
+        .then((r) => setGithubCfg(r.data))
+        .catch(() => undefined);
+      void api<{ data: BackupJob[] }>('/settings/github-backup/jobs')
+        .then((r) => setGithubJobs(r.data))
+        .catch(() => undefined);
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setGithubChecking(false);
+    }
+  };
+  const runGithubBackup = async () => {
+    setGithubRunning(true);
+    try {
+      const result = await api<{ data: { file: string; url: string; sizeMB: number } }>('/settings/github-backup/run', {
+        method: 'POST',
+      });
+      setMessage(`بکاپ محصولات به گیت‌هاب ارسال شد: ${result.data.file} (${result.data.sizeMB}MB)`);
+      void api<{ data: GithubBackupConfig }>('/settings/github-backup')
+        .then((r) => setGithubCfg(r.data))
+        .catch(() => undefined);
+      void api<{ data: BackupJob[] }>('/settings/github-backup/jobs')
+        .then((r) => setGithubJobs(r.data))
+        .catch(() => undefined);
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setGithubRunning(false);
+    }
+  };
+  const inspectImport = async (file: File) => {
+    setImportInspecting(true);
+    setImportPreview(null);
+    try {
+      const body = new FormData();
+      body.append('file', file);
+      const result = await api<{
+        data: {
+          filename: string;
+          sizeBytes: number;
+          entries: number;
+          version: number | null;
+          mediaIncluded: boolean;
+        };
+      }>('/settings/backup/inspect', { method: 'POST', body });
+      setImportPreview(result.data);
+      setMessage('فایل Backup معتبر است؛ قبل از Restore باید Preview بررسی شود.');
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setImportInspecting(false);
+    }
+  };
+  const restoreImport = async () => {
+    if (
+      !importFile ||
+      !importPreview ||
+      !window.confirm('این عملیات اطلاعات فعلی را جایگزین می‌کند. ادامه می‌دهید؟')
+    )
+      return;
+    setImportRestoring(true);
+    try {
+      const body = new FormData();
+      body.append('file', importFile);
+      await api('/settings/backup/restore', { method: 'POST', body });
+      setMessage('Restore با موفقیت انجام شد. برای امنیت، دوباره وارد پنل شوید.');
+      setImportFile(null);
+      setImportPreview(null);
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setImportRestoring(false);
+    }
+  };
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     try {
       await api('/settings', { method: 'PUT', body: JSON.stringify(settings) });
+      // The tab icon follows the saved favicon immediately — no manual refresh.
+      void applyStoreFavicon();
       setMessage('تنظیمات با موفقیت ذخیره شد.');
     } catch (error) {
       setMessage((error as Error).message);
@@ -285,6 +523,21 @@ export function SettingsPage() {
       </section>
     );
 
+  if (loadFailed)
+    return (
+      <section>
+        <h1>تنظیمات</h1>
+        <p className="field-error">
+          تنظیمات از سرور بارگذاری نشد؛ برای جلوگیری از بازنویسیٔ تصادفی مقادیر پیش‌فرض روی تنظیمات
+          واقعی، فرم نمایش داده نمی‌شود.
+        </p>
+        {message && <p className="muted">{message}</p>}
+        <button className="button-primary" onClick={() => window.location.reload()}>
+          تلاش دوباره
+        </button>
+      </section>
+    );
+
   const tabs = [
     {
       id: 'store',
@@ -308,6 +561,29 @@ export function SettingsPage() {
     },
   ] as const;
   const activeTab = tabs.find((item) => item.id === tab) ?? tabs[0];
+
+  // Live scheduler box: the polled status when available, otherwise the config
+  // loaded with the page.
+  const ghStatus: GithubBackupStatus | null =
+    githubStatus ??
+    (githubCfg
+      ? {
+          enabled: githubCfg.enabled,
+          intervalMinutes: githubCfg.intervalMinutes,
+          lastRunAt: githubCfg.lastRunAt ?? null,
+          lastRunStatus: githubCfg.lastStatus ?? null,
+          lastError: githubCfg.lastError ?? null,
+          lastFile: githubCfg.lastFile ?? null,
+          lastTrigger: githubCfg.lastTrigger ?? null,
+          lastTickAt: githubCfg.lastTickAt ?? null,
+          nextRunAt: githubCfg.nextRunAt ?? null,
+          lastSkipReason: githubCfg.lastSkipReason ?? null,
+          tickCount: githubCfg.tickCount ?? 0,
+          schedulerBootedAt: githubCfg.schedulerBootedAt ?? null,
+          schedulerAlive: githubCfg.schedulerAlive,
+          schedulerOwnedHere: githubCfg.schedulerOwnedHere,
+        }
+      : null);
 
   return (
     <section className="settings-page">
@@ -437,6 +713,42 @@ export function SettingsPage() {
                       value={settings['store.profile']?.header?.navVideo ?? ''}
                       onChange={(e) => updateHeaderText('navVideo', e.target.value)}
                       placeholder="ویدئوی فروشگاه"
+                    />
+                  </label>
+                </div>
+                <div className="two-fields">
+                  <label>
+                    تیتر اصلی هدر
+                    <input
+                      value={settings['store.profile']?.header?.heroHeadline ?? ''}
+                      onChange={(e) => updateHeaderText('heroHeadline', e.target.value)}
+                      placeholder="قطعهٔ ماشینت رو پیدا کن، بقیه‌اش با ماست"
+                    />
+                  </label>
+                  <label>
+                    توضیح زیر تیتر هدر
+                    <input
+                      value={settings['store.profile']?.header?.heroSubheadline ?? ''}
+                      onChange={(e) => updateHeaderText('heroSubheadline', e.target.value)}
+                      placeholder="کاتالوگ قطعات یدکی خودرو"
+                    />
+                  </label>
+                </div>
+                <div className="two-fields">
+                  <label>
+                    عدد سابقه
+                    <input
+                      value={settings['store.profile']?.header?.experienceYears ?? ''}
+                      onChange={(e) => updateHeaderText('experienceYears', e.target.value)}
+                      placeholder="۱۸ سال"
+                    />
+                  </label>
+                  <label>
+                    توضیح سابقه
+                    <input
+                      value={settings['store.profile']?.header?.experienceLabel ?? ''}
+                      onChange={(e) => updateHeaderText('experienceLabel', e.target.value)}
+                      placeholder="سابقهٔ تأمین قطعات یدکی"
                     />
                   </label>
                 </div>
@@ -901,6 +1213,7 @@ export function SettingsPage() {
         )}
 
         {tab === 'system' && (
+          <>
           <fieldset>
             <legend>انبار و پشتیبان‌گیری</legend>
             <label>
@@ -938,6 +1251,45 @@ export function SettingsPage() {
             >
               {backupRunning ? 'در حال آغاز…' : 'اجرای پشتیبان‌گیری اکنون'}
             </button>
+            <label className="outline" style={{ display: 'inline-flex', cursor: 'pointer' }}>
+              {importInspecting ? 'در حال بررسی فایل…' : 'واردکردن فایل پشتیبان'}
+              <input
+                type="file"
+                accept=".tar.gz,.gpg"
+                hidden
+                disabled={importInspecting}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) {
+                    setImportFile(file);
+                    void inspectImport(file);
+                  }
+                  event.currentTarget.value = '';
+                }}
+              />
+            </label>
+            {importPreview && (
+              <div className="backup-status">
+                <b className="status-chip">Backup معتبر</b>
+                <span>{importPreview.filename}</span>
+                <small>
+                  {formatPersianNumber(importPreview.entries)} فایل · نسخهٔ{' '}
+                  {formatPersianNumber(importPreview.version ?? 0)} ·{' '}
+                  {importPreview.mediaIncluded ? 'رسانه دارد' : 'بدون رسانه'}
+                </small>
+                <p className="settings-help">
+                  Restore واقعی فقط با فعال‌سازی امن روی سرور اجرا می‌شود.
+                </p>
+                <button
+                  type="button"
+                  className="outline"
+                  disabled={importRestoring}
+                  onClick={() => void restoreImport()}
+                >
+                  {importRestoring ? 'در حال Restore…' : 'تأیید و Restore اطلاعات'}
+                </button>
+              </div>
+            )}
             <label className="switch-row">
               <input
                 type="checkbox"
@@ -975,6 +1327,199 @@ export function SettingsPage() {
               فایل‌های پشتیبان پس از انتقال امن به مقصد خارجی از VPS حذف می‌شوند.
             </p>
           </fieldset>
+
+          <fieldset>
+            <legend>پشتیبان‌گیری خودکار محصولات به GitHub (private)</legend>
+            <p className="settings-help">
+              هر {githubCfg?.intervalMinutes ?? 30} دقیقه یک فایل ZIP از محصولات (products.json + references.json {githubCfg?.includeImages ? '+ تصاویر' : 'بدون تصاویر'}) ساخته شده و با نام تاریخ و ساعت به ریپازیتوری خصوصی <code>khodehydro/salimvand-backup</code> پوش می‌شود. مسیر: <code>backups/YYYY/MM/DD/products[-noimg]-YYYY-MM-DD_HH-mm-ss.zip</code> بر اساس ساعت تهران. اگر حجم تصاویر زیاد شد، تیک تصاویر را بردارید تا بکاپ سبک‌تر شود.
+            </p>
+            {githubCfg ? (
+              <>
+                <label className="switch-row">
+                  <input
+                    type="checkbox"
+                    checked={githubCfg.enabled}
+                    onChange={(e) => setGithubCfg({ ...githubCfg, enabled: e.target.checked })}
+                  />{' '}
+                  فعال‌سازی بکاپ خودکار GitHub (هر {githubCfg.intervalMinutes} دقیقه)
+                </label>
+                <label className="switch-row">
+                  <input
+                    type="checkbox"
+                    checked={githubCfg.includeImages ?? true}
+                    onChange={(e) => setGithubCfg({ ...githubCfg, includeImages: e.target.checked })}
+                  />{' '}
+                  شامل تصاویر محصولات در بکاپ (اگر تصاویر زیاد شد تیک را بردارید تا بکاپ بدون تصویر و سبک‌تر باشد)
+                </label>
+                <div className="two-fields">
+                  <label>
+                    ریپازیتوری (owner/repo)
+                    <input
+                      dir="ltr"
+                      value={githubCfg.repo}
+                      onChange={(e) => setGithubCfg({ ...githubCfg, repo: e.target.value })}
+                      placeholder="khodehydro/salimvand-backup"
+                    />
+                  </label>
+                  <label>
+                    شاخه
+                    <input
+                      dir="ltr"
+                      value={githubCfg.branch}
+                      onChange={(e) => setGithubCfg({ ...githubCfg, branch: e.target.value })}
+                      placeholder="main"
+                    />
+                  </label>
+                </div>
+                <div className="two-fields">
+                  <label>
+                    مسیر پوشه در ریپو
+                    <input
+                      dir="ltr"
+                      value={githubCfg.pathPrefix}
+                      onChange={(e) => setGithubCfg({ ...githubCfg, pathPrefix: e.target.value })}
+                      placeholder="backups"
+                    />
+                  </label>
+                  <label>
+                    بازه زمانی (دقیقه)
+                    <input
+                      type="number"
+                      min={5}
+                      max={1440}
+                      value={githubCfg.intervalMinutes}
+                      onChange={(e) => setGithubCfg({ ...githubCfg, intervalMinutes: Number(e.target.value) || 30 })}
+                    />
+                  </label>
+                </div>
+                <label>
+                  توکن GitHub (PAT با دسترسی repo) - خصوصی، نمایش داده نمی‌شود
+                  <input
+                    dir="ltr"
+                    type="password"
+                    value={githubTokenInput}
+                    onChange={(e) => setGithubTokenInput(e.target.value)}
+                    placeholder={githubCfg.hasToken ? `موجود: ${githubCfg.tokenMasked} - برای تغییر توکن جدید وارد کنید` : 'ghp_...'}
+                  />
+                  {githubCfg.hasToken && <small className="muted">توکن فعلی: {githubCfg.tokenMasked} - خالی بگذارید تا تغییر نکند</small>}
+                </label>
+                <div className="two-fields">
+                  <button type="button" className="button-primary" onClick={() => void saveGithubConfig()}>
+                    ذخیره تنظیمات GitHub
+                  </button>
+                  <button
+                    type="button"
+                    className="outline"
+                    disabled={githubRunning}
+                    onClick={() => void runGithubBackup()}
+                  >
+                    {githubRunning ? 'در حال ارسال...' : 'اجرای دستی بکاپ اکنون'}
+                  </button>
+                </div>
+                {(githubCfg.lastRunAt || githubCfg.lastFile) && (
+                  <div className="backup-status">
+                    <b className={githubCfg.lastStatus === 'success' ? 'status-chip' : 'low-stock'}>
+                      {githubCfg.lastStatus === 'success' ? 'آخرین ارسال موفق' : githubCfg.lastStatus === 'failed' ? 'آخرین ارسال ناموفق' : 'وضعیت'}
+                    </b>
+                    {githubCfg.lastRunAt && <span>{new Date(githubCfg.lastRunAt).toLocaleString('fa-IR')}</span>}
+                    {githubCfg.lastFile && <small dir="ltr">{githubCfg.lastFile}</small>}
+                    {githubCfg.lastError && <small className="low-stock">{githubCfg.lastError}</small>}
+                    {githubCfg.lastFile && githubCfg.lastStatus === 'success' && (
+                      <a
+                        className="row-action"
+                        target="_blank"
+                        rel="noreferrer"
+                        href={`https://github.com/${githubCfg.repo}/blob/${githubCfg.branch}/${githubCfg.lastFile}`}
+                      >
+                        مشاهده در GitHub
+                      </a>
+                    )}
+                  </div>
+                )}
+                  {ghStatus && (
+                    <div className="backup-scheduler" aria-live="polite">
+                      <div className="bs-row">
+                        <b>زمان‌بند خودکار</b>
+                        <span
+                          className={`status-chip ${ghStatus.schedulerAlive ? 'ok' : 'stale'}`}
+                          title={
+                            ghStatus.schedulerBootedAt
+                              ? `آخرین راه‌اندازی: ${new Date(ghStatus.schedulerBootedAt).toLocaleString('fa-IR')}`
+                              : undefined
+                          }
+                        >
+                          {ghStatus.enabled
+                            ? ghStatus.schedulerAlive
+                              ? 'فعال · در حال بررسی'
+                              : 'فعال اما بررسی نمی‌شود!'
+                            : 'خاموش'}
+                        </span>
+                      </div>
+                      <div className="bs-grid">
+                        <span>آخرین بررسی</span>
+                        <b>{relativeTime(ghStatus.lastTickAt)}</b>
+                        <span>اجرای بعدی</span>
+                        <b>{ghStatus.nextRunAt ? tehranTime(ghStatus.nextRunAt) : '—'}</b>
+                        <span>آخرین اجرا</span>
+                        <b>
+                          {ghStatus.lastRunAt
+                            ? `${relativeTime(ghStatus.lastRunAt)} (${
+                                ghStatus.lastTrigger === 'manual' ? 'دستی' : 'خودکار'
+                              })`
+                            : '—'}
+                        </b>
+                        <span>تعداد بررسی</span>
+                        <b>{(ghStatus.tickCount ?? 0).toLocaleString('fa-IR')}</b>
+                      </div>
+                      {ghStatus.enabled && ghStatus.lastSkipReason && !ghStatus.schedulerAlive && (
+                        <small className="low-stock">
+                          زمان‌بند در این لحظه پاس نمی‌دهد — سرویس API را بررسی کنید (journalctl -u
+                          salimvand-api).
+                        </small>
+                      )}
+                      {ghStatus.enabled && !ghStatus.schedulerOwnedHere && (
+                        <small className="muted">
+                          این پاسخ از پردازهٔ worker است؛ زمان‌بند فقط در سرویس salimvand-api اجرا
+                          می‌شود.
+                        </small>
+                      )}
+                      <button
+                        type="button"
+                        className="outline"
+                        disabled={githubChecking}
+                        onClick={() => void checkGithubSchedule()}
+                      >
+                        {githubChecking ? 'در حال بررسی…' : 'بررسی حالا (تست زمان‌بند)'}
+                      </button>
+                      <small className="muted">
+                        «بررسی حالا» همان تصمیمِ زمان‌بند را فوراً می‌گیرد: اگر وقتِ بکاپ رسیده باشد
+                        آرشیو را می‌سازد و علت را همین‌جا می‌نویسد.
+                      </small>
+                    </div>
+                  )}
+                {githubJobs.length > 0 && (
+                  <div className="backup-jobs">
+                    <h3>تاریخچه بکاپ GitHub</h3>
+                    {githubJobs.slice(0, 8).map((job) => (
+                      <div key={job.id}>
+                        <span>
+                          <b>{job.status === 'success' ? 'موفق' : job.status === 'running' ? 'در حال اجرا' : 'ناموفق'}</b>
+                          <small>{new Date(job.startedAt).toLocaleString('fa-IR')}</small>
+                        </span>
+                        <code dir="ltr">{job.file || job.error || `#${job.id}`}</code>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className="settings-help">
+                  برای ساخت توکن: GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic) → Generate new token → تیک repo را بزنید. توکن را کپی و اینجا وارد کنید. ریپازیتوری <code>salimvand-backup</code> را private بسازید.
+                </p>
+              </>
+            ) : (
+              <p className="muted">در حال بارگذاری تنظیمات GitHub...</p>
+            )}
+          </fieldset>
+          </>
         )}
 
         <div className="settings-save-bar">

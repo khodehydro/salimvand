@@ -1,4 +1,15 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
+import { EtagInterceptor } from '../../common/http/etag.interceptor';
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
 import { RolesGuard } from '../../common/auth/roles.guard';
 import { Roles } from '../../common/auth/roles.decorator';
@@ -9,17 +20,29 @@ const managementGuards = [JwtAuthGuard, RolesGuard];
 @Controller()
 export class ReferenceController {
   constructor(private readonly refs: ReferenceService) {}
-  @Get('categories') categories() {
+  // Reference data is near-static but re-fetched constantly: ETag + 304
+  // makes every revalidation a zero-byte download.
+  @UseInterceptors(EtagInterceptor)
+  @Get('categories')
+  categories() {
     return this.refs.categories();
   }
-  @Get('brands') brands() {
+  @UseInterceptors(EtagInterceptor)
+  @Get('brands')
+  brands() {
     return this.refs.brands();
   }
-  @Get('vehicles/tree') vehicles() {
+  @UseInterceptors(EtagInterceptor)
+  @Get('vehicles/tree')
+  vehicles() {
     return this.refs.vehicles();
   }
 
-  @UseGuards(...managementGuards) @Roles('manager') @Get('references') adminList() {
+  @UseGuards(...managementGuards)
+  @Roles('manager')
+  @UseInterceptors(EtagInterceptor)
+  @Get('references')
+  adminList() {
     return this.refs.adminList();
   }
   @UseGuards(...managementGuards) @Roles('manager') @Post('categories') createCategory(

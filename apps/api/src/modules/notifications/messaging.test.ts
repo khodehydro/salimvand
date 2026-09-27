@@ -64,6 +64,7 @@ describe('SMS templates', () => {
       'حمید',
     );
     expect(named).toBe('حمید عزیز\n\nفاکتور INV-0003 شما صادر شد');
+    expect(buildInvoiceMessage('INV-0003', 'c0de', '5000', false, '{customer_name} عزیز', 'حمید')).toBe('حمید عزیز');
     const anonymous = buildInvoiceMessage(
       'INV-0003',
       'c0de',
@@ -237,6 +238,7 @@ describe('sms.ir adapter', () => {
         lineNumber: 30004505000017,
         messageText: 'فاکتور INV-1',
         mobiles: ['09121234567'],
+        sendDateTime: null,
       });
       expect(logs).toHaveLength(1);
       expect(logs[0].data).toMatchObject({ status: 'sent', provider: 'sms.ir' });

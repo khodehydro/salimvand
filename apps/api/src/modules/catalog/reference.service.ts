@@ -5,6 +5,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service';
+import { writeAudit } from '../../common/audit/audit-log';
+import { buildBrandSyncPayload, buildCategorySyncPayload } from '../../common/sync/sync-payloads';
 
 @Injectable()
 export class ReferenceService {
@@ -62,9 +64,8 @@ export class ReferenceService {
     if (!/^[A-Z0-9_-]{2,10}$/.test(code))
       throw new BadRequestException('کد دسته باید ۲ تا ۱۰ نویسهٔ لاتین باشد');
     const slug = this.text(input.slug) || `${code.toLowerCase()}-${Date.now()}`;
-    return this.unique(async () => ({
-      ok: true,
-      data: await this.prisma.category.create({
+    return this.unique(async () => {
+      const category = await this.prisma.category.create({
         data: {
           name,
           code,
@@ -72,8 +73,17 @@ export class ReferenceService {
           parentId: this.optional(input.parentId),
           sort: this.integer(input.sort) ?? 0,
         },
-      }),
-    }));
+      });
+      // New categories must reach offline clients through pull.
+      await writeAudit(this.prisma, {
+        action: 'create',
+        entityType: 'category',
+        entityId: category.id,
+        after: { name, code },
+        syncPayload: buildCategorySyncPayload(category),
+      });
+      return { ok: true, data: category };
+    });
   }
 
   async updateCategory(id: string, input: Record<string, unknown>) {
@@ -101,42 +111,74 @@ export class ReferenceService {
     }
     if (input.sort !== undefined) data.sort = this.integer(input.sort) ?? 0;
     if (!Object.keys(data).length) throw new BadRequestException('تغییری ارسال نشده است');
-    return this.unique(async () => ({
-      ok: true,
-      data: await this.prisma.category.update({ where: { id }, data }),
-    }));
+    return this.unique(async () => {
+      const category = await this.prisma.category.update({ where: { id }, data });
+      await writeAudit(this.prisma, {
+        action: 'update',
+        entityType: 'category',
+        entityId: id,
+        after: { name: category.name, code: category.code },
+        syncPayload: buildCategorySyncPayload(category),
+      });
+      return { ok: true, data: category };
+    });
   }
   async setCategoryActive(id: string, isActive: boolean) {
     await this.category(id);
-    return {
-      ok: true,
-      data: await this.prisma.category.update({ where: { id }, data: { isActive } }),
-    };
+    const category = await this.prisma.category.update({ where: { id }, data: { isActive } });
+    // Deactivating a category hides it from bootstrap; offline caches must hear.
+    await writeAudit(this.prisma, {
+      action: isActive ? 'update' : 'delete',
+      entityType: 'category',
+      entityId: id,
+      after: { isActive },
+      syncPayload: buildCategorySyncPayload(category),
+    });
+    return { ok: true, data: category };
   }
 
   async createBrand(input: Record<string, unknown>) {
     const name = this.text(input.name);
     if (!name) throw new BadRequestException('نام برند الزامی است');
-    return this.unique(async () => ({
-      ok: true,
-      data: await this.prisma.brand.create({ data: { name } }),
-    }));
+    return this.unique(async () => {
+      const brand = await this.prisma.brand.create({ data: { name } });
+      await writeAudit(this.prisma, {
+        action: 'create',
+        entityType: 'brand',
+        entityId: brand.id,
+        after: { name },
+        syncPayload: buildBrandSyncPayload(brand),
+      });
+      return { ok: true, data: brand };
+    });
   }
   async updateBrand(id: string, input: Record<string, unknown>) {
     const name = this.text(input.name);
     if (!name) throw new BadRequestException('نام برند الزامی است');
     await this.brand(id);
-    return this.unique(async () => ({
-      ok: true,
-      data: await this.prisma.brand.update({ where: { id }, data: { name } }),
-    }));
+    return this.unique(async () => {
+      const brand = await this.prisma.brand.update({ where: { id }, data: { name } });
+      await writeAudit(this.prisma, {
+        action: 'update',
+        entityType: 'brand',
+        entityId: id,
+        after: { name },
+        syncPayload: buildBrandSyncPayload(brand),
+      });
+      return { ok: true, data: brand };
+    });
   }
   async setBrandActive(id: string, isActive: boolean) {
     await this.brand(id);
-    return {
-      ok: true,
-      data: await this.prisma.brand.update({ where: { id }, data: { isActive } }),
-    };
+    const brand = await this.prisma.brand.update({ where: { id }, data: { isActive } });
+    await writeAudit(this.prisma, {
+      action: isActive ? 'update' : 'delete',
+      entityType: 'brand',
+      entityId: id,
+      after: { isActive },
+      syncPayload: buildBrandSyncPayload(brand),
+    });
+    return { ok: true, data: brand };
   }
 
   async createMake(input: Record<string, unknown>) {

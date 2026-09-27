@@ -16,13 +16,14 @@ import vazirmatnRegular from 'vazirmatn/fonts/webfonts/Vazirmatn-Regular.woff2?u
 export const STORE_NAME = 'فروشگاه سلیم‌وند';
 export const STORE_SITE = 'salimvand.ir';
 
-export type LabelSize = '50x30' | '60x40' | '38x22';
+export type LabelSize = '50x30' | '60x40' | '40x60' | '38x22';
 export type LabelStyle = 'brand' | 'mono' | 'navy';
 export type BarcodeType = 'ean13' | 'code128';
 
 export const labelSizes: Array<{ id: LabelSize; label: string; hint: string }> = [
   { id: '50x30', label: '۵۰×۳۰', hint: 'پیش‌فرض — رول لیبل استاندارد قطعات' },
   { id: '60x40', label: '۶۰×۴۰', hint: 'کارتن و قطعات بزرگ (باتری، رادیاتور)' },
+  { id: '40x60', label: '۴۰×۶۰', hint: 'پیش‌فرض عمودی — مناسب لیبل قطعات' },
   { id: '38x22', label: '۳۸×۲۲', hint: 'قطعات کوچک (شمع، فیلتر، سنسور)' },
 ];
 
@@ -280,6 +281,7 @@ export type LabelOptions = {
   showFoot: boolean;
   /** Store name from settings (falls back to فروشگاه سلیم‌وند). */
   storeName?: string;
+  footerText?: string;
   /** Site logo path from settings (e.g. /uploads/site/logo.webp); when
    * empty the «س» monogram mark is used instead. */
   logoUrl?: string;
@@ -292,7 +294,7 @@ export function renderLabelHTML(o: LabelOptions): string {
     o.type === 'ean13'
       ? ean13Bits(o.code || '')
       : code128Bits((o.code || o.sku || '').toUpperCase());
-  const bh = o.size === '60x40' ? 34 : o.size === '38x22' ? 20 : 26;
+  const bh = o.size === '60x40' || o.size === '40x60' ? 34 : o.size === '38x22' ? 20 : 26;
   const bars = enc
     ? barcodeSVG(enc.bits, bh)
     : '<div style="font-size:2mm;color:#c8383c">شمارهٔ بارکد نامعتبر</div>';
@@ -301,7 +303,7 @@ export function renderLabelHTML(o: LabelOptions): string {
       ? enc.code.slice(0, 1) + ' ' + enc.code.slice(1, 7) + ' ' + enc.code.slice(7)
       : enc.code
     : '';
-  const bcStyle = `height:${o.size === '60x40' ? '8mm' : o.size === '38x22' ? '4.6mm' : '5.4mm'}`;
+  const bcStyle = `height:${o.size === '60x40' || o.size === '40x60' ? '8mm' : o.size === '38x22' ? '4.6mm' : '5.4mm'}`;
 
   const metaRow = o.showMeta
     ? `
@@ -322,7 +324,7 @@ export function renderLabelHTML(o: LabelOptions): string {
     o.showFoot && o.size !== '38x22'
       ? `
       <div class="lb-foot">
-        <span>اصالت و گارانتی کالا</span>
+        <span>${esc(o.footerText || 'اصالت و گارانتی کالا')}</span>
         <span class="lb-digits-latin">${STORE_SITE}</span>
       </div>`
       : '';
@@ -346,6 +348,47 @@ export function renderLabelHTML(o: LabelOptions): string {
         <div class="lb-digits">${esc(digits)}</div>
       </div>
       ${foot}
+    </div>
+  </div>`;
+}
+
+/* ============ برچسب قفسه — نام قهرمان، بزرگ و وسط‌چین ============ */
+
+export type ShelfLabelOptions = {
+  /** Display name of the shelf («قفسه جلو») — the hero of the label. */
+  name: string;
+  /** Owning warehouse («انبار اصلی») — small chip under the name; '' when none. */
+  warehouse: string;
+  size: LabelSize;
+  style: LabelStyle;
+  /** Store name from settings (falls back to فروشگاه سلیم‌وند). */
+  storeName?: string;
+  logoUrl?: string;
+};
+
+export function renderShelfLabelHTML(o: ShelfLabelOptions): string {
+  const sty = o.style === 'brand' ? '' : o.style;
+  const mark = o.logoUrl
+    ? `<img class="lb-logo" src="${esc(o.logoUrl)}" alt="" />`
+    : '<div class="mk">س</div>';
+  const warehouseChip = o.warehouse.trim()
+    ? `<span class="lb-chip">${esc(o.warehouse)}</span>`
+    : '';
+  return `
+  <div class="lb s-${o.size} ${sty} sl">
+    <div class="lb-h">
+      ${mark}
+      <div class="nm">${esc(o.storeName || STORE_NAME)}</div>
+      <div class="lb-digits-latin lb-h-url">${STORE_SITE}</div>
+    </div>
+    <div class="sl-b">
+      <div class="sl-name">${esc(o.name)}</div>
+      ${
+        warehouseChip
+          ? `
+      <div class="sl-sub">${warehouseChip}</div>`
+          : ''
+      }
     </div>
   </div>`;
 }
@@ -440,6 +483,28 @@ export const LABEL_CSS = `
 .lb.s-38x22 .lb-meta{font-size:1.5mm}
 .lb.s-38x22 .lb-digits{font-size:1.7mm;letter-spacing:.1em}
 .lb.s-38x22 .lb-foot{display:none}
+
+/* — برچسب قفسه: نام بزرگ وسط‌چین + چیپ انبار — */
+.sl-b{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;
+  text-align:center;gap:.7mm;
+  padding:1.4mm 1.8mm 1.2mm;min-height:0;overflow:hidden}
+.sl-name{font-weight:800;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;
+  -webkit-box-orient:vertical;overflow:hidden}
+.sl-sub{display:flex;align-items:center;justify-content:center;gap:1.2mm;color:#4a5f79;min-height:0;
+  flex-wrap:nowrap;overflow:hidden}
+.lb.mono .sl-name{color:#000}
+.lb.mono .sl-sub{color:#333}
+.lb.navy .sl-name{color:#fff}
+.lb.navy .sl-sub{color:#bcd7f5}
+
+.lb.s-50x30 .sl-name{font-size:5mm}
+.lb.s-50x30 .sl-sub{font-size:1.9mm}
+.lb.s-60x40 .sl-name{font-size:6.5mm}
+.lb.s-60x40 .sl-sub{font-size:2.2mm}
+.lb.s-40x60 .sl-name{font-size:5.2mm}
+.lb.s-40x60 .sl-sub{font-size:2mm}
+.lb.s-38x22 .sl-name{font-size:3.6mm;-webkit-line-clamp:1}
+.lb.s-38x22 .sl-sub{font-size:1.5mm}
 `;
 
 /** برگهٔ چاپ A4: سند کامل و مستقل برای iframe چاپ (فونت وزیرمتن جاسازی‌شده). */

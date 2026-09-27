@@ -40,6 +40,64 @@ sudo APP_DIR=/opt/salimvand DEPLOY_BRANCH=main ./scripts/deploy.sh
 
 در هر Deploy، اگر vhost پنل (`cms.`) هنوز location مسیر `/uploads/` را نداشته باشد، همین بلاک به‌صورت خودکار به همان server block اضافه و Nginx Reload می‌شود تا پیش‌نمایش تصاویر در کتابخانهٔ رسانه و تنظیمات پنل کار کند. فایل vhost هرگز بازنویسی کامل نمی‌شود تا تغییرات Certbot (بلوک‌های TLS) دست‌نخورده بمانند؛ برای نصب‌های تازه، `setup-server.sh` نسخهٔ کامل داخل `deploy/nginx/salimvand.conf` را می‌گذارد.
 
+## Deploy از ویندوز روی سرور لینوکس (PowerShell + SSH)
+
+اگر سرور شما لینوکس است و فقط از ویندوز به آن وصل می‌شوید، این اسکریپت روی **کامپیوتر شما** اجرا
+می‌شود و با SSH روی سرور، آخرین تغییرات را از گیت‌هاب می‌گیرد و دیپلوی می‌کند. روی سرور نیازی به
+پوشهٔ از‌پیش‌ساخته نیست: اگر `/opt/salimvand` نباشد، مخزن کلون می‌شود؛ وگرنه فقط `fetch` و
+`checkout` انجام می‌شود و بعد همان `scripts/deploy.sh` اجرا می‌گردد:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\deploy\deploy-remote.ps1 -Host root@IP-SERVER
+```
+
+با شاخه و کلید SSH دلخواه:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\deploy\deploy-remote.ps1 `
+    -Host root@IP-SERVER -Branch arena/01a0dd70-salimvand `
+    -SshKey "$HOME\.ssh\id_ed25519"
+```
+
+مراحل روی سرور: کلون/fetch شاخه → ساخت `.env` در صورت نبود (خروج با کد `2` تا آن را پر کنید) →
+`pnpm install` → `prisma generate` → `migrate deploy` → `seed` → `typecheck` → `build` →
+ری‌استارت `salimvand-api`، `salimvand-website` و `salimvand-worker` → بررسی سلامت
+`/api/v1/health/ready`. خروجی هر مرحله دستور در ترمینال شما چاپ می‌شود، بنابراین همه‌چیز قابل
+ردیابی است. `-SkipRestart` (معادل `SKIP_RESTART=1` در `scripts/deploy.sh`) فقط دریافت و Build را
+انجام می‌دهد و سرویس‌ها را ری‌استارت نمی‌کند.
+
+## Deploy روی ویندوز (PowerShell)
+
+اگر سرور مقصد ویندوز است (یا پوشه‌ای از پروژه روی آن وجود ندارد و قرار است همه‌چیز مستقیماً از
+گیت‌هاب دریافت شود)، از اسکریپت PowerShell استفاده کنید. این اسکریپت در صورت نبود پوشه، مخزن را
+کلون می‌کند و در غیر این صورت فقط `fetch` + `checkout` انجام می‌دهد؛ سپس نصب، Migration، Seed،
+Build و ری‌استارت سرویس‌ها را انجام می‌دهد:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\deploy\deploy-windows.ps1 -AppDir C:\salimvand -Branch arena/01a0dd70-salimvand
+```
+
+روی سروری که هنوز هیچ پوشه‌ای ندارد، اسکریپت را مستقیماً از گیت‌هاب اجرا کنید:
+
+```powershell
+powershell -ExecutionPolicy Bypass -Command "iwr https://raw.githubusercontent.com/khodehydro/salimvand/arena/01a0dd70-salimvand/deploy/deploy-windows.ps1 -OutFile $env:TEMP\deploy.ps1; & $env:TEMP\deploy.ps1 -AppDir C:\salimvand -Branch arena/01a0dd70-salimvand -InstallPrerequisites"
+```
+
+نکته‌ها:
+
+- بار اول `.env` از `.env.example` ساخته می‌شود و اسکریپت با کد `2` متوقف می‌شود تا مقادیر واقعی
+  (`DATABASE_URL`, `REDIS_URL`, دو Secret طولانی JWT, `APP_URL`, `ADMIN_URL`, `CORS_ORIGINS`,
+  `PUBLIC_SITE_URL`) را پر کنید؛ سپس همان فرمان دوباره اجرا شود.
+- اگر `pm2` نصب باشد، سه سرویس `salimvand-api`، `salimvand-website` و `salimvand-worker` با آن
+  مدیریت و با `pm2 save` ماندگار می‌شوند؛ در غیر این صورت با `Start-Process` بالا می‌آیند و PID
+  آن‌ها در `C:\salimvand\.pids` نوشته می‌شود. برای Production ویندوزی، نصب pm2
+  (`npm i -g pm2`) یا تعریف سرویس با NSSM توصیه می‌شود.
+- Migrationها با `prisma migrate deploy` اجرا می‌شوند؛ ستون سبدها (`inventory_items.basketId`)
+  و نوع محل `basket` هم با همین Migration روی دیتابیس موجود اعمال می‌شود و نیازی به ساخت مجدد
+  دیتابیس نیست.
+- پارامتر `-SkipRestart` فقط دریافت و Build را انجام می‌دهد (برای زمانی که می‌خواهید خودتان
+  سرویس‌ها را ری‌استارت کنید).
+
 ## Smoke Check پس از Deploy
 
 برای بررسی مستقل سلامت سرویس‌ها روی VPS:
@@ -79,6 +137,41 @@ bash scripts/check-production.sh
   ```
 
 - اگر `.env` کلاً خراب شده باشد، بازاستقرار از گیت با `scripts/deploy.sh` کد را به حالت سالم برمی‌گرداند؛ کلیدهای ضروری `.env` در `.env.example` و `scripts/verify-production-config.sh` فهرست شده‌اند.
+
+## عیب‌یابی: بکاپ خودکارِ GitHub اجرا نمی‌شود
+
+بکاپ خودکار محصولات به ریپازیتوری GitHub را یک زمان‌بندِ داخلیِ API انجام می‌دهد (`GithubBackupService`).
+اگر دکمهٔ «اجرای دستی» کار می‌کند ولی بکاپ خودکار نمی‌آید، این ترتیب را بررسی کنید:
+
+۱. در پنل: **تنظیمات → تب سیستم و پشتیبان → پشتیبان‌گیری خودکار محصولات به GitHub**. زیرِ فرم،
+جعبهٔ **«زمان‌بند خودکار»** وضعیت را می‌گوید:
+
+- `فعال · در حال بررسی` + «آخرین بررسی: همین لحظه» → زمان‌بند زنده است؛ «اجرای بعدی» زمانِ
+  دقیقِ آرشیوِ بعدی است (به وقت تهران).
+- `فعال اما بررسی نمی‌شود!` → پردازهٔ API زمان‌بند را اجرا نمی‌کند: سرویس را بررسی کنید
+  (`systemctl status salimvand-api` و `journalctl -u salimvand-api -f`).
+- «آخرین اجرا (دستی)» → هر بار اجرا (دستی یا خودکار) شمارشِ بازه را از نو شروع می‌کند؛
+  خودکار در پایانِ همان بازه اجرا می‌شود.
+
+۲. دکمهٔ **«بررسی حالا (تست زمان‌بند)»** همان تصمیمِ زمان‌بند را فوراً می‌گیرد و نتیجه را می‌نویسد:
+اگر وقتِ بکاپ رسیده باشد آرشیو را می‌سازد، وگرنه علت را می‌گوید
+(`هنوز زمانِ بکاپ بعدی نرسیده`، `بکاپ خودکار غیرفعال است`، `توکن یا ریپازیتوری تنظیم نشده`، …).
+
+۳. در صورت نیاز روی سرور:
+
+```bash
+journalctl -u salimvand-api --since '2 hours ago' | grep -i 'GitHub backup'
+```
+
+هر ۳۰ ثانیه یک ردیفِ `lastTickAt` در تنظیمات ذخیره می‌شود؛ خطاهای احتمالیِ ساختِ زیپ یا ارسال به
+GitHub همین‌جا با برچسب `GitHub backup` دیده می‌شوند.
+
+نکته‌ها:
+
+- فقط سرویسِ `salimvand-api` زمان‌بند را اجرا می‌کند (سرویسِ worker آن را رد می‌کند تا هر بازه دو
+  آرشیوِ یکسان نسازد).
+- ذخیره کردنِ تنظیمات با بکاپِ عقب‌افتاده، همان لحظه یک اجرا را زمان‌بندی می‌کند (۲ ثانیه بعد).
+- پرشِ ساعتِ سرور (اصلاحِ NTP) دیگر باعث تعویقِ نامحدود نمی‌شود.
 
 ## Backup و بازبینی
 

@@ -106,7 +106,9 @@ describe('PurchaseService validation', () => {
       'تسویه',
       'actor-id',
     );
-    expect(result.data.invoice.paidAmount).toBe(700n);
+    const purchaseResult = result.data as { invoice?: { paidAmount: bigint } };
+    expect(purchaseResult.invoice).toBeDefined();
+    expect(purchaseResult.invoice!.paidAmount).toBe(700n);
     expect(updateMany).toHaveBeenCalledTimes(1);
     expect(supplierPayment).toHaveBeenCalledWith(
       expect.objectContaining({

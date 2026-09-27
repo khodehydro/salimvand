@@ -1,6 +1,7 @@
 import { Type } from 'class-transformer';
 import {
   IsBoolean,
+  IsDateString,
   IsEnum,
   IsInt,
   IsMobilePhone,
@@ -26,7 +27,27 @@ export class CreateInvoiceDto {
   @IsOptional() @IsString() @MaxLength(30) storePhone?: string;
   @IsOptional() @IsString() @MaxLength(500) customerAddress?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(9_000_000_000_000_000) discount?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(100) discountPercent?: number;
   @ValidateNested({ each: true }) @Type(() => InvoiceItemDto) items!: InvoiceItemDto[];
+}
+
+export class CreateInvoiceCustomerDto {
+  @IsString()
+  @MaxLength(150)
+  name!: string;
+
+  @IsMobilePhone('fa-IR')
+  mobile!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  address?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  notes?: string;
 }
 
 /** Addresses stay editable after issue: the store snapshot may change or the
@@ -43,9 +64,20 @@ export enum InvoicePaymentMethod {
   transfer = 'transfer',
   credit = 'credit',
 }
+export class PaymentCheckDto {
+  @IsOptional() @IsString() @MaxLength(80) checkNumber?: string;
+  @IsOptional() @IsString() @MaxLength(120) bank?: string;
+  @IsOptional() @IsString() @MaxLength(120) branch?: string;
+  @IsNumberString() amount!: string;
+  @IsDateString() dueDate!: string;
+}
 export class PayInvoiceDto {
   @IsNumberString() amount!: string;
   @IsEnum(InvoicePaymentMethod) method!: InvoicePaymentMethod;
+  @IsOptional()
+  @ValidateNested({ each: true })
+  @Type(() => PaymentCheckDto)
+  checks?: PaymentCheckDto[];
 }
 
 export class ReturnInvoiceItemDto {

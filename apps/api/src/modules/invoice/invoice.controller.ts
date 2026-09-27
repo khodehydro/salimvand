@@ -18,6 +18,7 @@ import { RolesGuard } from '../../common/auth/roles.guard';
 import { Roles } from '../../common/auth/roles.decorator';
 import { InvoiceService } from './invoice.service';
 import {
+  CreateInvoiceCustomerDto,
   CreateInvoiceDto,
   PayInvoiceDto,
   ReturnInvoiceItemDto,
@@ -37,8 +38,32 @@ export class InvoiceController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('seller', 'accountant')
   @Get()
-  list() {
-    return this.invoices.list();
+  list(@Query('cursor') cursor?: string, @Query('limit') limit?: string) {
+    return this.invoices.list(cursor, limit);
+  }
+
+  // Static segments are declared before the `:id` param routes: NestJS matches
+  // in declaration order, so GET /invoices/customers and /invoices/options
+  // must never fall through to @Get(':id').
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('seller')
+  @Get('customers')
+  customers(@Query('search') search?: string) {
+    return this.invoices.customers(search);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('seller')
+  @Post('customers')
+  createCustomer(@Body() body: CreateInvoiceCustomerDto) {
+    return this.invoices.createCustomer(body);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('seller')
+  @Get('options')
+  options() {
+    return this.invoices.options();
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -61,25 +86,21 @@ export class InvoiceController {
     return this.invoices.rotateLink(id, request.user?.id ?? '', request.ip);
   }
 
+  // Declared BEFORE @Get(':id') — Nest matches in declaration order. This is
+  // the narrow read the mobile return sheet uses instead of the full invoice
+  // detail: no customer PII and no payments, so warehouse can process returns.
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('seller')
-  @Get('customers')
-  customers(@Query('search') search?: string) {
-    return this.invoices.customers(search);
+  @Roles('manager', 'warehouse', 'accountant')
+  @Get(':id/return-context')
+  returnContext(@Param('id') id: string) {
+    return this.invoices.returnContext(id);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('seller')
-  @Post('customers')
-  createCustomer(@Body() body: { name?: string; mobile?: string; notes?: string }) {
-    return this.invoices.createCustomer(body);
-  }
-
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('seller')
-  @Get('options')
-  options() {
-    return this.invoices.options();
+  @Roles('seller', 'accountant')
+  @Get(':id')
+  get(@Param('id') id: string) {
+    return this.invoices.get(id);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -102,9 +123,32 @@ export class InvoiceController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('seller', 'accountant')
+  @Patch('checks/:checkId/status')
+  @Roles('seller', 'accountant')
+  updateCheckStatus(
+    @Param('checkId') checkId: string,
+    @Body() body: { status?: 'pending' | 'cleared' | 'bounced' | 'cancelled'; notes?: string },
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.invoices.updateCheckStatus(
+      checkId,
+      body.status ?? 'pending',
+      body.notes,
+      request.user?.id,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('seller', 'accountant')
   @Post(':id/pay')
   pay(@Param('id') id: string, @Body() body: PayInvoiceDto, @Req() request: AuthenticatedRequest) {
-    return this.invoices.pay(id, body.amount ?? 0, body.method ?? 'cash', request.user?.id ?? '');
+    return this.invoices.pay(
+      id,
+      body.amount ?? 0,
+      body.method ?? 'cash',
+      request.user?.id ?? '',
+      body.checks,
+    );
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

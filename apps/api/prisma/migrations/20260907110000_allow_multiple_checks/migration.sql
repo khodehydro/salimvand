@@ -1,0 +1,1 @@
+ALTER TABLE "payment_checks" DROP CONSTRAINT IF EXISTS "payment_checks_paymentId_key";

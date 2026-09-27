@@ -237,19 +237,59 @@ async function seedVehicles() {
 }
 
 async function seedLocations() {
-  // Flat shelves keyed by a one-letter prefix so the item table can reference
-  // them by prefix (A-1, B-1, ...). Location has no unique on `code` alone, so
-  // we look up by (parentId = null, code) and create if missing.
-  const shelves = ['A-1', 'A-2', 'B-1', 'B-2', 'C-1', 'D-1', 'E-1', 'F-1'];
+  // The real store layout: انبار «پایین اصلی» با ۲۰ قفسهٔ ۷ ردیفه — الگوی
+  // «قفسه.ردیف» (۱.۱ تا ۲۰.۷). کدها لاتینِ shelf.row می‌مانند تا در پیکرها
+  // فشرده باشند؛ نام‌ها همان الگو با ارقام فارسی‌اند چون نام، متنِ برچسب است.
+  // Idempotent: سطرهای موجود (حتی اگر اپراتور نامش را عوض کرده) دست نمی‌خورند.
+  const legacyCodes = ['A-1', 'A-2', 'B-1', 'B-2', 'C-1', 'D-1', 'E-1', 'F-1'];
+  for (const code of legacyCodes) {
+    const legacy = await prisma.location.findFirst({
+      where: { code, parentId: null },
+      include: { _count: { select: { items: true } } },
+    });
+    // The old flat demo shelves stopped being part of the layout; drop them
+    // only while empty so they quit reappearing after every deploy.
+    if (legacy && legacy._count.items === 0) {
+      await prisma.location.delete({ where: { id: legacy.id } });
+    }
+  }
+
+  const warehouse =
+    (await prisma.location.findFirst({
+      where: { code: 'MAIN', parentId: null, type: 'warehouse' },
+    })) ??
+    (await prisma.location.create({
+      data: { code: 'MAIN', name: 'پایین اصلی', type: 'warehouse' },
+    }));
+
   const out: Record<string, { id: string }> = {};
-  for (const code of shelves) {
-    const existing = await prisma.location.findFirst({ where: { code, parentId: null } });
-    const row =
-      existing ??
-      (await prisma.location.create({ data: { code, name: `قفسه ${code}`, type: 'shelf' } }));
-    out[code[0]] = row as unknown as { id: string };
+  const letters = ['A', 'B', 'C', 'D', 'E', 'F'];
+  for (let shelfNo = 1; shelfNo <= 20; shelfNo += 1) {
+    for (let rowNo = 1; rowNo <= 7; rowNo += 1) {
+      const code = `${shelfNo}.${rowNo}`;
+      const existing = await prisma.location.findFirst({
+        where: { parentId: warehouse.id, code },
+      });
+      const location =
+        existing ??
+        (await prisma.location.create({
+          data: {
+            code,
+            name: toPersianDigits(code),
+            type: 'shelf',
+            parentId: warehouse.id,
+          },
+        }));
+      // Demo inventory rows reference shelves by their old A–F prefixes; on
+      // fresh installs point them at the first row of the first six shelves.
+      if (rowNo === 1 && shelfNo <= letters.length) out[letters[shelfNo - 1]] = location;
+    }
   }
   return out;
+}
+
+function toPersianDigits(value: string | number): string {
+  return String(value).replace(/\d/g, (digit) => '۰۱۲۳۴۵۶۷۸۹'[Number(digit)]);
 }
 
 function matchModel(productName: string, makes: Record<string, { model: string; id: string }[]>) {

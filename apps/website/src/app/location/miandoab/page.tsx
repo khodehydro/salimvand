@@ -1,7 +1,7 @@
 import { PublicSubHeader } from '../../PublicSubHeader';
 import type { Metadata } from 'next';
 export const metadata: Metadata = {
-  title: 'فروش لوازم داخلی خودرو در میاندوآب | سلیم وند',
+  title: 'فروش لوازم داخلی خودرو در میاندوآب',
   description:
     'فروش لوازم داخل کابین و قطعات خودروهای داخلی در میاندوآب، شهرستان میاندوآب، آذربایجان غربی توسط فروشگاه آذین خودرو سلیم وند.',
   alternates: { canonical: '/location/miandoab' },

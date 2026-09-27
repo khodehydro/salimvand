@@ -35,6 +35,7 @@ const roleLabels: Record<string, string> = {
   seller: 'فروشنده',
   warehouse: 'انباردار',
   accountant: 'حسابدار',
+  wholesale: 'خریدار عمده',
 };
 const initialForm = { name: '', username: '', password: '', role: 'seller', mobile: '' };
 

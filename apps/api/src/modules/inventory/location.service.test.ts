@@ -15,7 +15,10 @@ const row = (overrides: Record<string, unknown> = {}) => ({
 function makeService(overrides: Record<string, unknown> = {}) {
   const prisma = {
     location: {
-      findMany: vi.fn(),
+      // assertChildren() reads the child types of a node before re-parenting.
+      // The explicit return type keeps the mock's resolved value open instead
+      // of narrowing it to `never[]`.
+      findMany: vi.fn(async (): Promise<Record<string, unknown>[]> => []),
       findFirst: vi.fn(),
       findUnique: vi.fn(),
       count: vi.fn(async () => 0),
@@ -40,8 +43,17 @@ describe('LocationService', () => {
       expect.objectContaining({
         include: expect.objectContaining({
           parent: true,
-          children: expect.objectContaining({ include: { _count: { select: { items: true } } } }),
-          _count: { select: { items: true } },
+          // children of a warehouse are shelves, and each shelf carries its
+          // own baskets — both levels report their stock counts.
+          children: expect.objectContaining({
+            include: expect.objectContaining({
+              children: expect.objectContaining({
+                include: { _count: { select: { items: true, basketItems: true } } },
+              }),
+              _count: { select: { items: true, basketItems: true, children: true } },
+            }),
+          }),
+          _count: { select: { items: true, basketItems: true, children: true } },
         }),
       }),
     );
@@ -125,6 +137,20 @@ describe('LocationService', () => {
     });
   });
 
+  it('rejects a blank name or code on update, not just on create', async () => {
+    const { service, prisma } = makeService();
+    prisma.location.findUnique.mockResolvedValue(row());
+    // نام یا کدِ خالی/فقط‌فاصله هرگز نباید به دیتابیس برسد — همین ردیف‌های
+    // «بدون نام» قبلاً از این مسیر ایجاد شده بودند.
+    await expect(service.update('loc-1', { name: '', code: 'A-03' })).rejects.toThrow(
+      new BadRequestException('نام و کد محل الزامی است'),
+    );
+    await expect(service.update('loc-1', { name: 'قفسه جلو', code: '   ' })).rejects.toThrow(
+      new BadRequestException('نام و کد محل الزامی است'),
+    );
+    expect(prisma.location.update).not.toHaveBeenCalled();
+  });
+
   it('detaching a shelf (بدون انبار) sends parentId null', async () => {
     const { service, prisma } = makeService();
     prisma.location.findUnique.mockResolvedValue(row({ parentId: 'wh-1' }));
@@ -135,24 +161,29 @@ describe('LocationService', () => {
     });
   });
 
-  it('a warehouse with shelves cannot become a shelf itself', async () => {
+  it('an انبار can never hang under another location', async () => {
     const { service, prisma } = makeService();
     prisma.location.findUnique.mockResolvedValue(row({ id: 'wh-1', type: 'warehouse' }));
     prisma.location.count.mockResolvedValue(3);
     await expect(service.update('wh-1', { parentId: 'wh-2' })).rejects.toThrow(
-      'این انبار قفسه دارد و نمی‌تواند زیرمجموعهٔ انبار دیگری شود',
+      'انبار نمی‌تواند زیرمجموعهٔ محل دیگری باشد',
     );
+    await expect(
+      service.create({ name: 'انبار دوم', code: 'W-2', type: 'warehouse', parentId: 'wh-1' }),
+    ).rejects.toThrow('انبار نمی‌تواند زیرمجموعهٔ محل دیگری باشد');
+    expect(prisma.location.create).not.toHaveBeenCalled();
   });
 
   it('deleting a shelf reports how many items were detached', async () => {
     const { service, prisma } = makeService();
     prisma.location.findUnique.mockResolvedValue({
       ...row(),
-      _count: { items: 4, children: 0 },
+      _count: { items: 4, basketItems: 2, children: 0 },
     });
     const result = await service.remove('loc-1', 'u1');
     expect(prisma.location.delete).toHaveBeenCalledWith({ where: { id: 'loc-1' } });
-    expect(result.data).toEqual({ id: 'loc-1', detachedItems: 4 });
+    // A shelf is referenced by items and (as a basket) by other lines.
+    expect(result.data).toEqual({ id: 'loc-1', detachedItems: 6 });
   });
 
   it('deleting a warehouse with shelves is blocked', async () => {
@@ -162,14 +193,132 @@ describe('LocationService', () => {
       _count: { items: 0, children: 2 },
     });
     await expect(service.remove('loc-1')).rejects.toThrow(
-      'ابتدا قفسه‌های این انبار را حذف یا به انبار دیگری منتقل کنید',
+      'ابتدا سبدها و قفسه‌های این محل را حذف یا به محل دیگری منتقل کنید',
     );
     expect(prisma.location.delete).not.toHaveBeenCalled();
+  });
+
+  /* ——— سبد (basket): the third level of the placement tree ——— */
+
+  it('creates a سبد inside a قفسه and rejects one without a shelf', async () => {
+    const { service, prisma } = makeService();
+    prisma.location.findUnique.mockImplementation(async ({ where }: { where: { id?: string } }) => {
+      if (where.id === 'shelf-1') return row({ id: 'shelf-1', parentId: 'wh-1' });
+      if (where.id === 'wh-1') return row({ id: 'wh-1', type: 'warehouse' });
+      return null;
+    });
+    const created = await service.create({
+      name: 'سبد ۲',
+      code: 'B-2',
+      type: 'basket',
+      parentId: 'shelf-1',
+    });
+    expect(prisma.location.create).toHaveBeenCalledWith({
+      data: { name: 'سبد ۲', code: 'B-2', type: 'basket', parentId: 'shelf-1' },
+    });
+    expect(created.ok).toBe(true);
+    // A basket with no shelf has no address at all.
+    await expect(service.create({ name: 'سبد', code: 'B-3', type: 'basket' })).rejects.toThrow(
+      'سبد باید داخل یک قفسه تعریف شود',
+    );
+    // …and neither does a basket hung straight off a warehouse.
+    await expect(
+      service.create({ name: 'سبد', code: 'B-4', type: 'basket', parentId: 'wh-1' }),
+    ).rejects.toThrow('سبد باید داخل یک قفسه تعریف شود، نه مستقیماً داخل انبار');
+  });
+
+  it('keeps the tree three levels deep: no shelf under a basket, no basket under a basket', async () => {
+    const { service, prisma } = makeService();
+    prisma.location.findUnique.mockImplementation(async ({ where }: { where: { id?: string } }) => {
+      if (where.id === 'basket-1')
+        return row({ id: 'basket-1', type: 'basket', parentId: 'shelf-1' });
+      if (where.id === 'shelf-1') return row({ id: 'shelf-1', parentId: 'wh-1' });
+      return null;
+    });
+    await expect(
+      service.create({ name: 'قفسه', code: 'C-1', parentId: 'basket-1' }),
+    ).rejects.toThrow('قفسه نمی‌تواند داخل سبد باشد');
+    await expect(
+      service.create({ name: 'سبد', code: 'B-9', type: 'basket', parentId: 'basket-1' }),
+    ).rejects.toThrow('سبد نمی‌تواند داخل سبد دیگری باشد');
+    // A shelf that already holds baskets may still move to another warehouse.
+    prisma.location.findMany.mockResolvedValue([{ type: 'basket' }]);
+    prisma.location.findUnique.mockImplementation(async ({ where }: { where: { id?: string } }) => {
+      if (where.id === 'shelf-1') return row({ id: 'shelf-1', parentId: 'wh-1' });
+      if (where.id === 'wh-2') return row({ id: 'wh-2', type: 'warehouse' });
+      return null;
+    });
+    const moved = await service.update('shelf-1', { parentId: 'wh-2' });
+    expect(moved.ok).toBe(true);
+  });
+
+  it('refuses to turn a shelf with shelves into a basket (or a basket with children into anything)', async () => {
+    const { service, prisma } = makeService();
+    prisma.location.findUnique.mockResolvedValue(row({ id: 'loc-1', parentId: 'wh-1' }));
+    prisma.location.findMany.mockResolvedValue([{ type: 'shelf' }]);
+    await expect(service.update('loc-1', { type: 'basket', parentId: 'shelf-9' })).rejects.toThrow(
+      'این محل قفسه دارد و نمی‌تواند سبد شود',
+    );
+    prisma.location.findMany.mockResolvedValue([{ type: 'basket' }]);
+    prisma.location.findUnique.mockImplementation(async ({ where }: { where: { id?: string } }) => {
+      if (where.id === 'loc-1') return row({ id: 'loc-1', type: 'basket', parentId: 'shelf-1' });
+      if (where.id === 'shelf-9') return row({ id: 'shelf-9', parentId: 'wh-1' });
+      return null;
+    });
+    // A basket already holding baskets may not be moved to another shelf.
+    await expect(service.update('loc-1', { name: 'سبد ۱', parentId: 'shelf-9' })).rejects.toThrow(
+      'سبد نمی‌تواند زیرمجموعه داشته باشد',
+    );
+    expect(prisma.location.update).not.toHaveBeenCalled();
+  });
+
+  it('deleting a سبد detaches the lines filed in it and keeps their stock', async () => {
+    const { service, prisma } = makeService();
+    prisma.location.findUnique.mockResolvedValue({
+      ...row({ type: 'basket', parentId: 'shelf-1' }),
+      _count: { items: 0, basketItems: 5, children: 0 },
+    });
+    const result = await service.remove('loc-1', 'u1');
+    expect(prisma.location.delete).toHaveBeenCalledWith({ where: { id: 'loc-1' } });
+    expect(result.data).toEqual({ id: 'loc-1', detachedItems: 5 });
   });
 
   it('updating or deleting an unknown location returns 404', async () => {
     const { service } = makeService();
     await expect(service.update('nope', { name: 'x' })).rejects.toBeInstanceOf(NotFoundException);
     await expect(service.remove('nope')).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+describe('LocationService.list filters (پیکر قفسه/سبد در اپ)', () => {
+  const makeList = () => {
+    const findMany = vi.fn().mockResolvedValue([]);
+    const prisma = { location: { findMany }, auditLog: { create: vi.fn() } };
+    return { service: new LocationService(prisma as never), findMany };
+  };
+
+  it('returns only the requested level of the tree', async () => {
+    const { service, findMany } = makeList();
+    await service.list({ type: 'basket' });
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { type: 'basket' } }));
+  });
+
+  it('narrows to the children of one location', async () => {
+    const { service, findMany } = makeList();
+    await service.list({ parentId: 'shelf-1' });
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { parentId: 'shelf-1' } }),
+    );
+  });
+
+  it('rejects an unknown type instead of silently returning nothing', async () => {
+    const { service } = makeList();
+    await expect(service.list({ type: 'garage' })).rejects.toThrow('نوع محل معتبر نیست');
+  });
+
+  it('returns the whole tree when no filter is sent', async () => {
+    const { service, findMany } = makeList();
+    await service.list();
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: {} }));
   });
 });
