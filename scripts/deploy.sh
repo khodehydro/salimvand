@@ -73,6 +73,14 @@ chown salimvand:salimvand "$ROOT_DIR/version.json" 2>/dev/null || true
 "${PNPM[@]}" --filter @salimvand/api exec prisma generate
 "${PNPM[@]}" --filter @salimvand/api exec prisma migrate deploy
 "${PNPM[@]}" --filter @salimvand/api prisma:seed
+# Next.js writes generated route types into .next/types during the PREVIOUS
+# build, and apps/website/tsconfig.json includes them. A route deleted since
+# that build leaves a dangling reference (e.g. ".next/types/app/p/[slug]/page.ts"
+# importing src/app/p/[slug]/page.js), so `tsc --noEmit` fails on a tree whose
+# src/ is perfectly clean — exactly the `Cannot find module '../../../../../src/
+# app/p/[slug]/page.js'` error that killed earlier rollouts. Drop only the
+# generated types; the running standalone output lives elsewhere in .next.
+rm -rf "$ROOT_DIR/apps/website/.next/types"
 if [[ "${SKIP_TYPECHECK:-0}" != "1" ]]; then
   "${PNPM[@]}" typecheck
 fi
