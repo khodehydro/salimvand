@@ -31,6 +31,34 @@ type GithubBackupConfig = {
   lastFile?: string | null;
   lastStatus?: string | null;
   lastError?: string | null;
+  /** Scheduler diagnostics written by the API on every tick. */
+  lastTrigger?: string | null;
+  lastTickAt?: string | null;
+  nextRunAt?: string | null;
+  lastSkipReason?: string | null;
+  schedulerBootedAt?: string | null;
+  tickCount?: number;
+  schedulerAlive?: boolean;
+  schedulerOwnedHere?: boolean;
+};
+
+/** Live scheduler health (polled) — kept apart from the editable config so a
+ *  refresh never overwrites half-typed settings. */
+type GithubBackupStatus = {
+  enabled: boolean;
+  intervalMinutes: number;
+  lastRunAt?: string | null;
+  lastRunStatus?: string | null;
+  lastError?: string | null;
+  lastFile?: string | null;
+  lastTrigger?: string | null;
+  lastTickAt?: string | null;
+  nextRunAt?: string | null;
+  lastSkipReason?: string | null;
+  tickCount?: number;
+  schedulerBootedAt?: string | null;
+  schedulerAlive?: boolean;
+  schedulerOwnedHere?: boolean;
 };
 
 type Settings = {
@@ -111,6 +139,22 @@ const initial: Settings = {
   'inventory.default_min_stock': 3,
   'backup.schedule': { enabled: true },
 };
+
+/** «۳ دقیقه پیش» — برای نمایش وضعیت زمان‌بندِ بکاپ. */
+const relativeTime = (value?: string | null) => {
+  if (!value) return 'هرگز';
+  const diff = Date.now() - new Date(value).getTime();
+  const minutes = Math.round(diff / 60_000);
+  if (minutes < 1) return 'همین لحظه';
+  if (minutes < 60) return `${minutes.toLocaleString('fa-IR')} دقیقه پیش`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours.toLocaleString('fa-IR')} ساعت پیش`;
+  return `${Math.round(hours / 24).toLocaleString('fa-IR')} روز پیش`;
+};
+
+const tehranTime = (value?: string | null) =>
+  value ? new Date(value).toLocaleString('fa-IR', { timeZone: 'Asia/Tehran', hour12: false }) : '—';
+
 export function SettingsPage() {
   const [testChannel, setTestChannel] = useState('sms');
   const [testMobile, setTestMobile] = useState('');
@@ -136,7 +180,9 @@ export function SettingsPage() {
   } | null>(null);
   const [githubCfg, setGithubCfg] = useState<GithubBackupConfig | null>(null);
   const [githubJobs, setGithubJobs] = useState<BackupJob[]>([]);
+  const [githubStatus, setGithubStatus] = useState<GithubBackupStatus | null>(null);
   const [githubRunning, setGithubRunning] = useState(false);
+  const [githubChecking, setGithubChecking] = useState(false);
   const [githubTokenInput, setGithubTokenInput] = useState('');
   const [settings, setSettings] = useState<Settings>(initial);
   // Settings are grouped into focused tabs so a first-time operator lands on
@@ -202,6 +248,18 @@ export function SettingsPage() {
     void api<{ data: BackupJob[] }>('/settings/github-backup/jobs')
       .then((result) => setGithubJobs(result.data))
       .catch(() => undefined);
+  }, []);
+
+  // The GitHub scheduler status is polled separately: refreshing the editable
+  // config mid-typing would throw away the operator's input.
+  useEffect(() => {
+    const load = () =>
+      void api<{ data: GithubBackupStatus }>('/settings/github-backup/status')
+        .then((result) => setGithubStatus(result.data))
+        .catch(() => undefined);
+    load();
+    const poll = setInterval(load, 30_000);
+    return () => clearInterval(poll);
   }, []);
   useEffect(() => {
     if (!backupJobs.some((job) => job.status === 'running')) return;
@@ -302,6 +360,38 @@ export function SettingsPage() {
     }
   };
 
+  const checkGithubSchedule = async () => {
+    setGithubChecking(true);
+    try {
+      const result = await api<{ data: { ran: boolean; reason: string | null } }>(
+        '/settings/github-backup/tick',
+        { method: 'POST' },
+      );
+      const reasons: Record<string, string> = {
+        'not-due': 'هنوز زمانِ بکاپ بعدی نرسیده — طبق زمان‌بندی صبر کنید.',
+        disabled: 'بکاپ خودکار غیرفعال است.',
+        'missing-config': 'توکن یا ریپازیتوری تنظیم نشده است.',
+        busy: 'یک بکاپ هم‌اکنون در حال اجرا است.',
+        failed: 'اجرا شد اما خطا خورد — پیام خطا را در بالا ببینید.',
+        'config-error': 'خواندن تنظیمات از دیتابیس ناموفق بود.',
+      };
+      setMessage(
+        result.data.ran
+          ? 'زمان‌بند بکاپ را اجرا کرد — فایل جدید در ریپازیتوری قرار گرفت.'
+          : `زمان‌بند اجرا نکرد: ${reasons[result.data.reason ?? ''] ?? result.data.reason}`,
+      );
+      void api<{ data: GithubBackupConfig }>('/settings/github-backup')
+        .then((r) => setGithubCfg(r.data))
+        .catch(() => undefined);
+      void api<{ data: BackupJob[] }>('/settings/github-backup/jobs')
+        .then((r) => setGithubJobs(r.data))
+        .catch(() => undefined);
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setGithubChecking(false);
+    }
+  };
   const runGithubBackup = async () => {
     setGithubRunning(true);
     try {
@@ -471,6 +561,29 @@ export function SettingsPage() {
     },
   ] as const;
   const activeTab = tabs.find((item) => item.id === tab) ?? tabs[0];
+
+  // Live scheduler box: the polled status when available, otherwise the config
+  // loaded with the page.
+  const ghStatus: GithubBackupStatus | null =
+    githubStatus ??
+    (githubCfg
+      ? {
+          enabled: githubCfg.enabled,
+          intervalMinutes: githubCfg.intervalMinutes,
+          lastRunAt: githubCfg.lastRunAt ?? null,
+          lastRunStatus: githubCfg.lastStatus ?? null,
+          lastError: githubCfg.lastError ?? null,
+          lastFile: githubCfg.lastFile ?? null,
+          lastTrigger: githubCfg.lastTrigger ?? null,
+          lastTickAt: githubCfg.lastTickAt ?? null,
+          nextRunAt: githubCfg.nextRunAt ?? null,
+          lastSkipReason: githubCfg.lastSkipReason ?? null,
+          tickCount: githubCfg.tickCount ?? 0,
+          schedulerBootedAt: githubCfg.schedulerBootedAt ?? null,
+          schedulerAlive: githubCfg.schedulerAlive,
+          schedulerOwnedHere: githubCfg.schedulerOwnedHere,
+        }
+      : null);
 
   return (
     <section className="settings-page">
@@ -1323,6 +1436,67 @@ export function SettingsPage() {
                     )}
                   </div>
                 )}
+                  {ghStatus && (
+                    <div className="backup-scheduler" aria-live="polite">
+                      <div className="bs-row">
+                        <b>زمان‌بند خودکار</b>
+                        <span
+                          className={`status-chip ${ghStatus.schedulerAlive ? 'ok' : 'stale'}`}
+                          title={
+                            ghStatus.schedulerBootedAt
+                              ? `آخرین راه‌اندازی: ${new Date(ghStatus.schedulerBootedAt).toLocaleString('fa-IR')}`
+                              : undefined
+                          }
+                        >
+                          {ghStatus.enabled
+                            ? ghStatus.schedulerAlive
+                              ? 'فعال · در حال بررسی'
+                              : 'فعال اما بررسی نمی‌شود!'
+                            : 'خاموش'}
+                        </span>
+                      </div>
+                      <div className="bs-grid">
+                        <span>آخرین بررسی</span>
+                        <b>{relativeTime(ghStatus.lastTickAt)}</b>
+                        <span>اجرای بعدی</span>
+                        <b>{ghStatus.nextRunAt ? tehranTime(ghStatus.nextRunAt) : '—'}</b>
+                        <span>آخرین اجرا</span>
+                        <b>
+                          {ghStatus.lastRunAt
+                            ? `${relativeTime(ghStatus.lastRunAt)} (${
+                                ghStatus.lastTrigger === 'manual' ? 'دستی' : 'خودکار'
+                              })`
+                            : '—'}
+                        </b>
+                        <span>تعداد بررسی</span>
+                        <b>{(ghStatus.tickCount ?? 0).toLocaleString('fa-IR')}</b>
+                      </div>
+                      {ghStatus.enabled && ghStatus.lastSkipReason && !ghStatus.schedulerAlive && (
+                        <small className="low-stock">
+                          زمان‌بند در این لحظه پاس نمی‌دهد — سرویس API را بررسی کنید (journalctl -u
+                          salimvand-api).
+                        </small>
+                      )}
+                      {ghStatus.enabled && !ghStatus.schedulerOwnedHere && (
+                        <small className="muted">
+                          این پاسخ از پردازهٔ worker است؛ زمان‌بند فقط در سرویس salimvand-api اجرا
+                          می‌شود.
+                        </small>
+                      )}
+                      <button
+                        type="button"
+                        className="outline"
+                        disabled={githubChecking}
+                        onClick={() => void checkGithubSchedule()}
+                      >
+                        {githubChecking ? 'در حال بررسی…' : 'بررسی حالا (تست زمان‌بند)'}
+                      </button>
+                      <small className="muted">
+                        «بررسی حالا» همان تصمیمِ زمان‌بند را فوراً می‌گیرد: اگر وقتِ بکاپ رسیده باشد
+                        آرشیو را می‌سازد و علت را همین‌جا می‌نویسد.
+                      </small>
+                    </div>
+                  )}
                 {githubJobs.length > 0 && (
                   <div className="backup-jobs">
                     <h3>تاریخچه بکاپ GitHub</h3>

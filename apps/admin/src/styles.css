@@ -1768,6 +1768,61 @@ body,
   word-break: break-all;
 }
 
+/* ── وضعیتِ زمان‌بندِ بکاپ GitHub ─────────────────────────────────────────
+   اپراتور باید بتواند ببیند زمان‌بند زنده است یا نه (آخرین بررسی، اجرای
+   بعدی، و علتِ اجرا نشدن) بدون اینکه لاگِ سرور را بخواند. */
+.backup-scheduler {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--sv-border);
+  border-radius: 10px;
+  background: var(--sv-surface-2);
+}
+.backup-scheduler .bs-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.backup-scheduler .bs-row b {
+  font-size: 12.5px;
+}
+.backup-scheduler .status-chip {
+  font-size: 11px;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+.backup-scheduler .status-chip.ok {
+  color: var(--sv-ok);
+  background: var(--sv-ok-soft);
+}
+.backup-scheduler .status-chip.stale {
+  color: var(--sv-danger);
+  background: var(--sv-danger-soft);
+}
+.backup-scheduler .bs-grid {
+  display: grid;
+  grid-template-columns: auto 1fr auto 1fr;
+  gap: 6px 10px;
+  align-items: center;
+  font-size: 11.5px;
+}
+.backup-scheduler .bs-grid span {
+  color: var(--sv-text-3);
+}
+.backup-scheduler .bs-grid b {
+  color: var(--sv-text);
+}
+.backup-scheduler button {
+  justify-self: start;
+}
+@media (max-width: 620px) {
+  .backup-scheduler .bs-grid {
+    grid-template-columns: auto 1fr;
+  }
+}
+
 .admin-fab {
   position: fixed;
   inset-block-end: 74px;

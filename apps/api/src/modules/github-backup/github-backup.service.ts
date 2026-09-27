@@ -1,4 +1,10 @@
-import { BadRequestException, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma.service';
 import { ProductsBackupService } from '../catalog/products-backup.service';
 
@@ -14,6 +20,15 @@ type GithubBackupConfig = {
   lastFile?: string | null;
   lastStatus?: string | null;
   lastError?: string | null;
+  /** «auto» or «manual» — what triggered the last archive. */
+  lastTrigger?: string | null;
+  /** Scheduler health, written on every tick so the panel can prove the loop
+   *  is alive (and show why a tick decided to skip the run). */
+  lastTickAt?: string | null;
+  nextRunAt?: string | null;
+  lastSkipReason?: string | null;
+  schedulerBootedAt?: string | null;
+  tickCount?: number;
 };
 
 const DEFAULT_CONFIG: GithubBackupConfig = {
@@ -28,15 +43,36 @@ const DEFAULT_CONFIG: GithubBackupConfig = {
   lastFile: null,
   lastStatus: null,
   lastError: null,
+  lastTrigger: null,
+  lastTickAt: null,
+  nextRunAt: null,
+  lastSkipReason: null,
+  schedulerBootedAt: null,
+  tickCount: 0,
 };
 
 const SETTING_KEY = 'github.backup';
 
+/** The queue worker boots the very same AppModule (`dist/worker.js`), so both
+ *  processes used to own a timer and every interval pushed two identical
+ *  archives. Only the API process (`dist/main.js`) schedules backups.
+ *  `ENABLE_QUEUE_WORKER` alone is not enough: the operator may set it in .env
+ *  so the API drains the queue too — that process is still the API. */
+const isQueueWorkerProcess = () =>
+  (process.argv[1] ?? '').endsWith('/worker.js') && process.env.ENABLE_QUEUE_WORKER === 'true';
+
 @Injectable()
-export class GithubBackupService implements OnModuleInit {
+export class GithubBackupService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(GithubBackupService.name);
   private timer: NodeJS.Timeout | null = null;
   private running = false;
+  /** One tick at a time — the manual «run now» button must never overlap the
+   *  scheduler's own tick. */
+  private ticking = false;
+  /** How often the due-time is evaluated. Short enough that a due backup does
+   *  not wait a whole minute. */
+  private readonly tickMs = 30_000;
+  private readonly bootedAt = new Date();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -44,14 +80,102 @@ export class GithubBackupService implements OnModuleInit {
   ) {}
 
   onModuleInit() {
-    this.logger.log('GitHub backup scheduler initialized - checking every 60s');
-    this.timer = setInterval(() => {
-      void this.tick().catch((e) => this.logger.error(`tick failed: ${(e as Error).message}`));
-    }, 60_000);
-    setTimeout(() => {
-      this.logger.log('GitHub backup initial tick after boot');
-      void this.tick().catch((e) => this.logger.error(`initial tick failed: ${(e as Error).message}`));
-    }, 15_000);
+    // The queue worker boots the same AppModule; two schedulers would push
+    // two identical archives every interval, so only the API process owns the
+    // timer.
+    if (isQueueWorkerProcess()) {
+      this.logger.log('GitHub backup scheduler: disabled in the worker process');
+      return;
+    }
+    this.logger.log(`GitHub backup scheduler armed — checking every ${this.tickMs / 1000}s`);
+    void this.persistDiagnostics({ schedulerBootedAt: this.bootedAt.toISOString() }).catch((e) =>
+      this.logger.error(`scheduler boot state failed: ${(e as Error).message}`),
+    );
+    // First check shortly after boot: a server that was down past its due
+    // time catches up instead of waiting for the next window.
+    this.scheduleNext(10_000);
+  }
+
+  onModuleDestroy() {
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = null;
+  }
+
+  /** Re-arms the loop. Every path (success, failure, skip) goes through here,
+   *  so a single bad tick can never stop the schedule for good. */
+  private scheduleNext(delayMs: number) {
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = setTimeout(() => {
+      void this.runTickLoop();
+    }, delayMs);
+    // Never hold the process open just for the timer.
+    this.timer.unref?.();
+  }
+
+  private async runTickLoop() {
+    try {
+      await this.tick();
+    } catch (e) {
+      this.logger.error(`GitHub backup tick failed: ${(e as Error).message}`);
+    } finally {
+      this.scheduleNext(this.tickMs);
+    }
+  }
+
+  /** Scheduler health only — polled by the panel without overwriting the
+   *  operator's half-typed settings form. */
+  async getSchedulerStatus() {
+    const cfg = await this.getConfig();
+    const lastTick = cfg.lastTickAt ? new Date(cfg.lastTickAt).getTime() : null;
+    const staleAfterMs = Math.max(this.tickMs * 6, 180_000);
+    return {
+      enabled: cfg.enabled,
+      intervalMinutes: cfg.intervalMinutes,
+      lastRunAt: cfg.lastRunAt ?? null,
+      lastRunStatus: cfg.lastStatus ?? null,
+      lastError: cfg.lastError ?? null,
+      lastFile: cfg.lastFile ?? null,
+      lastTrigger: cfg.lastTrigger ?? null,
+      lastTickAt: cfg.lastTickAt ?? null,
+      nextRunAt: cfg.nextRunAt ?? null,
+      lastSkipReason: cfg.lastSkipReason ?? null,
+      tickCount: cfg.tickCount ?? 0,
+      schedulerBootedAt: cfg.schedulerBootedAt ?? null,
+      schedulerAlive: lastTick !== null && Date.now() - lastTick < staleAfterMs,
+      schedulerOwnedHere: !isQueueWorkerProcess(),
+    };
+  }
+
+  /** Manual «check now» from the panel — same decision path as the timer. */
+  async tickNow() {
+    if (this.ticking) return { ok: true, data: { ran: false, reason: 'busy' } };
+    const result = await this.tick();
+    return { ok: true, data: result };
+  }
+
+  /** Merges scheduler state into the stored config without touching the
+   *  user's settings. */
+  private async persistDiagnostics(patch: Partial<GithubBackupConfig>) {
+    const current = await this.getConfig();
+    const next: GithubBackupConfig = { ...current, ...patch };
+    await this.prisma.setting.upsert({
+      where: { key: SETTING_KEY },
+      update: { value: next as never },
+      create: { key: SETTING_KEY, value: next as never },
+    });
+    return next;
+  }
+
+  /** When the next archive is due, given the last run and the interval. */
+  private static dueAt(cfg: GithubBackupConfig, now: Date) {
+    const last = cfg.lastRunAt ? new Date(cfg.lastRunAt) : null;
+    // No previous run at all → it is already due.
+    if (!last || Number.isNaN(last.getTime())) return now;
+    const due = new Date(last.getTime() + cfg.intervalMinutes * 60_000);
+    // A clock jump (NTP correction) can leave lastRunAt in the future; never
+    // let that postpone the schedule by more than one extra interval.
+    if (due.getTime() - now.getTime() > cfg.intervalMinutes * 60_000) return now;
+    return due;
   }
 
   async getConfig(): Promise<GithubBackupConfig> {
@@ -73,11 +197,19 @@ export class GithubBackupService implements OnModuleInit {
   async getPublicConfig() {
     const cfg = await this.getConfig();
     const masked = cfg.token ? `${cfg.token.slice(0, 6)}...${cfg.token.slice(-4)}` : '';
+    // A tick newer than three intervals means the loop is alive; anything
+    // older means the process is not scheduling (restart loop, crash, …).
+    const lastTick = cfg.lastTickAt ? new Date(cfg.lastTickAt).getTime() : null;
+    const staleAfterMs = Math.max(this.tickMs * 6, 180_000);
     return {
       ...cfg,
       token: undefined,
       tokenMasked: masked,
       hasToken: Boolean(cfg.token),
+      // Scheduler health for the panel.
+      schedulerOwnedHere: !isQueueWorkerProcess(),
+      schedulerAlive: lastTick !== null && Date.now() - lastTick < staleAfterMs,
+      schedulerBootedAt: cfg.schedulerBootedAt ?? null,
     };
   }
 
@@ -103,47 +235,100 @@ export class GithubBackupService implements OnModuleInit {
       create: { key: SETTING_KEY, value: next as never, updatedById: userId },
     });
 
+    // Turning the scheduler on (or shortening the interval) must not wait for
+    // the next 30s check: recompute the due time and, when it is already in
+    // the past, run the check immediately.
+    if (next.enabled && next.token && next.repo) {
+      const due = GithubBackupService.dueAt(next, new Date());
+      await this.persistDiagnostics({ nextRunAt: due.toISOString(), lastSkipReason: null });
+      if (due.getTime() <= Date.now()) {
+        this.logger.log('GitHub backup: config saved and backup is due — running now');
+        this.scheduleNext(2_000);
+      }
+    } else {
+      await this.persistDiagnostics({ nextRunAt: null, lastSkipReason: 'disabled' });
+    }
+
     return this.getPublicConfig();
   }
 
-  private async tick() {
-    if (this.running) {
-      this.logger.debug('GitHub backup tick: already running, skip');
-      return;
-    }
-    let cfg: GithubBackupConfig;
-    try {
-      cfg = await this.getConfig();
-    } catch (e) {
-      this.logger.error(`GitHub backup tick: failed to get config ${(e as Error).message}`);
-      return;
-    }
-    if (!cfg.enabled) {
-      return;
-    }
-    if (!cfg.token || !cfg.repo) {
-      this.logger.warn('GitHub backup tick: enabled but token/repo missing');
-      return;
-    }
-
+  /**
+   * One scheduler pass: records that the loop is alive, decides whether an
+   * archive is due and — only then — builds and pushes it. The reason for
+   * every skip is stored so the panel can show «چرا اجرا نشد» instead of
+   * leaving the operator guessing.
+   */
+  private async tick(): Promise<{ ran: boolean; reason: string | null }> {
+    if (this.ticking) return { ran: false, reason: 'busy' };
+    this.ticking = true;
     const now = new Date();
-    const lastRun = cfg.lastRunAt ? new Date(cfg.lastRunAt) : null;
-    const intervalMs = cfg.intervalMinutes * 60_000;
-
-    if (lastRun) {
-      const elapsed = now.getTime() - lastRun.getTime();
-      if (elapsed < intervalMs) {
-        return;
-      }
-    } else {
-      this.logger.log('GitHub backup tick: no previous run, will run now');
-    }
-
-    this.logger.log(`GitHub backup tick: running auto backup to ${cfg.repo} (interval ${cfg.intervalMinutes}m, includeImages=${cfg.includeImages})`);
     try {
-      await this.runBackupInternal(cfg, 'auto');
-    } catch (e) {
-      this.logger.error(`GitHub backup auto failed: ${(e as Error).message}`);
+      let cfg: GithubBackupConfig;
+      try {
+        cfg = await this.getConfig();
+      } catch (e) {
+        this.logger.error(`GitHub backup tick: config unreadable ${(e as Error).message}`);
+        return { ran: false, reason: 'config-error' };
+      }
+
+      const diagnostics: Partial<GithubBackupConfig> = {
+        lastTickAt: now.toISOString(),
+        tickCount: (cfg.tickCount ?? 0) + 1,
+        schedulerBootedAt: cfg.schedulerBootedAt ?? this.bootedAt.toISOString(),
+      };
+
+      if (this.running) {
+        await this.persistDiagnostics({ ...diagnostics, lastSkipReason: 'busy' });
+        return { ran: false, reason: 'busy' };
+      }
+      if (!cfg.enabled) {
+        await this.persistDiagnostics({
+          ...diagnostics,
+          lastSkipReason: 'disabled',
+          nextRunAt: null,
+        });
+        return { ran: false, reason: 'disabled' };
+      }
+      if (!cfg.token || !cfg.repo) {
+        await this.persistDiagnostics({
+          ...diagnostics,
+          lastSkipReason: 'missing-config',
+          nextRunAt: null,
+        });
+        this.logger.warn('GitHub backup tick: enabled but token/repo missing');
+        return { ran: false, reason: 'missing-config' };
+      }
+
+      const due = GithubBackupService.dueAt(cfg, now);
+      if (due.getTime() > now.getTime()) {
+        await this.persistDiagnostics({
+          ...diagnostics,
+          lastSkipReason: 'not-due',
+          nextRunAt: due.toISOString(),
+        });
+        return { ran: false, reason: 'not-due' };
+      }
+
+      this.logger.log(
+        `GitHub backup tick: due — pushing to ${cfg.repo} (every ${cfg.intervalMinutes}m, includeImages=${cfg.includeImages})`,
+      );
+      try {
+        await this.runBackupInternal({ ...cfg, ...diagnostics }, 'auto');
+        await this.persistDiagnostics({
+          lastSkipReason: null,
+          nextRunAt: new Date(Date.now() + cfg.intervalMinutes * 60_000).toISOString(),
+        });
+        return { ran: true, reason: null };
+      } catch (e) {
+        this.logger.error(`GitHub backup auto failed: ${(e as Error).message}`);
+        await this.persistDiagnostics({
+          lastSkipReason: 'failed',
+          nextRunAt: new Date(Date.now() + cfg.intervalMinutes * 60_000).toISOString(),
+        });
+        return { ran: false, reason: 'failed' };
+      }
+    } finally {
+      this.ticking = false;
     }
   }
 
@@ -215,6 +400,9 @@ export class GithubBackupService implements OnModuleInit {
         lastFile: filePath,
         lastStatus: 'success',
         lastError: null,
+        lastTrigger: triggeredBy.startsWith('manual') ? 'manual' : 'auto',
+        lastSkipReason: null,
+        nextRunAt: new Date(now.getTime() + cfg.intervalMinutes * 60_000).toISOString(),
       };
 
       await this.prisma.setting.upsert({
@@ -257,6 +445,8 @@ export class GithubBackupService implements OnModuleInit {
         lastRunAt: new Date().toISOString(),
         lastStatus: 'failed',
         lastError: message.slice(0, 500),
+        lastTrigger: triggeredBy.startsWith('manual') ? 'manual' : 'auto',
+        lastSkipReason: 'failed',
       };
 
       await this.prisma.setting.upsert({

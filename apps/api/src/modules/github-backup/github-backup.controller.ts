@@ -24,9 +24,23 @@ export class GithubBackupController {
     return { ok: true, data };
   }
 
+  /** Lightweight scheduler health for the panel's live status box. */
+  @Get('status')
+  async status() {
+    return { ok: true, data: await this.githubBackup.getSchedulerStatus() };
+  }
+
   @Post('run')
   async run(@Req() req: AuthRequest) {
     return this.githubBackup.runManual(req.user!.id);
+  }
+
+  /** Runs one scheduler pass on demand: the panel's «بررسی حالا» button.
+   *  Reports whether an archive was due (and pushed) or why it was skipped,
+   *  so a broken schedule is diagnosable without reading server logs. */
+  @Post('tick')
+  async tick() {
+    return this.githubBackup.tickNow();
   }
 
   @Get('jobs')
