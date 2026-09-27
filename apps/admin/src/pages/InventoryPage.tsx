@@ -158,6 +158,14 @@ export function InventoryPage() {
   const [basketForm, setBasketForm] = useState({ name: '', code: '', parentId: '' });
   const [editingBasket, setEditingBasket] = useState<Location | null>(null);
   const [locationError, setLocationError] = useState('');
+  // تب «قفسه‌ها و سبدها» خودش سه تب دارد (انبارها / قفسه‌ها / سبدها) —
+  // در یک صفحهٔ واحد همهٔ آن‌ها روی هم تلنبار می‌شد و کار با آن سخت بود.
+  const [locationTab, setLocationTab] = useState<'warehouses' | 'shelves' | 'baskets'>('shelves');
+  // جست‌وجو و فیلترِ هر سطح — یک فروشگاه واقعی ۱۴۰+ قفسه دارد، بدون فیلتر
+  // پیدا کردن یک قفسه در لیست ممکن نیست.
+  const [locationQuery, setLocationQuery] = useState('');
+  const [shelfWarehouseFilter, setShelfWarehouseFilter] = useState('');
+  const [basketShelfFilter, setBasketShelfFilter] = useState('');
   // نمای فعلی لیست اقلام — برای هایلایت سگمنت «همه اقلام / کم‌موجود»
   const [stockView, setStockView] = useState<'all' | 'low'>('all');
   const skipFirstSearch = useRef(true);
@@ -364,6 +372,61 @@ export function InventoryPage() {
   const basketsOf = (shelfId: string | null) =>
     baskets.filter((location) => (location.parentId ?? null) === shelfId);
   const itemsInBasket = (basket: Location) => basket._count?.basketItems ?? 0;
+  /** خلاصهٔ یک انبار برای جدول: تعداد قفسه‌ها، سبدهای آن‌ها و اقلامِ روی قفسه. */
+  const warehouseStats = (warehouse: Location) => {
+    const rows = warehouse.children ?? [];
+    return {
+      shelves: rows.length,
+      baskets: rows.reduce((sum, shelf) => sum + (shelf.children?.length ?? 0), 0),
+      items: rows.reduce((sum, shelf) => sum + (shelf._count?.items ?? 0), 0),
+    };
+  };
+  /** جست‌وجو در نام و کدِ یک محل (با ارقام فارسی/لاتین یکسان). */
+  const matchesLocationQuery = (location: Location) => {
+    const query = locationQuery.trim().toLocaleLowerCase('fa');
+    if (!query) return true;
+    return `${location.name} ${location.code}`.toLocaleLowerCase('fa').includes(query);
+  };
+  const visibleWarehouses = warehouses.filter(matchesLocationQuery);
+  const visibleShelves = shelves.filter(
+    (location) =>
+      matchesLocationQuery(location) &&
+      (!shelfWarehouseFilter || location.parentId === shelfWarehouseFilter),
+  );
+  const visibleBaskets = baskets.filter(
+    (location) =>
+      matchesLocationQuery(location) &&
+      (!basketShelfFilter || location.parentId === basketShelfFilter),
+  );
+  /** گروه‌بندیِ نمایشی: هر لیست زیرِ والد خودش (انبار › قفسه، قفسه › سبد). */
+  const locationBuckets = (
+    rows: Location[],
+    parents: Array<{ id: string; name: string }>,
+    orphanLabel: string,
+  ) => {
+    const bucketMap = new Map<string, { id: string; name: string; rows: Location[] }>();
+    for (const row of rows) {
+      const key = row.parentId ?? '';
+      const bucket = bucketMap.get(key) ?? {
+        id: key,
+        name: parents.find((parent) => parent.id === key)?.name ?? orphanLabel,
+        rows: [],
+      };
+      bucket.rows.push(row);
+      bucketMap.set(key, bucket);
+    }
+    return [...bucketMap.values()];
+  };
+  const shelfBuckets = locationBuckets(
+    visibleShelves,
+    warehouses.map((warehouse) => ({ id: warehouse.id, name: warehouse.name })),
+    'بدون انبار',
+  );
+  const basketBuckets = locationBuckets(
+    visibleBaskets,
+    shelves.map((shelf) => ({ id: shelf.id, name: locationLabel(shelf) })),
+    'بدون قفسه',
+  );
   const startWarehouseEdit = (warehouse: Location) => {
     setEditingWarehouse(warehouse);
     setLocationError('');
@@ -1007,143 +1070,292 @@ export function InventoryPage() {
 
       {tab === 'shelves' && (
         <div className="shelves-tab">
-          {/* Warehouses — the grouping level (انبار اصلی، فروشگاه، …) */}
-          <div className="shelves-box">
-            <h2>{editingWarehouse ? `ویرایش انبار «${editingWarehouse.name}»` : 'انبارها'}</h2>
-            <p className="muted">
-              هر انبار یک گروه برای قفسه‌هاست — انبار اصلی، فروشگاه، انبار دوم و… به دلخواه.
-            </p>
-            <div className="shelves-form">
-              <input
-                value={warehouseForm.name}
-                onChange={(e) => setWarehouseForm({ ...warehouseForm, name: e.target.value })}
-                placeholder="نام انبار (مثلاً انبار اصلی)"
-              />
-              <input
-                value={warehouseForm.code}
-                onChange={(e) => setWarehouseForm({ ...warehouseForm, code: e.target.value })}
-                placeholder="کد مثل W-01"
-                dir="ltr"
-              />
-              <button
-                className="button-primary"
-                disabled={busy}
-                onClick={() => void saveWarehouse()}
-              >
-                {editingWarehouse ? 'ذخیرهٔ ویرایش' : 'افزودن انبار'}
-              </button>
-              {editingWarehouse && (
-                <button
-                  className="outline"
-                  onClick={() => {
-                    setEditingWarehouse(null);
-                    setWarehouseForm({ name: '', code: '' });
-                  }}
-                >
-                  انصراف
-                </button>
-              )}
-            </div>
-            <div className="inventory-list">
-              {warehouses.map((warehouse) => (
-                <div className="inventory-row" key={warehouse.id}>
-                  <div className="inv-info">
-                    <b>{warehouse.name}</b>
-                    <small dir="ltr">{warehouse.code}</small>
-                  </div>
-                  <span className="chip">
-                    {formatPersianNumber(warehouse.children?.length ?? 0)} قفسه ·{' '}
-                    {formatPersianNumber(
-                      (warehouse.children ?? []).reduce(
-                        (sum, child) =>
-                          sum + (child.children?.length ?? 0) + (child._count?.items ?? 0),
-                        warehouse._count?.items ?? 0,
-                      ),
-                    )}{' '}
-                    محل/قلم
-                  </span>
-                  <div className="inv-actions">
-                    <button className="row-action" onClick={() => startWarehouseEdit(warehouse)}>
-                      ویرایش
-                    </button>
-                    <button
-                      className="row-action danger-text"
-                      disabled={busy}
-                      onClick={() => void removeLocation(warehouse)}
-                    >
-                      حذف
-                    </button>
-                  </div>
-                </div>
-              ))}
-              {!warehouses.length && <p className="muted">هنوز انباری ثبت نشده است.</p>}
-            </div>
-          </div>
-
-          {/* Shelves — placed inside a warehouse (or «بدون انبار») */}
-          <div className="shelves-box">
-            <h2>{editingShelf ? `ویرایش قفسهٔ «${editingShelf.name}»` : 'قفسه‌ها'}</h2>
-            <div className="shelves-form">
-              <input
-                value={shelfForm.name}
-                onChange={(e) => setShelfForm({ ...shelfForm, name: e.target.value })}
-                placeholder="نام قفسه (مثلاً قفسه جلو)"
-              />
-              <input
-                value={shelfForm.code}
-                onChange={(e) => setShelfForm({ ...shelfForm, code: e.target.value })}
-                placeholder="کد مثل A-03"
-                dir="ltr"
-              />
-              <select
-                value={shelfForm.parentId}
-                onChange={(e) => setShelfForm({ ...shelfForm, parentId: e.target.value })}
-              >
-                <option value="">بدون انبار</option>
-                {warehouses.map((warehouse) => (
-                  <option key={warehouse.id} value={warehouse.id}>
-                    {warehouse.name}
-                  </option>
-                ))}
-              </select>
-              <button className="button-primary" disabled={busy} onClick={() => void saveShelf()}>
-                {editingShelf ? 'ذخیرهٔ ویرایش' : 'افزودن قفسه'}
-              </button>
-              {editingShelf && (
-                <button
-                  className="outline"
-                  onClick={() => {
-                    setEditingShelf(null);
-                    setShelfForm({ name: '', code: '', parentId: '' });
-                  }}
-                >
-                  انصراف
-                </button>
-              )}
-            </div>
-            {locationError && <small className="field-error">{locationError}</small>}
+          {/* سه سطحِ درختِ مکان‌ها در سه تب جدا — انبارها / قفسه‌ها / سبدها
+              — درست مثل تب‌های صفحهٔ فاکتورها. روی هم چیدنِ هر سه فرم در یک
+              صفحه، تجربهٔ کاربریِ این بخش را خراب کرده بود. */}
+          <nav className="settings-tabs seg-tabs locations-seg" aria-label="سطوح مکان‌ها">
             {[
-              ...warehouses.map((warehouse) => ({ id: warehouse.id, name: warehouse.name })),
-              { id: '', name: 'بدون انبار' },
-            ].map((bucket) => {
-              const rows = shelvesOf(bucket.id || null);
-              if (!rows.length) return null;
-              return (
-                <div className="shelf-group" key={bucket.id || 'none'}>
-                  <h3>{bucket.name}</h3>
-                  <div className="inventory-list">
-                    {rows.map((shelf) => (
-                      <div className="inventory-row" key={shelf.id}>
-                        <div className="inv-info">
+              {
+                id: 'warehouses' as const,
+                label: 'انبارها',
+                hint: 'گروه‌بندی قفسه‌ها',
+                count: warehouses.length,
+              },
+              {
+                id: 'shelves' as const,
+                label: 'قفسه‌ها',
+                hint: 'محل اصلی نگهداری کالا',
+                count: shelves.length,
+              },
+              {
+                id: 'baskets' as const,
+                label: 'سبدها',
+                hint: 'ظرف‌های داخل هر قفسه',
+                count: baskets.length,
+              },
+            ].map((entry) => (
+              <button
+                type="button"
+                key={entry.id}
+                className={locationTab === entry.id ? 'active' : ''}
+                onClick={() => {
+                  setLocationTab(entry.id);
+                  setLocationQuery('');
+                  setLocationError('');
+                }}
+                aria-current={locationTab === entry.id ? 'true' : undefined}
+              >
+                <b>
+                  {entry.label} · {formatPersianNumber(entry.count)}
+                </b>
+                <small>{entry.hint}</small>
+              </button>
+            ))}
+          </nav>
+
+          {locationTab === 'warehouses' && (
+            <section className="loc-panel" aria-label="انبارها">
+              <header className="loc-panel-head">
+                <div>
+                  <h2>
+                    {editingWarehouse ? `ویرایش انبار «${editingWarehouse.name}»` : 'افزودن انبار'}
+                  </h2>
+                  <p className="muted">
+                    هر انبار یک گروه برای قفسه‌هاست — انبار اصلی، فروشگاه، انبار دوم و… به دلخواه.
+                  </p>
+                </div>
+                <span className="count">
+                  {formatPersianNumber(visibleWarehouses.length)} انبار
+                </span>
+              </header>
+
+              <form
+                className="loc-form"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void saveWarehouse();
+                }}
+              >
+                <label>
+                  نام انبار
+                  <input
+                    value={warehouseForm.name}
+                    onChange={(e) => setWarehouseForm({ ...warehouseForm, name: e.target.value })}
+                    placeholder="مثلاً انبار اصلی"
+                  />
+                </label>
+                <label>
+                  کد انبار
+                  <input
+                    value={warehouseForm.code}
+                    onChange={(e) => setWarehouseForm({ ...warehouseForm, code: e.target.value })}
+                    placeholder="W-01"
+                    dir="ltr"
+                  />
+                </label>
+                <div className="loc-form-actions">
+                  <button className="button-primary" type="submit" disabled={busy}>
+                    {editingWarehouse ? 'ذخیرهٔ ویرایش' : 'افزودن انبار'}
+                  </button>
+                  {editingWarehouse && (
+                    <button
+                      type="button"
+                      className="outline"
+                      onClick={() => {
+                        setEditingWarehouse(null);
+                        setWarehouseForm({ name: '', code: '' });
+                      }}
+                    >
+                      انصراف
+                    </button>
+                  )}
+                </div>
+              </form>
+              {locationError && <small className="field-error">{locationError}</small>}
+
+              <div className="loc-list loc-5" role="table" aria-label="فهرست انبارها">
+                <div className="loc-head" role="row">
+                  <span role="columnheader">نام انبار</span>
+                  <span role="columnheader">کد</span>
+                  <span role="columnheader">قفسه‌ها</span>
+                  <span role="columnheader">سبدها</span>
+                  <span role="columnheader">عملیات</span>
+                </div>
+                {visibleWarehouses.map((warehouse) => {
+                  const stats = warehouseStats(warehouse);
+                  return (
+                    <div className="loc-row" role="row" key={warehouse.id}>
+                      <span className="loc-cell loc-name" role="cell" data-label="نام انبار">
+                        <b>{warehouse.name}</b>
+                      </span>
+                      <span className="loc-cell loc-code" role="cell" data-label="کد" dir="ltr">
+                        {warehouse.code}
+                      </span>
+                      <span className="loc-cell" role="cell" data-label="قفسه‌ها">
+                        {formatPersianNumber(stats.shelves)} قفسه
+                      </span>
+                      <span className="loc-cell" role="cell" data-label="سبدها">
+                        {formatPersianNumber(stats.baskets)} سبد ·{' '}
+                        {formatPersianNumber(stats.items)} قلم
+                      </span>
+                      <span className="loc-cell loc-actions" role="cell" data-label="عملیات">
+                        <button
+                          className="row-action"
+                          onClick={() => startWarehouseEdit(warehouse)}
+                        >
+                          ویرایش
+                        </button>
+                        <button
+                          className="row-action danger-text"
+                          disabled={busy}
+                          onClick={() => void removeLocation(warehouse)}
+                        >
+                          حذف
+                        </button>
+                      </span>
+                    </div>
+                  );
+                })}
+                {!visibleWarehouses.length && (
+                  <p className="loc-empty muted">
+                    {warehouses.length
+                      ? 'انباری با این جست‌وجو پیدا نشد.'
+                      : 'هنوز انباری ثبت نشده است.'}
+                  </p>
+                )}
+              </div>
+            </section>
+          )}
+
+          {locationTab === 'shelves' && (
+            <section className="loc-panel" aria-label="قفسه‌ها">
+              <header className="loc-panel-head">
+                <div>
+                  <h2>{editingShelf ? `ویرایش قفسهٔ «${editingShelf.name}»` : 'افزودن قفسه'}</h2>
+                  <p className="muted">
+                    هر قفسه داخل یک انبار است و می‌تواند چند سبد داشته باشد — آدرس کالا
+                    «انبار · قفسه · سبد» است.
+                  </p>
+                </div>
+                <span className="count">{formatPersianNumber(visibleShelves.length)} قفسه</span>
+              </header>
+
+              <form
+                className="loc-form"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void saveShelf();
+                }}
+              >
+                <label>
+                  نام قفسه
+                  <input
+                    value={shelfForm.name}
+                    onChange={(e) => setShelfForm({ ...shelfForm, name: e.target.value })}
+                    placeholder="مثلاً قفسه جلو"
+                  />
+                </label>
+                <label>
+                  کد قفسه
+                  <input
+                    value={shelfForm.code}
+                    onChange={(e) => setShelfForm({ ...shelfForm, code: e.target.value })}
+                    placeholder="A-03"
+                    dir="ltr"
+                  />
+                </label>
+                <label>
+                  انبار
+                  <select
+                    value={shelfForm.parentId}
+                    onChange={(e) => setShelfForm({ ...shelfForm, parentId: e.target.value })}
+                  >
+                    <option value="">بدون انبار</option>
+                    {warehouses.map((warehouse) => (
+                      <option key={warehouse.id} value={warehouse.id}>
+                        {warehouse.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="loc-form-actions">
+                  <button className="button-primary" type="submit" disabled={busy}>
+                    {editingShelf ? 'ذخیرهٔ ویرایش' : 'افزودن قفسه'}
+                  </button>
+                  {editingShelf && (
+                    <button
+                      type="button"
+                      className="outline"
+                      onClick={() => {
+                        setEditingShelf(null);
+                        setShelfForm({ name: '', code: '', parentId: '' });
+                      }}
+                    >
+                      انصراف
+                    </button>
+                  )}
+                </div>
+              </form>
+              {locationError && <small className="field-error">{locationError}</small>}
+
+              <div className="loc-filters">
+                <div className="search-field">
+                  <span className="search-icon">⌕</span>
+                  <input
+                    value={locationQuery}
+                    onChange={(e) => setLocationQuery(e.target.value)}
+                    placeholder="جست‌وجو در نام یا کد قفسه…"
+                  />
+                </div>
+                <select
+                  value={shelfWarehouseFilter}
+                  onChange={(e) => setShelfWarehouseFilter(e.target.value)}
+                  aria-label="فیلتر بر اساس انبار"
+                >
+                  <option value="">همهٔ انبارها</option>
+                  {warehouses.map((warehouse) => (
+                    <option key={warehouse.id} value={warehouse.id}>
+                      {warehouse.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="loc-list loc-6" role="table" aria-label="فهرست قفسه‌ها">
+                <div className="loc-head" role="row">
+                  <span role="columnheader">قفسه</span>
+                  <span role="columnheader">کد</span>
+                  <span role="columnheader">انبار</span>
+                  <span role="columnheader">سبدها</span>
+                  <span role="columnheader">اقلام</span>
+                  <span role="columnheader">عملیات</span>
+                </div>
+                {shelfBuckets.map((bucket) => (
+                  <div className="loc-bucket" key={bucket.id || 'none'}>
+                    <div className="loc-bucket-head">
+                      <b>{bucket.name}</b>
+                      <small>{formatPersianNumber(bucket.rows.length)} قفسه</small>
+                    </div>
+                    {bucket.rows.map((shelf) => (
+                      <div className="loc-row" role="row" key={shelf.id}>
+                        <span className="loc-cell loc-name" role="cell" data-label="قفسه">
                           <b>{shelf.name}</b>
-                          <small dir="ltr">{shelf.code}</small>
-                        </div>
-                        <span className="chip">{locationTypeLabels[shelf.type] ?? shelf.type}</span>
-                        <span className="muted">
-                          {formatPersianNumber(shelf._count?.items ?? 0)} قلم ·{' '}
+                        </span>
+                        <span className="loc-cell loc-code" role="cell" data-label="کد" dir="ltr">
+                          {shelf.code}
+                        </span>
+                        <span className="loc-cell" role="cell" data-label="انبار">
+                          {warehouses.find((row) => row.id === shelf.parentId)?.name ?? (
+                            <span className="loc-dash">بدون انبار</span>
+                          )}
+                        </span>
+                        <span className="loc-cell" role="cell" data-label="سبدها">
                           {formatPersianNumber(shelf.children?.length ?? 0)} سبد
                         </span>
-                        <div className="inv-actions">
+                        <span className="loc-cell" role="cell" data-label="اقلام">
+                          {formatPersianNumber(shelf._count?.items ?? 0)} قلم
+                        </span>
+                        <span className="loc-cell loc-actions" role="cell" data-label="عملیات">
                           <button className="row-action" onClick={() => startShelfEdit(shelf)}>
                             ویرایش
                           </button>
@@ -1154,82 +1366,147 @@ export function InventoryPage() {
                           >
                             حذف
                           </button>
-                        </div>
+                        </span>
                       </div>
                     ))}
                   </div>
-                </div>
-              );
-            })}
-            {!shelves.length && <p className="muted">هنوز قفسه‌ای ثبت نشده است.</p>}
-          </div>
-
-          {/* Baskets (سبدها) — bins inside one shelf; each part may be filed
-              in one of them instead of straight onto the shelf. */}
-          <div className="shelves-box">
-            <h2>{editingBasket ? `ویرایش سبد «${editingBasket.name}»` : 'سبدها'}</h2>
-            <p className="muted">
-              هر سبد یک ظرفِ مشخص داخل یک قفسه است — «قفسه A-03، سبد ۲». کالا می‌تواند مستقیماً روی
-              قفسه باشد یا داخل یکی از سبدهای همان قفسه.
-            </p>
-            <div className="shelves-form">
-              <input
-                value={basketForm.name}
-                onChange={(e) => setBasketForm({ ...basketForm, name: e.target.value })}
-                placeholder="نام سبد (مثلاً سبد ۲)"
-              />
-              <input
-                value={basketForm.code}
-                onChange={(e) => setBasketForm({ ...basketForm, code: e.target.value })}
-                placeholder="کد مثل B-2"
-                dir="ltr"
-              />
-              <select
-                value={basketForm.parentId}
-                onChange={(e) => setBasketForm({ ...basketForm, parentId: e.target.value })}
-              >
-                <option value="">قفسه را انتخاب کنید…</option>
-                {shelves.map((shelf) => (
-                  <option key={shelf.id} value={shelf.id}>
-                    {locationLabel(shelf)}
-                  </option>
                 ))}
-              </select>
-              <button className="button-primary" disabled={busy} onClick={() => void saveBasket()}>
-                {editingBasket ? 'ذخیرهٔ ویرایش' : 'افزودن سبد'}
-              </button>
-              {editingBasket && (
-                <button
-                  className="outline"
-                  onClick={() => {
-                    setEditingBasket(null);
-                    setBasketForm({ name: '', code: '', parentId: '' });
-                  }}
+                {!visibleShelves.length && (
+                  <p className="loc-empty muted">
+                    {shelves.length
+                      ? 'قفسه‌ای با این فیلتر پیدا نشد.'
+                      : 'هنوز قفسه‌ای ثبت نشده است.'}
+                  </p>
+                )}
+              </div>
+            </section>
+          )}
+
+          {locationTab === 'baskets' && (
+            <section className="loc-panel" aria-label="سبدها">
+              <header className="loc-panel-head">
+                <div>
+                  <h2>{editingBasket ? `ویرایش سبد «${editingBasket.name}»` : 'افزودن سبد'}</h2>
+                  <p className="muted">
+                    هر سبد یک ظرفِ مشخص داخل یک قفسه است — «قفسه A-03، سبد ۲». کالا می‌تواند
+                    مستقیماً روی قفسه باشد یا داخل یکی از سبدهای همان قفسه.
+                  </p>
+                </div>
+                <span className="count">{formatPersianNumber(visibleBaskets.length)} سبد</span>
+              </header>
+
+              <form
+                className="loc-form"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void saveBasket();
+                }}
+              >
+                <label>
+                  نام سبد
+                  <input
+                    value={basketForm.name}
+                    onChange={(e) => setBasketForm({ ...basketForm, name: e.target.value })}
+                    placeholder="مثلاً سبد ۲"
+                  />
+                </label>
+                <label>
+                  کد سبد
+                  <input
+                    value={basketForm.code}
+                    onChange={(e) => setBasketForm({ ...basketForm, code: e.target.value })}
+                    placeholder="B-2"
+                    dir="ltr"
+                  />
+                </label>
+                <label>
+                  قفسه
+                  <select
+                    value={basketForm.parentId}
+                    onChange={(e) => setBasketForm({ ...basketForm, parentId: e.target.value })}
+                  >
+                    <option value="">قفسه را انتخاب کنید…</option>
+                    {shelves.map((shelf) => (
+                      <option key={shelf.id} value={shelf.id}>
+                        {locationLabel(shelf)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="loc-form-actions">
+                  <button className="button-primary" type="submit" disabled={busy}>
+                    {editingBasket ? 'ذخیرهٔ ویرایش' : 'افزودن سبد'}
+                  </button>
+                  {editingBasket && (
+                    <button
+                      type="button"
+                      className="outline"
+                      onClick={() => {
+                        setEditingBasket(null);
+                        setBasketForm({ name: '', code: '', parentId: '' });
+                      }}
+                    >
+                      انصراف
+                    </button>
+                  )}
+                </div>
+              </form>
+              {locationError && <small className="field-error">{locationError}</small>}
+
+              <div className="loc-filters">
+                <div className="search-field">
+                  <span className="search-icon">⌕</span>
+                  <input
+                    value={locationQuery}
+                    onChange={(e) => setLocationQuery(e.target.value)}
+                    placeholder="جست‌وجو در نام یا کد سبد…"
+                  />
+                </div>
+                <select
+                  value={basketShelfFilter}
+                  onChange={(e) => setBasketShelfFilter(e.target.value)}
+                  aria-label="فیلتر بر اساس قفسه"
                 >
-                  انصراف
-                </button>
-              )}
-            </div>
-            {[
-              ...shelves.map((shelf) => ({ id: shelf.id, name: locationLabel(shelf) })),
-            ].map((bucket) => {
-              const rows = basketsOf(bucket.id);
-              if (!rows.length) return null;
-              return (
-                <div className="shelf-group" key={bucket.id}>
-                  <h3>{bucket.name}</h3>
-                  <div className="inventory-list">
-                    {rows.map((basket) => (
-                      <div className="inventory-row" key={basket.id}>
-                        <div className="inv-info">
+                  <option value="">همهٔ قفسه‌ها</option>
+                  {shelves.map((shelf) => (
+                    <option key={shelf.id} value={shelf.id}>
+                      {locationLabel(shelf)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="loc-list loc-5" role="table" aria-label="فهرست سبدها">
+                <div className="loc-head" role="row">
+                  <span role="columnheader">سبد</span>
+                  <span role="columnheader">کد</span>
+                  <span role="columnheader">قفسه</span>
+                  <span role="columnheader">اقلام</span>
+                  <span role="columnheader">عملیات</span>
+                </div>
+                {basketBuckets.map((bucket) => (
+                  <div className="loc-bucket" key={bucket.id || 'none'}>
+                    <div className="loc-bucket-head">
+                      <b>{bucket.name}</b>
+                      <small>{formatPersianNumber(bucket.rows.length)} سبد</small>
+                    </div>
+                    {bucket.rows.map((basket) => (
+                      <div className="loc-row" role="row" key={basket.id}>
+                        <span className="loc-cell loc-name" role="cell" data-label="سبد">
                           <b>{basket.name}</b>
-                          <small dir="ltr">{basket.code}</small>
-                        </div>
-                        <span className="chip">سبد</span>
-                        <span className="muted">
+                        </span>
+                        <span className="loc-cell loc-code" role="cell" data-label="کد" dir="ltr">
+                          {basket.code}
+                        </span>
+                        <span className="loc-cell" role="cell" data-label="قفسه">
+                          <span className="place-chip" title={bucket.name}>
+                            {shelves.find((row) => row.id === basket.parentId)?.code ?? bucket.name}
+                          </span>
+                        </span>
+                        <span className="loc-cell" role="cell" data-label="اقلام">
                           {formatPersianNumber(itemsInBasket(basket))} قلم
                         </span>
-                        <div className="inv-actions">
+                        <span className="loc-cell loc-actions" role="cell" data-label="عملیات">
                           <button className="row-action" onClick={() => startBasketEdit(basket)}>
                             ویرایش
                           </button>
@@ -1240,19 +1517,21 @@ export function InventoryPage() {
                           >
                             حذف
                           </button>
-                        </div>
+                        </span>
                       </div>
                     ))}
                   </div>
-                </div>
-              );
-            })}
-            {!baskets.length && (
-              <p className="muted">
-                هنوز سبدی ثبت نشده است — کالاها فعلاً مستقیماً روی قفسه‌ها هستند.
-              </p>
-            )}
-          </div>
+                ))}
+                {!visibleBaskets.length && (
+                  <p className="loc-empty muted">
+                    {baskets.length
+                      ? 'سبدی با این فیلتر پیدا نشد.'
+                      : 'هنوز سبدی ثبت نشده است — کالاها فعلاً مستقیماً روی قفسه‌ها هستند.'}
+                  </p>
+                )}
+              </div>
+            </section>
+          )}
         </div>
       )}
 

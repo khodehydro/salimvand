@@ -3245,9 +3245,9 @@ body,
 .register-card b {
   font-size: 16px;
 }
+/* تب «قفسه‌ها و سبدها»: نوار تب‌ها + یک پنلِ فعال (نه دو ستونِ کنارِ هم) */
 .shelves-tab {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
   align-items: start;
 }
@@ -3339,9 +3339,6 @@ body,
   .inv-actions {
     grid-column: 1 / -1;
     justify-content: flex-start;
-  }
-  .shelves-tab {
-    grid-template-columns: 1fr;
   }
   .modal-backdrop {
     padding: 0;
@@ -5484,83 +5481,6 @@ button.btn-primary-lg:hover:not(:disabled) {
   text-align: right;
 }
 
-/* Shelves tab — warehouses (groups) on one side, their shelves on the other.
-   Block cards (not the inline .adjust-box flex row): each side stacks its
-   form, then the group lists. */
-.shelves-box {
-  min-width: 0;
-  background: var(--sv-surface);
-  border: 1px solid var(--sv-border);
-  border-radius: 14px;
-  padding: 18px;
-  display: grid;
-  gap: 12px;
-  align-content: start;
-}
-.shelves-box h2 {
-  margin: 0;
-  font-size: 16px;
-}
-.shelves-box > .muted {
-  margin: 0;
-}
-.shelves-box input,
-.shelves-box select {
-  width: 100%;
-  min-height: 42px;
-  box-sizing: border-box;
-  border: 1px solid var(--sv-border-2);
-  border-radius: 9px;
-  padding: 9px 12px;
-  background: var(--sv-surface-2);
-  color: var(--sv-text);
-  caret-color: var(--sv-primary);
-  font: 13px Vazirmatn, Tahoma, sans-serif;
-  color-scheme: light;
-  transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
-}
-.shelves-box input::placeholder { color: var(--sv-text-3); opacity: 1; }
-.shelves-box input:focus,
-.shelves-box select:focus {
-  outline: none;
-  border-color: var(--sv-primary);
-  background: var(--sv-surface);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sv-primary) 14%, transparent);
-}
-.shelves-box select { cursor: pointer; }
-.shelves-form {
-  display: grid;
-  gap: 8px;
-}
-.shelves-form .button-primary,
-.shelves-form .outline {
-  justify-self: start;
-}
-.shelf-group > h3 {
-  margin: 6px 0 2px;
-  font-size: 13px;
-  color: var(--sv-text-2);
-}
-/* Warehouse/shelf cards inside the boxes: the first column may shrink (the
-   base .inventory-row minmax(140px, …) forced ~530px of min-content and
-   overflowed the panel) while chips, counts and actions keep their size. */
-.shelves-box .inventory-row {
-  grid-template-columns: minmax(0, 1.2fr) auto auto auto;
-}
-/* Stack the two panels on narrower screens instead of squeezing them. */
-@media (max-width: 1000px) {
-  .shelves-tab {
-    grid-template-columns: 1fr;
-  }
-}
-/* Keep the mobile row stacking working inside the boxes too (this override
-   outranks the global mobile rule, so it needs its own counterpart). */
-@media (max-width: 700px) {
-  .shelves-box .inventory-row {
-    grid-template-columns: 1fr auto;
-  }
-}
-
 /* The shared Sheet renders an <aside> too; keep the sidebar dimensions from
    leaking into it. This prevents the inventory item card from opening as a
    clipped half-width panel. */
@@ -6392,6 +6312,213 @@ button.btn-primary-lg:hover:not(:disabled) {
   }
   .pt-item {
     border-top: 1px dashed var(--sv-border);
+  }
+}
+
+/* ── تب «قفسه‌ها و سبدها»: انبارها / قفسه‌ها / سبدها در سه تب ─────────────
+   هر سطحِ درخت تبِ خودش را دارد (فرم + جدول ستون‌بندی‌شده + فیلتر) تا
+   سه فرم روی هم تلنبار نشود. */
+.locations-seg {
+  margin: 0;
+}
+.loc-panel {
+  background: var(--sv-surface);
+  border: 1px solid var(--sv-border);
+  border-radius: var(--sv-radius-card);
+  overflow: hidden;
+}
+.loc-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 14px 16px;
+  background: var(--sv-surface-2);
+  border-bottom: 1px solid var(--sv-border);
+}
+.loc-panel-head h2 {
+  margin: 0 0 4px;
+  font-size: 15px;
+}
+.loc-panel-head p {
+  margin: 0;
+  max-width: 68ch;
+  font-size: 11.5px;
+}
+.loc-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  align-items: end;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--sv-border);
+}
+.loc-form label {
+  display: grid;
+  gap: 4px;
+  color: var(--sv-text-3);
+  font-size: 11px;
+  font-weight: 700;
+}
+.loc-form input,
+.loc-form select {
+  min-height: 40px;
+  border: 1px solid var(--sv-border-2);
+  border-radius: 9px;
+  padding: 9px 11px;
+  background: var(--sv-surface-2);
+  color: var(--sv-text);
+  font: 13px Vazirmatn, Tahoma, sans-serif;
+  color-scheme: light;
+}
+.loc-form input::placeholder {
+  color: var(--sv-text-3);
+  opacity: 1;
+}
+.loc-form input:focus,
+.loc-form select:focus {
+  outline: none;
+  border-color: var(--sv-primary);
+  background: var(--sv-surface);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sv-primary) 14%, transparent);
+}
+.loc-form-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.loc-filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 16px;
+  background: var(--sv-surface-2);
+  border-bottom: 1px solid var(--sv-border);
+}
+.loc-filters .search-field {
+  flex: 1 1 240px;
+  max-width: 340px;
+}
+.loc-filters select {
+  min-height: 38px;
+  border: 1px solid var(--sv-border-2);
+  border-radius: 9px;
+  padding: 8px 10px;
+  background: var(--sv-surface);
+  color: var(--sv-text);
+  font: 12.5px Vazirmatn, Tahoma, sans-serif;
+}
+
+/* جداولِ هر سطح — تعداد ستون‌ها با کلاس loc-5 / loc-6 مشخص می‌شود */
+.loc-list {
+  display: block;
+}
+.loc-head,
+.loc-row {
+  display: grid;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 16px;
+}
+.loc-list.loc-5 .loc-head,
+.loc-list.loc-5 .loc-row {
+  grid-template-columns:
+    minmax(120px, 1.6fr) minmax(70px, 0.7fr) minmax(100px, 1fr)
+    minmax(100px, 1fr) minmax(130px, 0.9fr);
+}
+.loc-list.loc-6 .loc-head,
+.loc-list.loc-6 .loc-row {
+  grid-template-columns:
+    minmax(110px, 1.5fr) minmax(70px, 0.6fr) minmax(110px, 1fr)
+    minmax(80px, 0.7fr) minmax(80px, 0.7fr) minmax(130px, 0.9fr);
+}
+.loc-head {
+  background: var(--sv-surface-3);
+  color: var(--sv-text-3);
+  font-size: 10.5px;
+  font-weight: 700;
+  border-bottom: 1px solid var(--sv-border);
+}
+.loc-row {
+  font-size: 12.5px;
+  border-bottom: 1px solid var(--sv-border);
+}
+.loc-row:last-child {
+  border-bottom: 0;
+}
+.loc-row:hover {
+  background: color-mix(in srgb, var(--sv-link) 5%, transparent);
+}
+.loc-cell {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.loc-name b {
+  font-size: 13px;
+}
+.loc-code {
+  font-family: ui-monospace, monospace;
+  direction: ltr;
+  color: var(--sv-text-2);
+}
+.loc-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.loc-dash {
+  color: var(--sv-text-3);
+}
+/* گروه‌بندی نمایشی: قفسه‌ها زیر انبار، سبدها زیر قفسه */
+.loc-bucket {
+  border-bottom: 1px solid var(--sv-border);
+}
+.loc-bucket:last-child {
+  border-bottom: 0;
+}
+.loc-bucket-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 16px;
+  background: var(--sv-surface-2);
+  border-bottom: 1px dashed var(--sv-border);
+  color: var(--sv-text-2);
+  font-size: 11.5px;
+}
+.loc-bucket-head small {
+  color: var(--sv-text-3);
+}
+.loc-empty {
+  margin: 0;
+  padding: 14px 16px;
+}
+@media (max-width: 900px) {
+  .loc-head {
+    display: none;
+  }
+  .loc-list .loc-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+    padding: 10px 14px;
+  }
+  .loc-cell {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 8px;
+  }
+  .loc-cell::before {
+    content: attr(data-label);
+    flex: 0 0 92px;
+    color: var(--sv-text-3);
+    font-size: 10.5px;
+    font-weight: 700;
   }
 }
 
