@@ -281,7 +281,6 @@ export class CatalogAdminService {
         data: {
           name,
           categoryId,
-          supplierId: rootSupplierId,
           code,
           ...seo,
           slug,
@@ -476,9 +475,6 @@ export class CatalogAdminService {
       const categoryId = this.stringValue(input.categoryId);
       if (!categoryId) throw new BadRequestException('دسته‌بندی نامعتبر است');
       data.categoryId = categoryId;
-    }
-    if (input.supplierId !== undefined) {
-      data.supplierId = input.supplierId ? String(input.supplierId).trim() || null : null;
     }
     const before = this.prisma.product.findUnique
       ? await this.prisma.product.findUnique({ where: { id } })

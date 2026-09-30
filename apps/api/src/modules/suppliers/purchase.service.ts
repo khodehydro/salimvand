@@ -209,19 +209,13 @@ export class PurchaseService {
       for (const line of normalized) {
         const current = await tx.inventoryItem.findUnique({
           where: { id: line.itemId },
-          select: { quantity: true, productId: true },
+          select: { quantity: true },
         });
         const next = current!.quantity + line.quantity;
         await tx.inventoryItem.update({
           where: { id: line.itemId },
           data: { quantity: next, purchasePrice: line.unitPrice, supplierId },
         });
-        if (current?.productId) {
-          await tx.product.update({
-            where: { id: current.productId },
-            data: { supplierId },
-          });
-        }
         await tx.inventoryTransaction.create({
           data: {
             itemId: line.itemId!,

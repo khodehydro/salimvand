@@ -195,7 +195,6 @@ export function ProductCreateModal({
         body: JSON.stringify({
           name: basic.name,
           categoryId: basic.categoryId,
-          supplierId: basic.supplierId || undefined,
           description: basic.description || null,
           partNumber: basic.partNumber || null,
           status: basic.status,

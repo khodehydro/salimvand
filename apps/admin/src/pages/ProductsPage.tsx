@@ -562,11 +562,16 @@ export function ProductsPage() {
                       {product.partNumber ? ` · ${product.partNumber}` : ''}
                     </small>
                     <span className="pt-meta-chips">
-                      {product.supplier?.name && (
-                        <span className="chip supplier-chip" title="تأمین‌کننده">
-                          🏢 {product.supplier.name}
-                        </span>
-                      )}
+                      {(() => {
+                        const sups = [
+                          ...new Set(items.map((i) => i.supplier?.name).filter(Boolean)),
+                        ];
+                        return sups.map((s) => (
+                          <span key={s} className="chip supplier-chip" title="تأمین‌کننده">
+                            🏢 {s}
+                          </span>
+                        ));
+                      })()}
                       {vehicleOptions.length > 0 && product.compatibilities?.length ? (
                         <span className="chip vehicle-chip">
                           {product.compatibilities.length.toLocaleString('fa-IR')} خودرو
@@ -834,7 +839,6 @@ function ProductEditor({
   const [basic, setBasic] = useState({
     name: product.name,
     categoryId: product.category?.id ?? '',
-    supplierId: product.supplierId ?? product.supplier?.id ?? '',
     description: product.description ?? '',
     partNumber: product.partNumber ?? '',
     status: product.status,
@@ -938,7 +942,6 @@ function ProductEditor({
       {
         name: basic.name,
         categoryId: basic.categoryId,
-        supplierId: basic.supplierId || null,
         description: basic.description || null,
         partNumber: basic.partNumber || null,
         status: basic.status,
@@ -1020,7 +1023,7 @@ function ProductEditor({
         body: JSON.stringify({
           productId: product.id,
           brandId: item.brandId,
-          supplierId: item.supplierId || basic.supplierId || undefined,
+          supplierId: item.supplierId || undefined,
           barcode: item.barcode,
           salePrice: Number(item.salePrice) || 0,
           purchasePrice: Number(item.purchasePrice) || 0,
@@ -1228,20 +1231,6 @@ function ProductEditor({
                   {categories.map((category) => (
                     <option value={category.id} key={category.id}>
                       {category.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                تأمین‌کننده
-                <select
-                  value={basic.supplierId}
-                  onChange={(event) => setBasic({ ...basic, supplierId: event.target.value })}
-                >
-                  <option value="">بدون تأمین‌کننده</option>
-                  {suppliers.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
                     </option>
                   ))}
                 </select>

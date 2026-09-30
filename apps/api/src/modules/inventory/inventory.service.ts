@@ -405,6 +405,7 @@ export class InventoryService {
       minStock?: number | null;
       locationId?: string | null;
       basketId?: string | null;
+      supplierId?: string | null;
       barcode?: string;
       brandId?: string | null;
       notes?: string;
