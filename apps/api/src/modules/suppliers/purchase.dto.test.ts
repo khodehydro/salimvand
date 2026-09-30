@@ -6,11 +6,11 @@ import { CreatePurchaseDto, SupplierPaymentDto } from './purchase.dto';
 
 const uuid = '550e8400-e29b-41d4-a716-446655440000';
 describe('Purchase DTO validation', () => {
-  it('accepts a valid purchase', async () => {
+  it('accepts a valid purchase with optional productName in lines', async () => {
     const dto = plainToInstance(CreatePurchaseDto, {
       supplierId: uuid,
       paidAmount: '1000',
-      lines: [{ inventoryItemId: uuid, quantity: 2, unitPrice: '500' }],
+      lines: [{ inventoryItemId: uuid, quantity: 2, unitPrice: '500', productName: 'لنت ترمز' }],
     });
     expect(await validate(dto)).toHaveLength(0);
   });

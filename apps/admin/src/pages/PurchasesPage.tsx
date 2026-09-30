@@ -167,9 +167,14 @@ export function PurchasesPage({ canCreate = true }: { canCreate?: boolean }) {
     if (Object.keys(errors).length) return setFieldErrors(errors);
     setLoading(true);
     try {
+      const payloadLines = lines.map(({ inventoryItemId, quantity, unitPrice }) => ({
+        inventoryItemId,
+        quantity,
+        unitPrice,
+      }));
       const created = await api<{ data: Purchase }>('/purchases', {
         method: 'POST',
-        body: JSON.stringify({ supplierId, paidAmount, lines }),
+        body: JSON.stringify({ supplierId, paidAmount, lines: payloadLines }),
       });
       setMessage(
         `فاکتور ${formatPersianNumber(created.data.number)} ثبت و موجودی به‌صورت اتمیک افزایش یافت.`,

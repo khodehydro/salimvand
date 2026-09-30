@@ -16,6 +16,7 @@ export class PurchaseLineDto {
   @IsUUID() inventoryItemId!: string;
   @Type(() => Number) @IsInt() @Min(1) @Max(1_000_000) quantity!: number;
   @IsNumberString() unitPrice!: string;
+  @IsOptional() @IsString() productName?: string;
 }
 export class CreatePurchaseDto {
   @IsUUID() supplierId!: string;
