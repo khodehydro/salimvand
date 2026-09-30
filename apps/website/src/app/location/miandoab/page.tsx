@@ -1,4 +1,4 @@
-import { PublicSubHeader } from '../../PublicSubHeader';
+import { PublicSubHeader, PublicFooter } from '../../PublicSubHeader';
 import type { Metadata } from 'next';
 export const metadata: Metadata = {
   title: 'فروش لوازم داخلی خودرو در میاندوآب',
@@ -49,6 +49,7 @@ export default function MiandoabPage() {
         <h2>تماس و استعلام</h2>
         <p>برای اطلاع از موجودی و قیمت روز قطعه با فروشگاه آذین خودرو سلیم وند تماس بگیرید.</p>
       </article>
+      <PublicFooter />
     </main>
   );
 }

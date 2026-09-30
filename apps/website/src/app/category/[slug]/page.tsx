@@ -1,6 +1,6 @@
 import { ProductCard } from '../../ProductCard';
 import { getStoreInfo, telHref } from '../../store-info';
-import { PublicSubHeader } from '../../PublicSubHeader';
+import { PublicSubHeader, PublicFooter } from '../../PublicSubHeader';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 const api = process.env.API_URL ?? 'https://api.salimvand.ir/api/v1';
@@ -21,7 +21,7 @@ type Product = {
 };
 async function getCategory(
   slug: string,
-): Promise<{ category: Category; products: Product[] } | null> {
+): Promise<{ category: Category; categories: Category[]; products: Product[] } | null> {
   try {
     // Next may pass the param already percent-encoded for non-ASCII slugs.
     const decodedSlug = decodeURIComponent(slug);
@@ -32,7 +32,7 @@ async function getCategory(
     const products = await fetch(`${api}/public/products?categoryId=${category.id}`, {
       next: { revalidate: 300 },
     });
-    return { category, products: ((await products.json()) as { data: Product[] }).data };
+    return { category, categories: data.categories, products: ((await products.json()) as { data: Product[] }).data };
   } catch {
     return null;
   }
@@ -110,6 +110,20 @@ export default async function CategoryPage({ params }: { params: Promise<{ slug:
         </nav>
         <p className="eyebrow">دسته‌بندی محصولات</p>
         <h1>{data.category.name}</h1>
+        {data.categories.length > 1 && (
+          <nav className="category-nav" aria-label="دسته‌بندی‌ها">
+            {data.categories.map((item) => (
+              <a
+                key={item.id}
+                href={`/category/${encodeURIComponent(item.slug)}`}
+                className={item.id === data.category.id ? 'is-active' : undefined}
+                aria-current={item.id === data.category.id ? 'page' : undefined}
+              >
+                {item.name}
+              </a>
+            ))}
+          </nav>
+        )}
         {data.products.length ? (
           <div className="product-grid">
             {data.products.map((product) => (
@@ -125,6 +139,7 @@ export default async function CategoryPage({ params }: { params: Promise<{ slug:
           <div className="placeholder">محصولی در این دسته‌بندی ثبت نشده است.</div>
         )}
       </section>
+      <PublicFooter />
     </main>
   );
 }

@@ -8,16 +8,10 @@ import { getStoreInfo, telHref, fullMapUrl, type StoreInfo } from './store-info'
  * homepage, so the phone numbers, social IDs and map set in the admin panel
  * are applied consistently across the whole storefront.
  *
- * `showContact={false}` renders only the slim header — used on the product
- * page, where the big contact/footer block must not sit above the product.
+ * Only the slim header is rendered here; the contact block and footer live in
+ * `PublicFooter`, which pages render at the very bottom (after their content).
  */
-export async function PublicSubHeader({
-  context,
-  showContact = true,
-}: {
-  context: string;
-  showContact?: boolean;
-}) {
+export async function PublicSubHeader({ context }: { context: string; showContact?: boolean }) {
   const info = await getStoreInfo();
   return (
     <>
@@ -40,22 +34,26 @@ export async function PublicSubHeader({
         </nav>
       </header>
 
-      {showContact && (
-        <>
-          <StoreContact info={info} variant="sub" />
+    </>
+  );
+}
 
-          <footer className="sub-footer">
-            <span>
-              © {formatPersianNumber(new Date().getFullYear())} {STORE_BRAND}
-            </span>
-            <nav aria-label="پیوندهای تکراری">
-              <a href="/#catalog">کاتالوگ</a>
-              <a href="/#video">ویدئوی فروشگاه</a>
-              <a href="/#contact">تماس و آدرس</a>
-            </nav>
-          </footer>
-        </>
-      )}
+/** Contact block + slim footer, rendered at the END of landing pages. */
+export async function PublicFooter() {
+  const info = await getStoreInfo();
+  return (
+    <>
+      <StoreContact info={info} variant="sub" />
+      <footer className="sub-footer">
+        <span>
+          © {formatPersianNumber(new Date().getFullYear())} {STORE_BRAND}
+        </span>
+        <nav aria-label="پیوندهای تکراری">
+          <a href="/#catalog">کاتالوگ</a>
+          <a href="/#video">ویدئوی فروشگاه</a>
+          <a href="/#contact">تماس و آدرس</a>
+        </nav>
+      </footer>
     </>
   );
 }

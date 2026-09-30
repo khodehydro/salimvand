@@ -2340,3 +2340,32 @@ p {
   aspect-ratio: 1 / 1;
   object-fit: contain;
 }
+
+/* Category page: horizontal category switcher under the title */
+.category-nav {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 2px 0 12px;
+  margin: -12px 0 26px;
+  scrollbar-width: thin;
+}
+.category-nav a {
+  flex: 0 0 auto;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--line, rgba(127, 127, 127, 0.25));
+  color: var(--text-2, inherit);
+  font-size: 13px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.category-nav a:hover {
+  border-color: var(--brand-600);
+  color: var(--brand-600);
+}
+.category-nav a.is-active {
+  background: var(--brand-900);
+  border-color: var(--brand-900);
+  color: var(--on-brand);
+}

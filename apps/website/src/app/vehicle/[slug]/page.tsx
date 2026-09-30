@@ -1,6 +1,6 @@
 import { ProductCard } from '../../ProductCard';
 import { getStoreInfo, telHref } from '../../store-info';
-import { PublicSubHeader } from '../../PublicSubHeader';
+import { PublicSubHeader, PublicFooter } from '../../PublicSubHeader';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
@@ -140,6 +140,7 @@ export default async function VehiclePage({ params }: { params: Promise<{ slug: 
           <div className="placeholder">هنوز قطعه‌ای برای این خودرو ثبت نشده است.</div>
         )}
       </section>
+      <PublicFooter />
     </main>
   );
 }
