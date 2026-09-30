@@ -21,7 +21,7 @@ function makeHarness(value: unknown) {
     update: vi.fn(async () => ({})),
   };
   const prisma = { setting, backupJob } as never;
-  const productsBackup = { buildBackup: vi.fn(async () => Buffer.from('zip-bytes')) } as never;
+  const productsBackup = { buildBackup: vi.fn(async () => Buffer.from('zip-bytes')) } as any;
   return {
     service: new GithubBackupService(prisma, productsBackup),
     productsBackup,
@@ -238,7 +238,7 @@ describe('GithubBackupService due-time guards', () => {
         return { key: where.key, value: store[where.key] };
       }),
     };
-    const productsBackup = { buildBackup: vi.fn(async () => Buffer.from('zip')) } as never;
+    const productsBackup = { buildBackup: vi.fn(async () => Buffer.from('zip')) } as any;
     const service = new GithubBackupService(
       {
         setting,

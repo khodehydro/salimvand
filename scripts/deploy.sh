@@ -3,14 +3,16 @@ set -Eeuo pipefail
 
 # One-shot, repeatable production release. Run as root on the VPS after .env is configured.
 ROOT_DIR="${APP_DIR:-/opt/salimvand}"
-# Production deploys the reviewed main branch by default; override only for a planned release.
-BRANCH="${DEPLOY_BRANCH:-main}"
+cd "$ROOT_DIR"
 LOCK_FILE=/var/lock/salimvand-deploy.lock
 exec 9>"$LOCK_FILE"
 flock -n 9 || { echo 'Another deployment is already running.' >&2; exit 1; }
-
-cd "$ROOT_DIR"
 [[ -f .env ]] || { echo "Missing $ROOT_DIR/.env; refusing to deploy." >&2; exit 1; }
+
+# Production deploys the current branch or main by default; override with DEPLOY_BRANCH.
+current_branch="$(git branch --show-current 2>/dev/null || true)"
+BRANCH="${DEPLOY_BRANCH:-${current_branch:-main}}"
+
 # Load production values for Prisma seed, migration and build-time tooling.
 set -a
 . "$ROOT_DIR/.env"
