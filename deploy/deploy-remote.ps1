@@ -21,7 +21,7 @@
 
 .PARAMETER Branch
     شاخه‌ای که دیپلوی می‌شود (پیش‌فرض: main — شاخهٔ بررسی‌شدهٔ Production).
-    برای انتشار همین شاخهٔ کاری: -Branch arena/01a0dd70-salimvand
+    برای انتشار همین شاخهٔ کاری: -Branch arena/01a0f311-salimvand
 
 .PARAMETER RepoUrl
     نشانی مخزن گیت‌هاب (پیش‌فرض: https://github.com/khodehydro/salimvand.git).
@@ -45,7 +45,7 @@
 .EXAMPLE
     # انتشار این شاخهٔ کاری با کلید SSH
     powershell -ExecutionPolicy Bypass -File .\deploy\deploy-remote.ps1 `
-        -Host root@185.143.233.10 -Branch arena/01a0dd70-salimvand `
+        -Host root@185.143.233.10 -Branch arena/01a0f311-salimvand `
         -SshKey "$HOME\.ssh\id_ed25519"
 #>
 [CmdletBinding()]

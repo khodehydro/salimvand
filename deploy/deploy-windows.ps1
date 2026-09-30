@@ -21,7 +21,7 @@
     مسیر نصب (پیش‌فرض: C:\salimvand). در صورت نبود، ساخته و کلون می‌شود.
 
 .PARAMETER Branch
-    شاخه‌ای که دیپلوی می‌شود (پیش‌فرض: arena/01a0dd70-salimvand).
+    شاخه‌ای که دیپلوی می‌شود (پیش‌فرض: arena/01a0f311-salimvand).
 
 .PARAMETER RepoUrl
     نشانی مخزن گیت‌هاب (پیش‌فرض: https://github.com/khodehydro/salimvand.git).
@@ -37,16 +37,16 @@
 
 .EXAMPLE
     # اجرای مستقیم از اینترنت (سرور بدون پوشهٔ پروژه):
-    powershell -ExecutionPolicy Bypass -Command "iwr https://raw.githubusercontent.com/khodehydro/salimvand/arena/01a0dd70-salimvand/deploy/deploy-windows.ps1 -OutFile $env:TEMP\deploy.ps1; & $env:TEMP\deploy.ps1"
+    powershell -ExecutionPolicy Bypass -Command "iwr https://raw.githubusercontent.com/khodehydro/salimvand/arena/01a0f311-salimvand/deploy/deploy-windows.ps1 -OutFile $env:TEMP\deploy.ps1; & $env:TEMP\deploy.ps1"
 
 .EXAMPLE
     # اجرای محلی با شاخه و مسیر دلخواه:
-    .\deploy\deploy-windows.ps1 -AppDir C:\salimvand -Branch arena/01a0dd70-salimvand
+    .\deploy\deploy-windows.ps1 -AppDir C:\salimvand -Branch arena/01a0f311-salimvand
 #>
 [CmdletBinding()]
 param(
     [string]$AppDir = 'C:\salimvand',
-    [string]$Branch = 'arena/01a0dd70-salimvand',
+    [string]$Branch = 'arena/01a0f311-salimvand',
     [string]$RepoUrl = 'https://github.com/khodehydro/salimvand.git',
     [string]$PublicSiteUrl = '',
     [switch]$SkipRestart,
