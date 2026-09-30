@@ -8,6 +8,7 @@ import { publicSiteUrl } from '../lib/public-site';
 import { MediaPicker, type PickerItem } from '../components/MediaPicker';
 import { MediaImage } from '../components/MediaImage';
 import { StockStepper } from '../components/StockStepper';
+import { SupplierBadge } from '../components/SupplierBadge';
 
 type ProductRow = {
   id: string;
@@ -567,9 +568,7 @@ export function ProductsPage() {
                           ...new Set(items.map((i) => i.supplier?.name).filter(Boolean)),
                         ];
                         return sups.map((s) => (
-                          <span key={s} className="chip supplier-chip" title="تأمین‌کننده">
-                            🏢 {s}
-                          </span>
+                          <SupplierBadge key={s} name={s!} variant="chip" />
                         ));
                       })()}
                       {vehicleOptions.length > 0 && product.compatibilities?.length ? (
@@ -702,12 +701,7 @@ export function ProductsPage() {
                               <small className="pt-dash">بدون بارکد</small>
                             )}
                             {entry.supplier?.name && (
-                              <span
-                                className="badge badge-supplier"
-                                title={`تأمین‌کننده: ${entry.supplier.name}`}
-                              >
-                                🏢 {entry.supplier.name}
-                              </span>
+                              <SupplierBadge name={entry.supplier.name} />
                             )}
                           </span>
                           <span className="pt-num pt-col-buy" role="cell" data-label="قیمت خرید">

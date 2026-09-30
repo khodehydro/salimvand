@@ -4,6 +4,7 @@ import { api, downloadFile, fetchAllPages } from '../lib/api';
 import { Modal } from '@salimvand/ui';
 import { StockStepper } from '../components/StockStepper';
 import { ProductCreateModal } from '../components/ProductCreateModal';
+import { SupplierBadge } from '../components/SupplierBadge';
 import { BarcodeSvg } from '../components/BarcodeSvg';
 import { formatJalaliDate, formatPersianNumber, formatRial } from '@salimvand/shared';
 import { FaNumberInput } from '../components/FaNumberInput';
@@ -1001,9 +1002,7 @@ export function InventoryPage() {
                         {(() => {
                           const sups = [...new Set(group.items.map((i) => i.supplier?.name).filter(Boolean))];
                           return sups.map((s) => (
-                            <span key={s} className="chip supplier-chip" title="تأمین‌کننده">
-                              🏢 {s}
-                            </span>
+                            <SupplierBadge key={s} name={s!} variant="chip" />
                           ));
                         })()}
                       </div>
@@ -1028,12 +1027,7 @@ export function InventoryPage() {
                             <b>{item.brand?.name ?? 'بدون برند'}</b>
                             <code dir="ltr">{item.barcode}</code>
                             {item.supplier?.name && (
-                              <span
-                                className="badge badge-supplier"
-                                title={`تأمین‌کننده: ${item.supplier.name}`}
-                              >
-                                🏢 {item.supplier.name}
-                              </span>
+                              <SupplierBadge name={item.supplier.name} />
                             )}
                           </div>
                           <div className="ibr-stock">
@@ -1608,7 +1602,7 @@ export function InventoryPage() {
                 <dt>تأمین‌کننده</dt>
                 <dd>
                   {detail.supplier?.name ? (
-                    <span className="badge badge-supplier">🏢 {detail.supplier.name}</span>
+                    <SupplierBadge name={detail.supplier.name} />
                   ) : (
                     'ثبت نشده'
                   )}
