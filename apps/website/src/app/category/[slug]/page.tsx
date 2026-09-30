@@ -1,10 +1,15 @@
 import { ProductCard } from '../../ProductCard';
 import { getStoreInfo, telHref } from '../../store-info';
 import { PublicSubHeader, PublicFooter } from '../../PublicSubHeader';
+import { CategorySidebar, type CategoryItem } from '../../CategorySidebar';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
+import { formatPersianNumber } from '@salimvand/shared';
+
 const api = process.env.API_URL ?? 'https://api.salimvand.ir/api/v1';
-type Category = { id: string; name: string; slug: string };
+
+type Category = CategoryItem;
+
 type Product = {
   slug: string;
   name: string;
@@ -19,6 +24,7 @@ type Product = {
   images: Array<{ path: string; thumbnailPath?: string; alt?: string }>;
   category: { name: string };
 };
+
 async function getCategory(
   slug: string,
 ): Promise<{ category: Category; categories: Category[]; products: Product[] } | null> {
@@ -27,16 +33,23 @@ async function getCategory(
     const decodedSlug = decodeURIComponent(slug);
     const filters = await fetch(`${api}/public/filters`, { next: { revalidate: 300 } });
     const data = ((await filters.json()) as { data: { categories: Category[] } }).data;
-    const category = data.categories.find((item) => item.slug === decodedSlug);
+    const category = data.categories.find(
+      (item) => item.slug === decodedSlug || item.slug === slug || item.id === decodedSlug,
+    );
     if (!category) return null;
-    const products = await fetch(`${api}/public/products?categoryId=${category.id}`, {
+    const products = await fetch(`${api}/public/products?categoryId=${category.id}&pageSize=60`, {
       next: { revalidate: 300 },
     });
-    return { category, categories: data.categories, products: ((await products.json()) as { data: Product[] }).data };
+    return {
+      category,
+      categories: data.categories,
+      products: ((await products.json()) as { data: Product[] }).data ?? [],
+    };
   } catch {
     return null;
   }
 }
+
 export async function generateMetadata({
   params,
 }: {
@@ -65,10 +78,12 @@ export async function generateMetadata({
       : undefined,
   };
 }
+
 export default async function CategoryPage({ params }: { params: Promise<{ slug: string }> }) {
   const data = await getCategory((await params).slug);
   const info = await getStoreInfo();
   if (!data) notFound();
+
   const siteUrl = (process.env.PUBLIC_SITE_URL ?? 'https://salimvand.ir').replace(/\/$/, '');
   const canonicalUrl = `${siteUrl}/category/${encodeURIComponent(data.category.slug)}`;
   const jsonLd = {
@@ -91,6 +106,7 @@ export default async function CategoryPage({ params }: { params: Promise<{ slug:
       },
     ],
   };
+
   return (
     <main className="shell">
       <script
@@ -102,43 +118,73 @@ export default async function CategoryPage({ params }: { params: Promise<{ slug:
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumb) }}
       />
       <PublicSubHeader context="کاتالوگ قطعات خودرو" />
-      <section className="catalog">
+
+      <section className="catalog category-catalog-page">
         <nav className="breadcrumb">
           <a href="/">خانه</a>
           <span>←</span>
+          <a href="/#catalog">دسته‌بندی‌ها</a>
+          <span>←</span>
           <span>{data.category.name}</span>
         </nav>
-        <p className="eyebrow">دسته‌بندی محصولات</p>
-        <h1>{data.category.name}</h1>
-        {data.categories.length > 1 && (
-          <nav className="category-nav" aria-label="دسته‌بندی‌ها">
-            {data.categories.map((item) => (
-              <a
-                key={item.id}
-                href={`/category/${encodeURIComponent(item.slug)}`}
-                className={item.id === data.category.id ? 'is-active' : undefined}
-                aria-current={item.id === data.category.id ? 'page' : undefined}
-              >
-                {item.name}
-              </a>
-            ))}
-          </nav>
-        )}
-        {data.products.length ? (
-          <div className="product-grid">
-            {data.products.map((product) => (
-              <ProductCard
-                key={product.slug}
-                product={product}
-                heading="h2"
-                contact={{ tel: telHref(info), telegram: info.telegram, bale: info.bale }}
-              />
-            ))}
+
+        <div className="category-page-header">
+          <div className="category-page-header-info">
+            <p className="eyebrow">دسته‌بندی قطعات خودرو</p>
+            <h1>{data.category.name}</h1>
+            <p className="category-meta-desc">
+              نمایش قطعات موجود در دسته‌بندی {data.category.name} در فروشگاه آذین خودرو میاندوآب.
+            </p>
           </div>
-        ) : (
-          <div className="placeholder">محصولی در این دسته‌بندی ثبت نشده است.</div>
-        )}
+          <div className="category-page-stats">
+            <span className="category-stat-badge">
+              <strong>{formatPersianNumber(data.products.length)}</strong> قطعه موجود
+            </span>
+          </div>
+        </div>
+
+        <div className="category-layout">
+          <CategorySidebar
+            categories={data.categories}
+            currentCategoryId={data.category.id}
+            currentCategoryName={data.category.name}
+            productCount={data.products.length}
+          />
+
+          <div className="category-main">
+            {data.products.length ? (
+              <div className="product-grid category-product-grid">
+                {data.products.map((product) => (
+                  <ProductCard
+                    key={product.slug}
+                    product={product}
+                    heading="h2"
+                    contact={{ tel: telHref(info), telegram: info.telegram, bale: info.bale }}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="category-empty-state">
+                <div className="category-empty-icon">📦</div>
+                <h3>محصولی در دسته‌بندی «{data.category.name}» ثبت نشده است</h3>
+                <p>
+                  برای استعلام موجودی انبار یا سفارش قطعه، می‌توانید با فروشگاه تماس بگیرید یا سایر
+                  دسته‌بندی‌ها را بررسی کنید.
+                </p>
+                <div className="category-empty-actions">
+                  <a href="/#catalog" className="button button-primary">
+                    مشاهدهٔ سایر قطعات
+                  </a>
+                  <a href={telHref(info)} className="button button-outline">
+                    تماس با فروشگاه
+                  </a>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </section>
+
       <PublicFooter />
     </main>
   );
