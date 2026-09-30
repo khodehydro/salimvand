@@ -579,7 +579,26 @@ export class NotificationsService implements OnModuleDestroy {
                 },
               },
             }
-          : { chat_id: chatId, text: job.data.message, disable_web_page_preview: true };
+          : {
+              chat_id: chatId,
+              text: job.data.message,
+              disable_web_page_preview: true,
+              ...(channel === 'telegram' && job.data.invoicePreview
+                ? {
+                    reply_markup: {
+                      inline_keyboard: [
+                        [
+                          {
+                            text: '📄 مشاهده فاکتور کامل',
+                            url: `${(env.PUBLIC_SITE_URL ?? 'https://salimvand.ir').replace(/\/+$/, '')}/i/${job.data.invoicePreview.shortCode}`,
+                            style: 'primary',
+                          },
+                        ],
+                      ],
+                    },
+                  }
+                : {}),
+            };
         let response: Response;
         try {
           response = await fetch(url, {

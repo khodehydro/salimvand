@@ -5,7 +5,8 @@ import { resolveMessagingEnv, type MessagingSettingsReader } from './messaging-c
 import { telegramApiHeaders } from './notifications.service';
 
 export type SocialPlatform = 'telegram' | 'bale';
-export type SocialButton = { text: string; url: string };
+export type ButtonStyle = 'primary' | 'success' | 'danger';
+export type SocialButton = { text: string; url: string; style?: ButtonStyle };
 
 export type ProductPostInput = {
   name: string;
@@ -64,13 +65,37 @@ export function buildProductKeyboard(
   post: ProductPostInput,
   platform: SocialPlatform,
 ): SocialButton[][] {
+  const isTg = platform === 'telegram';
   const rows: SocialButton[][] = [
-    [{ text: '🛒 استعلام و خرید', url: adminPmUrl(platform, post.adminUsername) }],
+    [
+      {
+        text: '🛒 استعلام و خرید',
+        url: adminPmUrl(platform, post.adminUsername),
+        ...(isTg ? { style: 'success' as const } : {}),
+      },
+    ],
   ];
   if (post.aparatVideoId?.trim())
-    rows.push([{ text: '🎬 نمایش ویدیو', url: aparatUrl(post.aparatVideoId.trim()) }]);
-  const lastRow: SocialButton[] = [{ text: '📦 کاتالوگ محصولات', url: post.siteUrl }];
-  if (post.navUrl) lastRow.push({ text: '🧭 مسیریابی سریع', url: post.navUrl });
+    rows.push([
+      {
+        text: '🎬 نمایش ویدیو',
+        url: aparatUrl(post.aparatVideoId.trim()),
+        ...(isTg ? { style: 'primary' as const } : {}),
+      },
+    ]);
+  const lastRow: SocialButton[] = [
+    {
+      text: '📦 کاتالوگ محصولات',
+      url: post.siteUrl,
+      ...(isTg ? { style: 'primary' as const } : {}),
+    },
+  ];
+  if (post.navUrl)
+    lastRow.push({
+      text: '🧭 مسیریابی سریع',
+      url: post.navUrl,
+      ...(isTg ? { style: 'primary' as const } : {}),
+    });
   rows.push(lastRow);
   return rows;
 }

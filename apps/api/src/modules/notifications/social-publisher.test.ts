@@ -63,14 +63,14 @@ describe('product post content', () => {
   it('builds the inline keyboard per platform', () => {
     const telegram = buildProductKeyboard(post, 'telegram');
     expect(telegram[0]).toEqual([
-      { text: '🛒 استعلام و خرید', url: 'https://t.me/salimvandiradmin2' },
+      { text: '🛒 استعلام و خرید', url: 'https://t.me/salimvandiradmin2', style: 'success' },
     ]);
     expect(telegram[1]).toEqual([
-      { text: '🎬 نمایش ویدیو', url: 'https://www.aparat.com/v/abc123' },
+      { text: '🎬 نمایش ویدیو', url: 'https://www.aparat.com/v/abc123', style: 'primary' },
     ]);
     expect(telegram[2]).toEqual([
-      { text: '📦 کاتالوگ محصولات', url: 'https://salimvand.ir' },
-      { text: '🧭 مسیریابی سریع', url: post.navUrl },
+      { text: '📦 کاتالوگ محصولات', url: 'https://salimvand.ir', style: 'primary' },
+      { text: '🧭 مسیریابی سریع', url: post.navUrl, style: 'primary' },
     ]);
 
     const bale = buildProductKeyboard(post, 'bale');
@@ -90,7 +90,7 @@ describe('product post content', () => {
     // Same rule as the mobile site: no navLat/navLng → no «مسیریابی سریع».
     const rows = buildProductKeyboard({ ...post, navUrl: null }, 'telegram');
     expect(rows[rows.length - 1]).toEqual([
-      { text: '📦 کاتالوگ محصولات', url: 'https://salimvand.ir' },
+      { text: '📦 کاتالوگ محصولات', url: 'https://salimvand.ir', style: 'primary' },
     ]);
   });
 

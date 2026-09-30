@@ -60,7 +60,28 @@ export class AuthService {
       const site = process.env.ADMIN_URL ?? 'https://cms.salimvand.ir';
       const link = `${site}/reset-password?token=${raw}`;
       const base = (config.telegram?.apiBase || process.env.TELEGRAM_API_BASE || 'https://api.telegram.org').replace(/\/+$/, '');
-      const response = await fetch(`${base}/bot${botToken}/sendMessage`, { method: 'POST', headers: { 'content-type': 'application/json', ...(config.telegram?.proxySecret ? { 'x-proxy-secret': config.telegram.proxySecret } : {}) }, body: JSON.stringify({ chat_id: chatId, text: `درخواست بازیابی رمز\nکاربر: ${user.username}\n\nلینک ۱۵ دقیقه معتبر است:\n${link}` }) });
+      const response = await fetch(`${base}/bot${botToken}/sendMessage`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          ...(config.telegram?.proxySecret ? { 'x-proxy-secret': config.telegram.proxySecret } : {}),
+        },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: `درخواست بازیابی رمز\nکاربر: ${user.username}\n\nلینک ۱۵ دقیقه معتبر است:\n${link}`,
+          reply_markup: {
+            inline_keyboard: [
+              [
+                {
+                  text: '🔑 تغییر رمز عبور',
+                  url: link,
+                  style: 'primary',
+                },
+              ],
+            ],
+          },
+        }),
+      });
       if (!response.ok) throw new BadRequestException('ارسال پیام تلگرام ناموفق بود');
     }
     return { ok: true, message: 'اگر کاربر معتبر باشد، لینک بازیابی برای مدیر ارسال می‌شود.' };
