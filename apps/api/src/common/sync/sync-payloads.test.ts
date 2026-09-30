@@ -94,6 +94,7 @@ describe('sync payload builders (Android pull contract)', () => {
       purchasePrice: '1850000',
       salePrice: '2450000',
       minStock: 3,
+      supplierId: null,
       locationId: null,
       basketId: null,
       isActive: true,

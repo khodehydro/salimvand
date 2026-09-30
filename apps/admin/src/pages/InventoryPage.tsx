@@ -31,6 +31,7 @@ type Item = {
     compatibilities?: Array<{ model: { name: string; make: { name: string } } }>;
   };
   brand?: { name: string };
+  supplier?: { id: string; name: string } | null;
   location?: { id: string; name: string; code: string; parent?: { name: string } | null };
   /** سبد — the basket (bin) this line is filed in, when it has one. */
   basket?: { id: string; name: string; code: string } | null;
@@ -128,6 +129,7 @@ export function InventoryPage() {
   const [locations, setLocations] = useState<Location[]>([]);
   const [categories, setCategories] = useState<Option[]>([]);
   const [brands, setBrands] = useState<Option[]>([]);
+  const [suppliers, setSuppliers] = useState<Option[]>([]);
   const [vehicles, setVehicles] = useState<VehicleMake[]>([]);
   const [filter, setFilter] = useState('');
   const [bulkBrand, setBulkBrand] = useState('');
@@ -206,6 +208,9 @@ export function InventoryPage() {
       .catch(() => undefined);
     void api<{ data: VehicleMake[] }>('/vehicles/tree')
       .then((r) => setVehicles(r.data))
+      .catch(() => undefined);
+    void api<{ data: Option[] }>('/suppliers')
+      .then((r) => setSuppliers(r.data))
       .catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -656,6 +661,7 @@ export function InventoryPage() {
           brands={brands}
           locations={locations}
           vehicles={vehicles}
+          suppliers={suppliers}
         />
       )}
 
@@ -992,6 +998,14 @@ export function InventoryPage() {
                       <div className="inv-group-chips">
                         {group.category && <span className="chip">{group.category}</span>}
                         {group.vehicles.length > 0 && <span className="chip vehicle-chip">{group.vehicles.length.toLocaleString('fa-IR')} خودرو سازگار</span>}
+                        {(() => {
+                          const sups = [...new Set(group.items.map((i) => i.supplier?.name).filter(Boolean))];
+                          return sups.map((s) => (
+                            <span key={s} className="chip supplier-chip" title="تأمین‌کننده">
+                              🏢 {s}
+                            </span>
+                          ));
+                        })()}
                       </div>
                     </div>
                     <div className="inventory-group-actions">
@@ -1013,6 +1027,14 @@ export function InventoryPage() {
                           <div className="ibr-brand">
                             <b>{item.brand?.name ?? 'بدون برند'}</b>
                             <code dir="ltr">{item.barcode}</code>
+                            {item.supplier?.name && (
+                              <span
+                                className="badge badge-supplier"
+                                title={`تأمین‌کننده: ${item.supplier.name}`}
+                              >
+                                🏢 {item.supplier.name}
+                              </span>
+                            )}
                           </div>
                           <div className="ibr-stock">
                             <span className={`badge ${status.badge}`}>{status.label}</span>
@@ -1583,6 +1605,16 @@ export function InventoryPage() {
                 <dd>{detail.brand?.name ?? '—'}</dd>
               </div>
               <div>
+                <dt>تأمین‌کننده</dt>
+                <dd>
+                  {detail.supplier?.name ? (
+                    <span className="badge badge-supplier">🏢 {detail.supplier.name}</span>
+                  ) : (
+                    'ثبت نشده'
+                  )}
+                </dd>
+              </div>
+              <div>
                 <dt>محل نگهداری</dt>
                 <dd>
                   {detail.location || detail.basket ? (
@@ -1634,6 +1666,37 @@ export function InventoryPage() {
               <code dir="ltr">{detail.barcode}</code>
             </div>
             <div className="two-fields">
+              <label>
+                تأمین‌کننده
+                <select
+                  value={detail.supplier?.id ?? ''}
+                  onChange={async (e) => {
+                    const supId = e.target.value;
+                    try {
+                      await api(`/inventory/items/${detail.id}`, {
+                        method: 'PATCH',
+                        body: JSON.stringify({ supplierId: supId || null }),
+                      });
+                      setMessage('تأمین‌کننده به‌روزرسانی شد');
+                      const selectedSup = suppliers.find((s) => s.id === supId);
+                      setDetail({
+                        ...detail,
+                        supplier: selectedSup ? { id: selectedSup.id, name: selectedSup.name } : null,
+                      });
+                      await load();
+                    } catch (err) {
+                      setMessage((err as Error).message);
+                    }
+                  }}
+                >
+                  <option value="">بدون تأمین‌کننده</option>
+                  {suppliers.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <label>
                 ورود کالا (تعداد)
                 <FaNumberInput

@@ -4,6 +4,7 @@ import { IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-
 export class CreateInventoryItemDto {
   @IsUUID() productId!: string;
   @IsOptional() @IsUUID() brandId?: string;
+  @IsOptional() @IsUUID() supplierId?: string;
   @IsOptional() @IsString() @MaxLength(20) barcode?: string;
   @IsOptional()
   @Type(() => Number)
@@ -47,5 +48,6 @@ export class UpdateInventoryItemDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(1_000_000) minStock?: number;
   @IsOptional() @IsUUID() locationId?: string;
   @IsOptional() @IsUUID() basketId?: string;
+  @IsOptional() @IsUUID() supplierId?: string;
   @IsOptional() @IsString() @MaxLength(255) notes?: string;
 }

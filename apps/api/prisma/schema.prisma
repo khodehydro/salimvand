@@ -255,12 +255,14 @@ model InventoryItem {
   /// سبد — the basket (bin) inside the shelf; null means «on the shelf,
   /// no basket». Always null unless it belongs to this line's shelf.
   basketId     String?                @db.Uuid
+  supplierId   String?                @db.Uuid
   notes        String?
   isActive     Boolean                @default(true)
   /// When the current salePrice took effect — feeds the Shamsi price badges.
   priceUpdatedAt DateTime?            @db.Timestamptz(6)
   product      Product                @relation(fields: [productId], references: [id])
   brand        Brand?                 @relation(fields: [brandId], references: [id])
+  supplier     Supplier?              @relation(fields: [supplierId], references: [id])
   location     Location?              @relation("ItemShelf", fields: [locationId], references: [id])
   basket       Location?              @relation("ItemBasket", fields: [basketId], references: [id])
   transactions InventoryTransaction[]
@@ -271,6 +273,7 @@ model InventoryItem {
   @@index([productId])
   @@index([locationId])
   @@index([basketId])
+  @@index([supplierId])
   @@map("inventory_items")
 }
 
@@ -412,6 +415,7 @@ model Supplier {
   @@index([isActive, deletedAt])
   purchases PurchaseInvoice[]
   supplierPayments SupplierPayment[]
+  inventoryItems InventoryItem[]
   @@map("suppliers")
 }
 

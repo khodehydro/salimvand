@@ -308,6 +308,7 @@ export interface InventoryTransferPayload {
  * stays command-only: it may only change through receive/adjust. */
 export interface InventoryUpdateMetadataPayload {
   itemId: string;
+  supplierId?: string | null;
   purchasePrice?: string;
   salePrice?: string;
   minStock?: number;
@@ -323,6 +324,7 @@ export interface InventoryUpdateMetadataPayload {
  * stock line when the operator supplied one. */
 export interface ProductCreateInventoryPayload {
   brandId?: string | null;
+  supplierId?: string | null;
   barcode?: string;
   purchasePrice?: string;
   salePrice?: string;
@@ -335,6 +337,7 @@ export interface ProductCreateInventoryPayload {
 export interface ProductCreatePayload {
   name: string;
   categoryId: string;
+  supplierId?: string | null;
   partNumber?: string;
   description?: string;
   status?: 'active' | 'hidden';
@@ -347,6 +350,7 @@ export interface ProductCreatePayload {
 }
 export interface ProductUpdatePayload {
   productId: string;
+  supplierId?: string | null;
   name?: string;
   description?: string;
   partNumber?: string;

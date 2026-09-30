@@ -73,14 +73,21 @@ export class InventoryService {
     // views are pre-filtered in SQL: the raw id universe replaces the old
     // fetch-everything-then-filter-in-JS pass.
     const statusUniverse =
-      filters.status === 'low' || filters.status === 'out'
+      filters.status === 'low'
         ? await this.prisma.$queryRaw<Array<{ id: string }>>`
             SELECT i.id FROM "inventory_items" i
             JOIN "products" p ON p.id = i."productId"
             WHERE i."isActive" = true
               AND p."deletedAt" IS NULL
-              AND i.quantity ${filters.status === 'out' ? Prisma.sql`<= 0` : Prisma.sql`<= COALESCE(i."minStock", 0)`}`
-        : null;
+              AND i.quantity <= COALESCE(i."minStock", 0)`
+        : filters.status === 'out'
+          ? await this.prisma.$queryRaw<Array<{ id: string }>>`
+              SELECT i.id FROM "inventory_items" i
+              JOIN "products" p ON p.id = i."productId"
+              WHERE i."isActive" = true
+                AND p."deletedAt" IS NULL
+                AND i.quantity <= 0`
+          : null;
     const items = await this.prisma.inventoryItem.findMany({
       where: {
         isActive: true,
@@ -116,6 +123,7 @@ export class InventoryService {
       take: limit + 1,
       include: {
         brand: true,
+        supplier: { select: { id: true, name: true } },
         // parent = the warehouse (انبار) of the shelf — the panel always
         // shows placement as «انبار · قفسه · سبد».
         location: { include: { parent: true } },
@@ -235,6 +243,7 @@ export class InventoryService {
     minStock?: number;
     locationId?: string;
     basketId?: string;
+    supplierId?: string;
     initialQuantity?: number;
     userId?: string;
   }) {
@@ -280,6 +289,7 @@ export class InventoryService {
           minStock: input.minStock,
           locationId: placement.locationId,
           basketId: placement.basketId,
+          supplierId: input.supplierId || undefined,
           // Opening price entry — only when a price was actually set.
           ...(salePrice > 0n ? { priceUpdatedAt: new Date() } : {}),
         },
@@ -478,6 +488,9 @@ export class InventoryService {
             throw new BadRequestException('حداقل موجودی باید عدد صحیح و غیرمنفی باشد');
           data.minStock = input.minStock;
         }
+      }
+      if (input.supplierId !== undefined) {
+        data.supplierId = input.supplierId ? input.supplierId : null;
       }
       if (input.notes !== undefined) data.notes = input.notes.trim() || null;
       if (!Object.keys(data).length) throw new BadRequestException('تغییری ارسال نشده است');
@@ -693,6 +706,7 @@ export class InventoryService {
       minStock?: number;
       locationId?: string | null;
       basketId?: string | null;
+      supplierId?: string | null;
       salePrice?: number;
       purchasePrice?: number;
       isActive?: boolean;
@@ -720,6 +734,7 @@ export class InventoryService {
           minStock: data.minStock !== undefined ? data.minStock : undefined,
           locationId: placementTouched ? placement.locationId : undefined,
           basketId: placementTouched ? placement.basketId : undefined,
+          supplierId: data.supplierId !== undefined ? (data.supplierId || null) : undefined,
           salePrice: data.salePrice !== undefined ? BigInt(data.salePrice) : undefined,
           purchasePrice: data.purchasePrice !== undefined ? BigInt(data.purchasePrice) : undefined,
           isActive: data.isActive !== undefined ? data.isActive : undefined,
@@ -729,6 +744,7 @@ export class InventoryService {
         include: {
           product: true,
           brand: true,
+          supplier: true,
           location: { include: { parent: true } },
           basket: true,
         },

@@ -15,6 +15,7 @@ import { resolvePlacement } from '../../common/inventory/placement';
  * row so a mobile product.create can never end up as a price-less neutral line. */
 type ProductCreateInventoryInput = {
   brandId?: string | null;
+  supplierId?: string | null;
   barcode?: string;
   purchasePrice?: bigint;
   salePrice?: bigint;
@@ -28,6 +29,7 @@ type ProductCreateInventoryInput = {
  * absent: stock may only move through receive/adjust commands. */
 type ProductUpdateInventoryInput = {
   itemId: string;
+  supplierId?: string | null;
   brandId?: string | null;
   barcode?: string;
   purchasePrice?: bigint;
@@ -96,7 +98,12 @@ export class CatalogAdminService {
       include: {
         category: true,
         inventoryItems: {
-          include: { brand: true, location: { include: { parent: true } }, basket: true },
+          include: {
+            brand: true,
+            supplier: { select: { id: true, name: true } },
+            location: { include: { parent: true } },
+            basket: true,
+          },
         },
         // Primary image first so the panel list can show a thumbnail without
         // pulling every image of every product.
@@ -144,7 +151,12 @@ export class CatalogAdminService {
         images: { orderBy: [{ isPrimary: 'desc' }, { sort: 'asc' }] },
         compatibilities: { include: { model: { include: { make: true } }, trim: true } },
         inventoryItems: {
-          include: { brand: true, location: { include: { parent: true } }, basket: true },
+          include: {
+            brand: true,
+            supplier: { select: { id: true, name: true } },
+            location: { include: { parent: true } },
+            basket: true,
+          },
         },
       },
     });
@@ -214,17 +226,28 @@ export class CatalogAdminService {
       const resolvedItems: Array<{
         input: ProductCreateInventoryInput;
         brandId: string | null;
+        supplierId: string | null;
         locationId: string | null;
         basketId: string | null;
         barcode: string;
       }> = [];
       const explicitBarcodes = new Set<string>();
+      const rootSupplierId = input.supplierId ? String(input.supplierId).trim() || null : null;
       for (const item of itemsInput) {
         let brandId: string | null = null;
         if (item.brandId) {
           const brand = await tx.brand.findUnique({ where: { id: item.brandId } });
           if (!brand || !brand.isActive) throw new BadRequestException('برند نامعتبر است');
           brandId = brand.id;
+        }
+        let supplierId: string | null = null;
+        const targetSupplierId = item.supplierId ?? rootSupplierId;
+        if (targetSupplierId) {
+          const supplier = tx.supplier?.findUnique
+            ? await tx.supplier.findUnique({ where: { id: targetSupplierId } })
+            : { id: targetSupplierId, isActive: true };
+          if (!supplier || !supplier.isActive) throw new BadRequestException('تأمین‌کننده نامعتبر است');
+          supplierId = supplier.id;
         }
         let locationId: string | null = null;
         if (item.locationId) {
@@ -252,12 +275,13 @@ export class CatalogAdminService {
         } else {
           barcode = await this.uniqueBarcode(tx);
         }
-        resolvedItems.push({ input: item, brandId, locationId, basketId, barcode });
+        resolvedItems.push({ input: item, brandId, supplierId, locationId, basketId, barcode });
       }
       const created = await tx.product.create({
         data: {
           name,
           categoryId,
+          supplierId: rootSupplierId,
           code,
           ...seo,
           slug,
@@ -289,6 +313,7 @@ export class CatalogAdminService {
             minStock: item.minStock,
             locationId: resolved.locationId,
             basketId: resolved.basketId,
+            supplierId: resolved.supplierId,
             // Opening price entry — only when a price was actually set.
             ...(item.salePrice && item.salePrice > 0n ? { priceUpdatedAt: new Date() } : {}),
           },
@@ -452,6 +477,9 @@ export class CatalogAdminService {
       if (!categoryId) throw new BadRequestException('دسته‌بندی نامعتبر است');
       data.categoryId = categoryId;
     }
+    if (input.supplierId !== undefined) {
+      data.supplierId = input.supplierId ? String(input.supplierId).trim() || null : null;
+    }
     const before = this.prisma.product.findUnique
       ? await this.prisma.product.findUnique({ where: { id } })
       : await this.prisma.product.findFirst({ where: { id } });
@@ -602,6 +630,11 @@ export class CatalogAdminService {
         throw new BadRequestException('basketId باید شناسهٔ معتبر سبد باشد');
       input.basketId = raw.basketId;
     }
+    if (raw.supplierId !== undefined && raw.supplierId !== null) {
+      if (typeof raw.supplierId !== 'string' || !this.uuidValue(raw.supplierId))
+        throw new BadRequestException('supplierId باید شناسهٔ معتبر تأمین‌کننده باشد');
+      input.supplierId = raw.supplierId;
+    }
     input.purchasePrice = this.priceValue(raw.purchasePrice, 'قیمت خرید');
     input.salePrice = this.priceValue(raw.salePrice, 'قیمت فروش');
     if (raw.minStock !== undefined && raw.minStock !== null) {
@@ -619,6 +652,7 @@ export class CatalogAdminService {
     const provided = [
       'brandId',
       'barcode',
+      'supplierId',
       'purchasePrice',
       'salePrice',
       'minStock',
@@ -685,6 +719,12 @@ export class CatalogAdminService {
       else if (typeof raw.basketId === 'string' && this.uuidValue(raw.basketId))
         input.basketId = raw.basketId;
       else throw new BadRequestException('basketId باید شناسهٔ معتبر سبد باشد');
+    }
+    if (raw.supplierId !== undefined) {
+      if (raw.supplierId === null) input.supplierId = null;
+      else if (typeof raw.supplierId === 'string' && this.uuidValue(raw.supplierId))
+        input.supplierId = raw.supplierId;
+      else throw new BadRequestException('supplierId باید شناسهٔ معتبر تأمین‌کننده باشد');
     }
     if (raw.purchasePrice !== undefined)
       input.purchasePrice = this.priceValue(raw.purchasePrice, 'قیمت خرید', true);
@@ -758,6 +798,13 @@ export class CatalogAdminService {
     if (input.salePrice !== undefined) data.salePrice = input.salePrice;
     if (input.minStock !== undefined) data.minStock = input.minStock;
     if (input.notes !== undefined) data.notes = input.notes.trim() || null;
+    if (input.supplierId !== undefined) {
+      if (input.supplierId) {
+        const supplier = await tx.supplier.findUnique({ where: { id: input.supplierId } });
+        if (!supplier || !supplier.isActive) throw new BadRequestException('تأمین‌کننده نامعتبر است');
+      }
+      data.supplierId = input.supplierId;
+    }
     // A real sale-price change stamps the badge timestamp on the line.
     const nextSalePrice = input.salePrice ?? existing.salePrice;
     if (nextSalePrice !== existing.salePrice) data.priceUpdatedAt = new Date();

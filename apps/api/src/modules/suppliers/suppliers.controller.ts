@@ -21,7 +21,7 @@ type AuthRequest = Request & { user?: { id: string } };
 
 @Controller('suppliers')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('super_admin', 'manager', 'accountant')
+@Roles('super_admin', 'manager', 'accountant', 'warehouse')
 export class SuppliersController {
   constructor(private readonly suppliers: SuppliersService) {}
   @Get() list(@Query('search') search?: string) {

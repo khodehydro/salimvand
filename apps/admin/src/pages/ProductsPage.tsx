@@ -19,6 +19,7 @@ type ProductRow = {
   partNumber?: string | null;
   seoKeywords?: string[];
   category?: { name: string };
+  supplier?: { id: string; name: string } | null;
   compatibilities?: Array<{ model: { name: string; make: { name: string } } }>;
   images?: Array<{ path: string; alt?: string | null; isPrimary: boolean }>;
   inventoryItems?: Array<{
@@ -29,6 +30,7 @@ type ProductRow = {
     purchasePrice?: string;
     barcode?: string | null;
     brand?: { name: string } | null;
+    supplier?: { id: string; name: string } | null;
     location?: { code: string; name: string; parent?: { name: string } | null } | null;
     basket?: { code: string; name?: string } | null;
   }>;
@@ -43,6 +45,8 @@ type ProductDetail = {
   priceDisplay?: string;
   description?: string | null;
   partNumber?: string | null;
+  supplierId?: string | null;
+  supplier?: { id: string; name: string } | null;
   aparatVideoId?: string | null;
   seoTitle?: string | null;
   seoDescription?: string | null;
@@ -70,6 +74,8 @@ type ProductDetail = {
     isActive: boolean;
     priceUpdatedAt?: string | null;
     brand?: { id: string; name: string } | null;
+    supplierId?: string | null;
+    supplier?: { id: string; name: string } | null;
     location?: { id: string; code: string; name: string } | null;
     /** سبد — the basket of this line inside its shelf. */
     basket?: { id: string; code: string; name: string } | null;
@@ -77,6 +83,7 @@ type ProductDetail = {
 };
 type Category = { id: string; name: string };
 type Brand = { id: string; name: string };
+type Supplier = { id: string; name: string };
 type Location = {
   id: string;
   code: string;
@@ -114,6 +121,7 @@ export function ProductsPage() {
   const [products, setProducts] = useState<ProductRow[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [vehicles, setVehicles] = useState<VehicleMake[]>([]);
   const [filter, setFilter] = useState('');
@@ -179,6 +187,9 @@ export function ProductsPage() {
       .catch(() => undefined);
     void api<{ data: Brand[] }>('/brands')
       .then((result) => setBrands(result.data))
+      .catch(() => undefined);
+    void api<{ data: Supplier[] }>('/suppliers')
+      .then((result) => setSuppliers(result.data))
       .catch(() => undefined);
     void api<{ data: Location[] }>('/locations')
       // Warehouses first, then shelves in numeric code order (۱.۱ … ۱۰.۱ … ۲۰.۷)
@@ -551,6 +562,11 @@ export function ProductsPage() {
                       {product.partNumber ? ` · ${product.partNumber}` : ''}
                     </small>
                     <span className="pt-meta-chips">
+                      {product.supplier?.name && (
+                        <span className="chip supplier-chip" title="تأمین‌کننده">
+                          🏢 {product.supplier.name}
+                        </span>
+                      )}
                       {vehicleOptions.length > 0 && product.compatibilities?.length ? (
                         <span className="chip vehicle-chip">
                           {product.compatibilities.length.toLocaleString('fa-IR')} خودرو
@@ -680,6 +696,14 @@ export function ProductsPage() {
                             ) : (
                               <small className="pt-dash">بدون بارکد</small>
                             )}
+                            {entry.supplier?.name && (
+                              <span
+                                className="badge badge-supplier"
+                                title={`تأمین‌کننده: ${entry.supplier.name}`}
+                              >
+                                🏢 {entry.supplier.name}
+                              </span>
+                            )}
                           </span>
                           <span className="pt-num pt-col-buy" role="cell" data-label="قیمت خرید">
                             {formatRial(Number(entry.purchasePrice ?? 0))}
@@ -747,6 +771,7 @@ export function ProductsPage() {
           onRefresh={() => void refresh(draft.id)}
           categories={categories}
           brands={brands}
+          suppliers={suppliers}
           locations={locations}
           vehicles={vehicles}
         />
@@ -769,6 +794,7 @@ type EditorProps = {
   onRefresh: () => void;
   categories: Category[];
   brands: Brand[];
+  suppliers: Supplier[];
   locations: Location[];
   vehicles: VehicleMake[];
 };
@@ -782,6 +808,7 @@ function ProductEditor({
   onRefresh,
   categories,
   brands,
+  suppliers,
   locations: initialLocations,
   vehicles,
 }: EditorProps) {
@@ -807,6 +834,7 @@ function ProductEditor({
   const [basic, setBasic] = useState({
     name: product.name,
     categoryId: product.category?.id ?? '',
+    supplierId: product.supplierId ?? product.supplier?.id ?? '',
     description: product.description ?? '',
     partNumber: product.partNumber ?? '',
     status: product.status,
@@ -829,6 +857,7 @@ function ProductEditor({
   const [pickTrim, setPickTrim] = useState('');
   const [item, setItem] = useState({
     brandId: '',
+    supplierId: product.supplierId ?? product.supplier?.id ?? '',
     barcode: createEan13(String(Date.now()).slice(-9)),
     salePrice: '',
     purchasePrice: '',
@@ -845,6 +874,7 @@ function ProductEditor({
         salePrice: string;
         purchasePrice: string;
         minStock: string;
+        supplierId: string;
         locationId: string;
         basketId: string;
       }
@@ -908,6 +938,7 @@ function ProductEditor({
       {
         name: basic.name,
         categoryId: basic.categoryId,
+        supplierId: basic.supplierId || null,
         description: basic.description || null,
         partNumber: basic.partNumber || null,
         status: basic.status,
@@ -989,6 +1020,7 @@ function ProductEditor({
         body: JSON.stringify({
           productId: product.id,
           brandId: item.brandId,
+          supplierId: item.supplierId || basic.supplierId || undefined,
           barcode: item.barcode,
           salePrice: Number(item.salePrice) || 0,
           purchasePrice: Number(item.purchasePrice) || 0,
@@ -1028,6 +1060,7 @@ function ProductEditor({
           salePrice: Number(edit.salePrice) || 0,
           purchasePrice: Number(edit.purchasePrice) || 0,
           minStock: edit.minStock === '' ? null : Number(edit.minStock),
+          supplierId: edit.supplierId || null,
           locationId: edit.locationId || null,
           basketId: edit.basketId || null,
         }),
@@ -1053,6 +1086,7 @@ function ProductEditor({
       salePrice: String(entry.salePrice),
       purchasePrice: String(entry.purchasePrice),
       minStock: entry.minStock == null ? '' : String(entry.minStock),
+      supplierId: entry.supplierId ?? entry.supplier?.id ?? '',
       locationId: entry.location?.id ?? '',
       basketId: entry.basket?.id ?? '',
     };
@@ -1062,6 +1096,7 @@ function ProductEditor({
       salePrice: string;
       purchasePrice: string;
       minStock: string;
+      supplierId: string;
       locationId: string;
       basketId: string;
     }>,
@@ -1193,6 +1228,20 @@ function ProductEditor({
                   {categories.map((category) => (
                     <option value={category.id} key={category.id}>
                       {category.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                تأمین‌کننده
+                <select
+                  value={basic.supplierId}
+                  onChange={(event) => setBasic({ ...basic, supplierId: event.target.value })}
+                >
+                  <option value="">بدون تأمین‌کننده</option>
+                  {suppliers.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
                     </option>
                   ))}
                 </select>
@@ -1546,6 +1595,22 @@ function ProductEditor({
                           />
                         </label>
                         <label>
+                          تأمین‌کننده
+                          <select
+                            value={edit.supplierId}
+                            onChange={(event) =>
+                              setItemEdit(entry, { supplierId: event.target.value })
+                            }
+                          >
+                            <option value="">بدون تأمین‌کننده</option>
+                            {suppliers.map((s) => (
+                              <option key={s.id} value={s.id}>
+                                {s.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label>
                           قفسه
                           <select
                             value={edit.locationId}
@@ -1623,6 +1688,20 @@ function ProductEditor({
                     {brands.map((brand) => (
                       <option value={brand.id} key={brand.id}>
                         {brand.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  تأمین‌کننده
+                  <select
+                    value={item.supplierId}
+                    onChange={(event) => setItem({ ...item, supplierId: event.target.value })}
+                  >
+                    <option value="">انتخاب تأمین‌کننده (اختیاری)</option>
+                    {suppliers.map((s) => (
+                      <option value={s.id} key={s.id}>
+                        {s.name}
                       </option>
                     ))}
                   </select>

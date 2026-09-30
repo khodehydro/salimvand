@@ -120,7 +120,7 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
    * internal tokens; the mobile client only receives operational catalog data. */
   async bootstrap(userId: string, deviceId: string) {
     await this.touchDevice(userId, deviceId);
-    const [categories, brands, locations, products, inventory, customers, cursor] =
+    const [categories, brands, locations, suppliers, products, inventory, customers, cursor] =
       await Promise.all([
         this.prisma.category.findMany({
           where: { isActive: true },
@@ -135,6 +135,11 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
         this.prisma.location.findMany({
           orderBy: { code: 'asc' },
           select: { id: true, parentId: true, type: true, code: true, name: true },
+        }),
+        this.prisma.supplier.findMany({
+          where: { isActive: true, deletedAt: null },
+          orderBy: { name: 'asc' },
+          select: { id: true, name: true, phone: true, mobile: true },
         }),
         this.prisma.product.findMany({
           where: { deletedAt: null },
@@ -170,6 +175,7 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
             minStock: true,
             locationId: true,
             basketId: true,
+            supplierId: true,
             priceUpdatedAt: true,
           },
         }),
@@ -205,6 +211,7 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
         categories,
         brands,
         locations,
+        suppliers,
         products: productsWithImageUrls,
         inventory,
         // Same payload shape as the sync pull stream, so the client caches

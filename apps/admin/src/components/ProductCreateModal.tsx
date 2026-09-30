@@ -39,6 +39,7 @@ type VehicleMake = {
 const emptyBasic = {
   name: '',
   categoryId: '',
+  supplierId: '',
   description: '',
   partNumber: '',
   status: 'active',
@@ -50,6 +51,7 @@ const emptyBasic = {
 const emptyItem = {
   brandId: '',
   barcode: '',
+  supplierId: '',
   salePrice: '',
   purchasePrice: '',
   minStock: '',
@@ -66,6 +68,7 @@ export function ProductCreateModal({
   brands,
   locations,
   vehicles,
+  suppliers: initialSuppliers,
   inline = false,
 }: {
   open: boolean;
@@ -75,10 +78,22 @@ export function ProductCreateModal({
   brands: Option[];
   locations: Location[];
   vehicles: VehicleMake[];
+  suppliers?: Option[];
   inline?: boolean;
 }) {
   const [basic, setBasic] = useState(emptyBasic);
   const [items, setItems] = useState([emptyItem]);
+  const [suppliers, setSuppliers] = useState<Option[]>(initialSuppliers ?? []);
+
+  useEffect(() => {
+    if (initialSuppliers?.length) {
+      setSuppliers(initialSuppliers);
+    } else {
+      api<{ data: Option[] }>('/suppliers')
+        .then((res) => setSuppliers(res.data))
+        .catch(() => {});
+    }
+  }, [initialSuppliers]);
   const updateItem = (index: number, patch: Partial<typeof emptyItem>) =>
     setItems((current) =>
       current.map((entry, i) => (i === index ? { ...entry, ...patch } : entry)),
@@ -180,6 +195,7 @@ export function ProductCreateModal({
         body: JSON.stringify({
           name: basic.name,
           categoryId: basic.categoryId,
+          supplierId: basic.supplierId || undefined,
           description: basic.description || null,
           partNumber: basic.partNumber || null,
           status: basic.status,
@@ -226,6 +242,7 @@ export function ProductCreateModal({
           body: JSON.stringify({
             productId,
             brandId: item.brandId,
+            supplierId: item.supplierId || basic.supplierId || undefined,
             barcode: item.barcode || createEan13(`${Date.now()}${index}`.slice(-9)),
             purchasePrice: Number(item.purchasePrice) || 0,
             salePrice: Number(item.salePrice) || 0,
@@ -346,6 +363,28 @@ export function ProductCreateModal({
                       onChange={(event) => setBasic({ ...basic, partNumber: event.target.value })}
                       placeholder="Part Number"
                     />
+                  </label>
+                  <label className="pc-s3">
+                    تأمین‌کننده (اختیاری)
+                    <select
+                      value={basic.supplierId}
+                      onChange={(event) => {
+                        const supId = event.target.value;
+                        setBasic({ ...basic, supplierId: supId });
+                        setItems((current) =>
+                          current.map((item, idx) =>
+                            idx === 0 && !item.supplierId ? { ...item, supplierId: supId } : item,
+                          ),
+                        );
+                      }}
+                    >
+                      <option value="">انتخاب تأمین‌کننده (اختیاری)</option>
+                      {suppliers.map((s) => (
+                        <option value={s.id} key={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </select>
                   </label>
                   <label className="pc-s3">
                     وضعیت
@@ -622,6 +661,22 @@ export function ProductCreateModal({
                               {basketsOf(item.locationId).map((basket) => (
                                 <option value={basket.id} key={basket.id}>
                                   {basketLabel(basket)}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="pc-s2">
+                            تأمین‌کننده
+                            <select
+                              value={item.supplierId || basic.supplierId}
+                              onChange={(event) =>
+                                updateItem(index, { supplierId: event.target.value })
+                              }
+                            >
+                              <option value="">انتخاب تأمین‌کننده</option>
+                              {suppliers.map((s) => (
+                                <option value={s.id} key={s.id}>
+                                  {s.name}
                                 </option>
                               ))}
                             </select>

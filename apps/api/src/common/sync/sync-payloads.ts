@@ -94,12 +94,13 @@ export function buildInventoryItemSyncPayload(
     | 'minStock'
     | 'locationId'
     | 'isActive'
-  > & { priceUpdatedAt?: Date | null; basketId?: string | null },
+  > & { priceUpdatedAt?: Date | null; basketId?: string | null; supplierId?: string | null },
 ) {
   return {
     id: item.id,
     productId: item.productId,
     brandId: item.brandId,
+    supplierId: item.supplierId ?? null,
     barcode: item.barcode,
     quantity: item.quantity,
     purchasePrice: money(item.purchasePrice),

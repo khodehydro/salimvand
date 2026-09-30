@@ -38,6 +38,7 @@ function makeService(overrides: Record<string, unknown> = {}) {
     productOperation: { findUnique: vi.fn().mockResolvedValue(null) },
     invoice: { findUnique: vi.fn().mockResolvedValue(null) },
     customer: { findUnique: vi.fn().mockResolvedValue(null) },
+    supplier: { findMany: vi.fn().mockResolvedValue([]) },
     ...overrides,
   };
   const inventory = {
@@ -637,6 +638,7 @@ describe('SyncService.resolveConflict', () => {
       purchasePrice: '100',
       salePrice: '120',
       minStock: null,
+      supplierId: null,
       locationId: null,
       basketId: null,
       isActive: true,
