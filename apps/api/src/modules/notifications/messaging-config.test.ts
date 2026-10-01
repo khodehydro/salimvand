@@ -98,6 +98,10 @@ describe('messaging config', () => {
                   botToken: 'panel-token',
                   apiBase: 'https://proxy.workers.dev',
                   proxySecret: 'panel-proxy-secret',
+                  adminUsername: 'salim_tg',
+                },
+                bale: {
+                  adminUsername: 'salim_bale',
                 },
               },
             }
@@ -114,6 +118,8 @@ describe('messaging config', () => {
     expect(env.TELEGRAM_BOT_TOKEN).toBe('panel-token');
     expect(env.TELEGRAM_API_BASE).toBe('https://proxy.workers.dev');
     expect(env.TELEGRAM_PROXY_SECRET).toBe('panel-proxy-secret');
+    expect(env.TELEGRAM_ADMIN_USERNAME).toBe('salim_tg');
+    expect(env.BALE_ADMIN_USERNAME).toBe('salim_bale');
     expect(env.BALE_BOT_TOKEN).toBe('env-bale');
     expect(env.UNRELATED).toBe('keep');
   });

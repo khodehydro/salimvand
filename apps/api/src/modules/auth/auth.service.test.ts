@@ -49,10 +49,7 @@ describe('AuthService', () => {
       },
     };
 
-    const authService = new AuthService(
-      prisma as never,
-      { get: vi.fn(() => 'jwt-secret') } as never,
-    );
+    const authService = new AuthService(prisma as never);
 
     try {
       await expect(authService.requestPasswordReset('admin')).rejects.toThrow(
@@ -86,10 +83,7 @@ describe('AuthService', () => {
       },
     };
 
-    const authService = new AuthService(
-      prisma as never,
-      { get: vi.fn(() => 'jwt-secret') } as never,
-    );
+    const authService = new AuthService(prisma as never);
 
     try {
       await expect(authService.requestPasswordReset('admin')).rejects.toThrow(

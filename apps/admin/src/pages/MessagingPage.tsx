@@ -43,8 +43,21 @@ type Tab = (typeof tabs)[number]['id'];
 
 type MessagingConfig = {
   sms?: { apiKey?: string; lineNumber?: string };
-  telegram?: { botToken?: string; chatId?: string; passwordRecoveryChatId?: string; apiBase?: string; proxySecret?: string };
-  bale?: { botToken?: string; chatId?: string; botId?: string; apiAccessKey?: string };
+  telegram?: {
+    botToken?: string;
+    chatId?: string;
+    passwordRecoveryChatId?: string;
+    apiBase?: string;
+    proxySecret?: string;
+    adminUsername?: string;
+  };
+  bale?: {
+    botToken?: string;
+    chatId?: string;
+    botId?: string;
+    apiAccessKey?: string;
+    adminUsername?: string;
+  };
 };
 type MessagingDraft = {
   smsApiKey: string;
@@ -54,10 +67,12 @@ type MessagingDraft = {
   telegramPasswordRecoveryChatId: string;
   telegramApiBase: string;
   telegramProxySecret: string;
+  telegramAdminUsername: string;
   baleBotToken: string;
   baleBotId: string;
   baleApiAccessKey: string;
   baleChatId: string;
+  baleAdminUsername: string;
 };
 const emptyDraft: MessagingDraft = {
   smsApiKey: '',
@@ -67,10 +82,12 @@ const emptyDraft: MessagingDraft = {
   telegramPasswordRecoveryChatId: '8686398534',
   telegramApiBase: '',
   telegramProxySecret: '',
+  telegramAdminUsername: '',
   baleBotToken: '',
   baleBotId: '',
   baleApiAccessKey: '',
   baleChatId: '',
+  baleAdminUsername: '',
 };
 
 const channelLabels: Record<string, string> = { sms: 'پیامک', telegram: 'تلگرام', bale: 'بله' };
@@ -103,10 +120,12 @@ export function MessagingPage() {
           telegramPasswordRecoveryChatId: config.telegram?.passwordRecoveryChatId ?? '8686398534',
           telegramApiBase: config.telegram?.apiBase ?? '',
           telegramProxySecret: '',
+          telegramAdminUsername: config.telegram?.adminUsername ?? '',
           baleBotToken: '',
           baleBotId: config.bale?.botId ?? '',
           baleApiAccessKey: '',
           baleChatId: config.bale?.chatId ?? '',
+          baleAdminUsername: config.bale?.adminUsername ?? '',
         });
       })
       .catch(() => undefined);
@@ -125,10 +144,12 @@ export function MessagingPage() {
           chatId: draft.telegramChatId.trim() || undefined,
           passwordRecoveryChatId: draft.telegramPasswordRecoveryChatId.trim() || undefined,
           apiBase: draft.telegramApiBase.trim() || undefined,
+          adminUsername: draft.telegramAdminUsername.trim() || undefined,
         },
         bale: {
           chatId: draft.baleChatId.trim() || undefined,
           botId: draft.baleBotId.trim() || undefined,
+          adminUsername: draft.baleAdminUsername.trim() || undefined,
         },
       };
       // Secrets are only sent when the operator typed a fresh value; an empty
@@ -315,6 +336,16 @@ export function MessagingPage() {
               <small className="field-hint">لینک فراموشی رمز فقط به این شناسه ارسال می‌شود.</small>
             </label>
             <label>
+              آیدی ادمین پاسخگویی تلگرام (دکمه استعلام و خرید)
+              <input
+                dir="ltr"
+                value={draft.telegramAdminUsername}
+                placeholder={messaging.telegram?.adminUsername || 'مثال: salimvandiradmin2'}
+                onChange={(event) => updateDraft('telegramAdminUsername', event.target.value)}
+              />
+              <small className="field-hint">نام کاربری ادمین تلگرام برای لینک «🛒 استعلام و خرید» در کانال (بدون @)</small>
+            </label>
+            <label>
               آدرس تلگرام — وورکر کلادفلر (برای انتشار در کانال)
               <input
                 dir="ltr"
@@ -356,6 +387,16 @@ export function MessagingPage() {
                 placeholder="مثال: 123456789"
                 onChange={(event) => updateDraft('baleBotId', event.target.value)}
               />
+            </label>
+            <label>
+              آیدی ادمین پاسخگویی بله (دکمه استعلام و خرید)
+              <input
+                dir="ltr"
+                value={draft.baleAdminUsername}
+                placeholder={messaging.bale?.adminUsername || 'مثال: salimvandiradmin2'}
+                onChange={(event) => updateDraft('baleAdminUsername', event.target.value)}
+              />
+              <small className="field-hint">نام کاربری ادمین بله برای لینک «🛒 استعلام و خرید» در کانال (بدون @)</small>
             </label>
             <label>
               API Access Key سرویس سفیر بله

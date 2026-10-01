@@ -19,6 +19,8 @@ export type ProductPostInput = {
   imageUrl?: string | null;
   siteUrl: string;
   adminUsername: string;
+  telegramAdminUsername?: string;
+  baleAdminUsername?: string;
 };
 
 export type PublishChannelResult = {
@@ -109,11 +111,15 @@ export function buildProductKeyboard(
   platform: SocialPlatform,
 ): SocialButton[][] {
   const isTg = platform === 'telegram';
+  const customAdmin = isTg ? post.telegramAdminUsername : post.baleAdminUsername;
+  const rawAdmin = customAdmin?.trim() || post.adminUsername?.trim() || DEFAULT_SOCIAL_ADMIN_USERNAME;
+  const cleanAdmin = rawAdmin.replace(/^@+/, '').trim();
+
   const rows: SocialButton[][] = [
     [
       {
         text: '🛒 استعلام و خرید',
-        url: adminPmUrl(platform, post.adminUsername),
+        url: adminPmUrl(platform, cleanAdmin),
         ...(isTg ? { style: 'success' as const } : {}),
       },
     ],
@@ -240,6 +246,8 @@ export class SocialPublisherService {
       imageUrl: image ? `${siteUrl}${image.path}` : null,
       siteUrl,
       adminUsername: env.SOCIAL_ADMIN_USERNAME ?? DEFAULT_SOCIAL_ADMIN_USERNAME,
+      telegramAdminUsername: env.TELEGRAM_ADMIN_USERNAME,
+      baleAdminUsername: env.BALE_ADMIN_USERNAME,
     };
     const telegramCaption = buildProductCaption(post, 'telegram');
     const baleCaption = buildProductCaption(post, 'bale');

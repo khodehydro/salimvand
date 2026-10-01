@@ -111,6 +111,19 @@ describe('product post content', () => {
     expect(aparatUrl('zz9')).toBe('https://www.aparat.com/v/zz9');
   });
 
+  it('uses custom admin usernames per platform and strips leading @', () => {
+    const customAdminPost = {
+      ...post,
+      telegramAdminUsername: '@custom_tg_admin',
+      baleAdminUsername: 'custom_bale_admin',
+    };
+    const tgButtons = buildProductKeyboard(customAdminPost, 'telegram');
+    expect(tgButtons[0][0].url).toBe('https://t.me/custom_tg_admin');
+
+    const baleButtons = buildProductKeyboard(customAdminPost, 'bale');
+    expect(baleButtons[0][0].url).toBe('https://ble.ir/custom_bale_admin');
+  });
+
   it('drops the video button when the product has no Aparat video', () => {
     const rows = buildProductKeyboard({ ...post, aparatVideoId: null }, 'telegram');
     expect(rows).toHaveLength(2);
