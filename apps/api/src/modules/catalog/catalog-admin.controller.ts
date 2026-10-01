@@ -101,7 +101,7 @@ export class CatalogAdminController {
   }
 
   /** Publishes the product announcement to the Telegram/Bale channels. */
-  @Roles('manager')
+  @Roles('manager', 'warehouse', 'seller')
   @Post(':id/publish')
   async publish(@Param('id') id: string) {
     return { ok: true, data: await this.social.publishProduct(id) };

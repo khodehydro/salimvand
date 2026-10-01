@@ -71,4 +71,24 @@ describe('InventoryController', () => {
     expect(updateItem).toHaveBeenCalledWith('item-1', { minStock: 5 }, 'user-1');
     expect(reconciliation).toHaveBeenCalled();
   });
+
+  it('allows warehouse, manager, and seller to publish item to channels', async () => {
+    expect(Reflect.getMetadata(ROLES_KEY, InventoryController.prototype.publishItem)).toEqual([
+      'manager',
+      'warehouse',
+      'seller',
+    ]);
+    const publishProduct = vi.fn(async (id: string) => ({
+      telegram: { ok: true },
+      bale: { ok: true },
+      caption: 'caption',
+    }));
+    const controller = new InventoryController({} as never, { publishProduct } as never);
+    const res = await controller.publishItem('item-1');
+    expect(res).toEqual({
+      ok: true,
+      data: { telegram: { ok: true }, bale: { ok: true }, caption: 'caption' },
+    });
+    expect(publishProduct).toHaveBeenCalledWith('item-1');
+  });
 });

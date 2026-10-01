@@ -176,14 +176,32 @@ export class SocialPublisherService {
     );
   }
 
-  async publishProduct(productId: string): Promise<PublishResult> {
-    const product = await this.prisma.product.findUnique({
-      where: { id: productId },
+  async publishProduct(productIdOrItemId: string): Promise<PublishResult> {
+    let product = await this.prisma.product.findUnique({
+      where: { id: productIdOrItemId },
       include: {
         images: { orderBy: [{ isPrimary: 'desc' }, { sort: 'asc' }], take: 1 },
         compatibilities: { include: { model: { include: { make: true } }, trim: true } },
       },
     });
+
+    if (!product && this.prisma?.inventoryItem) {
+      // In case an inventory item ID was passed from warehouse list / mobile client
+      const item = await this.prisma.inventoryItem.findUnique({
+        where: { id: productIdOrItemId },
+        select: { productId: true },
+      });
+      if (item?.productId) {
+        product = await this.prisma.product.findUnique({
+          where: { id: item.productId },
+          include: {
+            images: { orderBy: [{ isPrimary: 'desc' }, { sort: 'asc' }], take: 1 },
+            compatibilities: { include: { model: { include: { make: true } }, trim: true } },
+          },
+        });
+      }
+    }
+
     if (!product || product.deletedAt) throw new NotFoundException('محصول پیدا نشد');
 
     const env = await this.messagingEnv();

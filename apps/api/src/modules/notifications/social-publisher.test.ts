@@ -269,4 +269,42 @@ describe('SocialPublisherService', () => {
       global.fetch = originalFetch;
     }
   });
+
+  it('resolves product by inventory item ID when itemId is passed from warehouse list', async () => {
+    process.env.TELEGRAM_BOT_TOKEN = 'tg-token';
+    process.env.TELEGRAM_CHAT_ID = '-100';
+    delete process.env.BALE_BOT_TOKEN;
+    delete process.env.BALE_CHAT_ID;
+
+    const prisma = {
+      product: {
+        findUnique: vi.fn(async ({ where }: { where: { id: string } }) =>
+          where.id === 'p1' ? { ...product, images: [] } : null,
+        ),
+      },
+      inventoryItem: {
+        findUnique: vi.fn(async ({ where }: { where: { id: string } }) =>
+          where.id === 'item-10' ? { productId: 'p1' } : null,
+        ),
+      },
+      setting: { findUnique: vi.fn(async () => null) },
+      telegramLog: { create: async () => ({}) },
+    };
+    const originalFetch = global.fetch;
+    global.fetch = (async () =>
+      new Response(JSON.stringify({ ok: true }), { status: 200 })) as typeof fetch;
+    try {
+      const result = await serviceWith(prisma).publishProduct('item-10');
+      expect(result.telegram.ok).toBe(true);
+      expect(prisma.inventoryItem.findUnique).toHaveBeenCalledWith({
+        where: { id: 'item-10' },
+        select: { productId: true },
+      });
+      expect(prisma.product.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'p1' } }),
+      );
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
 });

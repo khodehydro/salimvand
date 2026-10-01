@@ -5,6 +5,7 @@ import {
   NotFoundException,
   OnModuleDestroy,
   OnModuleInit,
+  Optional,
 } from '@nestjs/common';
 import { Prisma, SyncOperationStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
@@ -12,6 +13,7 @@ import { InventoryService } from '../inventory/inventory.service';
 import { CatalogAdminService } from '../catalog/catalog-admin.service';
 import { InvoiceService } from '../invoice/invoice.service';
 import { PurchaseService } from '../suppliers/purchase.service';
+import { SocialPublisherService } from '../notifications/social-publisher.service';
 import { SYNC_CONFLICT_DECISIONS, validateSyncOperationEnvelope } from '@salimvand/shared';
 import {
   buildCustomerSyncPayload,
@@ -42,6 +44,7 @@ const RECOVERABLE_OPERATION_TYPES = [
   'purchase.pay',
   'product.create',
   'product.update',
+  'product.publish',
 ];
 
 type SyncOperationRow = {
@@ -88,6 +91,7 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
     private readonly catalog: CatalogAdminService,
     private readonly invoice: InvoiceService,
     private readonly purchases: PurchaseService,
+    @Optional() private readonly social?: SocialPublisherService,
   ) {}
 
   onModuleInit() {
@@ -657,6 +661,16 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
     }
     if (input.type === 'product.create')
       return this.catalog.create(payload, userId, undefined, input.operationId);
+    if (input.type === 'product.publish') {
+      const targetId =
+        (typeof payload.productId === 'string' && payload.productId) ||
+        (typeof payload.itemId === 'string' && payload.itemId) ||
+        (typeof payload.id === 'string' && payload.id) ||
+        '';
+      if (!targetId) throw new BadRequestException('شناسه محصول یا قلم انبار الزامی است');
+      if (!this.social) throw new BadRequestException('سرویس انتشار در دسترس نیست');
+      return this.social.publishProduct(targetId);
+    }
     if (input.type === 'product.update') {
       const productId = typeof payload.productId === 'string' ? payload.productId : '';
       if (!productId) throw new BadRequestException('productId عملیات الزامی است');

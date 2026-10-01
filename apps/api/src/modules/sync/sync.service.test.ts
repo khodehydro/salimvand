@@ -50,14 +50,16 @@ function makeService(overrides: Record<string, unknown> = {}) {
   const catalog = { create: vi.fn(), update: vi.fn() };
   const invoice = { create: vi.fn(), createCustomer: vi.fn(), pay: vi.fn() };
   const purchases = { create: vi.fn(), pay: vi.fn() };
+  const social = { publishProduct: vi.fn() };
   const service = new SyncService(
     prisma as never,
     inventory as never,
     catalog as never,
     invoice as never,
     purchases as never,
+    social as never,
   );
-  return { service, prisma, inventory, catalog, invoice, purchases };
+  return { service, prisma, inventory, catalog, invoice, purchases, social };
 }
 
 const OPERATION = {
@@ -523,6 +525,23 @@ describe('SyncService.applyOperation routing', () => {
       USER_ID,
       'android-device-meta-000001',
     );
+  });
+
+  it('routes product.publish with target product/item id to the social publisher', async () => {
+    const { service, social } = makeService();
+    social.publishProduct.mockResolvedValue({
+      caption: 'cap',
+      telegram: { ok: true },
+      bale: { ok: true },
+    });
+    const result = await service.queueOperation(USER_ID, {
+      operationId: 'android-device-publish-000001',
+      deviceId: 'android-device',
+      type: 'product.publish',
+      payload: { productId: 'p1' },
+    });
+    expect(result.data.status).toBe('applied');
+    expect(social.publishProduct).toHaveBeenCalledWith('p1');
   });
 
   it('rejects an unsupported operation type at the envelope level', async () => {

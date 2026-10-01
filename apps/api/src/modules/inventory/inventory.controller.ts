@@ -1,8 +1,10 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
   Get,
+  Optional,
   Param,
   Patch,
   Post,
@@ -16,6 +18,7 @@ import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
 import { RolesGuard } from '../../common/auth/roles.guard';
 import { Roles } from '../../common/auth/roles.decorator';
 import { InventoryService } from './inventory.service';
+import { SocialPublisherService } from '../notifications/social-publisher.service';
 import {
   AdjustInventoryDto,
   CreateInventoryItemDto,
@@ -28,7 +31,10 @@ import {
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('warehouse')
 export class InventoryController {
-  constructor(private readonly inventory: InventoryService) {}
+  constructor(
+    private readonly inventory: InventoryService,
+    @Optional() private readonly social?: SocialPublisherService,
+  ) {}
   @Get('summary') @Roles('manager', 'warehouse', 'accountant') summary() {
     return this.inventory.summary();
   }
@@ -75,6 +81,13 @@ export class InventoryController {
     @Req() request: AuthenticatedRequest,
   ) {
     return this.inventory.updateItem(id, body, request.user?.id);
+  }
+  /** Publishes product announcement for an inventory item to Telegram/Bale channels */
+  @Post('items/:id/publish')
+  @Roles('manager', 'warehouse', 'seller')
+  async publishItem(@Param('id') id: string) {
+    if (!this.social) throw new BadRequestException('سرویس انتشار در دسترس نیست');
+    return { ok: true, data: await this.social.publishProduct(id) };
   }
   @Post('items/:id/adjust') adjust(
     @Param('id') itemId: string,

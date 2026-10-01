@@ -254,6 +254,7 @@ export const SYNC_OPERATION_TYPES = [
   'inventory.update_metadata',
   'product.create',
   'product.update',
+  'product.publish',
   'invoice.create',
   'invoice.pay',
   'customer.create',
