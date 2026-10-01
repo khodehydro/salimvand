@@ -45,13 +45,56 @@ export function adminPmUrl(platform: SocialPlatform, username: string): string {
   return platform === 'telegram' ? `https://t.me/${username}` : `https://ble.ir/${username}`;
 }
 
+export function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 /** Caption of the channel post: name, code, vehicles, phone and address. */
-export function buildProductCaption(post: ProductPostInput): string {
-  const lines = [`🛠 ${post.name}`, '', `🔖 کد محصول: ${post.code}`];
-  if (post.vehicles.length) lines.push(`🚗 مناسب برای خودروهای: ${post.vehicles.join('، ')}`);
-  if (post.phones?.trim()) lines.push(`📞 ${post.phones.trim()}`);
-  if (post.address?.trim()) lines.push(`📍 ${post.address.trim()}`);
-  return lines.join('\n').slice(0, 1000);
+export function buildProductCaption(
+  post: ProductPostInput,
+  platform: SocialPlatform = 'telegram',
+): string {
+  const isTg = platform === 'telegram';
+  const escape = isTg ? escapeHtml : (s: string) => s;
+
+  // 1) Product specifications
+  const lines = [`🛠 ${escape(post.name)}`, '', `🔖 کد محصول: ${escape(post.code)}`];
+  if (post.vehicles.length) {
+    lines.push(`🚗 مناسب برای خودروهای: ${escape(post.vehicles.join('، '))}`);
+  }
+
+  // 2) Store info box (separated from specifications)
+  const hasStoreInfo = Boolean(post.phones?.trim() || post.address?.trim());
+  if (hasStoreInfo) {
+    lines.push('');
+    lines.push('──────────────');
+
+    if (post.phones?.trim()) {
+      const rawPhones = post.phones
+        .split(/[,،/\n]+/)
+        .map((p) => p.trim())
+        .filter(Boolean);
+
+      const formattedPhones = rawPhones.length
+        ? rawPhones
+            .map((phone) => (isTg ? `<code>${escapeHtml(phone)}</code>` : `\`${phone}\``))
+            .join('  |  ')
+        : isTg
+          ? `<code>${escapeHtml(post.phones.trim())}</code>`
+          : `\`${post.phones.trim()}\``;
+
+      lines.push(`📞 تماس (کلیک جهت کپی): ${formattedPhones}`);
+    }
+
+    if (post.address?.trim()) {
+      lines.push(`📍 ${escape(post.address.trim())}`);
+    }
+  }
+
+  return lines.join('\n').slice(0, 1024);
 }
 
 /**
@@ -180,13 +223,14 @@ export class SocialPublisherService {
       siteUrl,
       adminUsername: env.SOCIAL_ADMIN_USERNAME ?? DEFAULT_SOCIAL_ADMIN_USERNAME,
     };
-    const caption = buildProductCaption(post);
+    const telegramCaption = buildProductCaption(post, 'telegram');
+    const baleCaption = buildProductCaption(post, 'bale');
 
     const [telegram, bale] = await Promise.all([
-      this.send('telegram', env, post, caption),
-      this.send('bale', env, post, caption),
+      this.send('telegram', env, post, telegramCaption),
+      this.send('bale', env, post, baleCaption),
     ]);
-    return { caption, telegram, bale };
+    return { caption: telegramCaption, telegram, bale };
   }
 
   private async send(
@@ -206,6 +250,7 @@ export class SocialPublisherService {
     const method = post.imageUrl ? 'sendPhoto' : 'sendMessage';
     const payload = {
       chat_id: chatId,
+      ...(platform === 'telegram' ? { parse_mode: 'HTML' } : {}),
       ...(post.imageUrl ? { photo: post.imageUrl, caption } : { text: caption }),
       reply_markup: { inline_keyboard: buildProductKeyboard(post, platform) },
     };

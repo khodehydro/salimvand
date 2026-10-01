@@ -47,17 +47,48 @@ afterEach(() => {
 
 describe('product post content', () => {
   it('builds the caption with name, code, vehicles, phone and address', () => {
-    const caption = buildProductCaption(post);
+    const caption = buildProductCaption(post, 'telegram');
     expect(caption).toContain('🛠 لنت ترمز جلو');
     expect(caption).toContain('🔖 کد محصول: BRK-100');
     expect(caption).toContain('🚗 مناسب برای خودروهای: پژو ۲۰۶، پژو ۲۰۷');
-    expect(caption).toContain('📞 ۰۴۱-۳۲۳۴۵۶۷۸');
+    expect(caption).toContain('──────────────');
+    expect(caption).toContain('📞 تماس (کلیک جهت کپی): <code>۰۴۱-۳۲۳۴۵۶۷۸</code>');
     expect(caption).toContain('📍 میاندوآب، خیابان امام');
+
+    const baleCaption = buildProductCaption(post, 'bale');
+    expect(baleCaption).toContain('📞 تماس (کلیک جهت کپی): `۰۴۱-۳۲۳۴۵۶۷۸`');
   });
 
   it('omits the vehicles line when the product has no compatibility', () => {
     const caption = buildProductCaption({ ...post, vehicles: [] });
     expect(caption).not.toContain('مناسب برای خودروهای');
+  });
+
+  it('formats multiple phone numbers as copyable tags and separates store info box', () => {
+    const multiPhonePost = {
+      ...post,
+      phones: '۰۴۱-۳۲۳۴۵۶۷۸ / ۰۹۱۴۱۲۳۴۵۶۷',
+      name: 'فیلتر روغن <مخصوص>',
+    };
+    const tgCaption = buildProductCaption(multiPhonePost, 'telegram');
+    expect(tgCaption).toContain('🛠 فیلتر روغن &lt;مخصوص&gt;');
+    expect(tgCaption).toContain(
+      '📞 تماس (کلیک جهت کپی): <code>۰۴۱-۳۲۳۴۵۶۷۸</code>  |  <code>۰۹۱۴۱۲۳۴۵۶۷</code>',
+    );
+    expect(tgCaption).toContain('──────────────');
+
+    const baleCaption = buildProductCaption(multiPhonePost, 'bale');
+    expect(baleCaption).toContain(
+      '📞 تماس (کلیک جهت کپی): `۰۴۱-۳۲۳۴۵۶۷۸`  |  `۰۹۱۴۱۲۳۴۵۶۷`',
+    );
+  });
+
+  it('omits store info section when neither phone nor address exists', () => {
+    const noStorePost = { ...post, phones: '', address: '' };
+    const caption = buildProductCaption(noStorePost);
+    expect(caption).not.toContain('──────────────');
+    expect(caption).not.toContain('📞');
+    expect(caption).not.toContain('📍');
   });
 
   it('builds the inline keyboard per platform', () => {
@@ -190,6 +221,7 @@ describe('SocialPublisherService', () => {
       expect((calls[0].init.headers as Record<string, string>)['x-proxy-secret']).toBe('s3cret');
       const body = JSON.parse(String(calls[0].init.body)) as Record<string, unknown>;
       expect(body.chat_id).toBe('-1003798951709');
+      expect(body.parse_mode).toBe('HTML');
       expect(body.photo).toBe('https://salimvand.ir/uploads/products/x.jpg');
       expect(String(body.caption)).toContain('کد محصول: BRK-100');
       expect(String(body.caption)).toContain('پژو ۲۰۶ تیپ ۵');
