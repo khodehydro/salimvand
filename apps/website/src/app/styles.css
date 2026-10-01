@@ -52,6 +52,34 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: Vazirmatn, Tahoma, Arial, sans-serif;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+input,
+textarea {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+}
+img {
+  -webkit-user-drag: none;
+  -khtml-user-drag: none;
+  -moz-user-drag: none;
+  -o-user-drag: none;
+  user-drag: none;
+  -webkit-touch-callout: none;
+  pointer-events: none;
+}
+button,
+a,
+input,
+select,
+textarea {
+  pointer-events: auto;
 }
 .site-shell {
   max-width: 1280px;

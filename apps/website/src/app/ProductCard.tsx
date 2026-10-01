@@ -80,6 +80,7 @@ export function ProductCard({
               sizes="(max-width: 620px) 50vw, (max-width: 900px) 33vw, 25vw"
               alt={image.alt ?? product.name}
               loading="lazy"
+              draggable={false}
             />
           ) : (
             <span>قطعه خودرو</span>

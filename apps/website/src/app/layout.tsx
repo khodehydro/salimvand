@@ -69,6 +69,17 @@ const themeBootstrap =
 const scrollFlagBootstrap =
   "(function(){try{var e=document.documentElement;var u=function(){e.classList.toggle('is-scrolled',window.scrollY>80)};u();window.addEventListener('scroll',u,{passive:true});}catch(e){}})();";
 
+/**
+ * Protects public website media and content from downloading and copying:
+ * - Prevents contextmenu (right-click / long-press menus) outside form inputs
+ * - Prevents text copying / cutting outside form inputs
+ * - Prevents drag-and-drop of images to save them
+ * - Intercepts shortcuts: Ctrl/Cmd+S (save page), Ctrl/Cmd+U (view source),
+ *   Ctrl/Cmd+C (copy text outside form inputs).
+ */
+const contentProtectionBootstrap =
+  "(function(){try{var isEditable=function(e){var tag=(e.target&&e.target.tagName)?e.target.tagName.toUpperCase():'';return tag==='INPUT'||tag==='TEXTAREA'};document.addEventListener('contextmenu',function(e){if(!isEditable(e)){e.preventDefault();return false;}},{capture:true});document.addEventListener('copy',function(e){if(!isEditable(e)){e.preventDefault();return false;}},{capture:true});document.addEventListener('cut',function(e){if(!isEditable(e)){e.preventDefault();return false;}},{capture:true});document.addEventListener('dragstart',function(e){e.preventDefault();return false;},{capture:true});document.addEventListener('keydown',function(e){var mod=e.ctrlKey||e.metaKey;if(!mod)return;var k=(e.key||'').toLowerCase();if(k==='s'||k==='u'||(k==='c'&&!isEditable(e))){e.preventDefault();return false;}},{capture:true});}catch(e){}})();";
+
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const info = await getStoreInfo();
   const jsonLd = {
@@ -111,6 +122,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       <body>
         <script dangerouslySetInnerHTML={{ __html: themeBootstrap }} />
         <script dangerouslySetInnerHTML={{ __html: scrollFlagBootstrap }} />
+        <script dangerouslySetInnerHTML={{ __html: contentProtectionBootstrap }} />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
