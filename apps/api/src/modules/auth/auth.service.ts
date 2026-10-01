@@ -51,8 +51,14 @@ export class AuthService {
     if (user) {
       const setting = await this.prisma.setting.findUnique({ where: { key: 'integrations.messaging' } });
       const config = (setting?.value ?? {}) as { telegram?: { botToken?: string; passwordRecoveryChatId?: string; apiBase?: string; proxySecret?: string } };
-      const botToken = config.telegram?.botToken || process.env.TELEGRAM_BOT_TOKEN;
-      const chatId = config.telegram?.passwordRecoveryChatId || process.env.TELEGRAM_PASSWORD_RESET_CHAT_ID;
+      const botToken = (config.telegram?.botToken || process.env.TELEGRAM_BOT_TOKEN || '').trim();
+      const rawChatId = (config.telegram?.passwordRecoveryChatId || process.env.TELEGRAM_PASSWORD_RESET_CHAT_ID || '').trim();
+      // Normalize Persian/Arabic digits to ASCII digits and trim whitespace
+      const chatId = rawChatId
+        .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 1776))
+        .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 1632))
+        .trim();
+
       if (!botToken || !chatId) throw new BadRequestException('ربات تلگرام بازیابی پیکربندی نشده است');
       const raw = randomBytes(32).toString('hex');
       await this.prisma.passwordResetToken.deleteMany({ where: { userId: user.id, usedAt: null } });
@@ -60,11 +66,12 @@ export class AuthService {
       const site = process.env.ADMIN_URL ?? 'https://cms.salimvand.ir';
       const link = `${site}/reset-password?token=${raw}`;
       const base = (config.telegram?.apiBase || process.env.TELEGRAM_API_BASE || 'https://api.telegram.org').replace(/\/+$/, '');
+      const proxySecret = config.telegram?.proxySecret || process.env.TELEGRAM_PROXY_SECRET;
       const response = await fetch(`${base}/bot${botToken}/sendMessage`, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          ...(config.telegram?.proxySecret ? { 'x-proxy-secret': config.telegram.proxySecret } : {}),
+          ...(proxySecret ? { 'x-proxy-secret': proxySecret } : {}),
         },
         body: JSON.stringify({
           chat_id: chatId,
@@ -82,7 +89,21 @@ export class AuthService {
           },
         }),
       });
-      if (!response.ok) throw new BadRequestException('ارسال پیام تلگرام ناموفق بود');
+      if (!response.ok) {
+        const errorBody = (await response.json().catch(() => null)) as { description?: string } | null;
+        const detail = errorBody?.description?.trim();
+        let errorMsg = 'ارسال پیام تلگرام ناموفق بود';
+        if (detail) {
+          if (/chat not found/i.test(detail)) {
+            errorMsg = 'چت پیدا نشد — لطفاً ابتدا با اکانت تلگرام وارد ربات شوید و دکمه Start را بزنید، همچنین از صحت شناسه عددی اکانت مطمئن شوید.';
+          } else if (/can't initiate conversation/i.test(detail) || /bot was blocked/i.test(detail)) {
+            errorMsg = 'ربات اجازه ارسال پیام به شما را ندارد — لطفاً ابتدا در تلگرام وارد ربات شوید و دکمه Start را بزنید.';
+          } else {
+            errorMsg = `ارسال پیام تلگرام ناموفق بود: ${detail}`;
+          }
+        }
+        throw new BadRequestException(errorMsg);
+      }
     }
     return { ok: true, message: 'اگر کاربر معتبر باشد، لینک بازیابی برای مدیر ارسال می‌شود.' };
   }
