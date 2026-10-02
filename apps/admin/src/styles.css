@@ -10324,11 +10324,16 @@ html[data-theme='dark'] {
   white-space: nowrap;
 }
 .vh-kind button:hover { color: var(--sv-text); }
-.vh-kind button.active {
-  background: var(--sv-surface);
-  color: var(--sv-primary, var(--sv-link));
+/* تب فعالِ سگمنت: مثل بقیهٔ سگمنت‌های پنل (seg-tabs/tp-options) توپُرِ primary.
+   رنگ متن با !important، قانون نشتیِ سراسری «.active { color: var(--sv-on-brand) !important }»
+   را خنثی می‌کند تا متن روی پس‌زمینهٔ هم‌رنگ نیفتد. */
+.vh-kind button.active,
+.vh-kind button.active:hover {
+  background: var(--sv-primary);
+  color: var(--sv-primary-fg) !important;
+  border-color: var(--sv-primary);
   font-weight: 700;
-  box-shadow: 0 1px 4px rgba(11, 28, 47, .1);
+  box-shadow: 0 1px 4px rgba(11, 28, 47, .18);
 }
 .vh-submit {
   border: 0;
