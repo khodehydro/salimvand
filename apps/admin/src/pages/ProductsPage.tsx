@@ -618,7 +618,7 @@ export function ProductsPage() {
                       }
                     }}
                   >
-                    <span aria-hidden="true" />
+                    <span aria-hidden="true" className="sw-track" />
                     <span className="pt-switch-text">
                       {product.status === 'active' ? 'فعال' : 'غیرفعال'}
                     </span>
