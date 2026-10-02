@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from 'next';
-import { APP_NAME } from '@salimvand/shared';
 import { getStoreInfo } from './store-info';
 import 'vazirmatn/Vazirmatn-font-face.css';
 import './styles.css';
@@ -15,33 +14,35 @@ export const viewport: Viewport = {
 
 // The favicon is operator-configurable from the admin settings; read the same
 // store meta as the pages so the browser tab icon follows the panel.
+// The title/description come from the panel too (store.profile.seo) so the
+// browser tab is never a hard-coded string.
 export async function generateMetadata(): Promise<Metadata> {
   const info = await getStoreInfo();
-  const base = process.env.PUBLIC_SITE_URL ?? 'https://salimvand.ir';
-  const description =
-    'خرید و استعلام قیمت لوازم یدکی و قطعات خودرو، برندها و قطعات مناسب خودرو در میاندوآب از فروشگاه سلیم وند.';
+  const base = (process.env.PUBLIC_SITE_URL ?? 'https://salimvand.ir').replace(/\/+$/, '');
+  const title = `${info.seo.title} | ${info.name}`;
+  const description = info.seo.description;
   return {
     metadataBase: new URL(base),
-    title: { default: `${APP_NAME} | آذین خودرو`, template: `%s | ${APP_NAME}` },
+    title: { default: title, template: `%s | ${info.name}` },
     description,
     keywords: [
       'لوازم یدکی خودرو',
       'قطعات خودرو',
       'لوازم داخلی خودرو',
       'قطعات ماشین',
-      'قطعات خودرو میاندوآب',
-      'سلیم وند',
+      `قطعات خودرو ${info.address.split('،')[0]?.trim() || 'میاندوآب'}`,
+      info.name,
     ],
     alternates: { canonical: '/' },
     openGraph: {
       type: 'website',
       locale: 'fa_IR',
       url: base,
-      siteName: APP_NAME,
-      title: `${APP_NAME} | آذین خودرو`,
+      siteName: info.name,
+      title,
       description,
     },
-    twitter: { card: 'summary_large_image', title: APP_NAME, description },
+    twitter: { card: 'summary_large_image', title, description },
     robots: {
       index: true,
       follow: true,
@@ -50,7 +51,7 @@ export async function generateMetadata(): Promise<Metadata> {
     appleWebApp: {
       capable: true,
       statusBarStyle: 'black-translucent',
-      title: APP_NAME,
+      title: info.name,
     },
     icons: info.faviconUrl ? { icon: { url: info.faviconUrl } } : undefined,
   };
@@ -82,17 +83,38 @@ const contentProtectionBootstrap =
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const info = await getStoreInfo();
+  const base = (process.env.PUBLIC_SITE_URL ?? 'https://salimvand.ir').replace(/\/+$/, '');
+  // Social/channel links set in the panel; placeholders (bare t.me/ble.ir roots)
+  // are excluded so Google only indexes real, operator-configured profiles.
+  const sameAs = [info.telegram, info.bale, info.instagram].filter((link) => {
+    if (!link) return false;
+    try {
+      const url = new URL(link);
+      return Boolean(url.pathname.replace(/\/+$/, ''));
+    } catch {
+      return false;
+    }
+  });
+  const phones = info.phones.map((phone) => phone.replace(/[^0-9+]/g, '')).filter(Boolean);
   const jsonLd = {
     '@context': 'https://schema.org',
     '@graph': [
       {
         '@type': 'AutoPartsStore',
-        '@id': 'https://salimvand.ir/#store',
-        name: info.name || 'فروشگاه آذین خودرو سلیم وند',
-        alternateName: 'فروشگاه سلیم وند',
-        url: 'https://salimvand.ir',
+        '@id': `${base}/#store`,
+        name: info.name,
+        url: base,
         image: info.logoUrl || undefined,
-        telephone: info.phones[0] || undefined,
+        // Every configured phone number becomes indexable — the primary one
+        // also stays on `telephone` for rich-result compatibility.
+        telephone: phones[0] || undefined,
+        contactPoint: phones.map((phone) => ({
+          '@type': 'ContactPoint',
+          contactType: 'customer service',
+          telephone: phone,
+          areaServed: 'IR',
+          availableLanguage: 'fa-IR',
+        })),
         address: {
           '@type': 'PostalAddress',
           streetAddress: info.address || undefined,
@@ -100,18 +122,34 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           addressRegion: 'آذربایجان غربی',
           addressCountry: 'IR',
         },
+        // Panel-configured coordinates feed both the geo signal and maps.
+        geo:
+          info.nav.lat != null && info.nav.lng != null
+            ? { '@type': 'GeoCoordinates', latitude: info.nav.lat, longitude: info.nav.lng }
+            : undefined,
+        openingHoursSpecification:
+          info.open && info.close
+            ? {
+                '@type': 'OpeningHoursSpecification',
+                dayOfWeek: ['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday'],
+                opens: info.open,
+                closes: info.close,
+              }
+            : undefined,
+        // Telegram / Bale / Instagram channel IDs from the panel settings.
+        sameAs: sameAs.length ? sameAs : undefined,
         areaServed: ['میاندوآب', 'آذربایجان غربی', 'ایران'],
         priceRange: '$$',
       },
       {
         '@type': 'WebSite',
-        '@id': 'https://salimvand.ir/#website',
-        url: 'https://salimvand.ir',
-        name: 'فروشگاه سلیم وند',
+        '@id': `${base}/#website`,
+        url: base,
+        name: info.name,
         inLanguage: 'fa-IR',
         potentialAction: {
           '@type': 'SearchAction',
-          target: 'https://salimvand.ir/?q={search_term_string}',
+          target: `${base}/?q={search_term_string}`,
           'query-input': 'required name=search_term_string',
         },
       },

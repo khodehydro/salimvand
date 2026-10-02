@@ -45,6 +45,12 @@ export type StoreInfo = {
   bale: string;
   instagram: string;
   trustVideo: string | null;
+  /** Operator-editable search-engine metadata: the browser-tab title and the
+   * meta description Google shows. Empty panel values fall back to defaults. */
+  seo: {
+    title: string;
+    description: string;
+  };
   /** Site-wide price display switch from the panel: when true, product prices
    * render on the storefront; when false (default) prices stay inquiry-only. */
   pricing: { showPrices: boolean };
@@ -84,6 +90,11 @@ export async function getStoreInfo(): Promise<StoreInfo> {
     bale: 'https://ble.ir/',
     instagram: 'https://instagram.com/',
     trustVideo: null,
+    seo: {
+      title: 'قطعات یدکی خودرو',
+      description:
+        'کاتالوگ قطعات یدکی خودرو با اعلام وضعیت موجودی و برندهای موجود در میاندوآب.',
+    },
     pricing: { showPrices: false },
   };
   try {
@@ -130,6 +141,9 @@ export async function getStoreInfo(): Promise<StoreInfo> {
     const rawHeader = (profile.header ?? {}) as Record<string, unknown>;
     const headerText = (key: keyof StoreInfo['header'], fallbackValue: string) =>
       asString(rawHeader[key] ?? '').trim() || fallbackValue;
+    const rawSeo = (profile.seo ?? {}) as Record<string, unknown>;
+    const seoText = (key: keyof StoreInfo['seo'], fallbackValue: string) =>
+      asString(rawSeo[key] ?? '').trim() || fallbackValue;
     return {
       name: asString(profile.name ?? '') || fallback.name,
       phones,
@@ -167,6 +181,10 @@ export async function getStoreInfo(): Promise<StoreInfo> {
       telegram: telegramLink || fallback.telegram,
       bale: baleLink || fallback.bale,
       instagram: instagram || fallback.instagram,
+      seo: {
+        title: seoText('title', fallback.seo.title),
+        description: seoText('description', fallback.seo.description),
+      },
       // Operators paste either the bare hash or a full Aparat link — accept both.
       trustVideo: extractAparatVideoId(asString(data.trustVideo ?? '')) || null,
       pricing: {

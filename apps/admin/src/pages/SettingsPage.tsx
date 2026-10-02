@@ -80,6 +80,12 @@ type Settings = {
     navLng?: string;
     navApp?: string;
     instagram?: string;
+    /** Search-engine metadata: browser-tab title and the meta description
+     * Google shows. Empty values fall back to the site defaults. */
+    seo?: {
+      title?: string;
+      description?: string;
+    };
     header?: {
       tagline?: string;
       cta?: string;
@@ -119,6 +125,10 @@ const initial: Settings = {
     navLng: '',
     navApp: 'both',
     instagram: '',
+    seo: {
+      title: '',
+      description: '',
+    },
     header: {
       tagline: '',
       cta: '',
@@ -290,6 +300,17 @@ export function SettingsPage() {
       'store.profile': {
         ...current['store.profile'],
         header: { ...(current['store.profile']?.header ?? {}), [key]: value },
+      },
+    }));
+  const updateSeoText = (
+    key: keyof NonNullable<NonNullable<Settings['store.profile']>['seo']>,
+    value: string,
+  ) =>
+    setSettings((current) => ({
+      ...current,
+      'store.profile': {
+        ...current['store.profile'],
+        seo: { ...(current['store.profile']?.seo ?? {}), [key]: value },
       },
     }));
   const sendTest = async () => {
@@ -678,6 +699,34 @@ export function SettingsPage() {
                   />
                 </label>
               </div>
+                <div className="header-texts">
+                  <small>موتور جستجو (SEO) — عنوان تب مرورگر و توضیح گوگل؛ خالی بماند، پیش‌فرض استفاده می‌شود</small>
+                  <div className="two-fields">
+                    <label>
+                      عنوان تب مرورگر سایت (Title)
+                      <input
+                        value={settings['store.profile']?.seo?.title ?? ''}
+                        onChange={(e) => updateSeoText('title', e.target.value)}
+                        placeholder="قطعات یدکی خودرو | فروشگاه سلیم وند"
+                      />
+                      <small className="field-hint">
+                        همین متن در تب مرورگر و نتیجهٔ گوگل نمایش داده می‌شود. برای دیدن نتیجه، صفحهٔ
+                        سایت را یک‌بار رفرش کنید.
+                      </small>
+                    </label>
+                    <label>
+                      توضیح متا (Meta Description)
+                      <input
+                        value={settings['store.profile']?.seo?.description ?? ''}
+                        onChange={(e) => updateSeoText('description', e.target.value)}
+                        placeholder="کاتالوگ قطعات یدکی خودرو با اعلام وضعیت موجودی و برندهای موجود در میاندوآب."
+                      />
+                      <small className="field-hint">
+                        توضیحی که زیر نام سایت در نتایج جستجوی گوگل می‌آید (پیشنهاد: ۱۲۰ تا ۱۶۰ نویسه).
+                      </small>
+                    </label>
+                  </div>
+                </div>
               <div className="header-texts">
                 <small>متن‌های هدر سایت — خالی بماند، پیش‌فرض استفاده می‌شود</small>
                 <div className="two-fields">

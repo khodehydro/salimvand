@@ -117,9 +117,13 @@ const getMeta = async (): Promise<StoreMeta> => {
 };
 
 export async function generateMetadata() {
+  // The home title/description are operator-editable from the panel
+  // (Settings → Store information → SEO); store-info applies the fallbacks.
+  const info = await getStoreInfo();
   return {
-    title: 'قطعات یدکی خودرو',
-    description: 'کاتالوگ قطعات یدکی خودرو با اعلام وضعیت موجودی و برندهای موجود در میاندوآب.',
+    title: info.seo.title,
+    description: info.seo.description,
+    openGraph: { title: info.seo.title, description: info.seo.description },
   };
 }
 
