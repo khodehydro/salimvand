@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service';
+import { AnalyticsService } from '../analytics/analytics.service';
 import { formatJalaliDate } from '@salimvand/shared';
 
 type PublicProduct = {
@@ -19,7 +20,10 @@ type PublicProduct = {
 
 @Injectable()
 export class CatalogService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly analytics?: AnalyticsService,
+  ) {}
 
   async listPublicProducts(query: {
     q?: string;
@@ -70,6 +74,11 @@ export class CatalogService {
           }
         : {}),
     };
+    // Site analytics: a non-empty q is a catalog search — record the term
+    // (fire-and-forget; an analytics hiccup must never break the listing).
+    const searchTerm = query.q?.trim();
+    if (searchTerm)
+      void this.analytics?.record({ kind: 'search', path: '/catalog', term: searchTerm });
     const page = Math.max(1, query.page ?? 1);
     const pageSize = Math.min(50, Math.max(1, query.pageSize ?? 24));
     // Site-wide master switch (settings › نمایش قیمت در سایت): when off, prices
@@ -147,6 +156,14 @@ export class CatalogService {
     const result = await this.listPublicProducts({ slug, page: 1, pageSize: 1 });
     const product = result.data[0];
     if (!product) throw new NotFoundException('محصول پیدا نشد');
+    // Site analytics: every product-page render counts as one product view.
+    const productId = (product as { id?: string }).id;
+    if (productId)
+      void this.analytics?.record({
+        kind: 'product',
+        path: `/product/${encodeURIComponent(slug)}`,
+        productId,
+      });
     return { ok: true, data: product };
   }
 

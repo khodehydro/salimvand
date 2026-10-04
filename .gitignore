@@ -13,3 +13,6 @@ uploads/
 *.tsbuildinfo
 
 # GitHub Actions are source-controlled; local action caches are ignored separately.
+
+# Local preview mock (not part of the app)
+preview-mock.local.mjs

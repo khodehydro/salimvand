@@ -5,6 +5,7 @@ const allRoles: UserRole[] = ['super_admin', 'manager', 'seller', 'warehouse', '
 
 export const pageRoles: Record<AdminPage, readonly UserRole[]> = {
   dashboard: allRoles,
+  analytics: ['super_admin', 'manager'],
   products: ['super_admin', 'manager'],
   wholesale: ['super_admin', 'manager', 'wholesale'],
   invoices: ['super_admin', 'manager', 'seller', 'accountant'],

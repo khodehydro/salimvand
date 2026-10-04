@@ -18,6 +18,7 @@ import { InventoryPage } from './pages/InventoryPage';
 import { LabelsPage } from './pages/LabelsPage';
 import { ReferencesPage } from './pages/ReferencesPage';
 import { DashboardPage } from './pages/DashboardPage';
+import { AnalyticsPage } from './pages/AnalyticsPage';
 import { InvoicesPage } from './pages/InvoicesPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { SettingsPage } from './pages/SettingsPage';
@@ -39,6 +40,7 @@ import './styles.css';
 
 type NavIconName =
   | 'dashboard'
+  | 'analytics'
   | 'invoice'
   | 'customers'
   | 'inventory'
@@ -68,6 +70,7 @@ type NotificationItem = {
 function NavIcon({ name }: { name: NavIconName }) {
   const paths: Record<NavIconName, ReactNode> = {
     dashboard: <><rect x="4" y="4" width="6" height="6" rx="1" /><rect x="14" y="4" width="6" height="6" rx="1" /><rect x="4" y="14" width="6" height="6" rx="1" /><rect x="14" y="14" width="6" height="6" rx="1" /></>,
+    analytics: <><path d="M4 4v16h16" /><path d="M8 16v-5M12 16V7M16 16v-3M20 16V10" /></>,
     invoice: <><path d="M6 3h9l3 3v15H6z" /><path d="M15 3v4h4M9 12h6M9 16h6" /></>,
     customers: <><circle cx="9" cy="8" r="3" /><path d="M3 20v-1a6 6 0 0 1 12 0v1M16 5.5a3 3 0 0 1 0 5.5M18 15a4 4 0 0 1 3 4v1" /></>,
     inventory: <><path d="m4 8 8-4 8 4-8 4zM4 8v8l8 4 8-4V8M12 12v8" /></>,
@@ -88,6 +91,7 @@ function NavIcon({ name }: { name: NavIconName }) {
 }
 const navItems: NavItem[] = [
   { id: 'dashboard', label: 'داشبورد', icon: 'dashboard' },
+  { id: 'analytics', label: 'آمار و بازدیدها', icon: 'analytics' },
   { id: 'invoices', label: 'فروش و فاکتورها', icon: 'invoice' },
   { id: 'customers', label: 'مشتریان', icon: 'customers' },
   { id: 'inventory', label: 'انبار و موجودی', icon: 'inventory' },
@@ -109,7 +113,7 @@ const navItems: NavItem[] = [
 // the sidebar, mobile navigation and command palette use the same information
 // architecture as the UI reference.
 const navGroups: Array<{ label: string; ids: Page[] }> = [
-  { label: 'اصلی', ids: ['dashboard'] },
+  { label: 'اصلی', ids: ['dashboard', 'analytics'] },
   {
     label: 'فروشگاه',
     ids: [
@@ -129,6 +133,7 @@ const navGroups: Array<{ label: string; ids: Page[] }> = [
 ];
 const pageTitles: Record<Page, string> = {
   dashboard: 'داشبورد',
+  analytics: 'آمار و بازدیدها',
   messaging: 'پیامک و کانال\u200cها',
   products: 'کاتالوگ محصولات',
   wholesale: 'لیست محصولات (عمده)',
@@ -537,6 +542,8 @@ function App() {
         <PageErrorBoundary>
           {page === 'dashboard' ? (
             <DashboardPage {...dashboardAccess} onNavigate={navigate} />
+          ) : page === 'analytics' ? (
+            <AnalyticsPage />
           ) : page === 'products' ? (
             <ProductsPage />
           ) : page === 'wholesale' ? (

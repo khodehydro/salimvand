@@ -131,6 +131,7 @@ model Product {
   images                ProductImage[]
   compatibilities       ProductVehicleCompat[]
   inventoryItems        InventoryItem[]
+  visits                PageVisit[]
   createdAt             DateTime               @default(now()) @db.Timestamptz(6)
   updatedAt             DateTime               @updatedAt @db.Timestamptz(6)
   @@index([categoryId, deletedAt])
@@ -765,4 +766,25 @@ model SyncConflict {
   @@index([userId, status, createdAt])
   @@unique([operationId, status])
   @@map("sync_conflicts")
+}
+
+/// One row per public-site page view or catalog search. Powers the
+/// «آمار و بازدیدها» screen (daily/weekly/monthly traffic, most-viewed
+/// products and most-searched terms). Product views and searches are
+/// recorded API-side by the public catalog endpoints; generic page visits
+/// come from the storefront via POST /public/analytics/track.
+model PageVisit {
+  id        String   @id @default(uuid()) @db.Uuid
+  /// 'page' | 'product' | 'search'
+  kind      String   @db.VarChar(20)
+  path      String   @db.VarChar(300)
+  /// Search term — only for kind='search'.
+  term      String?  @db.VarChar(200)
+  productId String?  @db.Uuid
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  @@index([createdAt])
+  @@index([kind, createdAt])
+  @@index([productId, createdAt])
+  @@map("page_visits")
 }

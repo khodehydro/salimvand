@@ -3,6 +3,7 @@ import { getStoreInfo, telHref } from '../../store-info';
 import { PublicSubHeader, PublicFooter } from '../../PublicSubHeader';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
+import { trackVisit } from '../../analytics';
 
 const api = process.env.API_URL ?? 'https://api.salimvand.ir/api/v1';
 type VehicleModel = { id: string; name: string; makeName: string; slug: string };
@@ -85,6 +86,7 @@ export default async function VehiclePage({ params }: { params: Promise<{ slug: 
   const data = await getVehicle((await params).slug);
   const info = await getStoreInfo();
   if (!data) notFound();
+  trackVisit(`/vehicle/${encodeURIComponent(data.vehicle.slug)}`);
   const siteUrl = (process.env.PUBLIC_SITE_URL ?? 'https://salimvand.ir').replace(/\/$/, '');
   const canonicalUrl = `${siteUrl}/vehicle/${encodeURIComponent(data.vehicle.slug)}`;
   const jsonLd = {

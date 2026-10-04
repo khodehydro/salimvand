@@ -5,6 +5,7 @@ import { CategorySidebar, type CategoryItem } from '../../CategorySidebar';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { formatPersianNumber } from '@salimvand/shared';
+import { trackVisit } from '../../analytics';
 
 const api = process.env.API_URL ?? 'https://api.salimvand.ir/api/v1';
 
@@ -83,6 +84,7 @@ export default async function CategoryPage({ params }: { params: Promise<{ slug:
   const data = await getCategory((await params).slug);
   const info = await getStoreInfo();
   if (!data) notFound();
+  trackVisit(`/category/${encodeURIComponent(data.category.slug)}`);
 
   const siteUrl = (process.env.PUBLIC_SITE_URL ?? 'https://salimvand.ir').replace(/\/$/, '');
   const canonicalUrl = `${siteUrl}/category/${encodeURIComponent(data.category.slug)}`;

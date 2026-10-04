@@ -9,9 +9,10 @@ import { ReferenceService } from './reference.service';
 import { CompatibilityController } from './compatibility.controller';
 import { CompatibilityService } from './compatibility.service';
 import { ProductsBackupService } from './products-backup.service';
+import { AnalyticsModule } from '../analytics/analytics.module';
 
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, AnalyticsModule],
   controllers: [
     CatalogController,
     CatalogAdminController,

@@ -1,5 +1,6 @@
 import { PublicSubHeader, PublicFooter } from '../../PublicSubHeader';
 import type { Metadata } from 'next';
+import { trackVisit } from '../../analytics';
 export const metadata: Metadata = {
   title: 'فروش لوازم داخلی خودرو در میاندوآب',
   description:
@@ -7,6 +8,7 @@ export const metadata: Metadata = {
   alternates: { canonical: '/location/miandoab' },
 };
 export default function MiandoabPage() {
+  trackVisit('/location/miandoab');
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'AutoPartsStore',

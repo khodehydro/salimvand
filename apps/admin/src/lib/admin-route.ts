@@ -1,5 +1,6 @@
 export const pageIds = [
   'dashboard',
+  'analytics',
   'products',
   'wholesale',
   'inventory',

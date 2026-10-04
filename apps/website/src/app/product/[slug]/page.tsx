@@ -8,6 +8,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { formatPersianNumber, formatRial } from '@salimvand/shared';
 import { getStoreInfo, primaryPhone, telHref } from '../../store-info';
+import { trackVisit } from '../../analytics';
 
 const apiUrl = process.env.API_URL ?? 'https://api.salimvand.ir/api/v1';
 type Spec = { key?: string; label?: string; value?: string };
@@ -138,6 +139,7 @@ export async function generateMetadata({
 export default async function ProductPage({ params }: { params: Promise<{ slug: string }> }) {
   const [product, info] = await Promise.all([getProduct((await params).slug), getStoreInfo()]);
   if (!product) notFound();
+  trackVisit(`/product/${encodeURIComponent(product.slug)}`);
   const specs = normalizeSpecs(product.specs);
   const compatibilities = product.compatibilities ?? [];
   const siteUrl = (process.env.PUBLIC_SITE_URL ?? 'https://salimvand.ir').replace(/\/$/, '');

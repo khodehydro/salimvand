@@ -6,6 +6,7 @@ import { APP_NAME, STORE_BRAND, formatPersianNumber } from '@salimvand/shared';
 import { TrustVideo } from './TrustVideo';
 import { getStoreInfo, telHref, type StoreInfo } from './store-info';
 import { StoreContact } from './PublicSubHeader';
+import { trackVisit } from './analytics';
 
 const apiUrl = process.env.API_URL ?? 'https://api.salimvand.ir/api/v1';
 type Product = {
@@ -132,6 +133,7 @@ export default async function HomePage({
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
+  trackVisit('/');
   const params = await searchParams;
   const query = new URLSearchParams();
   for (const key of ['q', 'categoryId', 'vehicleModelId', 'vehicleTrimId', 'brandId', 'page'])
