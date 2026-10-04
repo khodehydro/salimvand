@@ -15,6 +15,7 @@ export class PublicAnalyticsController {
 
   @Post('track')
   async track(
+    @Query('path') queryPath?: string,
     @Body()
     body?: {
       path?: string;
@@ -23,13 +24,16 @@ export class PublicAnalyticsController {
       productId?: string;
     },
   ) {
+    // The storefront posts the path as a query param (keepalive POST with no
+    // body); other callers may use JSON — accept both.
+    const path = body?.path?.trim() || queryPath?.trim() || '';
     const kind = body?.kind === 'product' || body?.kind === 'search' ? body.kind : 'page';
-    if (!body?.path) return { ok: true, data: { recorded: false } };
+    if (!path) return { ok: true, data: { recorded: false } };
     await this.analytics.record({
       kind,
-      path: body.path,
-      term: body.term ?? null,
-      productId: body.productId ?? null,
+      path,
+      term: body?.term ?? null,
+      productId: body?.productId ?? null,
     });
     return { ok: true, data: { recorded: true } };
   }
