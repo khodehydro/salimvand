@@ -2,10 +2,14 @@ import { describe, expect, it, vi } from 'vitest';
 import { AnalyticsService } from './analytics.service';
 
 /** Minimal Prisma stub covering the aggregate surface the service uses. */
+type CreateVisitInput = {
+  data: { kind: string; path: string; term?: string | null; productId?: string | null };
+};
+
 function makePrisma(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     pageVisit: {
-      create: vi.fn(async () => ({})),
+      create: vi.fn(async (_input: CreateVisitInput) => ({})),
       count: vi.fn(async () => 3),
       groupBy: vi.fn(async () => []),
       ...(overrides.pageVisit as object),
@@ -27,8 +31,8 @@ describe('AnalyticsService', () => {
     await service.record({ kind: 'search', path: '/catalog', term: 'لنت جلو' });
     await service.record({ kind: 'product', path: '/product/x', productId: 'p1' });
     expect(prisma.pageVisit.create).toHaveBeenCalledTimes(3);
-    const first = prisma.pageVisit.create.mock.calls[0][0].data;
-    expect(first.path.length).toBeLessThanOrEqual(300);
+    const firstCall = prisma.pageVisit.create.mock.calls.at(0);
+    expect(firstCall?.at(0)?.data.path.length).toBeLessThanOrEqual(300);
 
     // Unknown kinds are ignored — the endpoint is public, so it must not be
     // able to create arbitrary rows.
