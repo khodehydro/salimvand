@@ -43,14 +43,21 @@ const SIZE_MM: Record<LabelSize, { w: number; h: number }> = {
 
 const ZOOMS = [2, 3, 4] as const;
 
-/** Two tabs on the labels page: barcoded product labels and shelf/placement
- * labels printed from the locations tree created in «انبار و موجودی». */
+/** Three tabs on the labels page: barcoded product labels, shelf labels and
+ * basket labels — the two placement tabs print from the locations tree
+ * created in «انبار و موجودی»; each basket gets exactly one label, like
+ * shelves. */
 const labelTabs = [
   { id: 'products', label: 'برچسب محصولات', hint: 'بارکد قابل اسکن برای هر کالای انبار' },
   {
     id: 'shelves',
-    label: 'برچسب قفسه‌ها و سبدها',
-    hint: 'نام و کد قفسه‌ها و سبدها — چاپ و نصب روی قفسه',
+    label: 'برچسب قفسه‌ها',
+    hint: 'نام و کد هر قفسه — چاپ و نصب روی قفسه',
+  },
+  {
+    id: 'baskets',
+    label: 'برچسب سبد‌ها',
+    hint: 'نام و کد هر سبد — یک برچسب برای هر سبد',
   },
 ] as const;
 type LabelTab = (typeof labelTabs)[number]['id'];
@@ -104,11 +111,9 @@ export function LabelsPage() {
   const [showMeta, setShowMeta] = useState(false);
   const [showFoot, setShowFoot] = useState(true);
   const [count, setCount] = useState('18');
-  // — تب برچسب قفسه‌ها و سبدها —
+  // — تب‌های برچسب قفسه‌ها و سبد‌ها —
   const [shelves, setShelves] = useState<ShelfRow[]>([]);
   const [baskets, setBaskets] = useState<ShelfRow[]>([]);
-  /** Which level of the placement tree the label tab is printing. */
-  const [placementKind, setPlacementKind] = useState<'shelf' | 'basket'>('shelf');
   const [shelfFilter, setShelfFilter] = useState('');
   const [selectedShelfId, setSelectedShelfId] = useState('');
   const [shelfName, setShelfName] = useState('');
@@ -242,22 +247,26 @@ export function LabelsPage() {
     setShelfWarehouse(row.warehouse);
   };
 
-  /** Switches between «قفسه» and «سبد» labels: the preview, the batch list and
-   * the selection all follow the chosen level. */
-  const switchPlacementKind = (kind: 'shelf' | 'basket') => {
-    if (kind === placementKind) return;
-    setPlacementKind(kind);
-    setShelfFilter('');
-    const rows = kind === 'basket' ? baskets : shelves;
+  /** Which level of the placement tree the active tab prints — the shelf tab
+   * prints shelves, the basket tab prints baskets. */
+  const placementKind: 'shelf' | 'basket' = tab === 'baskets' ? 'basket' : 'shelf';
+  const placementTab = tab !== 'products';
+
+  /** Moving between the shelf and basket tabs follows the chosen level: the
+   * batch selection starts with every row and the preview shows the first. */
+  useEffect(() => {
+    if (!placementTab) return;
+    const rows = placementKind === 'basket' ? baskets : shelves;
     setPicked(new Set(rows.map((row) => row.id)));
-    const first = rows[0];
-    if (first) loadShelf(first);
+    setShelfFilter('');
+    if (rows[0]) loadShelf(rows[0]);
     else {
       setSelectedShelfId('');
       setShelfName('');
       setShelfWarehouse('');
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, shelves, baskets]);
 
   const filtered = useMemo(() => {
     const query = filter.trim().toLocaleLowerCase();
@@ -383,23 +392,36 @@ export function LabelsPage() {
 
       <div className="page-title">
         <div>
-          <h1>{tab === 'shelves' ? 'برچسب قفسه‌ها و سبدها' : 'برچسب محصولات'}</h1>
-          <p className="muted">
+          <h1>
             {tab === 'shelves'
-              ? 'برچسب نام هر قفسه و هر سبد بر اساس درخت انبار تعریف‌شده — چاپ کنید و روی قفسه یا سبد نصب کنید.'
+              ? 'برچسب قفسه‌ها'
+              : tab === 'baskets'
+                ? 'برچسب سبد‌ها'
+                : 'برچسب محصولات'}
+          </h1>
+          <p className="muted">
+            {placementTab
+              ? placementKind === 'basket'
+                ? 'برچسب نام هر سبد بر اساس درخت انبار — از هر سبد یک برچسب؛ چاپ کنید و روی سبد نصب کنید.'
+                : 'برچسب نام هر قفسه بر اساس درخت انبار — از هر قفسه یک برچسب؛ چاپ کنید و روی قفسه نصب کنید.'
               : 'برچسب آماده برای هر کالای انبار — با بارکد قابل اسکن، در سه اندازه و سه سبک؛ انتخاب محصول، تعداد و چاپ برگهٔ A4.'}
           </p>
         </div>
         <div className="page-h-tools">
-          {tab === 'shelves' ? (
+          {placementTab ? (
             <>
-              <span className="count">{persianDigits(shelves.length)} قفسه</span>
+              <span className="count">
+                {placementKind === 'basket'
+                  ? `${persianDigits(baskets.length)} سبد`
+                  : `${persianDigits(shelves.length)} قفسه`}
+              </span>
               <button
                 className="button-primary"
                 onClick={printShelfBatch}
                 disabled={!pickedShelves.length}
               >
-                ⎙ خروجی PDF قفسه‌ها ({persianDigits(pickedShelves.length)} قفسه)
+                ⎙ خروجی PDF {placementKind === 'basket' ? 'سبد' : 'قفسه'}‌ها (
+                {persianDigits(pickedShelves.length)} {placementKind === 'basket' ? 'سبد' : 'قفسه'})
               </button>
             </>
           ) : (
@@ -728,7 +750,7 @@ export function LabelsPage() {
         </div>
       )}
 
-      {tab === 'shelves' && (
+      {placementTab && (
         <div className="labels-layout">
           {/* ——— تنظیمات برچسب قفسه ——— */}
           <aside className="lbl-side">
@@ -739,30 +761,6 @@ export function LabelsPage() {
               </div>
               <div className="lbl-card-b">
                 <div className="lbl-field">
-                  <label>نوع برچسب</label>
-                  <div className="seg lbl-seg">
-                    <button
-                      type="button"
-                      className={placementKind === 'shelf' ? 'on' : ''}
-                      onClick={() => switchPlacementKind('shelf')}
-                    >
-                      قفسه
-                    </button>
-                    <button
-                      type="button"
-                      className={placementKind === 'basket' ? 'on' : ''}
-                      onClick={() => switchPlacementKind('basket')}
-                    >
-                      سبد
-                    </button>
-                  </div>
-                  <small className="lbl-hint">
-                    {placementKind === 'basket'
-                      ? `${persianDigits(baskets.length)} سبد — برچسب هر سبد نام سبد و قفسهٔ آن را نشان می‌دهد`
-                      : `${persianDigits(shelves.length)} قفسه — برچسب هر قفسه نام قفسه و انبار آن را نشان می‌دهد`}
-                  </small>
-                </div>
-                <div className="lbl-field">
                   <label>{placementKind === 'basket' ? 'انتخاب سبد' : 'انتخاب قفسه از انبار'}</label>
                   <input
                     placeholder="جست‌وجوی نام، کد یا انبار…"
@@ -772,7 +770,7 @@ export function LabelsPage() {
                   <select
                     value={selectedShelfId}
                     onChange={(event) => {
-                      const row = shelves.find((entry) => entry.id === event.target.value);
+                      const row = placementRows.find((entry) => entry.id === event.target.value);
                       if (row) loadShelf(row);
                     }}
                   >
