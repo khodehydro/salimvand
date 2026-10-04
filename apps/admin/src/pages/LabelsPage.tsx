@@ -159,6 +159,11 @@ export function LabelsPage() {
       .then((result) => {
         const shelfRows: ShelfRow[] = [];
         const basketRows: ShelfRow[] = [];
+        // The API returns every location BOTH nested (warehouse → shelf →
+        // basket) and flat at the top level — each node can therefore be
+        // seen up to three times during the walk. Without this guard the
+        // batch print produced one label per copy (۳ برگه از هر سبد!).
+        const seen = new Set<string>();
         const walk = (
           nodes: LocationNode[],
           warehouse: string,
@@ -166,6 +171,8 @@ export function LabelsPage() {
           nested: boolean,
         ) => {
           for (const node of nodes) {
+            if (seen.has(node.id)) continue;
+            seen.add(node.id);
             if (node.type === 'warehouse') {
               walk(node.children ?? [], node.name, shelf, true);
               continue;
@@ -182,19 +189,13 @@ export function LabelsPage() {
               });
               continue;
             }
-            // The API returns every location flat at the top level too — a
-            // shelf that already has a parent is counted through its
-            // warehouse's children; pushing it again here would print every
-            // label twice. Only nested shelves and parentless legacy rows count.
-            if (nested || !node.parent) {
-              shelfRows.push({
-                id: node.id,
-                name: node.name,
-                code: node.code,
-                warehouse,
-                items: node._count?.items ?? 0,
-              });
-            }
+            shelfRows.push({
+              id: node.id,
+              name: node.name,
+              code: node.code,
+              warehouse,
+              items: node._count?.items ?? 0,
+            });
             walk(node.children ?? [], warehouse, node.name, true);
           }
         };

@@ -497,13 +497,14 @@ export const LABEL_CSS = `
 .lb.navy .sl-name{color:#fff}
 .lb.navy .sl-sub{color:#bcd7f5}
 
-.lb.s-50x30 .sl-name{font-size:5mm}
+/* نام سبد/قفسه عنصر اصلی برچسب است — درشت تا از فاصلهٔ چند متری خوانده شود. */
+.lb.s-50x30 .sl-name{font-size:6.4mm}
 .lb.s-50x30 .sl-sub{font-size:1.9mm}
-.lb.s-60x40 .sl-name{font-size:6.5mm}
+.lb.s-60x40 .sl-name{font-size:8.4mm}
 .lb.s-60x40 .sl-sub{font-size:2.2mm}
-.lb.s-40x60 .sl-name{font-size:5.2mm}
+.lb.s-40x60 .sl-name{font-size:6.8mm}
 .lb.s-40x60 .sl-sub{font-size:2mm}
-.lb.s-38x22 .sl-name{font-size:3.6mm;-webkit-line-clamp:1}
+.lb.s-38x22 .sl-name{font-size:4.6mm;-webkit-line-clamp:1}
 .lb.s-38x22 .sl-sub{font-size:1.5mm}
 `;
 
