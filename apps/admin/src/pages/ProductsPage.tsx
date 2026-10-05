@@ -666,6 +666,34 @@ export function ProductsPage() {
                       ) : null}
                     </span>
                   </span>
+                  {items.length > 0 && (
+                    <div className="pt-line-summary">
+                      {items.map((entry) => (
+                        <span
+                          className="pt-line-chip"
+                          key={`sum-${entry.id}`}
+                          dir="rtl"
+                        >
+                          <b>{entry.brand?.name ?? 'بدون برند'}</b>
+                          <span className="pt-line-price">
+                            خرید {formatRial(Number(entry.purchasePrice ?? 0))}
+                          </span>
+                          <span className="pt-line-price">
+                            فروش {formatRial(Number(entry.salePrice))}
+                          </span>
+                          <span className="pt-line-qty">
+                            تعداد {entry.quantity.toLocaleString('fa-IR')}
+                          </span>
+                          <span className="pt-line-place">
+                            {entry.location
+                              ? locationChip(entry.location)
+                              : 'بدون قفسه'}
+                            {entry.basket ? ` · ${basketLabel(entry.basket)}` : ''}
+                          </span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="pt-cell pt-category" role="cell" data-label="دسته‌بندی">
                   <span className="chip">{product.category?.name ?? 'بدون دسته'}</span>
@@ -867,7 +895,8 @@ export function ProductsPage() {
                     </>
                   ) : (
                     <p className="pt-items-empty muted">
-                      برای این محصول هنوز قلم انباری (برند/قیمت) ثبت نشده است.
+                      برای این محصول قلم انباری ثبت نشده — با دکمهٔ «ویرایش»،
+                      زبانهٔ «قلم‌ها، قیمت و موجودی» را پر کنید.
                     </p>
                   )}
                 </div>

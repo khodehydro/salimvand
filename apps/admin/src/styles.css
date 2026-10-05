@@ -10631,3 +10631,40 @@ html[data-theme='dark'] {
   color: var(--sv-link);
   font-weight: 700;
 }
+
+/* ── Level-1 per-line summary: buy/sale price, quantity and placement of
+   every stock line visible directly on the product row (the operator must
+   never scroll or expand to see قیمت/قفسه/تعداد). ── */
+.pt-line-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+  width: 100%;
+}
+.pt-line-chip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 4px 8px;
+  border: 1px dashed var(--sv-border-2);
+  border-radius: 8px;
+  background: var(--sv-surface-2);
+  font-size: 11px;
+  color: var(--sv-text-2);
+}
+.pt-line-chip > b {
+  color: var(--sv-text-1);
+}
+.pt-line-price {
+  font-weight: 600;
+  color: var(--sv-text-1);
+}
+.pt-line-qty {
+  font-weight: 700;
+  color: var(--sv-link);
+}
+.pt-line-place {
+  color: var(--sv-text-3);
+}

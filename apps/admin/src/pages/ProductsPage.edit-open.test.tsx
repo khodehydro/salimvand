@@ -5,6 +5,7 @@
  * path reported broken by operators («دکمهٔ ویرایش کار نمی‌کند») — a silent
  * failure here used to be invisible because openEditor had no catch.
  */
+import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ProductsPage } from './ProductsPage';
@@ -126,6 +127,79 @@ describe('ProductsPage edit button', () => {
     expect(
       await screen.findByText(/ویرایشگر با اطلاعات لیست باز شد؛ دریافت کامل اطلاعات محصول ناموفق بود/),
     ).toBeTruthy();
+  });
+
+  it('shows price, quantity and shelf of a NO-BRAND line directly on the product row', async () => {
+    mockApi = vi.fn((path: string) => {
+      if (path === `/products/${row.id}`)
+        return Promise.resolve({
+          ok: true,
+          data: {
+            ...detail,
+            inventoryItems: [
+              {
+                ...detail.inventoryItems[0],
+                brandId: null,
+                brand: null,
+                location: { id: '88888888-8888-4888-8888-888888888888', code: '1.1', name: 'قفسه ۱.۱' },
+              },
+            ],
+          },
+        });
+      if (path === '/products')
+        return Promise.resolve({
+          ok: true,
+          data: [
+            {
+              ...row,
+            inventoryItems: [
+              {
+                id: '22222222-2222-4222-8222-222222222222',
+                quantity: 5,
+                minStock: 2,
+                salePrice: '1250000',
+                purchasePrice: '800000',
+                barcode: '6001230000011',
+                brand: null,
+                location: { id: '88888888-8888-4888-8888-888888888888', code: '1.1', name: 'قفسه ۱.۱' },
+                basket: null,
+              },
+            ],
+            },
+          ],
+        });
+      return defaultRouting(path);
+    });
+    window.location.hash = '#/products';
+    render(<ProductsPage />);
+
+    expect(await screen.findByText('لنت جلو پژو ۲۰۶')).toBeTruthy();
+    // Every number the operator cares about, at level 1, for a brand-less line.
+    expect(screen.getAllByText('بدون برند').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/خرید/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/۸۰۰٬۰۰۰/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/۱٬۲۵۰٬۰۰۰/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/تعداد/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/(^|\s)1\.1(\s|$)/).length).toBeGreaterThan(0);
+  });
+
+  it('mounts the editor inside a fixed popup backdrop, not inline in the list', async () => {
+    mockApi = vi.fn((path: string) => defaultRouting(path));
+    window.location.hash = '#/products';
+    render(<ProductsPage />);
+
+    expect(await screen.findByText('لنت جلو پژو ۲۰۶')).toBeTruthy();
+    fireEvent.click(screen.getAllByText('ویرایش')[0]);
+    const dialog = await screen.findByRole('dialog', { name: /ویرایش لنت جلو پژو ۲۰۶/ });
+    // Popup semantics: the dialog's container IS the modal-backdrop element.
+    expect(dialog.parentElement?.className).toContain('modal-backdrop');
+    // Regression guard for the old inline-editor override: the stylesheet
+    // must keep .modal-backdrop fixed and must NOT force it static inside
+    // .products-page (that turned the popup into a bottom-of-page block).
+    const css = readFileSync('src/styles.css', 'utf8');
+    expect(css).toMatch(/\.modal-backdrop\s*{[^}]*position:\s*fixed/s);
+    expect(css).not.toMatch(/\.products-page > \.modal-backdrop[\s\S]{0,200}position:\s*static/);
+    expect(css).not.toContain('.products-page:has(> .modal-backdrop) > .product-list');
   });
 
   it('opens the editor instantly from the row while the detail GET is in flight', async () => {
