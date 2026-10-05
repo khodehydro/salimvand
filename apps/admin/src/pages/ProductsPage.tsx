@@ -52,6 +52,8 @@ type ProductDetail = {
   seoTitle?: string | null;
   seoDescription?: string | null;
   seoKeywords?: string[];
+  /** Optimistic shell built from the list row before the detail GET lands. */
+  partial?: boolean;
   category?: { id: string; name: string };
   images?: Array<{
     id: string;
@@ -163,19 +165,65 @@ export function ProductsPage() {
     await load();
     return fresh.data;
   };
+  /** Optimistic shell from the list row: the editor opens INSTANTLY (the
+   *  reported «دکمهٔ ویرایش کار نمی‌کند» felt dead during two sequential
+   *  GETs) and the detail GET overwrites it on arrival. Tabs that need ids
+   *  the list does not carry (stock lines, compatibilities) stay empty until
+   *  the detail lands; a failed detail GET keeps the shell open + noticed. */
+  const rowToDraft = (row: ProductRow): ProductDetail => {
+    const categoryId = categories.find((entry) => entry.name === row.category?.name)?.id;
+    return {
+      id: row.id,
+      name: row.name,
+      code: row.code,
+      slug: row.slug,
+      status: row.status,
+      priceDisplay: 'inherit',
+      description: null,
+      partNumber: row.partNumber ?? null,
+      supplierId: row.supplier?.id ?? null,
+      supplier: row.supplier ?? null,
+      aparatVideoId: null,
+      seoTitle: null,
+      seoDescription: null,
+      seoKeywords: row.seoKeywords ?? [],
+      ...(categoryId ? { category: { id: categoryId, name: row.category?.name ?? '' } } : {}),
+      images: (row.images ?? []).map((image, index) => ({
+        id: `row-${index}`,
+        path: image.path,
+        alt: image.alt ?? null,
+        isPrimary: image.isPrimary,
+        sort: index,
+      })),
+      compatibilities: [],
+      inventoryItems: [],
+      partial: true,
+    };
+  };
   /** Opens the editor for a product — refresh() alone only updates an
    *  already-open draft, so every entry point (row button, deep link) must
    *  set the draft explicitly. A failed load used to swallow the error and
-   *  the button just looked dead; now the operator sees WHY it failed. */
-  const openEditor = (id: string) =>
+   *  the button just looked dead; now the shell stays open and the reason
+   *  is shown. */
+  const openEditor = (id: string) => {
+    const row = products.find((entry) => entry.id === id);
+    if (row) {
+      setTab('basic');
+      setDraft(rowToDraft(row));
+    }
     void refresh(id)
       .then((fresh) => {
         setTab('basic');
         setDraft(fresh);
       })
       .catch((error: Error) =>
-        setMessage(`باز کردن ویرایشگر محصول ناموفق بود: ${error.message}`),
+        setMessage(
+          row
+            ? `ویرایشگر با اطلاعات لیست باز شد؛ دریافت کامل اطلاعات محصول ناموفق بود: ${error.message}`
+            : `باز کردن ویرایشگر محصول ناموفق بود: ${error.message}`,
+        ),
       );
+  };
 
   // Deep link from the global palette (#/products?edit=<id>) opens the editor.
   useEffect(() => {
@@ -772,7 +820,7 @@ export function ProductsPage() {
 
       {draft && (
         <ProductEditor
-          key={draft.id}
+          key={draft.partial ? `${draft.id}|partial` : draft.id}
           product={draft}
           tab={tab}
           setTab={setTab}
@@ -1209,6 +1257,9 @@ function ProductEditor({
         </div>
 
         <div className="editor-body">
+          {product.partial && (
+            <div className="notice">در حال دریافت کامل اطلاعات محصول…</div>
+          )}
           {tab === 'basic' && (
             <form
               className="product-form"
