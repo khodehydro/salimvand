@@ -30,6 +30,7 @@ import { AuditLogsPage } from './pages/AuditLogsPage';
 import { hashForPage, pageFromHash, type AdminPage as Page } from './lib/admin-route';
 import {
   canAccessPage,
+  catalogCapabilities,
   customerCapabilities,
   dashboardCapabilities,
   invoiceCapabilities,
@@ -364,6 +365,7 @@ function App() {
   const dashboardAccess = dashboardCapabilities(role);
   const invoiceAccess = invoiceCapabilities(role);
   const customerAccess = customerCapabilities(role);
+  const catalogAccess = catalogCapabilities(role);
   const exportLabel = page === 'reports' ? 'گزارش' : page === 'inventory' ? 'انبار' : '';
   const exportPath = page === 'reports' ? '/reports/sales/export' : '/reports/inventory/export';
   const exportFile = page === 'reports' ? 'salimvand-sales.csv' : 'salimvand-inventory.csv';
@@ -563,8 +565,10 @@ function App() {
             <AnalyticsPage />
           ) : page === 'products' || page === 'inventory' ? (
             <CatalogPage
-              tab={page === 'inventory' ? 'inventory' : 'products'}
-              onTab={(next) => navigate(next)}
+              canManageProducts={catalogAccess.canManageProducts}
+              canManagePlacements={catalogAccess.canManagePlacements}
+              canExportReports={catalogAccess.canExportReports}
+              canAdjustStock={catalogAccess.canAdjustStock}
             />
           ) : page === 'wholesale' ? (
             <WholesalePage />

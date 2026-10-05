@@ -1,7 +1,14 @@
 import type { UserRole } from '@salimvand/shared';
 import type { AdminPage } from './admin-route';
 
-const allRoles: UserRole[] = ['super_admin', 'manager', 'seller', 'warehouse', 'accountant', 'wholesale'];
+const allRoles: UserRole[] = [
+  'super_admin',
+  'manager',
+  'seller',
+  'warehouse',
+  'accountant',
+  'wholesale',
+];
 
 export const pageRoles: Record<AdminPage, readonly UserRole[]> = {
   dashboard: allRoles,
@@ -37,6 +44,26 @@ export function dashboardCapabilities(role: UserRole | '') {
     canViewHealth: isManager,
     canNotify: isManager,
     canBackup: isManager,
+  };
+}
+
+/**
+ * Capabilities of the unified «محصولات و انبار» screen. It is reachable by
+ * managers AND warehouse operators (#/inventory), but the API keeps product
+ * writes, the placement tree and the report exports manager-only — the list
+ * hides exactly those actions instead of letting them fail with 403.
+ */
+export function catalogCapabilities(role: UserRole | '') {
+  const isManager = role === 'manager' || role === 'super_admin';
+  return {
+    /** Create/edit/delete products, SEO keywords regeneration, backup & restore. */
+    canManageProducts: isManager,
+    /** Writes on the placement tree (انبار/قفسه/سبد). */
+    canManagePlacements: isManager,
+    /** CSV + accounting exports (ReportsController roles: manager, accountant). */
+    canExportReports: isManager || role === 'accountant',
+    /** Stock adjustments, bulk price changes and the item card. */
+    canAdjustStock: isManager || role === 'warehouse',
   };
 }
 

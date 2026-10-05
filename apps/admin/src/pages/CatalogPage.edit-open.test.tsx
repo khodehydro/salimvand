@@ -1,15 +1,20 @@
 // @vitest-environment jsdom
 /**
  * Guards the «ویرایش» chain end-to-end in the real component tree:
- * row button → GET /products/:id → ProductEditor modal. This is the exact
- * path reported broken by operators («دکمهٔ ویرایش کار نمی‌کند») — a silent
- * failure here used to be invisible because openEditor had no catch.
+ * row button → GET /products/:id → ProductEditor dialog. This is the exact
+ * path reported broken by operators («دکمهٔ ویرایش کار نمی‌کند»), and the
+ * dialog must appear as a FLOATING overlay — the editor used to be rendered
+ * inline at the end of the list («باید تا پایین لیست اسکرول کنیم»).
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { ProductsPage } from './ProductsPage';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { CatalogPage } from './CatalogPage';
+import { catalogCapabilities } from '../lib/admin-permissions';
 
-vi.mock('../lib/api', () => ({ api: (...args: unknown[]) => mockApi(...args as [string]), downloadFile: vi.fn() }));
+vi.mock('../lib/api', () => ({
+  api: (...args: unknown[]) => mockApi(...(args as [string])),
+  downloadFile: vi.fn(),
+}));
 
 const row = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -49,7 +54,11 @@ const detail = {
   compatibilities: [
     {
       id: '44444444-4444-4444-8444-444444444444',
-      model: { id: '55555555-5555-4555-8555-555555555555', name: '۲۰۶', make: { id: '66666666-6666-4666-8666-666666666666', name: 'پژو' } },
+      model: {
+        id: '55555555-5555-4555-8555-555555555555',
+        name: '۲۰۶',
+        make: { id: '66666666-6666-4666-8666-666666666666', name: 'پژو' },
+      },
       trim: null,
     },
   ],
@@ -86,25 +95,23 @@ afterEach(() => {
   window.location.hash = '';
 });
 
-describe('ProductsPage edit button', () => {
-  it('opens the product editor when ویرایش is clicked', async () => {
+describe('CatalogPage edit button', () => {
+  it('opens the product editor as a floating dialog when ویرایش is clicked', async () => {
     mockApi = vi.fn((path: string) => defaultRouting(path));
     window.location.hash = '#/products';
-    render(<ProductsPage />);
+    render(<CatalogPage {...catalogCapabilities('manager')} />);
 
-    // The row is rendered from the list payload.
     expect(await screen.findByText('لنت جلو پژو ۲۰۶')).toBeTruthy();
     const editButton = screen.getAllByText('ویرایش')[0];
     expect(editButton).toBeTruthy();
 
     fireEvent.click(editButton);
 
-    // The editor dialog mounts with the product identity — this is the
-    // assertion that failed (by not existing) when the button was «dead».
     const dialog = await screen.findByRole('dialog', { name: /ویرایش لنت جلو پژو ۲۰۶/ });
     expect(dialog).toBeTruthy();
+    // The dialog lives inside the fixed overlay — never inline in the list.
+    expect(dialog.closest('.modal-backdrop')).toBeTruthy();
     expect(await waitFor(() => screen.getByDisplayValue('لنت جلو پژو ۲۰۶'))).toBeTruthy();
-    // The detail GET ran exactly once for the editor.
     expect(mockApi).toHaveBeenCalledWith(`/products/${row.id}`);
   });
 
@@ -115,16 +122,16 @@ describe('ProductsPage edit button', () => {
         : defaultRouting(path),
     );
     window.location.hash = '#/products';
-    render(<ProductsPage />);
+    render(<CatalogPage {...catalogCapabilities('manager')} />);
 
     expect(await screen.findByText('لنت جلو پژو ۲۰۶')).toBeTruthy();
     fireEvent.click(screen.getAllByText('ویرایش')[0]);
 
-    // The optimistic shell still OPENS, and the operator sees why the full
-    // detail could not load (previously both silent).
     expect(await screen.findByRole('dialog', { name: /ویرایش لنت جلو پژو ۲۰۶/ })).toBeTruthy();
     expect(
-      await screen.findByText(/ویرایشگر با اطلاعات لیست باز شد؛ دریافت کامل اطلاعات محصول ناموفق بود/),
+      await screen.findByText(
+        /ویرایشگر با اطلاعات لیست باز شد؛ دریافت کامل اطلاعات محصول ناموفق بود/,
+      ),
     ).toBeTruthy();
   });
 
@@ -133,13 +140,28 @@ describe('ProductsPage edit button', () => {
       path === `/products/${row.id}` ? new Promise(() => {}) : defaultRouting(path),
     );
     window.location.hash = '#/products';
-    render(<ProductsPage />);
+    render(<CatalogPage {...catalogCapabilities('manager')} />);
 
     expect(await screen.findByText('لنت جلو پژو ۲۰۶')).toBeTruthy();
     fireEvent.click(screen.getAllByText('ویرایش')[0]);
 
-    // No waiting for the detail call: the shell dialog is up immediately.
     expect(await screen.findByRole('dialog', { name: /ویرایش لنت جلو پژو ۲۰۶/ })).toBeTruthy();
     expect(screen.getByText('در حال دریافت کامل اطلاعات محصول…')).toBeTruthy();
+  });
+
+  it('sends a warehouse operator straight to the stock-lines tab, without product tabs', async () => {
+    mockApi = vi.fn((path: string) => defaultRouting(path));
+    window.location.hash = '#/products';
+    render(<CatalogPage {...catalogCapabilities('warehouse')} />);
+
+    expect(await screen.findByText('لنت جلو پژو ۲۰۶')).toBeTruthy();
+    fireEvent.click(screen.getAllByText('＋ قلم')[0]);
+
+    const dialog = await screen.findByRole('dialog', { name: /ویرایش لنت جلو پژو ۲۰۶/ });
+    await waitFor(() => expect(within(dialog).getByText('قلم‌ها، قیمت و موجودی')).toBeTruthy());
+    // Product-level tabs would 403 for this role, so they are not offered.
+    expect(within(dialog).queryByText('پایه و سئو')).toBeNull();
+    expect(within(dialog).queryByText('تصاویر')).toBeNull();
+    expect(within(dialog).queryByText('سازگاری خودرو')).toBeNull();
   });
 });

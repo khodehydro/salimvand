@@ -1,105 +1,26 @@
-import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { createEan13, formatJalaliDate, formatRial } from '@salimvand/shared';
-import { FaNumberInput } from '../components/FaNumberInput';
-import { basketLabel, locationChip, locationLabel, placementChip } from '../lib/location-label';
-import { api, downloadFile } from '../lib/api';
-import { hashForPage } from '../lib/admin-route';
-import { publicSiteUrl } from '../lib/public-site';
-import { MediaPicker, type PickerItem } from '../components/MediaPicker';
-import { MediaImage } from '../components/MediaImage';
-import { StockStepper } from '../components/StockStepper';
-import { SupplierBadge } from '../components/SupplierBadge';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { createEan13, formatJalaliDate } from '@salimvand/shared';
+import type {
+  Brand,
+  Category,
+  Location,
+  ProductDetail,
+  Supplier,
+  VehicleMake,
+} from '../lib/catalog-types';
+import { FaNumberInput } from './FaNumberInput';
+import { StockStepper } from './StockStepper';
+import { basketLabel, locationLabel } from '../lib/location-label';
+import { api } from '../lib/api';
+import { MediaPicker, type PickerItem } from './MediaPicker';
+import { MediaImage } from './MediaImage';
 
-type ProductRow = {
-  id: string;
-  name: string;
-  code: string;
-  slug: string;
-  status: string;
-  deletedAt?: string | null;
-  partNumber?: string | null;
-  seoKeywords?: string[];
-  category?: { name: string };
-  supplier?: { id: string; name: string } | null;
-  compatibilities?: Array<{ model: { name: string; make: { name: string } } }>;
-  images?: Array<{ path: string; alt?: string | null; isPrimary: boolean }>;
-  inventoryItems?: Array<{
-    id: string;
-    quantity: number;
-    minStock?: number | null;
-    salePrice: string;
-    purchasePrice?: string;
-    barcode?: string | null;
-    brand?: { name: string } | null;
-    supplier?: { id: string; name: string } | null;
-    location?: { code: string; name: string; parent?: { name: string } | null } | null;
-    basket?: { code: string; name?: string } | null;
-  }>;
-};
-type ProductDetail = {
-  id: string;
-  name: string;
-  code: string;
-  slug: string;
-  status: string;
-  /** Storefront price visibility: 'inherit' follows the site-wide switch. */
-  priceDisplay?: string;
-  description?: string | null;
-  partNumber?: string | null;
-  supplierId?: string | null;
-  supplier?: { id: string; name: string } | null;
-  aparatVideoId?: string | null;
-  seoTitle?: string | null;
-  seoDescription?: string | null;
-  seoKeywords?: string[];
-  /** Optimistic shell built from the list row before the detail GET lands. */
-  partial?: boolean;
-  category?: { id: string; name: string };
-  images?: Array<{
-    id: string;
-    path: string;
-    alt?: string | null;
-    isPrimary: boolean;
-    sort: number;
-  }>;
-  compatibilities?: Array<{
-    id: string;
-    model: { id: string; name: string; make: { id: string; name: string } };
-    trim?: { id: string; name: string } | null;
-  }>;
-  inventoryItems?: Array<{
-    id: string;
-    barcode: string;
-    quantity: number;
-    salePrice: string;
-    purchasePrice: string;
-    minStock?: number | null;
-    isActive: boolean;
-    priceUpdatedAt?: string | null;
-    brand?: { id: string; name: string } | null;
-    supplierId?: string | null;
-    supplier?: { id: string; name: string } | null;
-    location?: { id: string; code: string; name: string } | null;
-    /** سبد — the basket of this line inside its shelf. */
-    basket?: { id: string; code: string; name: string } | null;
-  }>;
-};
-type Category = { id: string; name: string };
-type Brand = { id: string; name: string };
-type Supplier = { id: string; name: string };
-type Location = {
-  id: string;
-  code: string;
-  name: string;
-  type: string;
-  parentId?: string | null;
-  parent?: { id: string; name: string } | null;
-};
-type VehicleMake = {
-  id: string;
-  name: string;
-  models: Array<{ id: string; name: string; trims: Array<{ id: string; name: string }> }>;
-};
+/**
+ * Product editor dialog — one floating window over the list (never an inline
+ * block at the end of the page: the reported «پنجرهٔ ویرایش پایین لیست است و
+ * باید اسکرول کنیم» bug). Head + tabs stay put, the body scrolls, and every
+ * save action lives in the pinned header so it is always reachable.
+ */
 
 const tabs = [
   { id: 'basic', label: 'پایه و سئو' },
@@ -108,745 +29,15 @@ const tabs = [
   { id: 'vehicles', label: 'سازگاری خودرو' },
   { id: 'items', label: 'قلم‌ها، قیمت و موجودی' },
 ] as const;
-type Tab = (typeof tabs)[number]['id'];
+export type ProductEditorTab = (typeof tabs)[number]['id'];
 
 const aparatEmbed = (videoId: string) =>
   `https://www.aparat.com/video/video/embed/videohash/${videoId}/vt/frame`;
 
-const totalStock = (product: ProductRow) =>
-  product.inventoryItems?.reduce((sum, item) => sum + item.quantity, 0) ?? 0;
-const cheapestSalePrice = (product: ProductRow) => {
-  const prices = (product.inventoryItems ?? []).map((item) => Number(item.salePrice));
-  return prices.length ? Math.min(...prices) : null;
-};
-
-export function ProductsPage() {
-  const [products, setProducts] = useState<ProductRow[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [brands, setBrands] = useState<Brand[]>([]);
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [locations, setLocations] = useState<Location[]>([]);
-  const [vehicles, setVehicles] = useState<VehicleMake[]>([]);
-  const [filter, setFilter] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('');
-  const [brandFilter, setBrandFilter] = useState('');
-  const [vehicleFilter, setVehicleFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [keywordBusy, setKeywordBusy] = useState(false);
-  const [backupBusy, setBackupBusy] = useState(false);
-  const [restoreBusy, setRestoreBusy] = useState(false);
-  const restoreInputRef = useRef<HTMLInputElement | null>(null);
-  const [message, setMessage] = useState('');
-  const [draft, setDraft] = useState<ProductDetail | null>(null);
-  const [tab, setTab] = useState<Tab>('basic');
-  // Unified registration window (same component the warehouse tab uses):
-  // catalog + stock lines in one atomic submit, right from this page.
-  const [createOpen, setCreateOpen] = useState(false);
-  // Which product cards keep their stock table folded away — a long catalogue
-  // stays scannable when only the rows being worked on are expanded.
-  const [collapsedRows, setCollapsedRows] = useState<Set<string>>(new Set());
-  const toggleRow = (id: string) =>
-    setCollapsedRows((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-
-  const load = () =>
-    api<{ data: ProductRow[] }>('/products')
-      .then((result) => setProducts(result.data))
-      .catch((error: Error) => setMessage(error.message));
-  const refresh = async (id: string) => {
-    const fresh = await api<{ data: ProductDetail }>(`/products/${id}`);
-    // Update the open editor only: the header save closes the editor and a
-    // refresh that was still in flight must never resurrect it.
-    setDraft((current) => (current?.id === id ? fresh.data : current));
-    await load();
-    return fresh.data;
-  };
-  /** Optimistic shell from the list row: the editor opens INSTANTLY (the
-   *  reported «دکمهٔ ویرایش کار نمی‌کند» felt dead during two sequential
-   *  GETs) and the detail GET overwrites it on arrival. Tabs that need ids
-   *  the list does not carry (stock lines, compatibilities) stay empty until
-   *  the detail lands; a failed detail GET keeps the shell open + noticed. */
-  const rowToDraft = (row: ProductRow): ProductDetail => {
-    const categoryId = categories.find((entry) => entry.name === row.category?.name)?.id;
-    return {
-      id: row.id,
-      name: row.name,
-      code: row.code,
-      slug: row.slug,
-      status: row.status,
-      priceDisplay: 'inherit',
-      description: null,
-      partNumber: row.partNumber ?? null,
-      supplierId: row.supplier?.id ?? null,
-      supplier: row.supplier ?? null,
-      aparatVideoId: null,
-      seoTitle: null,
-      seoDescription: null,
-      seoKeywords: row.seoKeywords ?? [],
-      ...(categoryId ? { category: { id: categoryId, name: row.category?.name ?? '' } } : {}),
-      images: (row.images ?? []).map((image, index) => ({
-        id: `row-${index}`,
-        path: image.path,
-        alt: image.alt ?? null,
-        isPrimary: image.isPrimary,
-        sort: index,
-      })),
-      compatibilities: [],
-      inventoryItems: [],
-      partial: true,
-    };
-  };
-  /** Opens the editor for a product — refresh() alone only updates an
-   *  already-open draft, so every entry point (row button, deep link) must
-   *  set the draft explicitly. A failed load used to swallow the error and
-   *  the button just looked dead; now the shell stays open and the reason
-   *  is shown. */
-  const openEditor = (id: string) => {
-    const row = products.find((entry) => entry.id === id);
-    if (row) {
-      setTab('basic');
-      setDraft(rowToDraft(row));
-    }
-    void refresh(id)
-      .then((fresh) => {
-        setTab('basic');
-        setDraft(fresh);
-      })
-      .catch((error: Error) =>
-        setMessage(
-          row
-            ? `ویرایشگر با اطلاعات لیست باز شد؛ دریافت کامل اطلاعات محصول ناموفق بود: ${error.message}`
-            : `باز کردن ویرایشگر محصول ناموفق بود: ${error.message}`,
-        ),
-      );
-  };
-
-  // Deep link from the global palette (#/products?edit=<id>) opens the editor.
-  useEffect(() => {
-    const openFromHash = () => {
-      const editId = paramsFromHash(window.location.hash).edit;
-      if (editId) openEditor(editId);
-    };
-    openFromHash();
-    window.addEventListener('hashchange', openFromHash);
-    return () => window.removeEventListener('hashchange', openFromHash);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    void load();
-    void api<{ data: Category[] }>('/categories')
-      .then((result) => setCategories(result.data))
-      .catch(() => undefined);
-    void api<{ data: Brand[] }>('/brands')
-      .then((result) => setBrands(result.data))
-      .catch(() => undefined);
-    void api<{ data: Supplier[] }>('/suppliers')
-      .then((result) => setSuppliers(result.data))
-      .catch(() => undefined);
-    void api<{ data: Location[] }>('/locations')
-      // Warehouses first, then shelves in numeric code order (۱.۱ … ۱۰.۱ … ۲۰.۷)
-      // — mirrors the inventory page's ordering for the shelf pickers.
-      .then((result) =>
-        setLocations(
-          [...result.data].sort(
-            (a, b) =>
-              Number(b.type === 'warehouse') - Number(a.type === 'warehouse') ||
-              a.code.localeCompare(b.code, 'en', { numeric: true }),
-          ),
-        ),
-      )
-      .catch(() => undefined);
-    void api<{ data: VehicleMake[] }>('/vehicles/tree')
-      .then((result) => setVehicles(result.data))
-      .catch(() => undefined);
-  }, []);
-
-  const visible = products.filter((product) => {
-    const normalizedFilter = filter.trim().toLocaleLowerCase('fa');
-    const queryMatch =
-      `${product.name} ${product.code} ${product.partNumber ?? ''} ${(product.seoKeywords ?? []).join(' ')} ${
-        product.compatibilities
-          ?.map((entry) => `${entry.model.make.name} ${entry.model.name}`)
-          .join(' ') ?? ''
-      }`
-        .toLocaleLowerCase('fa')
-        .includes(normalizedFilter);
-    const categoryMatch = !categoryFilter || product.category?.name === categoryFilter;
-    const statusMatch = !statusFilter || product.status === statusFilter;
-    const brandMatch =
-      !brandFilter ||
-      product.inventoryItems?.some((entry) => (entry.brand?.name ?? 'بدون برند') === brandFilter);
-    const vehicleMatch =
-      !vehicleFilter ||
-      product.compatibilities?.some(
-        (entry) => `${entry.model.make.name} ${entry.model.name}` === vehicleFilter,
-      );
-    return queryMatch && categoryMatch && statusMatch && brandMatch && vehicleMatch;
-  });
-
-  const vehicleOptions = [
-    ...new Set(
-      products.flatMap(
-        (product) =>
-          product.compatibilities?.map((entry) => `${entry.model.make.name} ${entry.model.name}`) ??
-          [],
-      ),
-    ),
-  ];
-
-  return (
-    <section className="products-page">
-      <div className="page-title">
-        <div>
-          <h1>محصولات</h1>
-          <p className="muted">
-            کاتالوگ کامل با موجودی زندهٔ هر برند — برای ثبت محصول جدید از دکمهٔ «ثبت محصول»
-            استفاده کنید.
-          </p>
-        </div>
-        <div className="page-title-actions">
-          <span className="count">{products.length} محصول</span>
-          <button className="button-primary" onClick={() => setCreateOpen(true)}>
-            ＋ ثبت محصول
-          </button>
-          <button
-            className="keyword-regenerate"
-            disabled={keywordBusy}
-            onClick={async () => {
-              if (!window.confirm('کلیدواژه‌های همه محصولات بازسازی شود؟')) return;
-              setKeywordBusy(true);
-              try {
-                await api('/products/seo-keywords/regenerate', { method: 'POST' });
-                setMessage('کلیدواژه‌های محصولات بازسازی شد.');
-                await load();
-              } catch (error) {
-                setMessage((error as Error).message);
-              } finally {
-                setKeywordBusy(false);
-              }
-            }}
-          >
-            {keywordBusy ? 'در حال ساخت…' : 'بازسازی کلیدواژه‌ها'}
-          </button>
-          <button
-            className="products-backup-export"
-            disabled={backupBusy}
-            onClick={async () => {
-              setBackupBusy(true);
-              try {
-                await downloadFile(
-                  '/products/backup/export',
-                  `salimvand-products-backup-${new Date().toISOString().slice(0, 10)}.zip`,
-                );
-              } catch (error) {
-                setMessage((error as Error).message);
-              } finally {
-                setBackupBusy(false);
-              }
-            }}
-          >
-            {backupBusy ? 'در حال ساخت…' : 'پشتیبان‌گیری کامل (ZIP)'}
-          </button>
-          <button
-            className="products-backup-restore"
-            disabled={restoreBusy}
-            onClick={() => restoreInputRef.current?.click()}
-          >
-            {restoreBusy ? 'در حال بازگردانی…' : 'بازگردانی از پشتیبان…'}
-          </button>
-          <input
-            ref={restoreInputRef}
-            type="file"
-            accept=".zip,application/zip"
-            hidden
-            onChange={async (event) => {
-              const file = event.target.files?.[0];
-              event.target.value = '';
-              if (!file) return;
-              if (
-                !window.confirm(
-                  'بازگردانی از فایل پشتیبان؟\nهیچ داده‌ای حذف نمی‌شود — محصولات موجود بر اساس کد به‌روزرسانی می‌شوند و محصولات غایب با همان کد قبلی دوباره ساخته می‌شوند.\nتصاویر موجود در فایل ZIP نیز در پوشهٔ آپلودها بازیابی می‌شوند.',
-                )
-              )
-                return;
-              setRestoreBusy(true);
-              try {
-                const form = new FormData();
-                form.append('file', file);
-                const result = await api<{
-                  data: {
-                    productsCreated: number;
-                    productsUpdated: number;
-                    itemsCreated: number;
-                    itemsUpdated: number;
-                    imagesWritten: number;
-                    errors: string[];
-                  };
-                }>('/products/backup/import', { method: 'POST', body: form });
-                const summary = result.data;
-                const parts = [
-                  `${summary.productsCreated.toLocaleString('fa-IR')} محصول جدید`,
-                  `${summary.productsUpdated.toLocaleString('fa-IR')} محصول به‌روزرسانی‌شده`,
-                  `${(summary.itemsCreated + summary.itemsUpdated).toLocaleString('fa-IR')} قلم انبار`,
-                  `${summary.imagesWritten.toLocaleString('fa-IR')} تصویر`,
-                ];
-                setMessage(
-                  `بازگردانی انجام شد — ${parts.join('، ')}` +
-                    (summary.errors.length
-                      ? ` (${summary.errors.length.toLocaleString('fa-IR')} خطا: ${summary.errors.slice(0, 3).join('؛ ')}${summary.errors.length > 3 ? '…' : ''})`
-                      : ''),
-                );
-                await load();
-              } catch (error) {
-                setMessage((error as Error).message);
-              } finally {
-                setRestoreBusy(false);
-              }
-            }}
-          />
-        </div>
-      </div>
-
-      <div className="product-filter-toolbar">
-        <div className="search-field product-search-field">
-          <span className="search-icon">⌕</span>
-          <input
-            placeholder="جست‌وجوی نام، کد یا شماره فنی…"
-            value={filter}
-            onChange={(event) => setFilter(event.target.value)}
-          />
-          {filter && (
-            <button
-              type="button"
-              className="search-clear"
-              onClick={() => setFilter('')}
-              aria-label="پاک کردن جست‌وجو"
-            >
-              ✕
-            </button>
-          )}
-        </div>
-        <div className="toolbar-filter-row">
-          <label
-            className={`toolbar-pill${categoryFilter ? ' is-active' : ''}`}
-            aria-label="فیلتر دسته‌بندی"
-          >
-            <span className="tp-lead" aria-hidden="true">
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
-              </svg>
-            </span>
-            <select
-              value={categoryFilter}
-              onChange={(event) => setCategoryFilter(event.target.value)}
-              aria-label="فیلتر دسته‌بندی"
-            >
-              <option value="">همه دسته‌ها</option>
-              {[...new Set(products.map((product) => product.category?.name).filter(Boolean))].map(
-                (category) => (
-                  <option key={category} value={category}>
-                    {category}
-                  </option>
-                ),
-              )}
-            </select>
-          </label>
-          <label
-            className={`toolbar-pill${brandFilter ? ' is-active' : ''}`}
-            aria-label="فیلتر برند"
-          >
-            <span className="tp-lead" aria-hidden="true">
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <circle cx="12" cy="8" r="6" />
-                <path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11" />
-              </svg>
-            </span>
-            <select
-              value={brandFilter}
-              onChange={(event) => setBrandFilter(event.target.value)}
-              aria-label="فیلتر برند"
-            >
-              <option value="">همه برندها</option>
-              {brands.map((brand) => (
-                <option key={brand.id} value={brand.name}>
-                  {brand.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label
-            className={`toolbar-pill${vehicleFilter ? ' is-active' : ''}`}
-            aria-label="فیلتر خودرو"
-          >
-            <span className="tp-lead" aria-hidden="true">
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2" />
-                <circle cx="7" cy="17" r="2" />
-                <path d="M9 17h6" />
-                <circle cx="17" cy="17" r="2" />
-              </svg>
-            </span>
-            <select
-              value={vehicleFilter}
-              onChange={(event) => setVehicleFilter(event.target.value)}
-              aria-label="فیلتر خودرو"
-            >
-              <option value="">همه خودروها</option>
-              {vehicleOptions.map((vehicle) => (
-                <option key={vehicle} value={vehicle}>
-                  {vehicle}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div
-            className={`toolbar-pill${statusFilter ? ' is-active' : ''}`}
-            aria-label="فیلتر وضعیت"
-          >
-            <span className="tp-lead" aria-hidden="true">
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
-                <circle cx="12" cy="12" r="3" />
-              </svg>
-            </span>
-            <div className="tp-options" role="tablist" aria-label="وضعیت محصول">
-              {(
-                [
-                  { id: '', label: 'همه' },
-                  { id: 'active', label: 'فعال' },
-                  { id: 'hidden', label: 'مخفی' },
-                ] as const
-              ).map((entry) => (
-                <button
-                  key={entry.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={statusFilter === entry.id}
-                  className={statusFilter === entry.id ? 'active' : ''}
-                  onClick={() => setStatusFilter(entry.id)}
-                >
-                  {entry.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          {(filter || categoryFilter || brandFilter || vehicleFilter || statusFilter) && (
-            <button
-              type="button"
-              className="pill"
-              onClick={() => {
-                setFilter('');
-                setCategoryFilter('');
-                setBrandFilter('');
-                setVehicleFilter('');
-                setStatusFilter('');
-              }}
-            >
-              × پاک کردن فیلترها
-            </button>
-          )}
-        </div>
-      </div>
-
-      {message && <div className="notice">{message}</div>}
-
-      <div className="products-table" role="table" aria-label="فهرست محصولات">
-        {/* سطح ۱ — هر محصول یک سطر با ستون‌های واقعی (عکس، دسته، وضعیت،
-            موجودی کل، عملیات). سطح ۲ — جدول قلم‌های انبار همان محصول با
-            ستون‌های جدا برای قفسه و سبد تا آدرس کامل دیده شود. */}
-        <div className="pt-head" role="row">
-          <span role="columnheader">محصول</span>
-          <span role="columnheader">دسته‌بندی</span>
-          <span role="columnheader">نمایش در سایت</span>
-          <span role="columnheader">موجودی کل</span>
-          <span role="columnheader">عملیات</span>
-        </div>
-        {visible.map((product) => {
-          const stock = totalStock(product);
-          const items = product.inventoryItems ?? [];
-          const lowStock = items.some(
-            (entry) => entry.minStock != null && entry.quantity < entry.minStock,
-          );
-          const collapsed = collapsedRows.has(product.id);
-          return (
-            <article className={`pt-card${stock === 0 ? ' is-out' : ''}`} key={product.id}>
-              <div className="pt-row" role="row">
-                <div className="pt-cell pt-product" role="cell" data-label="محصول">
-                  <span className="product-thumb">
-                    {product.images?.[0] ? (
-                      <MediaImage
-                        src={product.images[0].path}
-                        alt={product.images[0].alt ?? product.name}
-                      />
-                    ) : (
-                      <span>قطعه</span>
-                    )}
-                  </span>
-                  <span className="pt-info">
-                    <b title={product.name}>{product.name}</b>
-                    <small dir="ltr">
-                      {product.code}
-                      {product.partNumber ? ` · ${product.partNumber}` : ''}
-                    </small>
-                    <span className="pt-meta-chips">
-                      {(() => {
-                        const sups = [
-                          ...new Set(items.map((i) => i.supplier?.name).filter(Boolean)),
-                        ];
-                        return sups.map((s) => (
-                          <SupplierBadge key={s} name={s!} variant="chip" />
-                        ));
-                      })()}
-                      {vehicleOptions.length > 0 && product.compatibilities?.length ? (
-                        <span className="chip vehicle-chip">
-                          {product.compatibilities.length.toLocaleString('fa-IR')} خودرو
-                        </span>
-                      ) : null}
-                      {items.length ? (
-                        <button
-                          type="button"
-                          className="pt-collapse"
-                          aria-expanded={!collapsed}
-                          onClick={() => toggleRow(product.id)}
-                        >
-                          {collapsed ? '▸' : '▾'} {items.length.toLocaleString('fa-IR')} قلم انبار
-                        </button>
-                      ) : null}
-                    </span>
-                  </span>
-                </div>
-                <div className="pt-cell pt-category" role="cell" data-label="دسته‌بندی">
-                  <span className="chip">{product.category?.name ?? 'بدون دسته'}</span>
-                </div>
-                <div className="pt-cell pt-status" role="cell" data-label="نمایش در سایت">
-                  <button
-                    type="button"
-                    className={`catalog-switch ${product.status === 'active' ? 'on' : ''}`}
-                    role="switch"
-                    aria-checked={product.status === 'active'}
-                    title="نمایش محصول برای کاربران عمومی سایت"
-                    onClick={async () => {
-                      try {
-                        await api(`/products/${product.id}`, {
-                          method: 'PATCH',
-                          body: JSON.stringify({
-                            status: product.status === 'active' ? 'hidden' : 'active',
-                          }),
-                        });
-                        setMessage(
-                          product.status === 'active'
-                            ? 'نمایش محصول در سایت غیرفعال شد.'
-                            : 'نمایش محصول در سایت فعال شد.',
-                        );
-                        await load();
-                      } catch (error) {
-                        setMessage((error as Error).message);
-                      }
-                    }}
-                  >
-                    <span aria-hidden="true" className="sw-track" />
-                    <span className="pt-switch-text">
-                      {product.status === 'active' ? 'فعال' : 'غیرفعال'}
-                    </span>
-                  </button>
-                </div>
-                <div className="pt-cell pt-total" role="cell" data-label="موجودی کل">
-                  <b className={stock === 0 ? 'pt-stock-empty' : undefined}>
-                    {stock.toLocaleString('fa-IR')}
-                  </b>
-                  {stock === 0 ? (
-                    <small className="pt-warn">ناموجود</small>
-                  ) : lowStock ? (
-                    <small className="pt-warn">کمتر از حداقل</small>
-                  ) : null}
-                </div>
-                <div className="pt-cell pt-actions" role="cell" data-label="عملیات">
-                  <button className="row-action" onClick={() => openEditor(product.id)}>
-                    ویرایش
-                  </button>
-                  <a
-                    className="row-action"
-                    href={`${publicSiteUrl}/product/${encodeURIComponent(product.slug)}`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    سایت
-                  </a>
-                  <button
-                    className="row-action"
-                    title="ساخت برچسب برای این محصول"
-                    onClick={() => {
-                      window.location.hash = hashForPage('labels', { product: product.id });
-                    }}
-                  >
-                    برچسب
-                  </button>
-                  <button
-                    className="row-action danger-text"
-                    onClick={async () => {
-                      if (!window.confirm('محصول حذف نرم شود؟ از سایت پنهان می‌شود.')) return;
-                      try {
-                        await api(`/products/${product.id}`, { method: 'DELETE' });
-                        setMessage('محصول حذف نرم شد.');
-                        await load();
-                      } catch (error) {
-                        setMessage((error as Error).message);
-                      }
-                    }}
-                  >
-                    حذف
-                  </button>
-                </div>
-              </div>
-
-              {!collapsed && (
-                <div
-                  className="pt-items"
-                  role="table"
-                  aria-label={`قلم‌های انبارِ ${product.name}`}
-                >
-                  {items.length ? (
-                    <>
-                      <div className="pt-items-head" role="row">
-                        <span role="columnheader">برند و بارکد</span>
-                        <span role="columnheader" className="pt-col-buy">
-                          قیمت خرید
-                        </span>
-                        <span role="columnheader">قیمت فروش</span>
-                        <span role="columnheader">موجودی</span>
-                        <span role="columnheader">قفسه</span>
-                        <span role="columnheader">سبد</span>
-                      </div>
-                      {items.map((entry) => (
-                        <div className="pt-item" role="row" key={entry.id}>
-                          <span className="pt-item-brand" role="cell" data-label="برند و بارکد">
-                            <b>{entry.brand?.name ?? 'بدون برند'}</b>
-                            {entry.barcode ? (
-                              <small dir="ltr">{entry.barcode}</small>
-                            ) : (
-                              <small className="pt-dash">بدون بارکد</small>
-                            )}
-                            {entry.supplier?.name && (
-                              <SupplierBadge name={entry.supplier.name} />
-                            )}
-                          </span>
-                          <span className="pt-num pt-col-buy" role="cell" data-label="قیمت خرید">
-                            {formatRial(Number(entry.purchasePrice ?? 0))}
-                          </span>
-                          <span className="pt-num pt-sale" role="cell" data-label="قیمت فروش">
-                            {formatRial(Number(entry.salePrice))}
-                          </span>
-                          <span className="pt-item-qty" role="cell" data-label="موجودی">
-                            <StockStepper
-                              itemId={entry.id}
-                              quantity={entry.quantity}
-                              onMessage={setMessage}
-                              onSaved={() => void load()}
-                            />
-                            {entry.minStock != null && entry.quantity < entry.minStock ? (
-                              <small className="pt-warn">
-                                حداقل {entry.minStock.toLocaleString('fa-IR')}
-                              </small>
-                            ) : null}
-                          </span>
-                          {/* قفسه و سبد دو ستون جدا هستند تا آدرس کامل قطعه
-                              (انبار · قفسه · سبد) هیچ‌وقت بریده نشود. */}
-                          <span className="pt-item-place" role="cell" data-label="قفسه">
-                            {entry.location ? (
-                              <span className="place-chip" title={locationLabel(entry.location)}>
-                                {locationChip(entry.location)}
-                              </span>
-                            ) : (
-                              <span className="pt-dash">تعیین نشده</span>
-                            )}
-                          </span>
-                          <span className="pt-item-place" role="cell" data-label="سبد">
-                            {entry.basket ? (
-                              <span className="place-chip is-basket">
-                                {basketLabel(entry.basket)}
-                              </span>
-                            ) : (
-                              <span className="pt-dash">ندارد</span>
-                            )}
-                          </span>
-                        </div>
-                      ))}
-                    </>
-                  ) : (
-                    <p className="pt-items-empty muted">
-                      برای این محصول هنوز قلم انباری (برند/قیمت) ثبت نشده است.
-                    </p>
-                  )}
-                </div>
-              )}
-            </article>
-          );
-        })}
-        {!visible.length && <p className="muted pt-empty">محصولی یافت نشد.</p>}
-      </div>
-
-      {draft && (
-        <ProductEditor
-          key={draft.partial ? `${draft.id}|partial` : draft.id}
-          product={draft}
-          tab={tab}
-          setTab={setTab}
-          onClose={() => setDraft(null)}
-          onMessage={setMessage}
-          onRefresh={() => void refresh(draft.id)}
-          categories={categories}
-          brands={brands}
-          suppliers={suppliers}
-          locations={locations}
-          vehicles={vehicles}
-        />
-      )}
-    </section>
-  );
-}
-
-function paramsFromHash(hash: string): Record<string, string> {
-  const query = hash.split('?')[1] ?? '';
-  return Object.fromEntries(new URLSearchParams(query));
-}
-
-type EditorProps = {
+export type EditorProps = {
   product: ProductDetail;
-  tab: Tab;
-  setTab: (tab: Tab) => void;
+  tab: ProductEditorTab;
+  setTab: (tab: ProductEditorTab) => void;
   onClose: () => void;
   onMessage: (text: string) => void;
   onRefresh: () => void;
@@ -855,9 +46,11 @@ type EditorProps = {
   suppliers: Supplier[];
   locations: Location[];
   vehicles: VehicleMake[];
+  /** Managers may edit the product itself; warehouse operators only its stock lines. */
+  canEditProductFields?: boolean;
 };
 
-function ProductEditor({
+export function ProductEditor({
   product,
   tab,
   setTab,
@@ -869,8 +62,15 @@ function ProductEditor({
   suppliers,
   locations: initialLocations,
   vehicles,
+  canEditProductFields = true,
 }: EditorProps) {
   const [locations, setLocations] = useState<Location[]>(initialLocations);
+  // A warehouse operator opens the editor straight on the stock lines: the
+  // product tabs (سئو، تصاویر، سازگاری) would 403 on save for them.
+  const visibleTabs = canEditProductFields ? tabs : tabs.filter((entry) => entry.id === 'items');
+  useEffect(() => {
+    if (!canEditProductFields && tab !== 'items') setTab('items');
+  }, [canEditProductFields, tab, setTab]);
   useEffect(() => {
     setLocations(initialLocations);
   }, [initialLocations]);
@@ -1193,7 +393,7 @@ function ProductEditor({
     }
     return saved;
   };
-  const footerLabel: Record<Tab, string> = {
+  const footerLabel: Record<ProductEditorTab, string> = {
     basic: 'ذخیرهٔ پایه و سئو',
     images: 'بارگذاری تصویر انتخاب‌شده',
     aparat: 'ذخیرهٔ ویدیو',
@@ -1215,15 +415,17 @@ function ProductEditor({
             {product.name} <code dir="ltr">{product.code}</code>
           </h2>
           <div className="editor-head-actions">
-            <button
-              type="button"
-              className="button-primary editor-save"
-              disabled={busy}
-              title={footerLabel[tab]}
-              onClick={() => void saveAndClose()}
-            >
-              {busy ? 'در حال ذخیره…' : '✓ ذخیره'}
-            </button>
+            {(canEditProductFields || tab === 'items') && (
+              <button
+                type="button"
+                className="button-primary editor-save"
+                disabled={busy}
+                title={footerLabel[tab]}
+                onClick={() => void saveAndClose()}
+              >
+                {busy ? 'در حال ذخیره…' : '✓ ذخیره'}
+              </button>
+            )}
             <button className="close" onClick={onClose} aria-label="بستن">
               ✕
             </button>
@@ -1243,7 +445,7 @@ function ProductEditor({
           </div>
         )}
         <div className="tabs" role="tablist">
-          {tabs.map((entry) => (
+          {visibleTabs.map((entry) => (
             <button
               key={entry.id}
               role="tab"
@@ -1257,9 +459,7 @@ function ProductEditor({
         </div>
 
         <div className="editor-body">
-          {product.partial && (
-            <div className="notice">در حال دریافت کامل اطلاعات محصول…</div>
-          )}
+          {product.partial && <div className="notice">در حال دریافت کامل اطلاعات محصول…</div>}
           {tab === 'basic' && (
             <form
               className="product-form"
@@ -1679,7 +879,8 @@ function ProductEditor({
                           </select>
                           {!shelves.length && (
                             <small className="muted">
-                              قفسه‌ای یافت نشد — از تب انبار → قفسه‌ها و سبدها، قفسه بسازید
+                              قفسه‌ای یافت نشد — از دکمهٔ «قفسه‌ها و سبدها» در نوار بالای همین لیست،
+                              قفسه بسازید
                             </small>
                           )}
                         </label>
@@ -1701,7 +902,8 @@ function ProductEditor({
                           </select>
                           {edit.locationId && basketsOf(edit.locationId).length === 0 && (
                             <small className="muted">
-                              این قفسه سبدی ندارد — از تب انبار → قفسه‌ها و سبدها اضافه کنید
+                              این قفسه سبدی ندارد — از دکمهٔ «قفسه‌ها و سبدها» در نوار بالای همین
+                              لیست اضافه کنید
                             </small>
                           )}
                         </label>
@@ -1815,7 +1017,8 @@ function ProductEditor({
                   </select>
                   {!shelves.length && (
                     <small className="muted">
-                      قفسه‌ای یافت نشد — از تب انبار → قفسه‌ها و سبدها، قفسه بسازید
+                      قفسه‌ای یافت نشد — از دکمهٔ «قفسه‌ها و سبدها» در نوار بالای همین لیست، قفسه
+                      بسازید
                     </small>
                   )}
                 </label>

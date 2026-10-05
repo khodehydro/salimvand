@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   canAccessPage,
+  catalogCapabilities,
   customerCapabilities,
   dashboardCapabilities,
   invoiceCapabilities,
@@ -78,5 +79,34 @@ describe('admin page permissions', () => {
     });
     expect(invoiceCapabilities('manager').canVoid).toBe(true);
     expect(invoiceCapabilities('').canCreate).toBe(false);
+  });
+
+  it('splits catalog, placement, export and stock rights inside the unified list', () => {
+    // Mirrors the API guards: product writes are manager-only, stock moves and
+    // bulk prices also belong to the warehouse, exports to accountant+.
+    expect(catalogCapabilities('manager')).toEqual({
+      canManageProducts: true,
+      canManagePlacements: true,
+      canExportReports: true,
+      canAdjustStock: true,
+    });
+    expect(catalogCapabilities('warehouse')).toEqual({
+      canManageProducts: false,
+      canManagePlacements: false,
+      canExportReports: false,
+      canAdjustStock: true,
+    });
+    expect(catalogCapabilities('accountant')).toEqual({
+      canManageProducts: false,
+      canManagePlacements: false,
+      canExportReports: true,
+      canAdjustStock: false,
+    });
+    expect(catalogCapabilities('')).toEqual({
+      canManageProducts: false,
+      canManagePlacements: false,
+      canExportReports: false,
+      canAdjustStock: false,
+    });
   });
 });

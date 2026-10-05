@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useId,
   useMemo,
   useState,
   type ButtonHTMLAttributes,
@@ -626,6 +627,7 @@ export function Modal({
   footer?: ReactNode;
   size?: 'sm' | 'md' | 'lg';
 }>) {
+  const titleId = useId();
   useEffect(() => {
     if (!open) return;
     const handler = (event: KeyboardEvent) => {
@@ -641,9 +643,16 @@ export function Modal({
       role="presentation"
       onMouseDown={(event) => event.target === event.currentTarget && onClose()}
     >
-      <div className={cx('sv-modal', `is-${size}`)} role="dialog" aria-modal="true">
+      {/* aria-labelledby ties the dialog to its visible title: screen readers
+          (and tests) can address a modal by the name it shows. */}
+      <div
+        className={cx('sv-modal', `is-${size}`)}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+      >
         <header>
-          <h3>{title}</h3>
+          <h3 id={titleId}>{title}</h3>
           <button
             type="button"
             className="sv-btn sv-btn--ghost sv-btn--icon"
