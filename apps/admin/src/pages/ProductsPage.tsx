@@ -137,6 +137,9 @@ export function ProductsPage() {
   const [message, setMessage] = useState('');
   const [draft, setDraft] = useState<ProductDetail | null>(null);
   const [tab, setTab] = useState<Tab>('basic');
+  // Unified registration window (same component the warehouse tab uses):
+  // catalog + stock lines in one atomic submit, right from this page.
+  const [createOpen, setCreateOpen] = useState(false);
   // Which product cards keep their stock table folded away — a long catalogue
   // stays scannable when only the rows being worked on are expanded.
   const [collapsedRows, setCollapsedRows] = useState<Set<string>>(new Set());
@@ -162,12 +165,17 @@ export function ProductsPage() {
   };
   /** Opens the editor for a product — refresh() alone only updates an
    *  already-open draft, so every entry point (row button, deep link) must
-   *  set the draft explicitly. */
+   *  set the draft explicitly. A failed load used to swallow the error and
+   *  the button just looked dead; now the operator sees WHY it failed. */
   const openEditor = (id: string) =>
-    void refresh(id).then((fresh) => {
-      setTab('basic');
-      setDraft(fresh);
-    });
+    void refresh(id)
+      .then((fresh) => {
+        setTab('basic');
+        setDraft(fresh);
+      })
+      .catch((error: Error) =>
+        setMessage(`باز کردن ویرایشگر محصول ناموفق بود: ${error.message}`),
+      );
 
   // Deep link from the global palette (#/products?edit=<id>) opens the editor.
   useEffect(() => {
@@ -249,12 +257,15 @@ export function ProductsPage() {
         <div>
           <h1>محصولات</h1>
           <p className="muted">
-            کاتالوگ کامل با موجودی زندهٔ هر برند — ثبت محصول جدید از بخش «انبار و موجودی» انجام
-            می‌شود.
+            کاتالوگ کامل با موجودی زندهٔ هر برند — برای ثبت محصول جدید از دکمهٔ «ثبت محصول»
+            استفاده کنید.
           </p>
         </div>
         <div className="page-title-actions">
           <span className="count">{products.length} محصول</span>
+          <button className="button-primary" onClick={() => setCreateOpen(true)}>
+            ＋ ثبت محصول
+          </button>
           <button
             className="keyword-regenerate"
             disabled={keywordBusy}

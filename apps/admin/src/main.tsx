@@ -12,9 +12,8 @@ import { MediaPage } from './pages/MediaPage';
 import { api, downloadFile } from './lib/api';
 import { applyStoreFavicon } from './lib/favicon';
 import { LoginPage } from './pages/LoginPage';
-import { ProductsPage } from './pages/ProductsPage';
+import { CatalogPage } from './pages/CatalogPage';
 import { WholesalePage } from './pages/WholesalePage';
-import { InventoryPage } from './pages/InventoryPage';
 import { LabelsPage } from './pages/LabelsPage';
 import { ReferencesPage } from './pages/ReferencesPage';
 import { DashboardPage } from './pages/DashboardPage';
@@ -94,9 +93,8 @@ const navItems: NavItem[] = [
   { id: 'analytics', label: 'آمار و بازدیدها', icon: 'analytics' },
   { id: 'invoices', label: 'فروش و فاکتورها', icon: 'invoice' },
   { id: 'customers', label: 'مشتریان', icon: 'customers' },
-  { id: 'inventory', label: 'انبار و موجودی', icon: 'inventory' },
   { id: 'labels', label: 'برچسب محصولات', icon: 'labels' },
-  { id: 'products', label: 'محصولات', icon: 'products' },
+  { id: 'products', label: 'محصولات و انبار', icon: 'products' },
   { id: 'wholesale', label: 'لیست محصولات (عمده)', icon: 'products' },
   { id: 'purchases', label: 'خرید و تأمین', icon: 'purchases' },
   { id: 'suppliers', label: 'تأمین‌کنندگان', icon: 'suppliers' },
@@ -119,7 +117,6 @@ const navGroups: Array<{ label: string; ids: Page[] }> = [
     ids: [
       'products',
       'wholesale',
-      'inventory',
       'labels',
       'invoices',
       'customers',
@@ -135,9 +132,9 @@ const pageTitles: Record<Page, string> = {
   dashboard: 'داشبورد',
   analytics: 'آمار و بازدیدها',
   messaging: 'پیامک و کانال\u200cها',
-  products: 'کاتالوگ محصولات',
+  products: 'محصولات و انبار',
   wholesale: 'لیست محصولات (عمده)',
-  inventory: 'انبار و موجودی',
+  inventory: 'محصولات و انبار',
   labels: 'برچسب محصولات',
   invoices: 'فروش و فاکتورها',
   media: 'رسانه‌ها',
@@ -349,12 +346,21 @@ function App() {
     }
   }, [role, page]);
   if (!authenticated) return <LoginPage onLogin={() => setAuthenticated(true)} />;
-  const visibleItems = navItems.filter((item) => canAccessPage(role, item.id));
-  // Mobile follows the documented daily workflow: dashboard, inventory, sales,
-  // then customers. Desktop keeps its fuller information architecture.
-  const mobileItems = ['dashboard', 'inventory', 'invoices', 'customers']
+  // The merged «محصولات و انبار» entry is visible to anyone who can reach
+  // either half: catalog (manager+) or warehouse (also انباردار).
+  const visibleItems = navItems.filter(
+    (item) =>
+      canAccessPage(role, item.id) ||
+      (item.id === 'products' && canAccessPage(role, 'inventory')),
+  );
+  // Mobile follows the documented daily workflow: dashboard, catalog &
+  // warehouse, sales, then customers.
+  const mobileItems = ['dashboard', 'products', 'invoices', 'customers']
     .map((id) => visibleItems.find((item) => item.id === id))
     .filter((item): item is NavItem => Boolean(item));
+  // Warehouse operators see the stock count on the merged nav entry;
+  // manager+ see the catalog count.
+  const navCountKey = canAccessPage(role, 'products') ? 'products' : 'inventory';
   const dashboardAccess = dashboardCapabilities(role);
   const invoiceAccess = invoiceCapabilities(role);
   const customerAccess = customerCapabilities(role);
@@ -362,8 +368,15 @@ function App() {
   const exportPath = page === 'reports' ? '/reports/sales/export' : '/reports/inventory/export';
   const exportFile = page === 'reports' ? 'salimvand-sales.csv' : 'salimvand-inventory.csv';
   const navigate = (next: Page, params?: Record<string, string>) => {
-    window.location.hash = hashForPage(next, params);
-    setPage(next);
+    // Merged catalog+warehouse entry: a warehouse operator cannot open the
+    // catalog route, so «محصولات و انبار» sends them to #/inventory instead
+    // of letting the guard bounce them to the dashboard.
+    const target =
+      next === 'products' && role && !canAccessPage(role, 'products') && canAccessPage(role, 'inventory')
+        ? 'inventory'
+        : next;
+    window.location.hash = hashForPage(target, params);
+    setPage(target);
     setMobileOpen(false);
     setPaletteOpen(false);
   };
@@ -410,14 +423,18 @@ function App() {
                 </button>
                 {expanded && groupItems.map((item) => (
                   <button
-                    className={page === item.id ? 'active' : ''}
+                    className={
+                      page === item.id || (item.id === 'products' && page === 'inventory')
+                        ? 'active'
+                        : ''
+                    }
                     key={item.id}
                     onClick={() => navigate(item.id)}
                   >
                     <span className="nav-icon"><NavIcon name={item.icon} /></span>
                     {item.label}
-                    {(item.id === 'products' || item.id === 'inventory') && navCounts[item.id] != null && (
-                      <i className="nav-count">{navCounts[item.id].toLocaleString('fa-IR')}</i>
+                    {item.id === 'products' && navCounts[navCountKey] != null && (
+                      <i className="nav-count">{navCounts[navCountKey].toLocaleString('fa-IR')}</i>
                     )}
                   </button>
                 ))}
@@ -544,16 +561,17 @@ function App() {
             <DashboardPage {...dashboardAccess} onNavigate={navigate} />
           ) : page === 'analytics' ? (
             <AnalyticsPage />
-          ) : page === 'products' ? (
-            <ProductsPage />
+          ) : page === 'products' || page === 'inventory' ? (
+            <CatalogPage
+              tab={page === 'inventory' ? 'inventory' : 'products'}
+              onTab={(next) => navigate(next)}
+            />
           ) : page === 'wholesale' ? (
             <WholesalePage />
           ) : page === 'invoices' ? (
             <InvoicesPage {...invoiceAccess} />
           ) : page === 'media' ? (
             <MediaPage />
-          ) : page === 'inventory' ? (
-            <InventoryPage />
           ) : page === 'labels' ? (
             <LabelsPage />
           ) : page === 'reports' ? (
