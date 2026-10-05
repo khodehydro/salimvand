@@ -9,6 +9,9 @@ import { MediaPicker, type PickerItem } from '../components/MediaPicker';
 import { MediaImage } from '../components/MediaImage';
 import { StockStepper } from '../components/StockStepper';
 import { SupplierBadge } from '../components/SupplierBadge';
+import { ProductCreateModal } from '../components/ProductCreateModal';
+import { InventoryItemSheet, WarehouseStructureSection } from './InventoryParts';
+import type { Item as SheetItem } from './InventoryParts';
 
 type ProductRow = {
   id: string;
@@ -32,8 +35,8 @@ type ProductRow = {
     barcode?: string | null;
     brand?: { name: string } | null;
     supplier?: { id: string; name: string } | null;
-    location?: { code: string; name: string; parent?: { name: string } | null } | null;
-    basket?: { code: string; name?: string } | null;
+    location?: { id: string; code: string; name: string; parent?: { name: string } | null } | null;
+    basket?: { id: string; code: string; name?: string } | null;
   }>;
 };
 type ProductDetail = {
@@ -142,6 +145,9 @@ export function ProductsPage() {
   // Unified registration window (same component the warehouse tab uses):
   // catalog + stock lines in one atomic submit, right from this page.
   const [createOpen, setCreateOpen] = useState(false);
+  // «کارت قلم» sheet of one stock line + the «فقط زیرِ حد نصاب» view.
+  const [sheetItem, setSheetItem] = useState<SheetItem | null>(null);
+  const [lowOnly, setLowOnly] = useState(false);
   // Which product cards keep their stock table folded away — a long catalogue
   // stays scannable when only the rows being worked on are expanded.
   const [collapsedRows, setCollapsedRows] = useState<Set<string>>(new Set());
@@ -286,7 +292,12 @@ export function ProductsPage() {
       product.compatibilities?.some(
         (entry) => `${entry.model.make.name} ${entry.model.name}` === vehicleFilter,
       );
-    return queryMatch && categoryMatch && statusMatch && brandMatch && vehicleMatch;
+    const lowMatch =
+      !lowOnly ||
+      (product.inventoryItems ?? []).some(
+        (entry) => entry.minStock != null && entry.quantity < entry.minStock,
+      );
+    return queryMatch && categoryMatch && statusMatch && brandMatch && vehicleMatch && lowMatch;
   });
 
   const vehicleOptions = [
@@ -563,6 +574,14 @@ export function ProductsPage() {
               ))}
             </div>
           </div>
+          <button
+            type="button"
+            className={`pill${lowOnly ? ' is-active' : ''}`}
+            aria-pressed={lowOnly}
+            onClick={() => setLowOnly((current) => !current)}
+          >
+            {lowOnly ? '✓' : ''} فقط زیرِ حد نصاب
+          </button>
           {(filter || categoryFilter || brandFilter || vehicleFilter || statusFilter) && (
             <button
               type="button"
@@ -776,6 +795,47 @@ export function ProductsPage() {
                               onMessage={setMessage}
                               onSaved={() => void load()}
                             />
+                            <button
+                              type="button"
+                              className="row-action pt-item-sheet"
+                              title="کارت قلم — تاریخچه، ورود کالا، انتقال قفسه"
+                              onClick={() => {
+                                setSheetItem({
+                                  id: entry.id,
+                                  barcode: entry.barcode ?? '',
+                                  quantity: entry.quantity,
+                                  salePrice: entry.salePrice,
+                                  purchasePrice: entry.purchasePrice,
+                                  minStock: entry.minStock ?? null,
+                                  product: {
+                                    id: product.id,
+                                    name: product.name,
+                                    code: product.code,
+                                    images: (product.images ?? []).map((image) => ({
+                                      path: image.path,
+                                    })),
+                                    category: product.category
+                                      ? { name: product.category.name }
+                                      : null,
+                                    compatibilities: [],
+                                  },
+                                  brand: entry.brand
+                                    ? { name: entry.brand.name }
+                                    : undefined,
+                                  supplier: entry.supplier ?? null,
+                                  location: entry.location ?? undefined,
+                                  basket: entry.basket
+                                    ? {
+                                        id: entry.basket.id,
+                                        name: entry.basket.name ?? '',
+                                        code: entry.basket.code,
+                                      }
+                                    : null,
+                                });
+                              }}
+                            >
+                              کارت قلم
+                            </button>
                             {entry.minStock != null && entry.quantity < entry.minStock ? (
                               <small className="pt-warn">
                                 حداقل {entry.minStock.toLocaleString('fa-IR')}
@@ -817,6 +877,44 @@ export function ProductsPage() {
         })}
         {!visible.length && <p className="muted pt-empty">محصولی یافت نشد.</p>}
       </div>
+
+      {/* پارت انبار — همان مدیریت قفسه‌ها و سبدهای صفحهٔ قدیمی انبار، حالا
+          بخشی از همین لیست واحد. */}
+      <details className="pc-seo inv-structure-wrap">
+        <summary>
+          <span className="pc-seo-title">ساختار انبار — انبارها، قفسه‌ها و سبدها</span>
+          <small>ایجاد، ویرایش و حذف محل نگهداری اقلام</small>
+        </summary>
+        <div className="pc-seo-body">
+          <WarehouseStructureSection onMessage={setMessage} />
+        </div>
+      </details>
+
+      <InventoryItemSheet
+        item={sheetItem}
+        suppliers={suppliers}
+        locations={locations}
+        onClose={() => setSheetItem(null)}
+        onMessage={setMessage}
+        onChanged={() => void load()}
+      />
+
+      {createOpen && (
+        <ProductCreateModal
+          open
+          onClose={() => setCreateOpen(false)}
+          onCreated={(msg) => {
+            setMessage(msg);
+            setCreateOpen(false);
+            void load();
+          }}
+          categories={categories}
+          brands={brands}
+          locations={locations}
+          vehicles={vehicles}
+          suppliers={suppliers}
+        />
+      )}
 
       {draft && (
         <ProductEditor

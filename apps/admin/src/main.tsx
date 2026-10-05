@@ -12,12 +12,12 @@ import { MediaPage } from './pages/MediaPage';
 import { api, downloadFile } from './lib/api';
 import { applyStoreFavicon } from './lib/favicon';
 import { LoginPage } from './pages/LoginPage';
-import { CatalogPage } from './pages/CatalogPage';
 import { WholesalePage } from './pages/WholesalePage';
 import { LabelsPage } from './pages/LabelsPage';
 import { ReferencesPage } from './pages/ReferencesPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { AnalyticsPage } from './pages/AnalyticsPage';
+import { ProductsPage } from './pages/ProductsPage';
 import { InvoicesPage } from './pages/InvoicesPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { SettingsPage } from './pages/SettingsPage';
@@ -562,10 +562,8 @@ function App() {
           ) : page === 'analytics' ? (
             <AnalyticsPage />
           ) : page === 'products' || page === 'inventory' ? (
-            <CatalogPage
-              tab={page === 'inventory' ? 'inventory' : 'products'}
-              onTab={(next) => navigate(next)}
-            />
+            // ONE unified list: both old routes render the same page.
+            <ProductsPage />
           ) : page === 'wholesale' ? (
             <WholesalePage />
           ) : page === 'invoices' ? (
