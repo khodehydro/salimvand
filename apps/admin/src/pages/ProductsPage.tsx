@@ -272,6 +272,35 @@ export function ProductsPage() {
       .catch(() => undefined);
   }, []);
 
+  /** Builds the «کارت قلم» payload of one stock line from the list row. */
+  const openLineCard = (
+    product: ProductRow,
+    entry: NonNullable<ProductRow['inventoryItems']>[number],
+  ) => {
+    setSheetItem({
+      id: entry.id,
+      barcode: entry.barcode ?? '',
+      quantity: entry.quantity,
+      salePrice: entry.salePrice,
+      purchasePrice: entry.purchasePrice,
+      minStock: entry.minStock ?? null,
+      product: {
+        id: product.id,
+        name: product.name,
+        code: product.code,
+        images: (product.images ?? []).map((image) => ({ path: image.path })),
+        category: product.category ? { name: product.category.name } : null,
+        compatibilities: [],
+      },
+      brand: entry.brand ? { name: entry.brand.name } : undefined,
+      supplier: entry.supplier ?? null,
+      location: entry.location ?? undefined,
+      basket: entry.basket
+        ? { id: entry.basket.id, name: entry.basket.name ?? '', code: entry.basket.code }
+        : null,
+    });
+  };
+
   const visible = products.filter((product) => {
     const normalizedFilter = filter.trim().toLocaleLowerCase('fa');
     const queryMatch =
@@ -744,6 +773,19 @@ export function ProductsPage() {
                   <button className="row-action" onClick={() => openEditor(product.id)}>
                     ویرایش
                   </button>
+                  {items.length > 0 && (
+                    <button
+                      className="row-action"
+                      title={
+                        items.length > 1
+                          ? 'کارت قلم — برای قلم‌های دیگر، روی همان ردیف در جدول قلم‌ها کلیک کنید'
+                          : 'کارت قلم — تاریخچه، ورود کالا، انتقال قفسه'
+                      }
+                      onClick={() => openLineCard(product, items[0])}
+                    >
+                      کارت قلم
+                    </button>
+                  )}
                   <a
                     className="row-action"
                     href={`${publicSiteUrl}/product/${encodeURIComponent(product.slug)}`}
@@ -798,7 +840,13 @@ export function ProductsPage() {
                         <span role="columnheader">سبد</span>
                       </div>
                       {items.map((entry) => (
-                        <div className="pt-item" role="row" key={entry.id}>
+                        <div
+                          className="pt-item is-clickable"
+                          role="row"
+                          key={entry.id}
+                          title="باز کردن کارت قلم — تاریخچه، ورود کالا، انتقال قفسه"
+                          onClick={() => openLineCard(product, entry)}
+                        >
                           <span className="pt-item-brand" role="cell" data-label="برند و بارکد">
                             <b>{entry.brand?.name ?? 'بدون برند'}</b>
                             {entry.barcode ? (
@@ -816,54 +864,18 @@ export function ProductsPage() {
                           <span className="pt-num pt-sale" role="cell" data-label="قیمت فروش">
                             {formatRial(Number(entry.salePrice))}
                           </span>
-                          <span className="pt-item-qty" role="cell" data-label="موجودی">
+                          <span
+                            className="pt-item-qty"
+                            role="cell"
+                            data-label="موجودی"
+                            onClick={(event) => event.stopPropagation()}
+                          >
                             <StockStepper
                               itemId={entry.id}
                               quantity={entry.quantity}
                               onMessage={setMessage}
                               onSaved={() => void load()}
                             />
-                            <button
-                              type="button"
-                              className="row-action pt-item-sheet"
-                              title="کارت قلم — تاریخچه، ورود کالا، انتقال قفسه"
-                              onClick={() => {
-                                setSheetItem({
-                                  id: entry.id,
-                                  barcode: entry.barcode ?? '',
-                                  quantity: entry.quantity,
-                                  salePrice: entry.salePrice,
-                                  purchasePrice: entry.purchasePrice,
-                                  minStock: entry.minStock ?? null,
-                                  product: {
-                                    id: product.id,
-                                    name: product.name,
-                                    code: product.code,
-                                    images: (product.images ?? []).map((image) => ({
-                                      path: image.path,
-                                    })),
-                                    category: product.category
-                                      ? { name: product.category.name }
-                                      : null,
-                                    compatibilities: [],
-                                  },
-                                  brand: entry.brand
-                                    ? { name: entry.brand.name }
-                                    : undefined,
-                                  supplier: entry.supplier ?? null,
-                                  location: entry.location ?? undefined,
-                                  basket: entry.basket
-                                    ? {
-                                        id: entry.basket.id,
-                                        name: entry.basket.name ?? '',
-                                        code: entry.basket.code,
-                                      }
-                                    : null,
-                                });
-                              }}
-                            >
-                              کارت قلم
-                            </button>
                             {entry.minStock != null && entry.quantity < entry.minStock ? (
                               <small className="pt-warn">
                                 حداقل {entry.minStock.toLocaleString('fa-IR')}

@@ -202,6 +202,25 @@ describe('ProductsPage edit button', () => {
     expect(css).not.toContain('.products-page:has(> .modal-backdrop) > .product-list');
   });
 
+  it('opens the کارت قلم sheet from the عملیات column button', async () => {
+    mockApi = vi.fn((path: string) =>
+      path === `/products/${row.id}` ? Promise.reject(new Error('x')) : defaultRouting(path),
+    );
+    window.location.hash = '#/products';
+    render(<ProductsPage />);
+
+    expect(await screen.findByText('لنت جلو پژو ۲۰۶')).toBeTruthy();
+    // The actions column now hosts the card button (exactly one, next to
+    // ویرایش/سایت/برچسب/حذف) — not the stock stepper cell.
+    const cardButton = screen.getByRole('button', { name: 'کارت قلم' });
+    const actionsCell = cardButton.closest('[data-label="عملیات"]');
+    expect(actionsCell).toBeTruthy();
+    fireEvent.click(cardButton);
+    // The sheet mounts with the line identity + prices.
+    expect(await screen.findByText(/کارت قلم — لنت جلو پژو ۲۰۶/)).toBeTruthy();
+    expect(screen.getAllByText(/۸۰۰٬۰۰۰/).length).toBeGreaterThan(0);
+  });
+
   it('opens the editor instantly from the row while the detail GET is in flight', async () => {
     mockApi = vi.fn((path: string) =>
       path === `/products/${row.id}` ? new Promise(() => {}) : defaultRouting(path),

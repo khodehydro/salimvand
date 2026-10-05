@@ -10668,3 +10668,12 @@ html[data-theme='dark'] {
 .pt-line-place {
   color: var(--sv-text-3);
 }
+
+/* Line rows open the «کارت قلم» sheet on click — pointer + hover affordance. */
+.pt-item.is-clickable {
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+.pt-item.is-clickable:hover {
+  background: var(--sv-surface-2);
+}
