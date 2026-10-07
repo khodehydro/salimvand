@@ -7438,16 +7438,8 @@ button.btn-primary-lg:hover:not(:disabled) {
   --sv-brand-50: var(--sv-surface-3);
   --sv-brand-100: var(--sv-surface-3);
 }
-[data-theme='dark'] .admin .row-action,
-[data-theme='dark'] .admin .product-actions-cell .row-action {
-  background: var(--sv-surface-3);
-  color: var(--sv-link);
-  border: 1px solid var(--sv-border);
-}
-[data-theme='dark'] .admin .row-action:hover {
-  background: var(--sv-surface-2);
-  border-color: var(--sv-border-2);
-}
+/* .row-action keeps the navy sidebar surface in dark theme as well —
+   removed from this override (buttons match the sidebar in both skins). */
 
 /* ════════════════════════════════════════════════════════════════════
    Product create (ثبت محصول) — pc-* classes are owned exclusively by
@@ -9233,39 +9225,55 @@ html[data-theme='dark'] {
 }
 
 /* ── 7) Row actions & buttons: unify .row-action to match .btn-sm ── */
+/* Row actions: solid sidebar navy (سرمه‌ای) with the on-navy text — the same
+   brand surface as the sidebar, so action buttons read as primary controls.
+   The destructive variant is solid red (see below). */
 .admin .row-action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 4px;
   min-height: 30px;
-  padding: 6px 12px;
+  padding: 6px 13px;
   border-radius: 999px;
-  border: 1px solid var(--sv-border);
-  background: var(--sv-surface);
-  color: var(--sv-link);
+  border: 1px solid color-mix(in srgb, #ffffff 14%, transparent);
+  background: var(--sv-sidebar);
+  color: var(--sv-on-navy);
   font: 600 11.5px Vazirmatn, Tahoma, sans-serif;
   cursor: pointer;
   white-space: nowrap;
-  box-shadow: 0 1px 2px rgb(13 43 75 / 5%);
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  box-shadow: 0 1px 2px rgb(4 18 31 / 18%);
+  text-decoration: none;
+  transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
 }
 .admin .row-action:hover:not(:disabled) {
-  background: var(--sv-surface-2);
-  border-color: var(--sv-primary);
-  color: var(--sv-primary);
+  background: color-mix(in srgb, var(--sv-sidebar) 80%, #ffffff);
+  box-shadow: 0 2px 8px rgb(4 18 31 / 26%);
+  transform: translateY(-1px);
 }
+.admin .row-action:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgb(4 18 31 / 18%);
+}
+.admin .row-action:focus-visible {
+  outline: 2px solid var(--sv-link);
+  outline-offset: 2px;
+}
+.admin .row-action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+/* Destructive actions (حذف …): solid red background, white text. */
 .admin .row-action.danger-text,
 .admin .row-action.danger {
-  color: var(--sv-danger);
-  background: var(--sv-danger-soft);
-  border-color: color-mix(in srgb, var(--sv-danger) 25%, transparent);
-}
-.admin .row-action.danger-text:hover,
-.admin .row-action.danger:hover {
+  color: #fff !important;
   background: var(--sv-danger);
-  color: #fff;
-  border-color: var(--sv-danger);
+  border-color: color-mix(in srgb, #ffffff 16%, transparent);
+}
+.admin .row-action.danger-text:hover:not(:disabled),
+.admin .row-action.danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--sv-danger) 84%, #000000);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--sv-danger) 38%, transparent);
 }
 .admin .invoice-count-link {
   display: inline-flex;
@@ -9748,8 +9756,9 @@ html[data-theme='dark'] {
 }
 
 /* ── 13) Dark theme overrides for unified system ── */
+/* .row-action is intentionally NOT in this list: action buttons keep the
+   sidebar navy surface in both skins (the sidebar itself stays navy too). */
 [data-theme='dark'] .admin .count,
-[data-theme='dark'] .admin .row-action,
 [data-theme='dark'] .admin .invoice-count-link {
   background: var(--sv-surface);
   border-color: var(--sv-border);
