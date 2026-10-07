@@ -56,7 +56,8 @@ function makeService(social?: ReturnType<typeof makeSocial>) {
     $transaction: vi.fn(async (callback: (tx: unknown) => unknown) => callback(prisma)),
   };
   return {
-    service: new CatalogAdminService(prisma as never, social),
+    // `social` is a minimal structural stub, not the real class — never.
+    service: new CatalogAdminService(prisma as never, social as never),
     prisma,
   };
 }
