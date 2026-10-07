@@ -301,6 +301,36 @@ export function ProductsPage() {
     });
   };
 
+  /** Publishes one product's announcement to the Telegram/Bale channels —
+   * the manual half of auto-publish (every new ACTIVE product is posted
+   * automatically ~10s after registration; this button is the retry/manual
+   * path with per-channel feedback). */
+  const publishToChannels = async (product: ProductRow) => {
+    setMessage(`در حال انتشار «${product.name}» در کانال‌ها…`);
+    try {
+      const result = await api<{
+        data: {
+          telegram: { ok: boolean; skipped?: boolean; reason?: string };
+          bale: { ok: boolean; skipped?: boolean; reason?: string };
+        };
+      }>(`/products/${product.id}/publish`, { method: 'POST' });
+      const label = (name: string, channel: { ok: boolean; skipped?: boolean; reason?: string }) =>
+        channel.skipped
+          ? `${name}: پیکربندی نشده`
+          : channel.ok
+            ? `${name}: ارسال شد ✓`
+            : `${name}: خطا — ${channel.reason}`;
+      setMessage(
+        `انتشار «${product.name}» — ${label('تلگرام', result.data.telegram)} · ${label(
+          'بله',
+          result.data.bale,
+        )}`,
+      );
+    } catch (error) {
+      setMessage((error as Error).message);
+    }
+  };
+
   const visible = products.filter((product) => {
     const normalizedFilter = filter.trim().toLocaleLowerCase('fa');
     const queryMatch =
@@ -802,6 +832,13 @@ export function ProductsPage() {
                     }}
                   >
                     برچسب
+                  </button>
+                  <button
+                    className="row-action"
+                    title="انتشار آگهی این محصول در کانال‌های تلگرام و بله"
+                    onClick={() => void publishToChannels(product)}
+                  >
+                    انتشار در کانال
                   </button>
                   <button
                     className="row-action danger-text"

@@ -9,6 +9,7 @@ import {
 } from '../../common/sync/sync-payloads';
 import { recordSalePriceChange } from '../../common/inventory/price-history';
 import { resolvePlacement } from '../../common/inventory/placement';
+import { SocialPublisherService } from '../notifications/social-publisher.service';
 
 /** Inventory fields accepted inside product.create — brand, barcode, prices,
  * shelf and the opening stock, applied in the same transaction as the catalog
@@ -42,7 +43,16 @@ type ProductUpdateInventoryInput = {
 
 @Injectable()
 export class CatalogAdminService {
-  constructor(private readonly prisma: PrismaService) {}
+  /** Channel auto-announce delay (ms): the panel uploads media + compat
+   * right after the create call returns, so the background post waits a
+   * beat to go out WITH the product photo. */
+  static readonly CHANNEL_PUBLISH_DELAY_MS = Number(
+    process.env.CHANNEL_AUTO_PUBLISH_DELAY_MS ?? 10_000,
+  );
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly social?: SocialPublisherService,
+  ) {}
 
   async wholesale() {
     const products = await this.prisma.product.findMany({
@@ -392,6 +402,12 @@ export class CatalogAdminService {
     const result = this.prisma.$transaction
       ? await this.prisma.$transaction(createProduct)
       : await createProduct(this.prisma);
+    // Auto-announce: a freshly created ACTIVE product is posted to the
+    // Telegram/Bale channels in the background — fire-and-forget, so a
+    // channel outage or missing configuration never fails the registration
+    // (the manual «انتشار در کانال» button stays the retry path).
+    if (result.product.status === 'active')
+      this.scheduleChannelPublish(result.product.id);
     // `inventoryItem` (the first line) is kept for the single-line callers;
     // multi-line consumers read `inventoryItems`.
     return {
@@ -402,6 +418,30 @@ export class CatalogAdminService {
         inventoryItems: result.inventoryItems,
       },
     };
+  }
+
+  /** Fires the channel announcement for one product after a short delay,
+   * fully detached from the request lifecycle. */
+  private scheduleChannelPublish(productId: string) {
+    if (!this.social?.publishProduct) return;
+    const timer = setTimeout(
+      (service) => {
+        void service
+          .publishProduct(productId)
+          .then((result) => {
+            const sent = [result.telegram, result.bale].filter((channel) => channel.ok).length;
+            if (sent > 0) console.log(`[social] محصول ${productId} در ${sent} کانال منتشر شد`);
+            else console.info(`[social] انتشار خودکار ${productId}: هیچ کانالی پیکربندی نیست`);
+          })
+          .catch((error: Error) =>
+            console.warn(`[social] انتشار خودکار ${productId} ناموفق بود: ${error.message}`),
+          );
+      },
+      CatalogAdminService.CHANNEL_PUBLISH_DELAY_MS,
+      this.social,
+    );
+    // A pending publish must never keep the process alive on shutdown.
+    timer.unref?.();
   }
 
   async update(

@@ -78,6 +78,11 @@ function defaultRouting(path: string) {
   if (path === '/suppliers') return ok([]);
   if (path === '/locations') return ok([]);
   if (path === '/vehicles/tree') return ok([]);
+  if (path === `/products/${row.id}/publish`)
+    return Promise.resolve({
+      ok: true,
+      data: { telegram: { ok: true }, bale: { skipped: true, reason: 'پیکربندی نشده' } },
+    });
   return Promise.reject(new Error(`unexpected api call: ${path}`));
 }
 
@@ -200,6 +205,23 @@ describe('ProductsPage edit button', () => {
     expect(css).toMatch(/\.modal-backdrop\s*{[^}]*position:\s*fixed/s);
     expect(css).not.toMatch(/\.products-page > \.modal-backdrop[\s\S]{0,200}position:\s*static/);
     expect(css).not.toContain('.products-page:has(> .modal-backdrop) > .product-list');
+  });
+
+  it('publishes a product to the channels from the عملیات column and reports per-channel results', async () => {
+    mockApi = vi.fn((path: string) => defaultRouting(path));
+    window.location.hash = '#/products';
+    render(<ProductsPage />);
+
+    expect(await screen.findByText('لنت جلو پژو ۲۰۶')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'انتشار در کانال' }));
+
+    // The endpoint ran and the message names both channels' outcome.
+    expect(mockApi).toHaveBeenCalledWith(`/products/${row.id}/publish`, {
+      method: 'POST',
+    });
+    expect(
+      await screen.findByText(/انتشار «لنت جلو پژو ۲۰۶» — تلگرام: ارسال شد ✓ · بله: پیکربندی نشده/),
+    ).toBeTruthy();
   });
 
   it('opens the کارت قلم sheet from the عملیات column button', async () => {

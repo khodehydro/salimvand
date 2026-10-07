@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CatalogAdminService } from './catalog-admin.service';
 
 const CATEGORY_ID = 'ca7e9000-0000-4000-8000-000000000001';
@@ -23,7 +23,7 @@ const INVENTORY_ITEM = {
   isActive: true,
 };
 
-function makeService() {
+function makeService(social?: ReturnType<typeof makeSocial>) {
   const prisma = {
     product: {
       create: vi.fn(),
@@ -55,10 +55,26 @@ function makeService() {
     counter: { upsert: vi.fn().mockResolvedValue({ lastValue: 12 }), update: vi.fn() },
     $transaction: vi.fn(async (callback: (tx: unknown) => unknown) => callback(prisma)),
   };
-  return { service: new CatalogAdminService(prisma as never), prisma };
+  return {
+    service: new CatalogAdminService(prisma as never, social),
+    prisma,
+  };
+}
+
+/** Minimal stand-in for SocialPublisherService (only publishProduct). */
+function makeSocial() {
+  return { publishProduct: vi.fn().mockResolvedValue({
+    caption: 'x',
+    telegram: { ok: true },
+    bale: { ok: true },
+  }) };
 }
 
 describe('CatalogAdminService', () => {
+  beforeEach(() => {
+    // Auto-announce fires on a timer; collapse the delay to run it inline.
+    (CatalogAdminService as unknown as { CHANNEL_PUBLISH_DELAY_MS: number }).CHANNEL_PUBLISH_DELAY_MS = 0;
+  });
   it('generates a stable slug and accepts manual SEO on create', async () => {
     const { service, prisma } = makeService();
     prisma.product.create.mockResolvedValue({ id: 'p1' });
@@ -688,5 +704,39 @@ describe('product.update with a nested inventory object', () => {
     await expect(
       service.update(PRODUCT_ID, { inventory: { itemId: ITEM_ID, barcode: '6269999999999' } }),
     ).rejects.toThrow('این بارکد قبلاً برای قلم دیگری ثبت شده است');
+  });
+});
+
+describe('channel auto-publish on product create', () => {
+  beforeEach(() => {
+    (CatalogAdminService as unknown as { CHANNEL_PUBLISH_DELAY_MS: number }).CHANNEL_PUBLISH_DELAY_MS = 0;
+  });
+
+  it('schedules a channel announcement for an ACTIVE product', async () => {
+    const social = makeSocial();
+    const { service, prisma } = makeService(social as never);
+    prisma.product.create.mockResolvedValue({ id: 'p1', status: 'active' });
+    await service.create({ name: 'لنت ترمز', categoryId: 'c1' });
+    await vi.waitFor(() => expect(social.publishProduct).toHaveBeenCalledTimes(1));
+    expect(social.publishProduct).toHaveBeenCalledWith('p1');
+  });
+
+  it('never announces a HIDDEN product', async () => {
+    const social = makeSocial();
+    const { service, prisma } = makeService(social as never);
+    prisma.product.create.mockResolvedValue({ id: 'p1', status: 'hidden' });
+    await service.create({ name: 'لنت ترمز', categoryId: 'c1', status: 'hidden' });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(social.publishProduct).not.toHaveBeenCalled();
+  });
+
+  it('keeps the registration successful when the channel post fails', async () => {
+    const social = makeSocial();
+    social.publishProduct.mockRejectedValue(new Error('channel down'));
+    const { service, prisma } = makeService(social as never);
+    prisma.product.create.mockResolvedValue({ id: 'p1', status: 'active' });
+    const result = await service.create({ name: 'لنت ترمز', categoryId: 'c1' });
+    expect(result.ok).toBe(true);
+    await vi.waitFor(() => expect(social.publishProduct).toHaveBeenCalled());
   });
 });

@@ -264,7 +264,11 @@ export function ProductCreateModal({
       onCreated(
         `محصول «${created.data.name}» ثبت شد${
           filledLines ? ` — ${formatPersianNumber(filledLines)} قلم انبار با تعداد و قیمت` : ''
-        } و روی سایت نمایش داده می‌شود.`,
+        } و روی سایت نمایش داده می‌شود.${
+          basic.status === 'active'
+            ? ' آگهی آن به‌صورت خودکار در کانال‌های تلگرام و بله هم منتشر می‌شود.'
+            : ''
+        }`,
       );
       reset();
       onClose();
