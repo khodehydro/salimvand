@@ -3,6 +3,7 @@ import { baladDirectionsUrl, parseCoordinate } from '@salimvand/shared';
 import { PrismaService } from '../../prisma.service';
 import { resolveMessagingEnv, type MessagingSettingsReader } from './messaging-config';
 import { telegramApiHeaders } from './notifications.service';
+import { createChannelPhoto, type ChannelBrand } from './channel-photo';
 
 export type SocialPlatform = 'telegram' | 'bale';
 export type ButtonStyle = 'primary' | 'success' | 'danger';
@@ -48,10 +49,7 @@ export function adminPmUrl(platform: SocialPlatform, username: string): string {
 }
 
 export function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 /** Caption of the channel post: name, code, vehicles, phone and address. */
@@ -112,7 +110,8 @@ export function buildProductKeyboard(
 ): SocialButton[][] {
   const isTg = platform === 'telegram';
   const customAdmin = isTg ? post.telegramAdminUsername : post.baleAdminUsername;
-  const rawAdmin = customAdmin?.trim() || post.adminUsername?.trim() || DEFAULT_SOCIAL_ADMIN_USERNAME;
+  const rawAdmin =
+    customAdmin?.trim() || post.adminUsername?.trim() || DEFAULT_SOCIAL_ADMIN_USERNAME;
   const cleanAdmin = rawAdmin.replace(/^@+/, '').trim();
 
   const rows: SocialButton[][] = [
@@ -159,7 +158,7 @@ export function publishFailure(status: number, description?: string | null): str
   return `HTTP ${status}`;
 }
 
-type StoreProfile = {
+type StoreProfile = ChannelBrand & {
   phones?: string;
   address?: string;
   navLat?: string;
@@ -252,9 +251,21 @@ export class SocialPublisherService {
     const telegramCaption = buildProductCaption(post, 'telegram');
     const baleCaption = buildProductCaption(post, 'bale');
 
+    // Generate once and share the same watermarked copy between providers.
+    // A rendering error must never silently publish an unbranded original.
+    let photo: Buffer | undefined;
+    if (image) {
+      try {
+        photo = await createChannelPhoto(image.path, profile ?? {});
+      } catch {
+        throw new BadRequestException(
+          'ساخت تصویر واترمارک‌دار ناموفق بود؛ تصویر محصول و آیکون فروشگاه را بررسی کنید',
+        );
+      }
+    }
     const [telegram, bale] = await Promise.all([
-      this.send('telegram', env, post, telegramCaption),
-      this.send('bale', env, post, baleCaption),
+      this.send('telegram', env, post, telegramCaption, photo),
+      this.send('bale', env, post, baleCaption, photo),
     ]);
     return { caption: telegramCaption, telegram, bale };
   }
@@ -264,6 +275,7 @@ export class SocialPublisherService {
     env: NodeJS.ProcessEnv,
     post: ProductPostInput,
     caption: string,
+    photo?: Buffer,
   ): Promise<PublishChannelResult> {
     const token = platform === 'telegram' ? env.TELEGRAM_BOT_TOKEN : env.BALE_BOT_TOKEN;
     const chatId = platform === 'telegram' ? env.TELEGRAM_CHAT_ID : env.BALE_CHAT_ID;
@@ -273,22 +285,32 @@ export class SocialPublisherService {
       platform === 'telegram'
         ? (env.TELEGRAM_API_BASE ?? 'https://api.telegram.org').replace(/\/+$/, '')
         : 'https://tapi.bale.ai';
-    const method = post.imageUrl ? 'sendPhoto' : 'sendMessage';
+    const method = photo ? 'sendPhoto' : 'sendMessage';
     const payload = {
       chat_id: chatId,
       ...(platform === 'telegram' ? { parse_mode: 'HTML' } : {}),
-      ...(post.imageUrl ? { photo: post.imageUrl, caption } : { text: caption }),
+      ...(photo ? { caption } : { text: caption }),
       reply_markup: { inline_keyboard: buildProductKeyboard(post, platform) },
     };
+    const headers =
+      platform === 'telegram' ? telegramApiHeaders(env) : { 'content-type': 'application/json' };
+    let requestBody: string | FormData = JSON.stringify(payload);
+    if (photo) {
+      const form = new FormData();
+      for (const [key, value] of Object.entries(payload)) {
+        form.set(key, typeof value === 'string' ? value : JSON.stringify(value));
+      }
+      form.set('photo', new Blob([new Uint8Array(photo)], { type: 'image/jpeg' }), 'product.jpg');
+      // fetch supplies the multipart boundary; keep the Telegram proxy secret.
+      delete headers['content-type'];
+      requestBody = form;
+    }
     let result: PublishChannelResult;
     try {
       const response = await fetch(`${base}/bot${token}/${method}`, {
         method: 'POST',
-        headers:
-          platform === 'telegram'
-            ? telegramApiHeaders(env)
-            : { 'content-type': 'application/json' },
-        body: JSON.stringify(payload),
+        headers,
+        body: requestBody,
         signal: AbortSignal.timeout(PUBLISH_TIMEOUT_MS),
       });
       const body = (await response.json().catch(() => null)) as {

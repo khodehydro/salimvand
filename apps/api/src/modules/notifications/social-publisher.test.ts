@@ -9,6 +9,11 @@ import {
   type ProductPostInput,
 } from './social-publisher.service';
 import { integrationUrl, telegramApiHeaders } from './notifications.service';
+import { createChannelPhoto } from './channel-photo';
+
+vi.mock('./channel-photo', () => ({
+  createChannelPhoto: vi.fn(async () => Buffer.from('watermarked-jpeg')),
+}));
 
 const post: ProductPostInput = {
   name: 'لنت ترمز جلو',
@@ -78,9 +83,7 @@ describe('product post content', () => {
     expect(tgCaption).toContain('──────────────');
 
     const baleCaption = buildProductCaption(multiPhonePost, 'bale');
-    expect(baleCaption).toContain(
-      '📞 تماس (کلیک جهت کپی): `۰۴۱-۳۲۳۴۵۶۷۸`  |  `۰۹۱۴۱۲۳۴۵۶۷`',
-    );
+    expect(baleCaption).toContain('📞 تماس (کلیک جهت کپی): `۰۴۱-۳۲۳۴۵۶۷۸`  |  `۰۹۱۴۱۲۳۴۵۶۷`');
   });
 
   it('omits store info section when neither phone nor address exists', () => {
@@ -232,10 +235,16 @@ describe('SocialPublisherService', () => {
       expect(calls).toHaveLength(1);
       expect(calls[0].url).toBe('https://proxy.workers.dev/bottg-token/sendPhoto');
       expect((calls[0].init.headers as Record<string, string>)['x-proxy-secret']).toBe('s3cret');
-      const body = JSON.parse(String(calls[0].init.body)) as Record<string, unknown>;
+      expect(calls[0].init.headers).not.toHaveProperty('content-type');
+      expect(calls[0].init.body).toBeInstanceOf(FormData);
+      const form = calls[0].init.body as FormData;
+      const body = Object.fromEntries(form.entries()) as Record<string, unknown>;
+      body.reply_markup = JSON.parse(String(body.reply_markup));
+      expect(body.photo).toBeInstanceOf(Blob);
+      expect(await (body.photo as Blob).text()).toBe('watermarked-jpeg');
+      expect(createChannelPhoto).toHaveBeenCalledWith(product.images[0].path, expect.any(Object));
       expect(body.chat_id).toBe('-1003798951709');
       expect(body.parse_mode).toBe('HTML');
-      expect(body.photo).toBe('https://salimvand.ir/uploads/products/x.jpg');
       expect(String(body.caption)).toContain('کد محصول: BRK-100');
       expect(String(body.caption)).toContain('پژو ۲۰۶ تیپ ۵');
       expect(String(body.caption)).not.toContain('پژو ۲۰۶ تیپ ۵، پژو ۲۰۶ تیپ ۵');
@@ -252,6 +261,57 @@ describe('SocialPublisherService', () => {
       expect(logs[0].data).toMatchObject({ channel: 'telegram', status: 'sent' });
     } finally {
       global.fetch = originalFetch;
+    }
+  });
+
+  it('shares one branded photo with both channels and leaves product data unchanged', async () => {
+    process.env.TELEGRAM_BOT_TOKEN = 'tg-token';
+    process.env.TELEGRAM_CHAT_ID = '-100';
+    process.env.BALE_BOT_TOKEN = 'bale-token';
+    process.env.BALE_CHAT_ID = '-200';
+    const brand = { name: 'فروشگاه تست', faviconUrl: '/uploads/site/icon.png' };
+    const prisma = {
+      product: { findUnique: vi.fn(async () => product) },
+      setting: { findUnique: vi.fn(async () => ({ value: brand })) },
+      telegramLog: { create: vi.fn(async () => ({})) },
+    };
+    const fetchMock = vi
+      .spyOn(global, 'fetch')
+      .mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    // A separate response is needed for each JSON body read.
+    fetchMock.mockImplementation(async () => new Response(JSON.stringify({ ok: true })));
+    vi.mocked(createChannelPhoto).mockClear();
+    try {
+      const result = await serviceWith(prisma).publishProduct('p1');
+      expect(result.telegram.ok).toBe(true);
+      expect(result.bale.ok).toBe(true);
+      expect(createChannelPhoto).toHaveBeenCalledTimes(1);
+      expect(createChannelPhoto).toHaveBeenCalledWith('/uploads/products/x.jpg', brand);
+      for (const [, init] of fetchMock.mock.calls) {
+        const photo = (init?.body as FormData).get('photo') as Blob;
+        expect(photo.type).toBe('image/jpeg');
+        expect(await photo.text()).toBe('watermarked-jpeg');
+      }
+      expect(product.images).toEqual([{ path: '/uploads/products/x.jpg' }]);
+    } finally {
+      fetchMock.mockRestore();
+    }
+  });
+
+  it('does not publish the original if watermark generation fails', async () => {
+    process.env.TELEGRAM_BOT_TOKEN = 'tg-token';
+    process.env.TELEGRAM_CHAT_ID = '-100';
+    const prisma = {
+      product: { findUnique: vi.fn(async () => product) },
+      setting: { findUnique: vi.fn(async () => null) },
+    };
+    vi.mocked(createChannelPhoto).mockRejectedValueOnce(new Error('broken image'));
+    const fetchMock = vi.spyOn(global, 'fetch');
+    try {
+      await expect(serviceWith(prisma).publishProduct('p1')).rejects.toThrow('واترمارک');
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      fetchMock.mockRestore();
     }
   });
 

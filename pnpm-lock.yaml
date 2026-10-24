@@ -117,6 +117,9 @@ importers:
       cookie-parser:
         specifier: ^1.4.7
         version: 1.4.7
+      decode-ico:
+        specifier: ^0.4.1
+        version: 0.4.1
       exceljs:
         specifier: ^4.4.0
         version: 4.4.0
@@ -353,6 +356,9 @@ packages:
 
   '@borewit/text-codec@0.2.2':
     resolution: {integrity: sha512-DDaRehssg1aNrH4+2hnj1B7vnUGEjU6OIlyRdkMd0aUdIUvKXrJfXsy8LVtXAy7DRvYVluWbMspsRhz2lcW0mQ==}
+
+  '@canvas/image-data@1.1.0':
+    resolution: {integrity: sha512-QdObRRjRbcXGmM1tmJ+MrHcaz1MftF2+W7YI+MsphnsCrmtyfS0d5qJbk0MeSbUeyM/jCb0hmnkXPsy026L7dA==}
 
   '@csstools/color-helpers@5.1.0':
     resolution: {integrity: sha512-S11EXWJyy0Mz5SYvRmY8nJYTFFd1LCNV+7cXyAgQtOOuzb4EsgfqDufL+9esx72/eLhsRdGZwaldu/h+E4t4BA==}
@@ -1738,6 +1744,14 @@ packages:
   decimal.js@10.6.0:
     resolution: {integrity: sha512-YpgQiITW3JXGntzdUmyUR1V812Hn8T1YVXhCu+wO3OpS4eU9l4YdD3qjyiKdV6mvV29zapkMeD390UVEf2lkUg==}
 
+  decode-bmp@0.2.1:
+    resolution: {integrity: sha512-NiOaGe+GN0KJqi2STf24hfMkFitDUaIoUU3eKvP/wAbLe8o6FuW5n/x7MHPR0HKvBokp6MQY/j7w8lewEeVCIA==}
+    engines: {node: '>=8.6.0'}
+
+  decode-ico@0.4.1:
+    resolution: {integrity: sha512-69NZfbKIzux1vBOd31al3XnMnH+2mqDhEgLdpygErm4d60N+UwA5Sq5WFjmEDQzumgB9fElojGwWG0vybVfFmA==}
+    engines: {node: '>=8.6'}
+
   deep-eql@5.0.2:
     resolution: {integrity: sha512-h5k/5U50IJJFpzfL6nO9jaaumfjO/f2NjK/oYB2Djzm4p9L+3T9qWpZqZ2hAbLPuuYq9wrU08WQyBTL5GbPk5Q==}
     engines: {node: '>=6'}
@@ -2865,6 +2879,9 @@ packages:
     resolution: {integrity: sha512-e0votIpp4Uo2AJYSzVHV6xCcawuiez3DzqDAbrTc3YxBkplN6e+dM13ZeIcZnDg/QpSuU2zfZ3rzwY8ukEnaXw==}
     engines: {node: '>=14.14'}
 
+  to-data-view@1.1.0:
+    resolution: {integrity: sha512-1eAdufMg6mwgmlojAx3QeMnzB/BTVp7Tbndi3U7ftcT2zCZadjxkkmLmd97zmaxWi+sgGcgWrokmpEoy0Dn0vQ==}
+
   toidentifier@1.0.1:
     resolution: {integrity: sha512-o5sSPKEkg/DIQNmH43V0/uerLrpzVedkUh8tGNvaeXpfpuwjKenlSox/2O/BTlZUtEe+JG7s5YhEz608PlAHRA==}
     engines: {node: '>=0.6'}
@@ -3268,6 +3285,8 @@ snapshots:
       '@babel/helper-validator-identifier': 7.29.7
 
   '@borewit/text-codec@0.2.2': {}
+
+  '@canvas/image-data@1.1.0': {}
 
   '@csstools/color-helpers@5.1.0': {}
 
@@ -4424,6 +4443,17 @@ snapshots:
   decimal.js-light@2.5.1: {}
 
   decimal.js@10.6.0: {}
+
+  decode-bmp@0.2.1:
+    dependencies:
+      '@canvas/image-data': 1.1.0
+      to-data-view: 1.1.0
+
+  decode-ico@0.4.1:
+    dependencies:
+      '@canvas/image-data': 1.1.0
+      decode-bmp: 0.2.1
+      to-data-view: 1.1.0
 
   deep-eql@5.0.2: {}
 
@@ -5714,6 +5744,8 @@ snapshots:
   tinyspy@4.0.4: {}
 
   tmp@0.2.7: {}
+
+  to-data-view@1.1.0: {}
 
   toidentifier@1.0.1: {}
 
