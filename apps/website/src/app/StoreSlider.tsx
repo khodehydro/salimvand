@@ -5,7 +5,6 @@ import { formatPersianNumber, type StoreSlide } from '@salimvand/shared';
 
 export function StoreSlider({ slides, storeName }: { slides: StoreSlide[]; storeName: string }) {
   const [active, setActive] = useState(0);
-  const [paused, setPaused] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [touching, setTouching] = useState(false);
   const [focused, setFocused] = useState(false);
@@ -42,11 +41,10 @@ export function StoreSlider({ slides, storeName }: { slides: StoreSlide[]; store
   }, []);
 
   useEffect(() => {
-    if (count < 2 || paused || hovered || touching || focused || !visible || !inView || reduced)
-      return;
-    const timer = window.setInterval(() => setActive((current) => (current + 1) % count), 5000);
+    if (count < 2 || hovered || touching || focused || !visible || !inView || reduced) return;
+    const timer = window.setInterval(() => setActive((current) => (current + 1) % count), 3000);
     return () => window.clearInterval(timer);
-  }, [count, index, paused, hovered, touching, focused, visible, inView, reduced]);
+  }, [count, index, hovered, touching, focused, visible, inView, reduced]);
 
   // Warm just the next slide instead of downloading the entire gallery.
   const nextPath = count > 1 ? slides[(index + 1) % count].path : '';
@@ -134,17 +132,6 @@ export function StoreSlider({ slides, storeName }: { slides: StoreSlide[]; store
               </button>
             ))}
           </div>
-          {!reduced && (
-            <button
-              type="button"
-              className="store-slider-pause"
-              aria-pressed={paused}
-              aria-label={paused ? 'ادامهٔ پخش خودکار' : 'توقف پخش خودکار'}
-              onClick={() => setPaused((value) => !value)}
-            >
-              {paused ? '▶' : 'Ⅱ'}
-            </button>
-          )}
         </div>
       )}
     </div>

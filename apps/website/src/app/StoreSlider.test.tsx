@@ -10,7 +10,7 @@ const slides = ['اول', 'دوم', 'سوم'].map((alt, i) => ({
   alt,
 }));
 const show = () => render(<StoreSlider slides={slides} storeName="فروشگاه" />);
-const tick = (ms = 5000) => act(() => vi.advanceTimersByTime(ms));
+const tick = (ms = 3000) => act(() => vi.advanceTimersByTime(ms));
 const active = () => screen.getByRole('button', { current: true }).getAttribute('aria-label');
 beforeEach(() => {
   vi.useFakeTimers();
@@ -35,10 +35,10 @@ describe('store image slider', () => {
     expect(html).not.toContain('iframe');
     expect(html).not.toContain('hero-video-card');
   });
-  it('automatically advances every five seconds and loops', () => {
+  it('automatically advances every three seconds and loops', () => {
     show();
     expect(active()).toBe('نمایش تصویر ۱');
-    tick(4999);
+    tick(2999);
     expect(active()).toBe('نمایش تصویر ۱');
     tick(1);
     expect(active()).toBe('نمایش تصویر ۲');
@@ -49,12 +49,12 @@ describe('store image slider', () => {
   });
   it('supports indicators and restarts the interval after manual selection', () => {
     show();
-    tick(4000);
+    tick(2000);
     fireEvent.click(screen.getByRole('button', { name: 'نمایش تصویر ۳' }));
     expect(active()).toBe('نمایش تصویر ۳');
     tick(1000);
     expect(active()).toBe('نمایش تصویر ۳');
-    tick(4000);
+    tick(2000);
     expect(active()).toBe('نمایش تصویر ۱');
   });
   it('supports swiping in both directions without hijacking vertical scrolling', () => {
@@ -82,16 +82,16 @@ describe('store image slider', () => {
     tick();
     expect(active()).toBe('نمایش تصویر ۳');
   });
-  it('supports keyboard navigation and pause/resume', () => {
+  it('supports keyboard navigation and shows only image indicators, without play/pause', () => {
     show();
+    expect(screen.getAllByRole('button')).toHaveLength(slides.length);
+    expect(screen.queryByRole('button', { name: /توقف پخش|ادامهٔ پخش/ })).toBeNull();
     fireEvent.keyDown(screen.getByRole('region'), { key: 'ArrowLeft' });
     expect(active()).toBe('نمایش تصویر ۲');
-    fireEvent.click(screen.getByRole('button', { name: 'توقف پخش خودکار' }));
-    tick(15000);
-    expect(active()).toBe('نمایش تصویر ۲');
-    fireEvent.click(screen.getByRole('button', { name: 'ادامهٔ پخش خودکار' }));
     tick();
     expect(active()).toBe('نمایش تصویر ۳');
+    fireEvent.keyDown(screen.getByRole('region'), { key: 'ArrowRight' });
+    expect(active()).toBe('نمایش تصویر ۲');
   });
   it('stops automatic advancement in hidden tabs', () => {
     show();

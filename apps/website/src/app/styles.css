@@ -3013,11 +3013,11 @@ p {
   justify-content: center;
   border-radius: 24px;
   background: #071728b3;
+  padding: 2px 4px;
 }
-.store-slider-dots button,
-.store-slider-pause {
-  width: 30px;
-  height: 32px;
+.store-slider-dots button {
+  width: 24px;
+  height: 24px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -3029,19 +3029,15 @@ p {
 }
 .store-slider-dots button span {
   display: block;
-  width: 7px;
-  height: 7px;
+  width: 4px;
+  height: 4px;
   background: #ffffff80;
   border-radius: 50%;
 }
 .store-slider-dots button.active span {
   background: #fff;
-  width: 11px;
-  height: 11px;
-}
-.store-slider-pause {
-  background: #071728b3;
-  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
 }
 .store-slider :focus-visible {
   outline: 2px solid #fff;
