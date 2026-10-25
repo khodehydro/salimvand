@@ -370,6 +370,29 @@ describe('SocialPublisherService', () => {
     }
   });
 
+  it('publishes only the selected platform in a bulk campaign', async () => {
+    process.env.TELEGRAM_BOT_TOKEN = 'tg-token';
+    process.env.TELEGRAM_CHAT_ID = '-100';
+    process.env.BALE_BOT_TOKEN = 'bale-token';
+    process.env.BALE_CHAT_ID = '-200';
+    const prisma = {
+      product: { findUnique: vi.fn(async () => product) },
+      setting: { findUnique: vi.fn(async () => null) },
+    };
+    const fetchMock = vi
+      .spyOn(global, 'fetch')
+      .mockImplementation(async () => new Response(JSON.stringify({ ok: true })));
+    try {
+      const result = await serviceWith(prisma).publishProduct('p1', ['telegram']);
+      expect(result.telegram.ok).toBe(true);
+      expect(result.bale).toEqual({ ok: false, skipped: true, reason: 'انتخاب نشده' });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(String(fetchMock.mock.calls[0][0])).toContain('/bottg-token/');
+    } finally {
+      fetchMock.mockRestore();
+    }
+  });
+
   it('does not publish the original if watermark generation fails', async () => {
     process.env.TELEGRAM_BOT_TOKEN = 'tg-token';
     process.env.TELEGRAM_CHAT_ID = '-100';

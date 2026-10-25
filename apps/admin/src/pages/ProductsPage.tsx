@@ -9,6 +9,7 @@ import { MediaPicker, type PickerItem } from '../components/MediaPicker';
 import { MediaImage } from '../components/MediaImage';
 import { StockStepper } from '../components/StockStepper';
 import { SupplierBadge } from '../components/SupplierBadge';
+import { BulkPublishButton } from '../components/BulkPublishButton';
 import { ProductCreateModal } from '../components/ProductCreateModal';
 import { InventoryItemSheet, WarehouseStructureSection } from './InventoryParts';
 import type { Item as SheetItem } from './InventoryParts';
@@ -381,6 +382,7 @@ export function ProductsPage() {
         </div>
         <div className="page-title-actions">
           <span className="count">{products.length} محصول</span>
+          <BulkPublishButton categories={categories} brands={brands} vehicles={vehicles} />
           <button className="button-primary" onClick={() => setCreateOpen(true)}>
             ＋ ثبت محصول
           </button>

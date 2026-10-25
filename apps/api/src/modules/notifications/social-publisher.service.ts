@@ -181,7 +181,10 @@ export class SocialPublisherService {
     );
   }
 
-  async publishProduct(productIdOrItemId: string): Promise<PublishResult> {
+  async publishProduct(
+    productIdOrItemId: string,
+    platforms: SocialPlatform[] = ['telegram', 'bale'],
+  ): Promise<PublishResult> {
     let product = await this.prisma.product.findUnique({
       where: { id: productIdOrItemId },
       include: {
@@ -211,7 +214,8 @@ export class SocialPublisherService {
 
     const env = await this.messagingEnv();
     const configured =
-      (env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) || (env.BALE_BOT_TOKEN && env.BALE_CHAT_ID);
+      (platforms.includes('telegram') && env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) ||
+      (platforms.includes('bale') && env.BALE_BOT_TOKEN && env.BALE_CHAT_ID);
     if (!configured)
       throw new BadRequestException(
         'برای انتشار، ابتدا توکن ربات و آیدی کانال تلگرام یا بله را در پنل (پیامک و کانال‌ها ← پیکربندی) ذخیره کنید',
@@ -264,8 +268,12 @@ export class SocialPublisherService {
       }
     }
     const [telegram, bale] = await Promise.all([
-      this.send('telegram', env, post, telegramCaption, photo),
-      this.send('bale', env, post, baleCaption, photo),
+      platforms.includes('telegram')
+        ? this.send('telegram', env, post, telegramCaption, photo)
+        : Promise.resolve({ ok: false, skipped: true, reason: 'انتخاب نشده' }),
+      platforms.includes('bale')
+        ? this.send('bale', env, post, baleCaption, photo)
+        : Promise.resolve({ ok: false, skipped: true, reason: 'انتخاب نشده' }),
     ]);
     return { caption: telegramCaption, telegram, bale };
   }

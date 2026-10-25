@@ -10686,3 +10686,100 @@ html[data-theme='dark'] {
 .pt-item.is-clickable:hover {
   background: var(--sv-surface-2);
 }
+
+/* Group publishing is a background campaign, not a long-lived browser request. */
+.bulk-publish-dialog .editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.bulk-form {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 12px;
+}
+.bulk-form > label,
+.bulk-publish-dialog .editor-body > label {
+  display: grid;
+  gap: 6px;
+}
+.bulk-publish-dialog select,
+.bulk-pick > input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--sv-border, #dce1e8);
+  border-radius: 10px;
+  background: var(--sv-surface, #fff);
+  color: inherit;
+  font: inherit;
+}
+.bulk-pick {
+  border: 1px solid var(--sv-border, #dce1e8);
+  border-radius: 12px;
+  padding: 12px;
+  min-width: 0;
+}
+.bulk-pick legend {
+  padding: 0 6px;
+  font-weight: 600;
+}
+.bulk-pick-options {
+  max-height: 180px;
+  overflow: auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px 0 2px;
+}
+.bulk-pick-options label,
+.bulk-checks label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.bulk-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.bulk-checks input,
+.bulk-pick input[type='checkbox'] {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+}
+.bulk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+.bulk-progress {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--sv-border, #dce1e8);
+  border-radius: 12px;
+}
+.bulk-progress progress {
+  display: block;
+  width: 100%;
+  height: 12px;
+  accent-color: var(--sv-brand-600, #167d6c);
+}
+.bulk-progress details {
+  margin-top: 16px;
+}
+.bulk-progress li {
+  margin-block: 8px;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 600px) {
+  .bulk-pick-options {
+    grid-template-columns: 1fr;
+  }
+  .bulk-actions > button {
+    width: 100%;
+  }
+}
