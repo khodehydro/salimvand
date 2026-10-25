@@ -87,7 +87,9 @@ export class CatalogService {
     const [products, total] = await Promise.all([
       this.prisma.product.findMany({
         where: where as never,
-        orderBy: { createdAt: 'desc' },
+        // A deterministic tie-breaker keeps offset pages stable when products
+        // share a creation timestamp (imports and bulk registration).
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         skip: (page - 1) * pageSize,
         take: pageSize,
         select: {

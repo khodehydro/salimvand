@@ -70,6 +70,17 @@ describe('CatalogService', () => {
     });
     expect(result.meta).toEqual({ page: 2, pageSize: 50, total: 25, totalPages: 1 });
   });
+  it('uses stable ordering and a 28-item offset for incremental storefront pages', async () => {
+    const { service, prisma } = makeService();
+    prisma.product.findMany.mockResolvedValue([row]);
+    prisma.product.count.mockResolvedValue(84);
+    const result = await service.listPublicProducts({ page: 2, pageSize: 28 });
+    expect(prisma.product.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], skip: 28, take: 28,
+    }));
+    expect(result.meta).toEqual({ page: 2, pageSize: 28, total: 84, totalPages: 3 });
+  });
+
   it('marks a product low when stock reaches its public threshold', async () => {
     const { service, prisma } = makeService();
     prisma.product.findMany.mockResolvedValue([

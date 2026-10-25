@@ -1,4 +1,10 @@
-import { ProductCard } from '../../ProductCard';
+import { LoadMoreProducts } from '../../LoadMoreProducts';
+import { getCatalogPage } from '../../catalog-data';
+import {
+  catalogCanonicalPath,
+  catalogPageNumber,
+  type CatalogPage,
+} from '../../catalog-pagination';
 import { getStoreInfo, telHref } from '../../store-info';
 import { PublicSubHeader, PublicFooter } from '../../PublicSubHeader';
 import { CategorySidebar, type CategoryItem } from '../../CategorySidebar';
@@ -11,24 +17,10 @@ const api = process.env.API_URL ?? 'https://api.salimvand.ir/api/v1';
 
 type Category = CategoryItem;
 
-type Product = {
-  slug: string;
-  name: string;
-  code: string;
-  availability: string;
-  aparatVideoId?: string | null;
-  brands?: Array<{ name: string; inStock: boolean }>;
-  compatibilities?: Array<{
-    model: { name: string; make: { name: string } };
-    trim?: { name: string } | null;
-  }>;
-  images: Array<{ path: string; thumbnailPath?: string; alt?: string }>;
-  category: { name: string };
-};
-
 async function getCategory(
   slug: string,
-): Promise<{ category: Category; categories: Category[]; products: Product[] } | null> {
+  page = 1,
+): Promise<{ category: Category; categories: Category[]; products: CatalogPage } | null> {
   try {
     // Next may pass the param already percent-encoded for non-ASCII slugs.
     const decodedSlug = decodeURIComponent(slug);
@@ -38,14 +30,10 @@ async function getCategory(
       (item) => item.slug === decodedSlug || item.slug === slug || item.id === decodedSlug,
     );
     if (!category) return null;
-    const products = await fetch(`${api}/public/products?categoryId=${category.id}&pageSize=60`, {
-      next: { revalidate: 300 },
-    });
-    return {
-      category,
-      categories: data.categories,
-      products: ((await products.json()) as { data: Product[] }).data ?? [],
-    };
+    const products = await getCatalogPage(
+      new URLSearchParams({ categoryId: category.id, page: String(page) }),
+    );
+    return { category, categories: data.categories, products };
   } catch {
     return null;
   }
@@ -53,10 +41,13 @@ async function getCategory(
 
 export async function generateMetadata({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
 }): Promise<Metadata> {
-  const data = await getCategory((await params).slug);
+  const page = catalogPageNumber((await searchParams).page);
+  const data = await getCategory((await params).slug, page);
   const siteUrl = (process.env.PUBLIC_SITE_URL ?? 'https://salimvand.ir').replace(/\/$/, '');
   return {
     title: data ? data.category.name : 'دسته‌بندی پیدا نشد',
@@ -67,7 +58,9 @@ export async function generateMetadata({
       ? [data.category.name, `لوازم یدکی ${data.category.name}`, 'قطعات خودرو میاندوآب']
       : undefined,
     alternates: data
-      ? { canonical: `${siteUrl}/category/${encodeURIComponent(data.category.slug)}` }
+      ? {
+          canonical: `${siteUrl}${catalogCanonicalPath(`/category/${encodeURIComponent(data.category.slug)}`, `page=${page}`)}`,
+        }
       : undefined,
     openGraph: data
       ? {
@@ -80,8 +73,15 @@ export async function generateMetadata({
   };
 }
 
-export default async function CategoryPage({ params }: { params: Promise<{ slug: string }> }) {
-  const data = await getCategory((await params).slug);
+export default async function CategoryPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
+  const page = catalogPageNumber((await searchParams).page);
+  const data = await getCategory((await params).slug, page);
   const info = await getStoreInfo();
   if (!data) notFound();
   trackVisit(`/category/${encodeURIComponent(data.category.slug)}`);
@@ -121,7 +121,7 @@ export default async function CategoryPage({ params }: { params: Promise<{ slug:
       />
       <PublicSubHeader context="کاتالوگ قطعات خودرو" />
 
-      <section className="catalog category-catalog-page">
+      <section className="catalog category-catalog-page" id="catalog">
         <nav className="breadcrumb">
           <a href="/">خانه</a>
           <span>←</span>
@@ -140,7 +140,7 @@ export default async function CategoryPage({ params }: { params: Promise<{ slug:
           </div>
           <div className="category-page-stats">
             <span className="category-stat-badge">
-              <strong>{formatPersianNumber(data.products.length)}</strong> قطعه موجود
+              <strong>{formatPersianNumber(data.products.total)}</strong> قطعه موجود
             </span>
           </div>
         </div>
@@ -150,21 +150,23 @@ export default async function CategoryPage({ params }: { params: Promise<{ slug:
             categories={data.categories}
             currentCategoryId={data.category.id}
             currentCategoryName={data.category.name}
-            productCount={data.products.length}
+            productCount={data.products.total}
           />
 
           <div className="category-main">
-            {data.products.length ? (
-              <div className="product-grid category-product-grid">
-                {data.products.map((product) => (
-                  <ProductCard
-                    key={product.slug}
-                    product={product}
-                    heading="h2"
-                    contact={{ tel: telHref(info), telegram: info.telegram, bale: info.bale }}
-                  />
-                ))}
-              </div>
+            {data.products.items.length ? (
+              <LoadMoreProducts
+                key={`${data.category.id}:${page}`}
+                initial={data.products}
+                query={new URLSearchParams({
+                  categoryId: data.category.id,
+                  page: String(page),
+                }).toString()}
+                pagePath={`/category/${encodeURIComponent(data.category.slug)}`}
+                heading="h2"
+                gridClassName="category-product-grid"
+                contact={{ tel: telHref(info), telegram: info.telegram, bale: info.bale }}
+              />
             ) : (
               <div className="category-empty-state">
                 <div className="category-empty-icon">📦</div>

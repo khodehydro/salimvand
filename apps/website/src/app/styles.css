@@ -2903,3 +2903,42 @@ p {
     gap: 10px;
   }
 }
+
+/* A real next-page link progressively enhances to an append-only catalog button. */
+.catalog-load-more {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 30px 12px 10px;
+  text-align: center;
+}
+.catalog-load-more p {
+  margin: 0;
+  color: var(--text-2);
+}
+.catalog-load-button {
+  min-width: 230px;
+  gap: 14px;
+}
+.catalog-load-button[aria-disabled='true'] {
+  opacity: 0.65;
+  cursor: wait;
+}
+.catalog-load-button:focus-visible {
+  outline: 3px solid var(--brand-600);
+  outline-offset: 4px;
+}
+.catalog-load-more .catalog-load-error {
+  color: var(--danger, #bb3333);
+}
+.catalog-previous {
+  color: var(--brand-600);
+  font-size: 13px;
+}
+@media (max-width: 620px) {
+  .catalog-load-button {
+    width: 100%;
+    max-width: 360px;
+  }
+}

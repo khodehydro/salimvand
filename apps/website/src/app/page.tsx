@@ -1,4 +1,6 @@
-import { ProductCard } from './ProductCard';
+import { LoadMoreProducts } from './LoadMoreProducts';
+import { getCatalogPage } from './catalog-data';
+import { catalogCanonicalPath, type CatalogPage } from './catalog-pagination';
 import { CatalogFilters } from './CatalogFilters';
 import { ThemeToggle } from './ThemeToggle';
 import { NavigationButton } from './NavigationButton';
@@ -9,20 +11,6 @@ import { StoreContact } from './PublicSubHeader';
 import { trackVisit } from './analytics';
 
 const apiUrl = process.env.API_URL ?? 'https://api.salimvand.ir/api/v1';
-type Product = {
-  slug: string;
-  name: string;
-  code: string;
-  availability: string;
-  aparatVideoId?: string | null;
-  brands: Array<{ name: string; inStock: boolean }>;
-  compatibilities?: Array<{
-    model: { name: string; make: { name: string } };
-    trim?: { name: string } | null;
-  }>;
-  images: Array<{ path: string; thumbnailPath?: string; alt?: string }>;
-  category: { name: string };
-};
 type Filter = { id: string; name: string; slug?: string };
 type Vehicle = {
   id: string;
@@ -43,26 +31,9 @@ function asArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : [];
 }
 
-async function getProducts(
-  query: string,
-): Promise<{ items: Product[]; total: number; totalPages: number; page: number }> {
+async function getProducts(query: string): Promise<CatalogPage> {
   try {
-    const response = await fetch(`${apiUrl}/public/products${query ? `?${query}` : ''}`, {
-      next: { revalidate: 300 },
-    });
-    if (!response.ok) return { items: [], total: 0, totalPages: 0, page: 1 };
-    const body = (await response.json()) as {
-      data?: unknown;
-      meta?: { total?: number; totalPages?: number; page?: number };
-    };
-    const items = asArray<Product>(body.data);
-    const meta = body.meta ?? {};
-    return {
-      items,
-      total: Number(meta.total ?? items.length) || 0,
-      totalPages: Number(meta.totalPages ?? 1) || 1,
-      page: Number(meta.page ?? 1) || 1,
-    };
+    return await getCatalogPage(new URLSearchParams(query));
   } catch {
     return { items: [], total: 0, totalPages: 0, page: 1 };
   }
@@ -117,11 +88,20 @@ const getMeta = async (): Promise<StoreMeta> => {
   } as StoreMeta;
 };
 
-export async function generateMetadata() {
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
   // The home title/description are operator-editable from the panel
   // (Settings → Store information → SEO); store-info applies the fallbacks.
   const info = await getStoreInfo();
+  const params = await searchParams;
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params))
+    if (typeof value === 'string') query.set(key, value);
   return {
+    alternates: { canonical: catalogCanonicalPath('/', query.toString()) },
     title: info.seo.title,
     description: info.seo.description,
     openGraph: { title: info.seo.title, description: info.seo.description },
@@ -136,7 +116,15 @@ export default async function HomePage({
   trackVisit('/');
   const params = await searchParams;
   const query = new URLSearchParams();
-  for (const key of ['q', 'categoryId', 'vehicleModelId', 'vehicleTrimId', 'brandId', 'page'])
+  for (const key of [
+    'q',
+    'categoryId',
+    'vehicleMakeId',
+    'vehicleModelId',
+    'vehicleTrimId',
+    'brandId',
+    'page',
+  ])
     if (params[key]) query.set(key, params[key]!);
   if (params.inStock === 'true') query.set('inStock', 'true');
   const [products, filters, meta, info] = await Promise.all([
@@ -219,45 +207,20 @@ export default async function HomePage({
             {info.pricing.showPrices ? 'قیمت‌های روز انبار' : 'قیمت فقط با استعلام'}
           </span>
         </div>
-        <CatalogFilters filters={filters} params={params} />
+        <CatalogFilters key={query.toString()} filters={filters} params={params} />
         {products.items.length ? (
-          <div className="product-grid">
-            {products.items.map((product) => (
-              <ProductCard
-                key={product.slug}
-                product={product}
-                contact={{
-                  tel: telHref(info),
-                  telegram: info.telegram,
-                  bale: info.bale,
-                }}
-              />
-            ))}
-          </div>
+          <LoadMoreProducts
+            key={query.toString()}
+            initial={products}
+            query={query.toString()}
+            contact={{ tel: telHref(info), telegram: info.telegram, bale: info.bale }}
+          />
         ) : (
           <div className="empty-state">
             <b>قطعه‌ای با این مشخصات پیدا نشد.</b>
             <span>فیلترها را پاک کنید یا عبارت دیگری جست‌وجو کنید.</span>
-            <a href="#catalog">پاک کردن فیلترها</a>
+            <a href="/#catalog">پاک کردن فیلترها</a>
           </div>
-        )}
-        {products.totalPages > 1 && (
-          <nav className="pagination" aria-label="صفحه‌بندی">
-            {Array.from({ length: products.totalPages }, (_, index) => {
-              const page = index + 1;
-              const next = new URLSearchParams(query.toString());
-              next.set('page', String(page));
-              return (
-                <a
-                  className={products.page === page ? 'current' : ''}
-                  href={`/?${next.toString()}`}
-                  key={page}
-                >
-                  {formatPersianNumber(page)}
-                </a>
-              );
-            })}
-          </nav>
         )}
       </section>
       <StoreContact info={info} variant="home" />
