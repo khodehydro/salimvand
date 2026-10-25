@@ -48,13 +48,14 @@ describe('channel-only photo watermark', () => {
     });
     expect(await sharp(output).metadata()).toMatchObject({
       format: 'jpeg',
-      width: 900,
-      height: 600,
+      width: 1200,
+      height: 1200,
     });
-    const iconPixel = await pixel(output, 40, 40);
+    const iconPixel = await pixel(output, 60, 60);
     expect(iconPixel[0]).toBeGreaterThan(220);
     expect(iconPixel[1]).toBeLessThan(30);
-    // The bottom right remains the product image, not another watermark.
+    // Product aspect ratio is preserved, with white padding above/below it.
+    expect(await pixel(output, 1150, 1150)).toEqual([255, 255, 255]);
     const untouched = await pixel(output, 850, 550);
     expect(untouched[0]).toBeCloseTo(32, -1);
     expect(untouched[2]).toBeCloseTo(96, -1);
@@ -84,7 +85,7 @@ describe('channel-only photo watermark', () => {
     const output = await createChannelPhoto('/uploads/products/p.png', {
       faviconUrl: '/uploads/site/icon.ico',
     });
-    const color = await pixel(output, 40, 40);
+    const color = await pixel(output, 60, 60);
     expect(color[1]).toBeGreaterThan(220);
     expect(color[0]).toBeLessThan(30);
   });
@@ -96,20 +97,55 @@ describe('channel-only photo watermark', () => {
       faviconUrl: '/uploads/site/missing.ico',
       logoUrl: '/uploads/site/logo.png',
     });
-    expect((await pixel(output, 40, 40))[2]).toBeGreaterThan(220);
+    expect((await pixel(output, 60, 60))[2]).toBeGreaterThan(220);
   });
 
   it.each([
     [80, 40],
     [1, 1],
     [2400, 1800],
-  ])('fits branding into %i × %i images', async (width, height) => {
+    [400, 1200],
+    [1200, 100],
+  ])('normalizes %i × %i images to a fixed channel frame', async (width, height) => {
     await writeFile(join(root, 'products', 'p.png'), await solid(width, height, '#203060'));
     const output = await createChannelPhoto('/uploads/products/p.png', {});
     const metadata = await sharp(output).metadata();
-    expect(metadata.width).toBeLessThanOrEqual(1600);
-    expect(metadata.height).toBeLessThanOrEqual(1600);
+    expect(metadata.width).toBe(1200);
+    expect(metadata.height).toBe(1200);
     expect(metadata.format).toBe('jpeg');
+  });
+
+  it('keeps the exact same watermark pixels for low- and high-resolution sources', async () => {
+    await writeFile(join(root, 'site', 'icon.png'), await solid(64, 64, '#ff0000'));
+    const brand = { name: 'فروشگاه سلیم وند', faviconUrl: '/uploads/site/icon.png' };
+    const crops: Buffer[] = [];
+    for (const size of [40, 400, 2400]) {
+      const name = `p-${size}.png`;
+      await writeFile(join(root, 'products', name), await solid(size, size, '#203060'));
+      const output = await createChannelPhoto(`/uploads/products/${name}`, brand);
+      crops.push(
+        await sharp(output).extract({ left: 16, top: 16, width: 520, height: 90 }).raw().toBuffer(),
+      );
+    }
+    expect(crops[0]).toEqual(crops[1]);
+    expect(crops[0]).toEqual(crops[2]);
+  });
+
+  it('contains the entire portrait product without stretching or cropping', async () => {
+    await writeFile(join(root, 'products', 'portrait.png'), await solid(300, 600, '#203060'));
+    const output = await createChannelPhoto('/uploads/products/portrait.png', {});
+    // A 1:2 source becomes 600x1200, centered with 300px white side margins.
+    expect(await pixel(output, 100, 600)).toEqual([255, 255, 255]);
+    expect(await pixel(output, 1100, 600)).toEqual([255, 255, 255]);
+    for (const [x, y] of [
+      [310, 10],
+      [890, 1190],
+      [600, 600],
+    ]) {
+      const color = await pixel(output, x, y);
+      expect(color[0]).toBeCloseTo(32, -1);
+      expect(color[2]).toBeCloseTo(96, -1);
+    }
   });
 
   it('rejects traversal, private URLs and invalid image files', async () => {

@@ -10,6 +10,10 @@ export type ChannelBrand = { name?: string; faviconUrl?: string; logoUrl?: strin
 const FONT = join(__dirname, '..', '..', '..', 'assets', 'fonts', 'Vazirmatn-Regular.ttf');
 const MAX_BYTES = 10 * 1024 * 1024;
 const IMAGE_OPTIONS = { limitInputPixels: 40_000_000 };
+// Both channels receive the same square frame. Draw branding AFTER normalizing
+// the product so its size and rasterization never depend on source resolution.
+const CHANNEL_PHOTO_SIZE = 1200;
+const WATERMARK_MARGIN = 24;
 const privateAddresses = new BlockList();
 for (const [address, prefix] of [
   ['0.0.0.0', 8],
@@ -117,12 +121,17 @@ async function iconPng(bytes: Buffer, size: number): Promise<Buffer> {
 export async function createChannelPhoto(path: string, brand: ChannelBrand): Promise<Buffer> {
   const base = await sharp(await imageBytes(path), IMAGE_OPTIONS)
     .rotate()
-    .resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true })
-    .ensureAlpha()
+    .flatten({ background: '#ffffff' })
+    .resize({
+      width: CHANNEL_PHOTO_SIZE,
+      height: CHANNEL_PHOTO_SIZE,
+      fit: 'contain',
+      position: 'centre',
+      background: '#ffffff',
+    })
     .png()
-    .toBuffer({ resolveWithObject: true });
-  const { width, height } = base.info;
-  // Lay out at a readable design size, then shrink as a unit for tiny images.
+    .toBuffer();
+  // Render text and icon directly at their final size on the normalized frame.
   const name = (brand.name?.trim() || 'فروشگاه سلیم وند').slice(0, 120);
   const text = await sharp({
     text: {
@@ -180,21 +189,13 @@ export async function createChannelPhoto(path: string, brand: ChannelBrand): Pro
     ])
     .png()
     .toBuffer();
-  const margin = Math.max(0, Math.min(16, Math.floor(Math.min(width, height) * 0.025)));
-  const fittedBadge = await sharp(badge)
-    .resize({
-      width: Math.max(1, Math.min(badgeWidth, width - margin * 2, Math.round(width * 0.65))),
-      height: Math.max(1, height - margin * 2),
-      fit: 'inside',
-      withoutEnlargement: true,
-    })
-    .png()
-    .toBuffer();
-  return sharp(base.data)
-    .composite([{ input: fittedBadge, top: margin, left: margin }])
-    .flatten({ background: '#ffffff' })
-    .jpeg({ quality: 90 })
-    .toBuffer();
+  return (
+    sharp(base)
+      .composite([{ input: badge, top: WATERMARK_MARGIN, left: WATERMARK_MARGIN }])
+      // Preserve the edges of small lettering and colored icons in the JPEG.
+      .jpeg({ quality: 92, chromaSubsampling: '4:4:4' })
+      .toBuffer()
+  );
 }
 
 /** Telegram downloads this separate, public derivative itself: only a small
