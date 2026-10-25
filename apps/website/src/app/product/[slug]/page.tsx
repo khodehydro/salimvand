@@ -3,6 +3,7 @@ import { NavigationButton } from '../../NavigationButton';
 import { ProductGallery } from '../../ProductGallery';
 import { PublicSubHeader } from '../../PublicSubHeader';
 import { ProductShareActions } from '../../ProductShareActions';
+import { SmsInquiryLink } from '../../SmsInquiryLink';
 import QRCode from 'qrcode';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
@@ -312,6 +313,11 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
                 <b dir="ltr">{primaryPhone(info) || 'شماره تماس ثبت نشده است'}</b>
               </a>
               <div className="product-messengers">
+                <SmsInquiryLink
+                  phone={telHref(info)}
+                  productName={product.name}
+                  className="button button-sms"
+                />
                 {/^https?:\/\/.+/.test(info.telegram) && (
                   <a className="button button-telegram" href={info.telegram} rel="noreferrer">
                     تلگرام

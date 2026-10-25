@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { formatRial } from '@salimvand/shared';
+import { SmsInquiryLink } from './SmsInquiryLink';
 
 /**
  * The single catalog card used by the homepage grid and every SEO landing
@@ -39,7 +40,7 @@ const availabilityLabels: Record<string, string> = {
   discontinued: 'ناموجود',
 };
 
-/** Quick actions rendered under every catalog card: call / Telegram / Bale
+/** Quick actions rendered under every catalog card: call / SMS / Telegram / Bale
  * without opening the product page. Passed down by each page from the store
  * settings so the numbers and links always match the panel. */
 export type CardContact = {
@@ -136,9 +137,16 @@ export function ProductCard({
       {contact && (contact.tel.startsWith('tel:') || contact.telegram || contact.bale) && (
         <div className="card-quick-actions">
           {contact.tel.startsWith('tel:') && (
-            <a className="quick-call" href={contact.tel} aria-label={`تماس برای ${product.name}`}>
-              ☎ تماس
-            </a>
+            <div className="quick-row">
+              <a className="quick-call" href={contact.tel} aria-label={`تماس برای ${product.name}`}>
+                ☎ تماس
+              </a>
+              <SmsInquiryLink
+                phone={contact.tel}
+                productName={product.name}
+                className="quick-sms"
+              />
+            </div>
           )}
           <div className="quick-row">
             {/^https?:\/\/.+/.test(contact.telegram ?? '') && (

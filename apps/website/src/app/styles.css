@@ -2265,7 +2265,7 @@ p {
   margin: 0 0 16px;
 }
 
-/* Quick actions under catalog cards (call / Telegram / Bale). */
+/* Quick actions under catalog cards (call / SMS / Telegram / Bale). */
 .card-quick-actions {
   display: grid;
   gap: 6px;
@@ -2295,6 +2295,26 @@ p {
 }
 .quick-call:hover {
   background: var(--primary-hover);
+}
+/* Use theme tokens so SMS remains readable in light and dark modes. */
+.quick-sms,
+.button-sms {
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border-2);
+}
+.card-quick-actions .quick-sms {
+  border-color: var(--border-2);
+}
+.quick-sms:hover,
+.button-sms:hover {
+  background: var(--surface-3);
+  border-color: var(--brand-400);
+}
+.quick-sms:focus-visible,
+.button-sms:focus-visible {
+  outline: 2px solid var(--brand-500);
+  outline-offset: 3px;
 }
 .quick-telegram {
   background: var(--telegram);
