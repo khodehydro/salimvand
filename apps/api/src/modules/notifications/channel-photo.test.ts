@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import sharp = require('sharp');
-import { createChannelPhoto } from './channel-photo';
+import { createChannelPhoto, storeChannelPhoto } from './channel-photo';
 
 let root: string;
 const previousUploadDir = process.env.UPLOAD_DIR;
@@ -124,5 +124,53 @@ describe('channel-only photo watermark', () => {
       'Private image URL',
     );
     await expect(createChannelPhoto('/uploads/products/bad.png', {})).rejects.toThrow();
+  });
+});
+
+describe('Telegram public channel derivatives', () => {
+  it('stores only the branded copy in a separate public directory', async () => {
+    const original = await solid(900, 600, '#203060');
+    await writeFile(join(root, 'products', 'original.png'), original);
+    const branded = await createChannelPhoto('/uploads/products/original.png', {});
+    const url = await storeChannelPhoto(branded, 'https://salimvand.ir/');
+    const path = new URL(url).pathname;
+    expect(url).toMatch(/^https:\/\/salimvand\.ir\/uploads\/channel-posts\/[a-f0-9]{64}\.jpg$/);
+    const file = join(root, path.slice('/uploads/'.length));
+    expect(await readFile(file)).toEqual(branded);
+    expect((await stat(file)).mode & 0o777).toBe(0o644);
+    expect(await readFile(join(root, 'products', 'original.png'))).toEqual(original);
+    expect(await readdir(join(root, 'products'))).toEqual(['original.png']);
+  });
+
+  it('reuses content-addressed filenames and changes them when the watermark changes', async () => {
+    const photo = Buffer.from('branded JPEG');
+    const first = await storeChannelPhoto(photo, 'https://salimvand.ir');
+    expect(await storeChannelPhoto(photo, 'https://salimvand.ir/')).toBe(first);
+    expect(
+      await storeChannelPhoto(Buffer.from('updated branding'), 'https://salimvand.ir'),
+    ).not.toBe(first);
+    expect(await readdir(join(root, 'channel-posts'))).toHaveLength(2);
+  });
+
+  it('publishes concurrent writes atomically without leaving temporary files', async () => {
+    const photo = await solid(900, 600, '#203060');
+    const urls = await Promise.all(
+      Array.from({ length: 5 }, () => storeChannelPhoto(photo, 'https://salimvand.ir')),
+    );
+    expect(new Set(urls).size).toBe(1);
+    const files = await readdir(join(root, 'channel-posts'));
+    expect(files).toHaveLength(1);
+    expect(files[0]).toMatch(/^[a-f0-9]{64}\.jpg$/);
+    expect(await readFile(join(root, 'channel-posts', files[0]))).toEqual(photo);
+  });
+
+  it('rejects invalid public URLs before writing files', async () => {
+    await expect(storeChannelPhoto(Buffer.from('photo'), 'file:///tmp')).rejects.toThrow(
+      'Invalid public site URL',
+    );
+    await expect(
+      storeChannelPhoto(Buffer.from('photo'), 'https://user:password@example.com'),
+    ).rejects.toThrow('Invalid public site URL');
+    expect(await readdir(root)).toEqual(['products', 'site']);
   });
 });

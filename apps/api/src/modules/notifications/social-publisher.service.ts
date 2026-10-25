@@ -3,7 +3,7 @@ import { baladDirectionsUrl, parseCoordinate } from '@salimvand/shared';
 import { PrismaService } from '../../prisma.service';
 import { resolveMessagingEnv, type MessagingSettingsReader } from './messaging-config';
 import { telegramApiHeaders } from './notifications.service';
-import { createChannelPhoto, type ChannelBrand } from './channel-photo';
+import { createChannelPhoto, storeChannelPhoto, type ChannelBrand } from './channel-photo';
 
 export type SocialPlatform = 'telegram' | 'bale';
 export type ButtonStyle = 'primary' | 'success' | 'danger';
@@ -285,23 +285,34 @@ export class SocialPublisherService {
       platform === 'telegram'
         ? (env.TELEGRAM_API_BASE ?? 'https://api.telegram.org').replace(/\/+$/, '')
         : 'https://tapi.bale.ai';
+    let telegramPhotoUrl: string | undefined;
+    if (photo && platform === 'telegram') {
+      try {
+        telegramPhotoUrl = await storeChannelPhoto(photo, post.siteUrl);
+      } catch {
+        const result = { ok: false, reason: 'ذخیرهٔ نسخهٔ واترمارک‌دار برای تلگرام ناموفق بود' };
+        await this.log(platform, chatId, caption, result).catch(() => undefined);
+        return result;
+      }
+    }
     const method = photo ? 'sendPhoto' : 'sendMessage';
     const payload = {
       chat_id: chatId,
       ...(platform === 'telegram' ? { parse_mode: 'HTML' } : {}),
       ...(photo ? { caption } : { text: caption }),
+      ...(telegramPhotoUrl ? { photo: telegramPhotoUrl } : {}),
       reply_markup: { inline_keyboard: buildProductKeyboard(post, platform) },
     };
     const headers =
       platform === 'telegram' ? telegramApiHeaders(env) : { 'content-type': 'application/json' };
     let requestBody: string | FormData = JSON.stringify(payload);
-    if (photo) {
+    if (photo && platform === 'bale') {
       const form = new FormData();
       for (const [key, value] of Object.entries(payload)) {
         form.set(key, typeof value === 'string' ? value : JSON.stringify(value));
       }
       form.set('photo', new Blob([new Uint8Array(photo)], { type: 'image/jpeg' }), 'product.jpg');
-      // fetch supplies the multipart boundary; keep the Telegram proxy secret.
+      // Bale accepts direct uploads; fetch supplies the multipart boundary.
       delete headers['content-type'];
       requestBody = form;
     }

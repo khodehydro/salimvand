@@ -9,10 +9,13 @@ import {
   type ProductPostInput,
 } from './social-publisher.service';
 import { integrationUrl, telegramApiHeaders } from './notifications.service';
-import { createChannelPhoto } from './channel-photo';
+import { createChannelPhoto, storeChannelPhoto } from './channel-photo';
 
 vi.mock('./channel-photo', () => ({
   createChannelPhoto: vi.fn(async () => Buffer.from('watermarked-jpeg')),
+  storeChannelPhoto: vi.fn(
+    async () => 'https://salimvand.ir/uploads/channel-posts/watermarked.jpg',
+  ),
 }));
 
 const post: ProductPostInput = {
@@ -44,6 +47,7 @@ const envKeys = [
 const savedEnv: Record<string, string | undefined> = {};
 for (const key of envKeys) savedEnv[key] = process.env[key];
 afterEach(() => {
+  vi.clearAllMocks();
   for (const key of envKeys) {
     if (savedEnv[key] === undefined) delete process.env[key];
     else process.env[key] = savedEnv[key];
@@ -235,13 +239,15 @@ describe('SocialPublisherService', () => {
       expect(calls).toHaveLength(1);
       expect(calls[0].url).toBe('https://proxy.workers.dev/bottg-token/sendPhoto');
       expect((calls[0].init.headers as Record<string, string>)['x-proxy-secret']).toBe('s3cret');
-      expect(calls[0].init.headers).not.toHaveProperty('content-type');
-      expect(calls[0].init.body).toBeInstanceOf(FormData);
-      const form = calls[0].init.body as FormData;
-      const body = Object.fromEntries(form.entries()) as Record<string, unknown>;
-      body.reply_markup = JSON.parse(String(body.reply_markup));
-      expect(body.photo).toBeInstanceOf(Blob);
-      expect(await (body.photo as Blob).text()).toBe('watermarked-jpeg');
+      expect(calls[0].init.headers).toHaveProperty('content-type', 'application/json');
+      expect(typeof calls[0].init.body).toBe('string');
+      const body = JSON.parse(String(calls[0].init.body)) as Record<string, unknown>;
+      expect(body.photo).toBe('https://salimvand.ir/uploads/channel-posts/watermarked.jpg');
+      expect(body.photo).not.toContain('/uploads/products/');
+      expect(storeChannelPhoto).toHaveBeenCalledWith(
+        Buffer.from('watermarked-jpeg'),
+        'https://salimvand.ir',
+      );
       expect(createChannelPhoto).toHaveBeenCalledWith(product.images[0].path, expect.any(Object));
       expect(body.chat_id).toBe('-1003798951709');
       expect(body.parse_mode).toBe('HTML');
@@ -287,12 +293,74 @@ describe('SocialPublisherService', () => {
       expect(result.bale.ok).toBe(true);
       expect(createChannelPhoto).toHaveBeenCalledTimes(1);
       expect(createChannelPhoto).toHaveBeenCalledWith('/uploads/products/x.jpg', brand);
-      for (const [, init] of fetchMock.mock.calls) {
-        const photo = (init?.body as FormData).get('photo') as Blob;
-        expect(photo.type).toBe('image/jpeg');
-        expect(await photo.text()).toBe('watermarked-jpeg');
+      expect(storeChannelPhoto).toHaveBeenCalledTimes(1);
+      for (const [url, init] of fetchMock.mock.calls) {
+        if (String(url).includes('bottg-token/')) {
+          const payload = JSON.parse(String(init?.body));
+          expect(payload.photo).toBe('https://salimvand.ir/uploads/channel-posts/watermarked.jpg');
+          expect(init?.headers).toHaveProperty('content-type', 'application/json');
+        } else {
+          const photo = (init?.body as FormData).get('photo') as Blob;
+          expect(photo.type).toBe('image/jpeg');
+          expect(await photo.text()).toBe('watermarked-jpeg');
+          expect(init?.headers).not.toHaveProperty('content-type');
+        }
       }
       expect(product.images).toEqual([{ path: '/uploads/products/x.jpg' }]);
+    } finally {
+      fetchMock.mockRestore();
+    }
+  });
+
+  it('keeps Bale working if storing the Telegram derivative fails', async () => {
+    process.env.TELEGRAM_BOT_TOKEN = 'tg-token';
+    process.env.TELEGRAM_CHAT_ID = '-100';
+    process.env.BALE_BOT_TOKEN = 'bale-token';
+    process.env.BALE_CHAT_ID = '-200';
+    const prisma = {
+      product: { findUnique: vi.fn(async () => product) },
+      setting: { findUnique: vi.fn(async () => null) },
+      telegramLog: { create: vi.fn(async () => ({})) },
+    };
+    vi.mocked(storeChannelPhoto).mockRejectedValueOnce(new Error('disk full'));
+    const fetchMock = vi
+      .spyOn(global, 'fetch')
+      .mockImplementation(async () => new Response(JSON.stringify({ ok: true })));
+    try {
+      const result = await serviceWith(prisma).publishProduct('p1');
+      expect(result.telegram.ok).toBe(false);
+      expect(result.telegram.reason).toContain('ذخیره');
+      expect(result.bale.ok).toBe(true);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(String(fetchMock.mock.calls[0][0])).toContain('tapi.bale.ai');
+      expect(prisma.telegramLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          channel: 'telegram',
+          status: 'failed',
+        }),
+      });
+    } finally {
+      fetchMock.mockRestore();
+    }
+  });
+
+  it('does not store a derivative when only Bale is configured', async () => {
+    delete process.env.TELEGRAM_BOT_TOKEN;
+    delete process.env.TELEGRAM_CHAT_ID;
+    process.env.BALE_BOT_TOKEN = 'bale-token';
+    process.env.BALE_CHAT_ID = '-200';
+    const prisma = {
+      product: { findUnique: vi.fn(async () => product) },
+      setting: { findUnique: vi.fn(async () => null) },
+    };
+    const fetchMock = vi
+      .spyOn(global, 'fetch')
+      .mockImplementation(async () => new Response(JSON.stringify({ ok: true })));
+    try {
+      const result = await serviceWith(prisma).publishProduct('p1');
+      expect(result.telegram.skipped).toBe(true);
+      expect(result.bale.ok).toBe(true);
+      expect(storeChannelPhoto).not.toHaveBeenCalled();
     } finally {
       fetchMock.mockRestore();
     }
@@ -337,6 +405,7 @@ describe('SocialPublisherService', () => {
       const result = await serviceWith(prisma).publishProduct('p1');
       expect(result.telegram.ok).toBe(false);
       expect(result.telegram.reason).toContain('مدیر کانال');
+      expect(storeChannelPhoto).not.toHaveBeenCalled();
       expect(result.bale.skipped).toBe(true);
     } finally {
       global.fetch = originalFetch;

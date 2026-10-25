@@ -1,5 +1,6 @@
+import { createHash, randomUUID } from 'node:crypto';
 import { lookup } from 'node:dns/promises';
-import { readFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { BlockList, isIP } from 'node:net';
 import { join, resolve, sep } from 'node:path';
 import sharp = require('sharp');
@@ -194,4 +195,32 @@ export async function createChannelPhoto(path: string, brand: ChannelBrand): Pro
     .flatten({ background: '#ffffff' })
     .jpeg({ quality: 90 })
     .toBuffer();
+}
+
+/** Telegram downloads this separate, public derivative itself: only a small
+ * JSON request crosses the Telegram proxy, not a multipart file upload.
+ * Content-addressed filenames reuse the URL for identical photos and avoid
+ * stale CDN caches when the product image or branding changes. Never use this
+ * path in product records or expose it as a replacement for the original. */
+export async function storeChannelPhoto(photo: Buffer, siteUrl: string): Promise<string> {
+  const origin = new URL(siteUrl);
+  if (!['https:', 'http:'].includes(origin.protocol) || origin.username || origin.password) {
+    throw new Error('Invalid public site URL');
+  }
+  const uploadRoot = resolve(
+    process.env.UPLOAD_DIR ?? join(process.cwd(), 'uploads', 'products'),
+    '..',
+  );
+  const dir = join(uploadRoot, 'channel-posts');
+  const name = `${createHash('sha256').update(photo).digest('hex')}.jpg`;
+  await mkdir(dir, { recursive: true, mode: 0o755 });
+  const temporary = join(dir, `${name}.${randomUUID()}.tmp`);
+  try {
+    await writeFile(temporary, photo, { flag: 'wx', mode: 0o644 });
+    // Publish atomically: concurrent sends must never serve a partial JPEG.
+    await rename(temporary, join(dir, name));
+  } finally {
+    await rm(temporary, { force: true }).catch(() => undefined);
+  }
+  return new URL(`/uploads/channel-posts/${name}`, origin).href;
 }
