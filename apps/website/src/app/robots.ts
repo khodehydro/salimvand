@@ -11,7 +11,7 @@ export default function robots(): MetadataRoute.Robots {
       // /p/ is a 308 redirect to /product/, /i/ and /invoice/ are tokenized
       // private invoice links that expire and would otherwise surface as
       // soft-404 / 404 in Search Console.
-      disallow: ['/admin', '/api/', '/search', '/p/', '/i/', '/invoice/'],
+      disallow: ['/admin', '/api/', '/search', '/p/', '/i/', '/invoice/', '/mini/'],
     },
     sitemap: `${base}/sitemap.xml`,
   };

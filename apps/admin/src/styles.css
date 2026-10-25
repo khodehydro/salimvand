@@ -10817,3 +10817,23 @@ html[data-theme='dark'] {
     grid-template-columns: 1fr;
   }
 }
+
+.miniapp-settings-platform {
+  padding: 16px;
+  border: 1px solid var(--sv-border);
+  border-radius: 14px;
+  display: grid;
+  gap: 12px;
+}
+.miniapp-settings-platform h3 {
+  margin: 0;
+}
+.miniapp-settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.miniapp-settings input[readonly] {
+  font-size: 12px;
+  background: var(--sv-surface-2);
+}

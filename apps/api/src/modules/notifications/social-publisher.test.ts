@@ -278,7 +278,7 @@ describe('SocialPublisherService', () => {
     const brand = { name: 'فروشگاه تست', faviconUrl: '/uploads/site/icon.png' };
     const prisma = {
       product: { findUnique: vi.fn(async () => product) },
-      setting: { findUnique: vi.fn(async () => ({ value: brand })) },
+      setting: { findUnique: vi.fn(async ({ where }: { where: { key: string } }) => ({ value: where.key === 'store.miniapp' ? { channelButtonsEnabled: true, buttonText: 'فروشگاه من', telegramBotUsername: 'shop_bot', baleBotUsername: '' } : brand })) },
       telegramLog: { create: vi.fn(async () => ({})) },
     };
     const fetchMock = vi
@@ -299,11 +299,13 @@ describe('SocialPublisherService', () => {
           const payload = JSON.parse(String(init?.body));
           expect(payload.photo).toBe('https://salimvand.ir/uploads/channel-posts/watermarked.jpg');
           expect(init?.headers).toHaveProperty('content-type', 'application/json');
+          expect(payload.reply_markup.inline_keyboard.flat()).toContainEqual({ text: 'فروشگاه من', url: 'https://t.me/shop_bot?startapp', style: 'primary' });
         } else {
           const photo = (init?.body as FormData).get('photo') as Blob;
           expect(photo.type).toBe('image/jpeg');
           expect(await photo.text()).toBe('watermarked-jpeg');
           expect(init?.headers).not.toHaveProperty('content-type');
+          expect(JSON.parse(String((init?.body as FormData).get('reply_markup'))).inline_keyboard.flat()).toContainEqual({ text: '📦 کاتالوگ محصولات', url: 'https://salimvand.ir' });
         }
       }
       expect(product.images).toEqual([{ path: '/uploads/products/x.jpg' }]);
@@ -476,4 +478,16 @@ describe('SocialPublisherService', () => {
       global.fetch = originalFetch;
     }
   });
+});
+
+it('uses ordinary launch URL buttons in channel posts and keeps website fallback per provider', () => {
+  const links = { telegram: 'https://t.me/shop_bot?startapp' };
+  const telegram = buildProductKeyboard(
+    { ...post, miniAppLinks: links, miniAppButtonText: 'فروشگاه' },
+    'telegram',
+  ).flat();
+  expect(telegram).toContainEqual({ text: 'فروشگاه', url: links.telegram, style: 'primary' });
+  expect(JSON.stringify(telegram)).not.toContain('web_app');
+  const bale = buildProductKeyboard({ ...post, miniAppLinks: links }, 'bale').flat();
+  expect(bale).toContainEqual({ text: '📦 کاتالوگ محصولات', url: post.siteUrl });
 });

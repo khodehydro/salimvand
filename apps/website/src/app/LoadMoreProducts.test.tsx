@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { LoadMoreProducts } from './LoadMoreProducts';
+import { MiniLoadMoreProducts } from './mini/MiniLoadMoreProducts';
+import { CATALOG_LEAVE_EVENT, noteCatalogSpaBack } from './catalog-return';
 import type { CatalogPage } from './catalog-pagination';
 
 const items = (start: number, count = 28) =>
@@ -182,4 +184,31 @@ describe('28-at-a-time catalog', () => {
       '/category/parts?categoryId=cat&page=1#catalog',
     );
   });
+});
+
+it('restores a mini-app list on SPA Back without relying on document navigation type', async () => {
+  history.replaceState({}, '', '/mini/telegram');
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(2)));
+  const props = {
+    initial,
+    query: 'page=1',
+    pagePath: '/mini/telegram',
+    productPath: '/mini/telegram/product',
+    spaReturn: true,
+  };
+  const { unmount } = render(<MiniLoadMoreProducts {...props} />);
+  expect(document.querySelectorAll('.mini-product-card')).toHaveLength(28);
+  expect(screen.getByRole('link', { name: 'مشاهدهٔ محصول 1' }).getAttribute('href')).toBe(
+    '/mini/telegram/product/p1',
+  );
+  fireEvent.click(screen.getByRole('button', { name: /نمایش محصولات بیشتر/ }));
+  await waitFor(() => expect(document.querySelectorAll('.mini-product-card')).toHaveLength(56));
+  Object.defineProperty(window, 'scrollY', { configurable: true, value: 2000 });
+  fireEvent(window, new Event(CATALOG_LEAVE_EVENT));
+  unmount();
+  noteCatalogSpaBack();
+  render(<MiniLoadMoreProducts {...props} />);
+  await waitFor(() => expect(document.querySelectorAll('.mini-product-card')).toHaveLength(56));
+  await waitFor(() => expect(window.scrollTo).toHaveBeenCalledWith(0, 2000));
+  history.replaceState({}, '', '/');
 });

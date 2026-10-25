@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
-import { parseStoreSlider } from '@salimvand/shared';
+import { parseStoreSlider, parseMiniAppSettings } from '@salimvand/shared';
 import { writeAudit } from '../../common/audit/audit-log';
 import {
   MESSAGING_SETTINGS_KEY,
@@ -19,6 +19,7 @@ const allowedKeys = new Set([
   'store.pricing',
   'store.trust_video',
   'store.slider',
+  'store.miniapp',
   'sms.templates',
   'integrations.telegram',
   'integrations.bale',
@@ -286,6 +287,11 @@ export class SettingsService {
     if (!entries.length) throw new BadRequestException('حداقل یک تنظیم لازم است');
     const invalid = entries.find(([key]) => !allowedKeys.has(key));
     if (invalid) throw new BadRequestException(`کلید تنظیمات مجاز نیست: ${invalid[0]}`);
+    if ('store.miniapp' in values) {
+      const config = parseMiniAppSettings(values['store.miniapp']);
+      if (!config) throw new BadRequestException('تنظیمات مینی‌اپ نامعتبر است؛ نام کاربری بازو/ربات و متن دکمه (حداکثر ۴۸ نویسه) را بررسی کنید');
+      values = { ...values, 'store.miniapp': config };
+    }
     if ('store.slider' in values) {
       const slider = parseStoreSlider(values['store.slider']);
       if (!slider) throw new BadRequestException('تنظیمات اسلایدر نامعتبر است؛ حداکثر ۱۰ تصویر بارگذاری‌شده با توضیح تا ۱۶۰ نویسه مجاز است');

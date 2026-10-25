@@ -179,3 +179,54 @@ describe('store slider setting validation', () => {
     expect(result.data['store.slider']).toEqual(value);
   });
 });
+
+it('rejects an unsafe mini-app destination or activation without a bot', async () => {
+  const service = new SettingsService({} as never);
+  const value = {
+    channelButtonsEnabled: true,
+    buttonText: 'فروشگاه',
+    telegramBotUsername: 'evil?x=1',
+    baleBotUsername: '',
+  };
+  await expect(service.update({ 'store.miniapp': value }, 'manager')).rejects.toThrow(
+    'تنظیمات مینی‌اپ نامعتبر',
+  );
+  await expect(
+    service.update({ 'store.miniapp': { ...value, telegramBotUsername: '' } }, 'manager'),
+  ).rejects.toThrow('تنظیمات مینی‌اپ نامعتبر');
+});
+
+it('normalizes mini-app usernames and persists only known config fields in the transaction', async () => {
+  const clean = {
+    channelButtonsEnabled: true,
+    buttonText: 'فروشگاه',
+    telegramBotUsername: 'shop_bot',
+    baleBotUsername: '',
+  };
+  const upsert = vi.fn(async () => ({}));
+  const tx = {
+    setting: { upsert, findMany: vi.fn(async () => [{ key: 'store.miniapp', value: clean }]) },
+  };
+  const prisma = {
+    setting: { findMany: vi.fn(async () => []) },
+    $transaction: vi.fn(async (fn: (client: typeof tx) => Promise<unknown>) => fn(tx)),
+  };
+  const result = await new SettingsService(prisma as never).update(
+    {
+      'store.miniapp': {
+        ...clean,
+        telegramBotUsername: ' @shop_bot ',
+        buttonText: ' فروشگاه ',
+        botToken: 'must-not-be-stored',
+      },
+    },
+    'manager',
+  );
+  expect(upsert).toHaveBeenCalledWith({
+    where: { key: 'store.miniapp' },
+    update: { value: clean, updatedById: 'manager' },
+    create: { key: 'store.miniapp', value: clean, updatedById: 'manager' },
+  });
+  expect(result.data['store.miniapp']).toEqual(clean);
+  expect(JSON.stringify(upsert.mock.calls)).not.toContain('must-not-be-stored');
+});

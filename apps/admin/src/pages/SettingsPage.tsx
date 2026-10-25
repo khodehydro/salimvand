@@ -7,6 +7,8 @@ import { isValidIranMobile } from '../lib/invoice-math';
 import { MediaPicker, type PickerItem } from '../components/MediaPicker';
 import { MediaImage } from '../components/MediaImage';
 import { StoreSliderEditor } from '../components/StoreSliderEditor';
+import { MiniAppSettingsEditor } from '../components/MiniAppSettingsEditor';
+import { DEFAULT_MINI_APP_SETTINGS, parseMiniAppSettings, type MiniAppSettings } from '@salimvand/shared';
 import type { StoreSliderSettings } from '@salimvand/shared';
 
 type BackupJob = {
@@ -102,6 +104,7 @@ type Settings = {
   };
   'store.trust_video'?: string;
   'store.slider'?: StoreSliderSettings;
+  'store.miniapp'?: MiniAppSettings;
   /** Site-wide storefront price switch: off = inquiry-only (the default),
    * on = product prices render on the public site. */
   'store.pricing'?: { showPrices?: boolean };
@@ -234,7 +237,7 @@ export function SettingsPage() {
   const [loadFailed, setLoadFailed] = useState(false);
   useEffect(() => {
     void api<{ data: Settings }>('/settings')
-      .then((result) => setSettings({ ...initial, ...result.data, 'store.slider': parseStoreSlider(result.data['store.slider']) ?? { slides: [] } }))
+      .then((result) => setSettings({ ...initial, ...result.data, 'store.slider': parseStoreSlider(result.data['store.slider']) ?? { slides: [] }, 'store.miniapp': parseMiniAppSettings(result.data['store.miniapp']) ?? DEFAULT_MINI_APP_SETTINGS }))
       .catch((error: Error) => {
         setLoadFailed(true);
         setMessage(error.message);
@@ -823,6 +826,10 @@ export function SettingsPage() {
               value={settings['store.slider'] ?? { slides: [] }}
               onBusyChange={setSliderBusy}
               onChange={(value) => setSettings((current) => ({ ...current, 'store.slider': value }))}
+            />
+            <MiniAppSettingsEditor
+              value={settings['store.miniapp'] ?? DEFAULT_MINI_APP_SETTINGS}
+              onChange={(value) => setSettings((current) => ({ ...current, 'store.miniapp': value }))}
             />
             <fieldset>
               <legend>قیمت‌ها در سایت</legend>

@@ -198,3 +198,30 @@ describe('public API contract — no internal data', () => {
     expect(result.data.items[0]).not.toHaveProperty('inventoryItemId');
   });
 });
+
+it('publishes only validated, non-secret mini-app settings and defaults safely to disabled', async () => {
+  const { service } = makeCatalog();
+  const fallback = await service.meta();
+  expect(fallback.data.miniapp.channelButtonsEnabled).toBe(false);
+  const configured = makeCatalog();
+  configured.prisma.setting.findMany.mockResolvedValue([
+    {
+      key: 'store.miniapp',
+      value: {
+        channelButtonsEnabled: true,
+        buttonText: 'فروشگاه',
+        telegramBotUsername: '@shop_bot',
+        baleBotUsername: '',
+        botToken: 'must-not-be-public',
+      },
+    },
+  ]);
+  const result = await configured.service.meta();
+  expect(result.data.miniapp).toEqual({
+    channelButtonsEnabled: true,
+    buttonText: 'فروشگاه',
+    telegramBotUsername: 'shop_bot',
+    baleBotUsername: '',
+  });
+  expect(JSON.stringify(result)).not.toContain('must-not-be-public');
+});

@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { baladDirectionsUrl, parseCoordinate } from '@salimvand/shared';
+import { baladDirectionsUrl, parseCoordinate, parseMiniAppSettings, miniAppLaunchUrl } from '@salimvand/shared';
 import { PrismaService } from '../../prisma.service';
 import { resolveMessagingEnv, type MessagingSettingsReader } from './messaging-config';
 import { telegramApiHeaders } from './notifications.service';
@@ -19,6 +19,8 @@ export type ProductPostInput = {
   aparatVideoId?: string | null;
   imageUrl?: string | null;
   siteUrl: string;
+  miniAppLinks?: Partial<Record<SocialPlatform, string>>;
+  miniAppButtonText?: string;
   adminUsername: string;
   telegramAdminUsername?: string;
   baleAdminUsername?: string;
@@ -133,8 +135,8 @@ export function buildProductKeyboard(
     ]);
   const lastRow: SocialButton[] = [
     {
-      text: '📦 کاتالوگ محصولات',
-      url: post.siteUrl,
+      text: post.miniAppLinks?.[platform] ? post.miniAppButtonText || '🛍 فروشگاه داخل پیام‌رسان' : '📦 کاتالوگ محصولات',
+      url: post.miniAppLinks?.[platform] || post.siteUrl,
       ...(isTg ? { style: 'primary' as const } : {}),
     },
   ];
@@ -223,6 +225,7 @@ export class SocialPublisherService {
 
     const profile = (await this.prisma.setting.findUnique({ where: { key: 'store.profile' } }))
       ?.value as StoreProfile | null;
+    const miniapp = parseMiniAppSettings((await this.prisma.setting.findUnique({ where: { key: 'store.miniapp' } }))?.value);
     const siteUrl = (env.PUBLIC_SITE_URL ?? 'https://salimvand.ir').replace(/\/+$/, '');
     const image = product.images[0];
     const vehicles = [
@@ -248,6 +251,11 @@ export class SocialPublisherService {
       aparatVideoId: product.aparatVideoId,
       imageUrl: image ? `${siteUrl}${image.path}` : null,
       siteUrl,
+      miniAppLinks: miniapp ? {
+        telegram: miniAppLaunchUrl(miniapp, 'telegram') ?? undefined,
+        bale: miniAppLaunchUrl(miniapp, 'bale') ?? undefined,
+      } : undefined,
+      miniAppButtonText: miniapp?.buttonText,
       adminUsername: env.SOCIAL_ADMIN_USERNAME ?? DEFAULT_SOCIAL_ADMIN_USERNAME,
       telegramAdminUsername: env.TELEGRAM_ADMIN_USERNAME,
       baleAdminUsername: env.BALE_ADMIN_USERNAME,
