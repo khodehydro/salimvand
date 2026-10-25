@@ -1,5 +1,7 @@
 import {
   extractAparatVideoId,
+  parseStoreSlider,
+  type StoreSliderSettings,
   extractMapEmbedUrl,
   formatPersianNumber,
   normalizeDigits,
@@ -45,6 +47,7 @@ export type StoreInfo = {
   bale: string;
   instagram: string;
   trustVideo: string | null;
+  slider: StoreSliderSettings;
   /** Operator-editable search-engine metadata: the browser-tab title and the
    * meta description Google shows. Empty panel values fall back to defaults. */
   seo: {
@@ -79,10 +82,11 @@ export async function getStoreInfo(): Promise<StoreInfo> {
       tagline: 'قطعات یدکی خودرو',
       cta: 'تماس سریع',
       navCatalog: 'کاتالوگ',
-      navVideo: 'ویدئوی فروشگاه',
+      navVideo: 'تصاویر فروشگاه',
       navContact: 'تماس',
       heroHeadline: 'قطعهٔ ماشینت رو پیدا کن، بقیه‌اش با ماست.',
-      heroSubheadline: 'کاتالوگ زندهٔ قطعات یدکی خودرو با اعلام وضعیت موجودی و برندهای موجود در انبار.',
+      heroSubheadline:
+        'کاتالوگ زندهٔ قطعات یدکی خودرو با اعلام وضعیت موجودی و برندهای موجود در انبار.',
       experienceYears: '۱۸ سال',
       experienceLabel: 'سابقهٔ تأمین قطعات یدکی',
     },
@@ -90,10 +94,10 @@ export async function getStoreInfo(): Promise<StoreInfo> {
     bale: 'https://ble.ir/',
     instagram: 'https://instagram.com/',
     trustVideo: null,
+    slider: { slides: [] },
     seo: {
       title: 'قطعات یدکی خودرو',
-      description:
-        'کاتالوگ قطعات یدکی خودرو با اعلام وضعیت موجودی و برندهای موجود در میاندوآب.',
+      description: 'کاتالوگ قطعات یدکی خودرو با اعلام وضعیت موجودی و برندهای موجود در میاندوآب.',
     },
     pricing: { showPrices: false },
   };
@@ -104,6 +108,7 @@ export async function getStoreInfo(): Promise<StoreInfo> {
       data?: {
         profile?: Record<string, unknown>;
         trustVideo?: string | null;
+        slider?: unknown;
         pricing?: { showPrices?: boolean };
         telegram?: Record<string, unknown>;
         bale?: Record<string, unknown>;
@@ -187,6 +192,7 @@ export async function getStoreInfo(): Promise<StoreInfo> {
       },
       // Operators paste either the bare hash or a full Aparat link — accept both.
       trustVideo: extractAparatVideoId(asString(data.trustVideo ?? '')) || null,
+      slider: parseStoreSlider(data.slider) ?? { slides: [] },
       pricing: {
         showPrices: ((data.pricing ?? {}) as { showPrices?: unknown }).showPrices === true,
       },

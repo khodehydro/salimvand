@@ -306,3 +306,81 @@ describe('MediaService first image of an imageless product', () => {
     expectPrimaryImageSyncChange();
   });
 });
+
+describe('store slider media', () => {
+  it('decodes and optimizes uploaded slide pixels to a bounded WebP', async () => {
+    const input = await sharp({
+      create: { width: 1800, height: 1000, channels: 3, background: '#123456' },
+    })
+      .png()
+      .toBuffer();
+    const result = await new MediaService({} as never).uploadSiteAsset('slide', {
+      // A valid camera-sized upload above the old logo-only 900 KB cap.
+      buffer: Buffer.concat([input, Buffer.alloc(1024 * 1024)]),
+      mimetype: 'image/png',
+      originalname: 'shop.png',
+    });
+    expect(result.data.path).toMatch(/^\/uploads\/site\/slide-[a-f0-9]{8}\.webp$/);
+    const { writeFile } = await import('node:fs/promises');
+    const args = vi.mocked(writeFile).mock.calls.at(-1)!;
+    const metadata = await sharp(args[1] as Buffer).metadata();
+    expect(metadata.format).toBe('webp');
+    expect(metadata.width).toBe(1600);
+    expect(metadata.height).toBeLessThanOrEqual(1200);
+    expect(metadata.exif).toBeUndefined();
+  });
+  it('rejects mislabeled invalid pixels, SVG, icons and oversized slides', async () => {
+    const service = new MediaService({} as never);
+    const file = (buffer: Buffer, mimetype: string) => ({
+      buffer,
+      mimetype,
+      originalname: 'image',
+    });
+    await expect(
+      service.uploadSiteAsset('slide', file(Buffer.from('<html/>'), 'image/png')),
+    ).rejects.toThrow('تصویر اسلایدر معتبر نیست');
+    await expect(
+      service.uploadSiteAsset('slide', file(Buffer.from('<svg/>'), 'image/svg+xml')),
+    ).rejects.toThrow('تصویر اسلایدر باید');
+    await expect(
+      service.uploadSiteAsset('slide', file(Buffer.from('ico'), 'image/x-icon')),
+    ).rejects.toThrow('تصویر اسلایدر باید');
+    await expect(
+      service.uploadSiteAsset('slide', file(Buffer.alloc(5 * 1024 * 1024 + 1), 'image/jpeg')),
+    ).rejects.toThrow('۵ مگابایت');
+  });
+  it('removes a permanently deleted image from published slider settings too', async () => {
+    const slide = { path: '/uploads/site/slide-ab12cd34.webp', alt: 'فروشگاه' };
+    const other = { path: '/uploads/site/slide-1234abcd.webp', alt: 'داخل' };
+    const setting = {
+      findUnique: vi
+        .fn()
+        .mockResolvedValueOnce({ value: { name: 'نام' } })
+        .mockResolvedValueOnce({ value: { slides: [slide, other] } }),
+      update: vi.fn(async () => ({})),
+    };
+    await new MediaService({ setting } as never).removeSiteAsset('slide-ab12cd34.webp');
+    expect(setting.update).toHaveBeenCalledWith({
+      where: { key: 'store.slider' },
+      data: { value: { slides: [other] } },
+    });
+  });
+});
+
+it('keeps a slide file when clearing its published reference fails', async () => {
+  const { rm } = await import('node:fs/promises');
+  vi.mocked(rm).mockClear();
+  const setting = {
+    findUnique: vi
+      .fn()
+      .mockResolvedValueOnce({ value: {} })
+      .mockResolvedValueOnce({
+        value: { slides: [{ path: '/uploads/site/slide-ab12cd34.webp', alt: '' }] },
+      }),
+    update: vi.fn().mockRejectedValue(new Error('database unavailable')),
+  };
+  await expect(
+    new MediaService({ setting } as never).removeSiteAsset('slide-ab12cd34.webp'),
+  ).rejects.toThrow('database unavailable');
+  expect(rm).not.toHaveBeenCalled();
+});

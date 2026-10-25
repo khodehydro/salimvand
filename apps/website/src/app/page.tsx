@@ -5,7 +5,7 @@ import { CatalogFilters } from './CatalogFilters';
 import { ThemeToggle } from './ThemeToggle';
 import { NavigationButton } from './NavigationButton';
 import { APP_NAME, STORE_BRAND, formatPersianNumber } from '@salimvand/shared';
-import { TrustVideo } from './TrustVideo';
+import { StoreSlider } from './StoreSlider';
 import { getStoreInfo, telHref, type StoreInfo } from './store-info';
 import { StoreContact } from './PublicSubHeader';
 import { trackVisit } from './analytics';
@@ -183,9 +183,7 @@ export default async function HomePage({
           </div>
         </div>
         <div className="hero-visual">
-          {/* The store video lives right in the hero — the old info cards
-              (real stock / brands / no prices) were merged into it. */}
-          <TrustVideo videoId={meta.trustVideo ?? process.env.APARAT_VIDEO_ID} variant="hero" />
+          <StoreSlider slides={info.slider.slides} storeName={info.name} />
         </div>
       </section>
       <section className="trust-strip">

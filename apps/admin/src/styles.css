@@ -10783,3 +10783,37 @@ html[data-theme='dark'] {
     width: 100%;
   }
 }
+
+/* Store slider settings: thumbnails stay inside their rounded preview. */
+.store-slider-list {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 14px;
+}
+.store-slider-list li {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--sv-border);
+  border-radius: 12px;
+}
+.store-slider-list img {
+  width: 140px;
+  height: 85px;
+  object-fit: cover;
+  border-radius: 10px;
+}
+.store-slider-order {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+@media (max-width: 620px) {
+  .store-slider-list li {
+    grid-template-columns: 1fr;
+  }
+}

@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
+import { parseStoreSlider } from '@salimvand/shared';
 import { writeAudit } from '../../common/audit/audit-log';
 import {
   MESSAGING_SETTINGS_KEY,
@@ -17,6 +18,7 @@ const allowedKeys = new Set([
   'store.profile',
   'store.pricing',
   'store.trust_video',
+  'store.slider',
   'sms.templates',
   'integrations.telegram',
   'integrations.bale',
@@ -284,6 +286,11 @@ export class SettingsService {
     if (!entries.length) throw new BadRequestException('حداقل یک تنظیم لازم است');
     const invalid = entries.find(([key]) => !allowedKeys.has(key));
     if (invalid) throw new BadRequestException(`کلید تنظیمات مجاز نیست: ${invalid[0]}`);
+    if ('store.slider' in values) {
+      const slider = parseStoreSlider(values['store.slider']);
+      if (!slider) throw new BadRequestException('تنظیمات اسلایدر نامعتبر است؛ حداکثر ۱۰ تصویر بارگذاری‌شده با توضیح تا ۱۶۰ نویسه مجاز است');
+      values = { ...values, 'store.slider': slider };
+    }
     const before = await this.prisma.setting.findMany({
       where: { key: { in: entries.map(([key]) => key) } },
     });

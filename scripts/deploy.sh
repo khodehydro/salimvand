@@ -226,6 +226,8 @@ open(path, 'w').write(block + raw)
 print('Patched the live vhost: gzip enabled for proxied responses.')
 GZIP_PY
   fi
+  # Keep the live Certbot vhost; patch only the CMS API request-body limit.
+  python3 "$ROOT_DIR/scripts/configure-slider-upload.py" "$NGINX_CONF" || rollback_vhost
   sed -i '/^[[:space:]]*listen/ { /http2/! s/443 ssl;/443 ssl http2;/ }' "$NGINX_CONF"
   nginx -t || rollback_vhost
   systemctl reload nginx

@@ -1,11 +1,13 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { extractMapEmbedUrl, formatPersianNumber } from '@salimvand/shared';
+import { extractMapEmbedUrl, formatPersianNumber, parseStoreSlider } from '@salimvand/shared';
 import { FaNumberInput } from '../components/FaNumberInput';
 import { api } from '../lib/api';
 import { applyStoreFavicon } from '../lib/favicon';
 import { isValidIranMobile } from '../lib/invoice-math';
 import { MediaPicker, type PickerItem } from '../components/MediaPicker';
 import { MediaImage } from '../components/MediaImage';
+import { StoreSliderEditor } from '../components/StoreSliderEditor';
+import type { StoreSliderSettings } from '@salimvand/shared';
 
 type BackupJob = {
   id: string;
@@ -99,6 +101,7 @@ type Settings = {
     };
   };
   'store.trust_video'?: string;
+  'store.slider'?: StoreSliderSettings;
   /** Site-wide storefront price switch: off = inquiry-only (the default),
    * on = product prices render on the public site. */
   'store.pricing'?: { showPrices?: boolean };
@@ -231,7 +234,7 @@ export function SettingsPage() {
   const [loadFailed, setLoadFailed] = useState(false);
   useEffect(() => {
     void api<{ data: Settings }>('/settings')
-      .then((result) => setSettings({ ...initial, ...result.data }))
+      .then((result) => setSettings({ ...initial, ...result.data, 'store.slider': parseStoreSlider(result.data['store.slider']) ?? { slides: [] } }))
       .catch((error: Error) => {
         setLoadFailed(true);
         setMessage(error.message);
@@ -478,6 +481,7 @@ export function SettingsPage() {
   };
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (sliderBusy) return;
     try {
       await api('/settings', { method: 'PUT', body: JSON.stringify(settings) });
       // The tab icon follows the saved favicon immediately — no manual refresh.
@@ -512,6 +516,7 @@ export function SettingsPage() {
   const activeMapUrl = () =>
     mapSource() === 'coords' ? autoMapUrl() || mapResolvedUrl() : mapResolvedUrl();
 
+  const [sliderBusy, setSliderBusy] = useState(false);
   const [assetBusy, setAssetBusy] = useState<'logo' | 'favicon' | null>(null);
   const uploadSiteAsset = async (kind: 'logo' | 'favicon', file: File | null) => {
     if (!file) return setMessage('ابتدا یک فایل تصویر انتخاب کنید.');
@@ -614,7 +619,7 @@ export function SettingsPage() {
           <h1>تنظیمات سیستم</h1>
           <p className="muted">{activeTab.hint}</p>
         </div>
-        <button className="button-primary" form="settings-form">
+        <button className="button-primary" form="settings-form" disabled={sliderBusy}>
           ✓ ذخیره تنظیمات
         </button>
       </div>
@@ -625,6 +630,7 @@ export function SettingsPage() {
             type="button"
             key={item.id}
             className={tab === item.id ? 'active' : ''}
+            disabled={sliderBusy}
             onClick={() => setTab(item.id)}
             aria-current={tab === item.id ? 'true' : undefined}
           >
@@ -757,11 +763,11 @@ export function SettingsPage() {
                     />
                   </label>
                   <label>
-                    منو: ویدئو
+                    منو: تصاویر فروشگاه
                     <input
                       value={settings['store.profile']?.header?.navVideo ?? ''}
                       onChange={(e) => updateHeaderText('navVideo', e.target.value)}
-                      placeholder="ویدئوی فروشگاه"
+                      placeholder="تصاویر فروشگاه"
                     />
                   </label>
                 </div>
@@ -810,23 +816,14 @@ export function SettingsPage() {
                       placeholder="تماس"
                     />
                   </label>
-                  <label>
-                    ویدئوی معرفی فروشگاه (شناسه یا لینک آپارات)
-                    <input
-                      dir="ltr"
-                      value={settings['store.trust_video'] ?? ''}
-                      onChange={(e) =>
-                        setSettings((current) => ({
-                          ...current,
-                          'store.trust_video': e.target.value,
-                        }))
-                      }
-                      placeholder="https://www.aparat.com/v/AbCdEf123 یا فقط AbCdEf123"
-                    />
-                  </label>
                 </div>
               </div>
             </fieldset>
+            <StoreSliderEditor
+              value={settings['store.slider'] ?? { slides: [] }}
+              onBusyChange={setSliderBusy}
+              onChange={(value) => setSettings((current) => ({ ...current, 'store.slider': value }))}
+            />
             <fieldset>
               <legend>قیمت‌ها در سایت</legend>
               <label className="switch-row">
@@ -951,7 +948,7 @@ export function SettingsPage() {
                     تلگرام و بله در دکمه‌های تماس و فوتر سایت — در صورت خالی بودن، دکمه‌ها پنهان
                     می‌شوند
                   </li>
-                  <li>ویدئوی آپارات در کارت ویدئوی صفحهٔ اصلی و صفحهٔ هر محصول</li>
+                  <li>اسلایدر تصاویر فروشگاه در صفحهٔ اصلی و ویدئوی اختصاصی هر محصول در صفحهٔ آن محصول</li>
                 </ul>
               </div>
             </fieldset>
@@ -1573,7 +1570,7 @@ export function SettingsPage() {
 
         <div className="settings-save-bar">
           <span>تغییرات پس از فشردن دکمهٔ ذخیره روی سایت اعمال می‌شود.</span>
-          <button type="submit" className="button-primary">
+          <button type="submit" className="button-primary" disabled={sliderBusy}>
             ✓ ذخیره تنظیمات
           </button>
         </div>

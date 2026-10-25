@@ -414,3 +414,5 @@ export function validateSyncOperationEnvelope(
     return { ok: false, error: 'payload must be an object' };
   return { ok: true, value: value as unknown as SyncOperationEnvelope };
 }
+
+export * from './store-slider';

@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service';
 import { AnalyticsService } from '../analytics/analytics.service';
-import { formatJalaliDate } from '@salimvand/shared';
+import { formatJalaliDate, parseStoreSlider } from '@salimvand/shared';
 
 type PublicProduct = {
   slug: string;
@@ -255,6 +255,7 @@ export class CatalogService {
           in: [
             'store.profile',
             'store.trust_video',
+            'store.slider',
             'store.pricing',
             'integrations.telegram',
             'integrations.bale',
@@ -275,6 +276,7 @@ export class CatalogService {
             (values['store.pricing'] as { showPrices?: boolean } | undefined)?.showPrices === true,
         },
         trustVideo: values['store.trust_video'] ?? null,
+        slider: parseStoreSlider(values['store.slider']) ?? { slides: [] },
         telegram: values['integrations.telegram'] ?? {},
         bale: values['integrations.bale'] ?? {},
       },

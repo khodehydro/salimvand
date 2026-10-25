@@ -26,7 +26,7 @@ export class MediaController {
   }
   /** Site-wide assets (store logo / favicon) referenced from store.profile. */
   @Post('settings/:kind/upload')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024 } }))
   uploadSiteAsset(
     @Param('kind') kind: string,
     @UploadedFile() file: { buffer: Buffer; mimetype: string; originalname: string },

@@ -81,7 +81,13 @@ describe('SettingsService', () => {
     const result = await new SettingsService(prisma as never).list();
     expect(result.data['integrations.messaging']).toEqual({
       sms: { apiKey: '••••1234', lineNumber: '300051' },
-      telegram: { botToken: '', chatId: undefined, apiBase: undefined, proxySecret: '', passwordRecoveryChatId: undefined },
+      telegram: {
+        botToken: '',
+        chatId: undefined,
+        apiBase: undefined,
+        proxySecret: '',
+        passwordRecoveryChatId: undefined,
+      },
       bale: { botToken: '', chatId: undefined, apiAccessKey: '', botId: undefined },
     });
     expect(result.data['store.trust_video']).toBe('video.mp4');
@@ -127,5 +133,49 @@ describe('SettingsService', () => {
     );
     const auditData = auditCreate.mock.calls[0][0].data as { after: Record<string, unknown> };
     expect(JSON.stringify(auditData.after)).not.toContain('stored-secret-9999');
+  });
+});
+
+describe('store slider setting validation', () => {
+  it('rejects unsafe or malformed slides before any database writes', async () => {
+    const service = new SettingsService({} as never);
+    await expect(
+      service.update(
+        { 'store.slider': { slides: [{ path: 'https://example.com/a.svg', alt: '' }] } },
+        'manager',
+      ),
+    ).rejects.toThrow('تنظیمات اسلایدر نامعتبر');
+    await expect(
+      service.update(
+        {
+          'store.slider': {
+            slides: Array(11).fill({ path: '/uploads/site/slide-ab12cd34.webp', alt: '' }),
+          },
+        },
+        'manager',
+      ),
+    ).rejects.toThrow('تنظیمات اسلایدر نامعتبر');
+  });
+  it('persists ordered slides under the new allowed setting key', async () => {
+    const value = { slides: [{ path: '/uploads/site/slide-ab12cd34.webp', alt: 'نمای فروشگاه' }] };
+    const tx = {
+      setting: { upsert: vi.fn(), findMany: vi.fn(async () => [{ key: 'store.slider', value }]) },
+      auditLog: { create: vi.fn() },
+    };
+    const prisma = {
+      setting: { findMany: vi.fn(async () => []) },
+      $transaction: vi.fn(async (fn: (client: typeof tx) => Promise<unknown>) => fn(tx)),
+    };
+    const result = await new SettingsService(prisma as never).update(
+      { 'store.slider': value },
+      'manager',
+    );
+    expect(tx.setting.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { key: 'store.slider' },
+        update: { value, updatedById: 'manager' },
+      }),
+    );
+    expect(result.data['store.slider']).toEqual(value);
   });
 });

@@ -5,6 +5,7 @@ import { basename, join } from 'node:path';
 import sharp = require('sharp');
 import { PrismaService } from '../../prisma.service';
 import { Prisma } from '@prisma/client';
+import { parseStoreSlider } from '@salimvand/shared';
 import { writeSyncChange } from '../../common/audit/audit-log';
 import { buildProductSyncPayload } from '../../common/sync/sync-payloads';
 
@@ -57,7 +58,9 @@ export class MediaService {
           ? 'لوگوی سایت'
           : name.startsWith('favicon')
             ? 'آیکون سایت'
-            : 'رسانهٔ سایت',
+            : name.startsWith('slide-')
+              ? 'تصویر اسلایدر فروشگاه'
+              : 'رسانهٔ سایت',
         alt: null,
         isPrimary: false,
         product: null,
@@ -73,7 +76,6 @@ export class MediaService {
     if (!safe || safe.includes('/') || safe.includes('\\') || safe !== basename(safe))
       throw new BadRequestException('نام فایل نامعتبر است');
     if (!/^[A-Za-z0-9._-]+$/.test(safe)) throw new BadRequestException('نام فایل نامعتبر است');
-    await rm(join(this.siteAssetDir(), safe), { force: true });
     const path = `/uploads/site/${safe}`;
     const row = await this.prisma.setting.findUnique({ where: { key: 'store.profile' } });
     const profile = (row?.value ?? {}) as Record<string, unknown>;
@@ -85,6 +87,20 @@ export class MediaService {
         data: { value: profile as Prisma.InputJsonValue },
       });
     }
+    // Media-library deletion must also remove published slider references.
+    if (safe.startsWith('slide-')) {
+      const sliderRow = await this.prisma.setting.findUnique({ where: { key: 'store.slider' } });
+      const slider = parseStoreSlider(sliderRow?.value);
+      if (slider?.slides.some((slide) => slide.path === path)) {
+        await this.prisma.setting.update({
+          where: { key: 'store.slider' },
+          data: {
+            value: { slides: slider.slides.filter((slide) => slide.path !== path) },
+          },
+        });
+      }
+    }
+    await rm(join(this.siteAssetDir(), safe), { force: true });
     return { ok: true, data: { id: `site:${safe}` } };
   }
 
@@ -98,9 +114,32 @@ export class MediaService {
     kind: string,
     file: { buffer: Buffer; mimetype: string; originalname: string },
   ) {
-    if (kind !== 'logo' && kind !== 'favicon')
-      throw new BadRequestException('نوع تصویر نامعتبر است (logo یا favicon)');
+    if (kind !== 'logo' && kind !== 'favicon' && kind !== 'slide')
+      throw new BadRequestException('نوع تصویر نامعتبر است (logo، favicon یا slide)');
     if (!file?.buffer?.length) throw new BadRequestException('فایل تصویر معتبر نیست');
+    if (kind === 'slide') {
+      if (file.buffer.length > 5 * 1024 * 1024)
+        throw new BadRequestException('حجم تصویر اسلایدر نباید بیشتر از ۵ مگابایت باشد');
+      if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.mimetype))
+        throw new BadRequestException('تصویر اسلایدر باید PNG، JPG یا WebP باشد');
+      let output: Buffer;
+      try {
+        // Decode real pixels, reject bombs/invalid bytes, apply EXIF rotation,
+        // strip metadata and write a bounded static WebP (never SVG/HTML).
+        output = await sharp(file.buffer, { limitInputPixels: 24_000_000 })
+          .rotate()
+          .resize({ width: 1600, height: 1200, fit: 'inside', withoutEnlargement: true })
+          .webp({ quality: 82 })
+          .toBuffer();
+      } catch {
+        throw new BadRequestException('تصویر اسلایدر معتبر نیست یا ابعاد آن بیش از حد بزرگ است');
+      }
+      const dir = this.siteAssetDir();
+      await mkdir(dir, { recursive: true });
+      const name = `slide-${randomUUID().slice(0, 8)}.webp`;
+      await writeFile(join(dir, name), output);
+      return { ok: true, data: { kind, path: `/uploads/site/${name}` } };
+    }
     const extension = SITE_ASSET_MIME[file.mimetype];
     if (!extension)
       throw new BadRequestException('فرمت مجاز: PNG، JPG، WebP یا ICO (حجم حداکثر ۱ مگابایت)');
