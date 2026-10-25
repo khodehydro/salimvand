@@ -289,8 +289,25 @@ export class SocialPublisherService {
     if (photo && platform === 'telegram') {
       try {
         telegramPhotoUrl = await storeChannelPhoto(photo, post.siteUrl);
-      } catch {
-        const result = { ok: false, reason: 'ذخیرهٔ نسخهٔ واترمارک‌دار برای تلگرام ناموفق بود' };
+      } catch (error) {
+        // Expose only recognized filesystem codes, never raw error messages
+        // (which can contain server paths or a misconfigured credential URL).
+        const code = (error as NodeJS.ErrnoException | null)?.code;
+        const safeCode = [
+          'EACCES',
+          'EPERM',
+          'ENOSPC',
+          'EROFS',
+          'ENOENT',
+          'ENOTDIR',
+          'EDQUOT',
+        ].includes(code ?? '')
+          ? ` (${code})`
+          : '';
+        const result = {
+          ok: false,
+          reason: `ذخیرهٔ نسخهٔ واترمارک‌دار برای تلگرام ناموفق بود${safeCode}`,
+        };
         await this.log(platform, chatId, caption, result).catch(() => undefined);
         return result;
       }

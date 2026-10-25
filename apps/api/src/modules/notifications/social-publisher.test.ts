@@ -322,7 +322,9 @@ describe('SocialPublisherService', () => {
       setting: { findUnique: vi.fn(async () => null) },
       telegramLog: { create: vi.fn(async () => ({})) },
     };
-    vi.mocked(storeChannelPhoto).mockRejectedValueOnce(new Error('disk full'));
+    vi.mocked(storeChannelPhoto).mockRejectedValueOnce(
+      Object.assign(new Error('secret local path'), { code: 'EACCES' }),
+    );
     const fetchMock = vi
       .spyOn(global, 'fetch')
       .mockImplementation(async () => new Response(JSON.stringify({ ok: true })));
@@ -330,6 +332,8 @@ describe('SocialPublisherService', () => {
       const result = await serviceWith(prisma).publishProduct('p1');
       expect(result.telegram.ok).toBe(false);
       expect(result.telegram.reason).toContain('ذخیره');
+      expect(result.telegram.reason).toContain('EACCES');
+      expect(result.telegram.reason).not.toContain('secret local path');
       expect(result.bale.ok).toBe(true);
       expect(fetchMock).toHaveBeenCalledTimes(1);
       expect(String(fetchMock.mock.calls[0][0])).toContain('tapi.bale.ai');

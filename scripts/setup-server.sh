@@ -17,6 +17,7 @@ fi
 
 id -u salimvand >/dev/null 2>&1 || useradd --system --home "$APP_DIR" --shell /usr/sbin/nologin salimvand
 install -d -o salimvand -g salimvand "$APP_DIR/uploads/products"
+install -d -o salimvand -g salimvand -m 0755 "$APP_DIR/uploads/channel-posts"
 # Backups can be triggered from the panel (API runs as salimvand), so the
 # archive dir and the status dir must belong to that user, not root.
 install -d -o salimvand -g salimvand -m 0700 /var/backups/salimvand

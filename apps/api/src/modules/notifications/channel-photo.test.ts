@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtemp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import sharp = require('sharp');
@@ -162,6 +162,27 @@ describe('Telegram public channel derivatives', () => {
     expect(files).toHaveLength(1);
     expect(files[0]).toMatch(/^[a-f0-9]{64}\.jpg$/);
     expect(await readFile(join(root, 'channel-posts', files[0]))).toEqual(photo);
+  });
+
+  it('works with a provisioned channel directory even when its parent is not writable', async () => {
+    if (process.platform === 'win32' || process.getuid?.() === 0) return;
+    // Production uploads can be owned by root: the service can write into
+    // pre-created children but must not need to create siblings under uploads.
+    const dir = join(root, 'channel-posts');
+    await chmod(root, 0o555);
+    try {
+      await expect(
+        storeChannelPhoto(Buffer.from('photo'), 'https://salimvand.ir'),
+      ).rejects.toMatchObject({ code: 'EACCES' });
+      await chmod(root, 0o755);
+      await mkdir(dir, { mode: 0o755 });
+      await chmod(root, 0o555);
+      const photo = Buffer.from('branded copy');
+      const url = await storeChannelPhoto(photo, 'https://salimvand.ir');
+      expect(await readFile(join(dir, new URL(url).pathname.split('/').pop()!))).toEqual(photo);
+    } finally {
+      await chmod(root, 0o755);
+    }
   });
 
   it('rejects invalid public URLs before writing files', async () => {

@@ -117,6 +117,10 @@ chown -R salimvand:salimvand "$STANDALONE"
 
 install -d -o salimvand -g salimvand "$ROOT_DIR/uploads/products"
 install -d -o salimvand -g salimvand "$ROOT_DIR/uploads/site"
+# The API cannot create a sibling under a root-owned uploads directory. Provision
+# the public Telegram derivative directory as root before restarting the API.
+CHANNEL_PHOTO_DIR="$(dirname "${UPLOAD_DIR:-$ROOT_DIR/uploads/products}")/channel-posts"
+install -d -o salimvand -g salimvand -m 0755 "$CHANNEL_PHOTO_DIR"
 # Panel-triggered backups run as the salimvand service user (the API spawns
 # scripts/backup.sh), so both the archive dir and the status dir must be
 # writable by it — otherwise every run dies with "Permission denied".

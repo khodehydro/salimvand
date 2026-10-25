@@ -138,6 +138,26 @@ bash scripts/check-production.sh
 
 - اگر `.env` کلاً خراب شده باشد، بازاستقرار از گیت با `scripts/deploy.sh` کد را به حالت سالم برمی‌گرداند؛ کلیدهای ضروری `.env` در `.env.example` و `scripts/verify-production-config.sh` فهرست شده‌اند.
 
+## عیب‌یابی: ذخیرهٔ تصویر کانال تلگرام ناموفق است
+
+API با کاربر `salimvand` اجرا می‌شود. پوشهٔ `uploads` ممکن است متعلق به root باشد؛
+بنابراین کپی‌های تلگرام باید در زیرپوشه‌ای از پیش ساخته‌شده و قابل نوشتن برای سرویس ذخیره شوند.
+`setup-server.sh` و `deploy.sh` پوشهٔ `channel-posts` را با مالک `salimvand:salimvand` و مجوز `0755` آماده می‌کنند؛
+دیپلوی مسیر سفارشی `UPLOAD_DIR` را هم برای این پوشه در نظر می‌گیرد.
+
+برای اصلاح فوری نصب موجود (روی سرور با root):
+
+```bash
+install -d -o salimvand -g salimvand -m 0755 /opt/salimvand/uploads/channel-posts
+runuser -u salimvand -- sh -c 'p=$(mktemp /opt/salimvand/uploads/channel-posts/.write-test.XXXXXX) && rm -f "$p" && echo WRITE_OK'
+```
+
+اگر `UPLOAD_DIR` سفارشی است، مسیر بالا باید `channel-posts` کنار پوشهٔ محصولات همان مسیر باشد.
+این اصلاح نیاز به ری‌استارت ندارد و فایل‌های اصلی محصول را تغییر نمی‌دهد. از `chmod 777` استفاده نکنید.
+اگر تست نوشتن شکست خورد، مالکیت و مجوزهای پوشه‌های والد، فضای دیسک، وضعیت read-only فایل‌سیستم
+و محدودیت‌های SELinux را بررسی کنید؛ SELinux را صرفاً برای رفع این خطا غیرفعال نکنید.
+خطاهای جدید API کد امن فایل‌سیستم مانند `EACCES` (مجوز) یا `ENOSPC` (فضای دیسک) را در نتیجهٔ انتشار نشان می‌دهند.
+
 ## عیب‌یابی: بکاپ خودکارِ GitHub اجرا نمی‌شود
 
 بکاپ خودکار محصولات به ریپازیتوری GitHub را یک زمان‌بندِ داخلیِ API انجام می‌دهد (`GithubBackupService`).
