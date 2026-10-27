@@ -114,6 +114,7 @@
   flex-shrink: 0;
 }
 .content-studio .cs-price-switch {
+  display: grid;
   font-size: 13px;
   font-weight: 700;
   padding: 12px;

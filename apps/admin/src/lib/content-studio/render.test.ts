@@ -231,6 +231,44 @@ describe('studio pixel renderer', () => {
     expect(positions.some((p) => p.text === snapshot.branding.address)).toBe(true);
     renderer.dispose();
   });
+  it('omits prices and inquiry labels in no-price mode for covers, lists and singles at every size', async () => {
+    const settings = {
+      ...DEFAULT_STUDIO_SETTINGS,
+      showPriceInfo: false,
+      showPrices: true,
+      allowMissingImages: true,
+    };
+    for (const format of Object.keys(STUDIO_FORMATS) as StudioFormat[]) {
+      const renderer = new StudioRenderer();
+      for (const frame of [
+        ...studioFrames(snapshot.products, settings),
+        ...studioFrames([snapshot.products[0]], { ...settings, mode: 'single' as const }),
+      ])
+        await renderer.render(frame, format, snapshot, settings);
+      renderer.dispose();
+    }
+    expect(text.some((t) => /قیمت|استعلام|ریال/.test(t))).toBe(false);
+    expect(text).toContain('برای سفارش با ما در ارتباط باشید');
+    expect(text).toContain('آبگیر پژو ۲۰۶ تیپ ۵');
+  });
+  it('puts the website and both networks on one shared footer baseline', async () => {
+    const context = document.createElement('canvas').getContext('2d')!;
+    vi.mocked(HTMLCanvasElement.prototype.getContext).mockReturnValue(context);
+    const positions: Record<string, number> = {};
+    context.fillText = (value, _x, y) => {
+      positions[value] = y;
+    };
+    const settings = { ...DEFAULT_STUDIO_SETTINGS, allowMissingImages: true };
+    await new StudioRenderer().render(
+      studioFrames(snapshot.products, settings)[0],
+      'portrait',
+      snapshot,
+      settings,
+    );
+    expect(positions['shop.test']).toBeDefined();
+    expect(positions['shop.test']).toBe(positions['t.me/shop']);
+    expect(positions['shop.test']).toBe(positions['ble.ir/shop']);
+  });
   it('blocks missing photos on strict export unless explicitly allowed, and honors cancellation', async () => {
     const renderer = new StudioRenderer(),
       settings = { ...DEFAULT_STUDIO_SETTINGS, title: 'آبگیر' };

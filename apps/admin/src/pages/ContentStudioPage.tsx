@@ -27,6 +27,17 @@ const initial = () => {
 const abortError = (error: unknown) => error instanceof DOMException && error.name === 'AbortError';
 export default function ContentStudioPage() {
   const [settings, setSettings] = useState<StudioSettings>(initial);
+  const [prefsError, setPrefsError] = useState('');
+  useEffect(() => {
+    try {
+      localStorage.setItem(PREFS, JSON.stringify(parseStudioSettings(settings)));
+      setPrefsError('');
+    } catch {
+      setPrefsError(
+        'ذخیرهٔ خودکار در این مرورگر در دسترس نیست؛ تنظیمات پس از بستن صفحه حفظ نمی‌شوند.',
+      );
+    }
+  }, [settings]);
   const [options, setOptions] = useState<StudioOptions | null>(null);
   const [filter, setFilter] = useState({
     categoryId: '',
@@ -82,9 +93,9 @@ export default function ContentStudioPage() {
   const request = useMemo<StudioFilter>(
     () => ({
       ...Object.fromEntries(Object.entries(filter).filter(([, value]) => value !== '')),
-      showPrices: settings.showPrices,
+      showPrices: settings.showPriceInfo && settings.showPrices,
     }),
-    [filter, settings.showPrices],
+    [filter, settings.showPrices, settings.showPriceInfo],
   );
   const requestKey = JSON.stringify(request);
   useEffect(() => {
@@ -566,17 +577,30 @@ export default function ContentStudioPage() {
               <b>۴</b> جزئیات خروجی
             </legend>
             <label className="cs-price-switch">
-              <input
-                type="checkbox"
-                checked={settings.showPrices}
-                onChange={(e) => update('showPrices', e.target.checked)}
-              />
-              نمایش قیمت فروش در تصاویر
+              نمایش قیمت در تصاویر
+              <select
+                value={!settings.showPriceInfo ? 'none' : settings.showPrices ? 'sale' : 'inquiry'}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setSettings((s) => ({
+                    ...s,
+                    showPriceInfo: value !== 'none',
+                    showPrices: value === 'sale',
+                  }));
+                  setNotice('');
+                }}
+              >
+                <option value="inquiry">فقط عبارت استعلام قیمت</option>
+                <option value="sale">قیمت فروش؛ بدون قیمت معتبر، استعلام</option>
+                <option value="none">بدون قیمت و بدون عبارت استعلام</option>
+              </select>
             </label>
             <p className="cs-hint">
-              {settings.showPrices
-                ? 'انتخاب صریح مدیر: قیمت فروش به ریال در فایل منتشر می‌شود، حتی اگر قیمت سایت مخفی باشد. قیمت خرید هرگز خوانده نمی‌شود.'
-                : 'در همهٔ تصاویر «استعلام قیمت» نمایش داده می‌شود و API هیچ مبلغی برنمی‌گرداند.'}
+              {!settings.showPriceInfo
+                ? 'قیمت و برچسب استعلام از کارت محصولات حذف می‌شوند و API هیچ مبلغی برنمی‌گرداند. متن دلخواه دعوت به ارتباط را می‌توانید جداگانه ویرایش کنید.'
+                : settings.showPrices
+                  ? 'انتخاب صریح مدیر: قیمت فروش به ریال در فایل منتشر می‌شود، حتی اگر قیمت سایت مخفی باشد. قیمت خرید هرگز خوانده نمی‌شود.'
+                  : 'در همهٔ تصاویر «استعلام قیمت» نمایش داده می‌شود و API هیچ مبلغی برنمی‌گرداند.'}
             </p>
             {booleanFields.map(([key, label]) => (
               <label className="cs-check" key={key}>
@@ -589,6 +613,11 @@ export default function ContentStudioPage() {
                 {label}
               </label>
             ))}
+            <p className="cs-hint">
+              تنظیمات طرح به‌صورت خودکار در همین مرورگر ذخیره می‌شوند؛ محصولات و قیمت‌ها ذخیره
+              نمی‌شوند.
+            </p>
+            {prefsError && <p role="alert">{prefsError}</p>}
             <div className="cs-actions">
               <button type="button" onClick={save}>
                 ذخیرهٔ تنظیمات طرح
@@ -736,8 +765,8 @@ export default function ContentStudioPage() {
             </div>
             <p className="cs-hint">
               ترتیب این فهرست، ترتیب تصاویر است. برند «خودکار» کمترین قیمت فروش مثبتِ برندهای موجود
-              را ترجیح می‌دهد و برای چند برند برچسب «از» می‌زند؛ بدون قیمت معتبر، «استعلام» درج
-              می‌شود.
+              را ترجیح می‌دهد؛ در حالت قیمت فروش، برای چند برند برچسب «از» و بدون قیمت معتبر
+              «استعلام» درج می‌شود.
             </p>
             {ready && snapshot && (
               <div className="cs-products">
@@ -766,9 +795,11 @@ export default function ContentStudioPage() {
                         <b>{p.name}</b>
                         <small>
                           {p.code} ·{' '}
-                          {settings.showPrices && price.price
-                            ? `${price.from ? 'از ' : ''}${formatRial(price.price)}`
-                            : 'استعلام قیمت'}
+                          {!settings.showPriceInfo
+                            ? 'بدون نمایش قیمت'
+                            : settings.showPrices && price.price
+                              ? `${price.from ? 'از ' : ''}${formatRial(price.price)}`
+                              : 'استعلام قیمت'}
                         </small>
                       </div>
                       <select

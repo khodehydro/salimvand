@@ -56,6 +56,7 @@ export type StudioSettings = {
   perPage: 3 | 4 | 6;
   cover: boolean;
   showPrices: boolean;
+  showPriceInfo: boolean;
   showCode: boolean;
   showBrands: boolean;
   showAvailability: boolean;
@@ -77,6 +78,7 @@ export const DEFAULT_STUDIO_SETTINGS: StudioSettings = {
   perPage: 6,
   cover: true,
   showPrices: false,
+  showPriceInfo: true,
   showCode: true,
   showBrands: true,
   showAvailability: true,
@@ -101,6 +103,7 @@ export function parseStudioSettings(raw: unknown): StudioSettings {
   for (const key of [
     'cover',
     'showPrices',
+    'showPriceInfo',
     'showCode',
     'showBrands',
     'showAvailability',
@@ -126,6 +129,7 @@ export function parseStudioSettings(raw: unknown): StudioSettings {
     ];
     if (formats.length) result.formats = formats;
   }
+  if (!result.showPriceInfo) result.showPrices = false;
   return result;
 }
 export function studioPrice(product: StudioProduct, variantId?: string) {

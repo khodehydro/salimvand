@@ -90,7 +90,7 @@ export async function exportStudio(
     add(
       `${folder}/راهنمای-خروجی.txt`,
       new TextEncoder().encode(
-        `ساخته‌شده برای: ${snapshot.branding.name}\nزمان دریافت داده: ${snapshot.capturedAt}\nمحصولات: ${snapshot.products.length}\nقیمت: ${settings.showPrices ? 'قیمت فروش به ریال؛ انتخاب صریح مدیر، مستقل از نمایش قیمت سایت' : 'استعلام؛ بدون درج قیمت'}\nانتشار خودکار انجام نشده است. تصاویر مربوط به زمان دریافت اطلاعات‌اند.\n${[...renderer.warnings].join('\n')}`,
+        `ساخته‌شده برای: ${snapshot.branding.name}\nزمان دریافت داده: ${snapshot.capturedAt}\nمحصولات: ${snapshot.products.length}\nقیمت: ${!settings.showPriceInfo ? 'بدون قیمت و برچسب استعلام' : settings.showPrices ? 'قیمت فروش به ریال؛ انتخاب صریح مدیر، مستقل از نمایش قیمت سایت' : 'استعلام؛ بدون درج قیمت'}\nانتشار خودکار انجام نشده است. تصاویر مربوط به زمان دریافت اطلاعات‌اند.\n${[...renderer.warnings].join('\n')}`,
       ),
     );
     checkStudioAbort(signal);

@@ -97,9 +97,10 @@ async function loaded() {
 describe('content studio workspace', () => {
   it('defaults to inquiry and six per page, can deselect/reorder and refreshes only selected IDs before downloading', async () => {
     await loaded();
-    expect(
-      screen.getByRole('checkbox', { name: 'نمایش قیمت فروش در تصاویر' }).getAttribute('checked'),
-    ).toBeNull();
+    expect(screen.getByRole('combobox', { name: 'نمایش قیمت در تصاویر' })).toHaveProperty(
+      'value',
+      'inquiry',
+    );
     expect(screen.getByRole('combobox', { name: 'تعداد اقلام در هر صفحه' })).toHaveProperty(
       'value',
       '6',
@@ -129,7 +130,9 @@ describe('content studio workspace', () => {
   });
   it('explicitly opts in to export sale prices and supports a single-story preset', async () => {
     await loaded();
-    fireEvent.click(screen.getByRole('checkbox', { name: 'نمایش قیمت فروش در تصاویر' }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'نمایش قیمت در تصاویر' }), {
+      target: { value: 'sale' },
+    });
     await waitFor(() =>
       expect(
         request.mock.calls.some(
@@ -168,6 +171,50 @@ describe('content studio workspace', () => {
         .hasAttribute('disabled'),
     ).toBe(true);
     await screen.findByText('برای دیدن طرح، حداقل یک محصول را انتخاب کنید.');
+  });
+  it('automatically restores the latest layout and no-price preference without saving product data', async () => {
+    await loaded();
+    fireEvent.change(screen.getByLabelText('عنوان مجموعه'), { target: { value: 'انتخاب امروز' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'نمایش قیمت در تصاویر' }), {
+      target: { value: 'sale' },
+    });
+    fireEvent.change(screen.getByRole('combobox', { name: 'نمایش قیمت در تصاویر' }), {
+      target: { value: 'none' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'استوری تک‌محصول' }));
+    const saved = localStorage.getItem('salimvand.content-studio.preferences.v1')!;
+    expect(JSON.parse(saved)).toMatchObject({
+      title: 'انتخاب امروز',
+      showPriceInfo: false,
+      showPrices: false,
+      mode: 'single',
+      formats: ['story'],
+    });
+    expect(saved).not.toMatch(/products|variants|capturedAt|1250000/);
+    cleanup();
+    await loaded();
+    expect(screen.getByLabelText('عنوان مجموعه')).toHaveProperty('value', 'انتخاب امروز');
+    expect(screen.getByRole('combobox', { name: 'نمایش قیمت در تصاویر' })).toHaveProperty(
+      'value',
+      'none',
+    );
+    expect(screen.getByRole('combobox', { name: 'نوع چیدمان' })).toHaveProperty('value', 'single');
+    fireEvent.click(screen.getByRole('button', { name: 'ساخت و دانلود همهٔ تصاویر ZIP' }));
+    await waitFor(() => expect(exportMock).toHaveBeenCalled());
+    expect(JSON.parse(String(request.mock.calls.at(-1)![1]?.body)).showPrices).toBe(false);
+    expect(exportMock.mock.calls[0][1]).toMatchObject({ showPriceInfo: false, showPrices: false });
+    expect(exportMock.mock.calls[0][0].products[0].variants[0].price).toBeNull();
+  });
+  it('warns when the browser refuses automatic preference storage', async () => {
+    const set = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    try {
+      await loaded();
+      expect(screen.getByRole('alert').textContent).toContain('ذخیرهٔ خودکار');
+    } finally {
+      set.mockRestore();
+    }
   });
   it('cancels without downloading a partial archive', async () => {
     exportMock.mockImplementation(

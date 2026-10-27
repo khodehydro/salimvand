@@ -1,6 +1,7 @@
 import { drawStudioIcon, studioPersianDigits, type StudioIcon } from './icons';
 import {
   STUDIO_FORMATS,
+  DEFAULT_STUDIO_SETTINGS,
   formatGroupedPersian,
   formatPersianNumber,
   studioPrice,
@@ -183,6 +184,7 @@ export class StudioRenderer {
       align = 'right',
       min = size,
     ) => {
+      if (!settings.showPriceInfo) return;
       if (value === 'استعلام قیمت') {
         const iconSize = Math.min(28, size);
         drawStudioIcon(c, 'inquiry', x - iconSize, y - iconSize + 3, iconSize, color);
@@ -327,7 +329,15 @@ export class StudioRenderer {
     box(60, top + 110, 960, 2, dark ? '#ffffff22' : '#d6e0ea', 0);
     const cars = settings.showVehicles && settings.vehicles.trim();
     const b = snapshot.branding;
+    const cta =
+      !settings.showPriceInfo && settings.cta === DEFAULT_STUDIO_SETTINGS.cta
+        ? 'برای سفارش با ما در ارتباط باشید'
+        : settings.cta;
     const socials = [
+      {
+        kind: 'website' as const,
+        value: b.website.replace(/^https?:\/\//i, '').replace(/\/$/, ''),
+      },
       {
         kind: 'telegram' as const,
         value: b.telegram.replace(/^https?:\/\//i, '').split(/[?#]/)[0],
@@ -337,10 +347,8 @@ export class StudioRenderer {
     const footerHeight =
       24 +
       (cars ? 56 : 0) +
-      (settings.cta ? 46 : 0) +
-      (settings.showContacts
-        ? (b.phones ? 40 : 0) + (b.website ? 32 : 0) + (socials.length ? 32 : 0)
-        : 0) +
+      (cta ? 46 : 0) +
+      (settings.showContacts ? (b.phones ? 40 : 0) + (socials.length ? 36 : 0) : 0) +
       (settings.showAddress && b.address ? 48 : 0) +
       40;
     const footerTop = H - footerHeight - (tall ? 140 : 0);
@@ -352,7 +360,7 @@ export class StudioRenderer {
     const titleY = top + 168;
     if (dark) {
       line(
-        settings.showPrices ? 'فهرست قیمت و محصولات' : 'کاتالوگ محصولات',
+        settings.showPriceInfo && settings.showPrices ? 'فهرست قیمت و محصولات' : 'کاتالوگ محصولات',
         1020,
         titleY,
         960,
@@ -512,25 +520,14 @@ export class StudioRenderer {
       wrap(settings.vehicles, 540, fy, 960, 19, dark ? '#d6e5f1' : INK, 700, 2, 'center');
       fy += 56;
     }
-    if (settings.cta) {
-      contactLine('inquiry', settings.cta, fy, 21, foreground, 700);
+    if (cta) {
+      contactLine(settings.showPriceInfo ? 'inquiry' : 'phone', cta, fy, 21, foreground, 700);
       fy += 46;
     }
     if (settings.showContacts) {
       if (b.phones) {
         contactLine('phone', studioPersianDigits(b.phones), fy, 28, foreground, 700);
         fy += 40;
-      }
-      if (b.website) {
-        contactLine(
-          'website',
-          b.website.replace(/^https?:\/\//i, '').replace(/\/$/, ''),
-          fy,
-          24,
-          foreground,
-          700,
-        );
-        fy += 32;
       }
       socials.forEach((social, i) => {
         contactLine(
@@ -540,11 +537,11 @@ export class StudioRenderer {
           20,
           muted,
           400,
-          socials.length === 2 ? 780 - i * 480 : 540,
-          socials.length === 2 ? 402 : 912,
+          60 + (960 / socials.length) * (socials.length - i - 0.5),
+          960 / socials.length - 54,
         );
       });
-      if (socials.length) fy += 32;
+      if (socials.length) fy += 36;
     }
     if (settings.showAddress && b.address) {
       drawStudioIcon(c, 'address', 994, fy - 19, 24, muted);
@@ -557,7 +554,7 @@ export class StudioRenderer {
         )
       : '';
     line(
-      `${settings.showPrices ? 'قیمت‌ها به ریال · ' : ''}تأیید نهایی قیمت و موجودی با فروشگاه${date ? ` · ${date}` : ''}`,
+      `${settings.showPriceInfo && settings.showPrices ? 'قیمت‌ها به ریال · ' : ''}${settings.showPriceInfo ? 'تأیید نهایی قیمت و موجودی با فروشگاه' : 'تأیید موجودی با فروشگاه'}${date ? ` · ${date}` : ''}`,
       1020,
       fy,
       870,

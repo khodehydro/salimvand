@@ -21,6 +21,19 @@ const product = (n: number): StudioProduct => ({
     { id: 'b', name: 'ب', available: false, price: '100' },
   ],
 });
+describe('studio price preference compatibility', () => {
+  it('restores old sale/inquiry preferences and rejects hidden-mode price opt-in', () => {
+    expect(parseStudioSettings({ showPrices: true })).toMatchObject({
+      showPrices: true,
+      showPriceInfo: true,
+    });
+    expect(parseStudioSettings({ showPriceInfo: false, showPrices: true })).toMatchObject({
+      showPrices: false,
+      showPriceInfo: false,
+    });
+    expect(parseStudioSettings({ showPriceInfo: 'false' }).showPriceInfo).toBe(true);
+  });
+});
 describe('content studio contracts', () => {
   it('uses exact integer sale prices, prioritizes available brands, and honors explicit brand selection', () => {
     expect(studioPrice(product(1))).toMatchObject({
