@@ -16,6 +16,7 @@ export const pageRoles: Record<AdminPage, readonly UserRole[]> = {
   suppliers: ['super_admin', 'manager', 'accountant'],
   reports: ['super_admin', 'manager', 'accountant'],
   media: ['super_admin', 'manager'],
+  'content-studio': ['super_admin', 'manager'],
   references: ['super_admin', 'manager'],
   settings: ['super_admin', 'manager'],
   messaging: ['super_admin', 'manager'],

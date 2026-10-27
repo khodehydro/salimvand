@@ -418,3 +418,5 @@ export function validateSyncOperationEnvelope(
 export * from './store-slider';
 
 export * from './miniapp';
+
+export * from './content-studio';

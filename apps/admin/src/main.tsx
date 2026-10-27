@@ -6,7 +6,7 @@ import {
   type PaletteGroup,
 } from '@salimvand/ui';
 import { DesignSystemRoute } from './DesignSystemRoute';
-import { Component, useEffect, useState, type ReactNode } from 'react';
+import { Component, lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
 import { APP_NAME, type UserRole } from '@salimvand/shared';
 import { MediaPage } from './pages/MediaPage';
 import { api, downloadFile } from './lib/api';
@@ -36,6 +36,8 @@ import {
 } from './lib/admin-permissions';
 import 'vazirmatn/Vazirmatn-font-face.css';
 import './styles.css';
+
+const ContentStudioPage = lazy(() => import('./pages/ContentStudioPage'));
 
 type NavIconName =
   | 'dashboard'
@@ -99,6 +101,7 @@ const navItems: NavItem[] = [
   { id: 'purchases', label: 'خرید و تأمین', icon: 'purchases' },
   { id: 'suppliers', label: 'تأمین‌کنندگان', icon: 'suppliers' },
   { id: 'media', label: 'رسانه‌ها', icon: 'media' },
+  { id: 'content-studio', label: 'استودیوی محتوا', icon: 'media' },
   { id: 'references', label: 'برندها و خودروها', icon: 'references' },
   { id: 'reports', label: 'گزارش‌ها', icon: 'reports' },
   { id: 'messaging', label: 'پیامک و کانال\u200cها', icon: 'messaging' },
@@ -123,6 +126,7 @@ const navGroups: Array<{ label: string; ids: Page[] }> = [
       'purchases',
       'suppliers',
       'media',
+      'content-studio',
       'references',
     ],
   },
@@ -138,6 +142,7 @@ const pageTitles: Record<Page, string> = {
   labels: 'برچسب محصولات',
   invoices: 'فروش و فاکتورها',
   media: 'رسانه‌ها',
+  'content-studio': 'استودیوی تولید محتوا',
   references: 'برندها و خودروها',
   reports: 'گزارش‌ها',
   settings: 'تنظیمات سیستم',
@@ -568,6 +573,10 @@ function App() {
             <WholesalePage />
           ) : page === 'invoices' ? (
             <InvoicesPage {...invoiceAccess} />
+          ) : page === 'content-studio' ? (
+            <Suspense fallback={<p role="status">در حال بارگذاری استودیوی محتوا…</p>}>
+              <ContentStudioPage />
+            </Suspense>
           ) : page === 'media' ? (
             <MediaPage />
           ) : page === 'labels' ? (

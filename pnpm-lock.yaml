@@ -32,6 +32,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.3.4
         version: 4.7.0(vite@6.4.3(@types/node@20.19.43)(tsx@4.23.12))
+      fflate:
+        specifier: ^0.8.2
+        version: 0.8.3
       html5-qrcode:
         specifier: ^2.3.8
         version: 2.3.8

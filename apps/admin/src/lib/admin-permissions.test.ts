@@ -9,6 +9,10 @@ import {
 describe('admin page permissions', () => {
   it('keeps sensitive system areas manager-only', () => {
     expect(canAccessPage('seller', 'settings')).toBe(false);
+    expect(canAccessPage('seller', 'content-studio')).toBe(false);
+    expect(canAccessPage('warehouse', 'content-studio')).toBe(false);
+    expect(canAccessPage('manager', 'content-studio')).toBe(true);
+    expect(canAccessPage('super_admin', 'content-studio')).toBe(true);
     expect(canAccessPage('warehouse', 'audit')).toBe(false);
     expect(canAccessPage('manager', 'audit')).toBe(true);
   });

@@ -7,6 +7,7 @@ export const pageIds = [
   'labels',
   'invoices',
   'media',
+  'content-studio',
   'references',
   'reports',
   'settings',

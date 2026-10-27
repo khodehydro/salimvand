@@ -4,6 +4,7 @@ import { hashForPage, pageFromHash } from './admin-route';
 describe('admin hash routes', () => {
   it('restores a valid page after reload or browser navigation', () => {
     expect(pageFromHash('#/inventory')).toBe('inventory');
+    expect(pageFromHash('#/content-studio')).toBe('content-studio');
     expect(pageFromHash('#/audit?user=u1')).toBe('audit');
   });
 

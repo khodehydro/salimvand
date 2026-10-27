@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ContentStudioModule } from './modules/content-studio/content-studio.module';
 import { PrismaModule } from './prisma.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -26,6 +27,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
   imports: [
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
     PrismaModule,
+    ContentStudioModule,
     CatalogModule,
     AuthModule,
     InventoryModule,
