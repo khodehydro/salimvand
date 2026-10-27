@@ -8,6 +8,7 @@ import {
   type StudioSnapshot,
 } from '@salimvand/shared';
 import { StudioRenderer } from './render';
+import { studioPersianDigits } from './icons';
 const snapshot: StudioSnapshot = {
   capturedAt: '2026-10-27T10:00:00Z',
   branding: {
@@ -32,6 +33,12 @@ const snapshot: StudioSnapshot = {
 };
 let text: string[], coords: number[][];
 beforeEach(() => {
+  vi.stubGlobal(
+    'Path2D',
+    class {
+      constructor(readonly path: string) {}
+    },
+  );
   text = [];
   coords = [];
   Object.defineProperty(document, 'fonts', {
@@ -52,11 +59,22 @@ beforeEach(() => {
         arc: () => {},
         createLinearGradient: () => ({ addColorStop: () => {} }),
         drawImage: () => {},
+        save: () => {},
+        restore: () => {},
+        clip: () => {},
+        translate: () => {},
+        scale: () => {},
       }) as unknown as CanvasRenderingContext2D,
   );
 });
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 describe('studio pixel renderer', () => {
+  it('localizes phone digits without dropping leading zeroes, separators or international prefixes', () => {
+    expect(studioPersianDigits('0912 345 6789 | +98-٢١-۱۲۳')).toBe('۰۹۱۲ ۳۴۵ ۶۷۸۹ | +۹۸-۲۱-۱۲۳');
+  });
   for (const format of Object.keys(STUDIO_FORMATS) as StudioFormat[])
     it(`renders cover, partial list and single at exact ${format} dimensions`, async () => {
       const settings = { ...DEFAULT_STUDIO_SETTINGS, title: 'آبگیر', allowMissingImages: true };
@@ -91,8 +109,12 @@ describe('studio pixel renderer', () => {
       settings,
     );
     expect(text).toContain('۱٬۲۳۴٬۵۶۷ ریال');
-    expect(text).toContain('Telegram: t.me/shop');
-    expect(text).toContain('Bale: ble.ir/shop');
+    expect(text).toContain('t.me/shop');
+    expect(text).not.toContain('Telegram: t.me/shop');
+    expect(text).toContain('۰۹۱۲');
+    expect(text).not.toContain('0912');
+    expect(text).toContain('ble.ir/shop');
+    expect(text).not.toContain('Bale: ble.ir/shop');
     expect(text).toContain('PEUGEOT | SAMAND | DENA | NISSAN | PAYKAN | RANA');
   });
   it('honors a custom single-story heading without changing the product data', async () => {
@@ -110,6 +132,104 @@ describe('studio pixel renderer', () => {
     );
     expect(text).toContain('انتخاب ویژه');
     expect(snapshot.products[0].name).toBe('آبگیر پژو ۲۰۶ تیپ ۵');
+  });
+  it('normalizes the same product with different source sizes and white margins without stretching', async () => {
+    class Photo {
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      private path = '';
+      get src() {
+        return this.path;
+      }
+      set src(value: string) {
+        this.path = value;
+        if (value) queueMicrotask(() => this.onload?.());
+      }
+      get naturalWidth() {
+        return this.path.includes('padded') ? 1024 : 200;
+      }
+      get naturalHeight() {
+        return this.path.includes('padded') ? 512 : 100;
+      }
+    }
+    vi.stubGlobal('Image', Photo);
+    const context = document.createElement('canvas').getContext('2d')!;
+    vi.mocked(HTMLCanvasElement.prototype.getContext).mockReturnValue(context);
+    let source: Photo;
+    const destinations: number[][] = [];
+    context.drawImage = vi.fn((...args: unknown[]) => {
+      source = args[0] as Photo;
+      if (args.length === 9) destinations.push(args.slice(5) as number[]);
+    }) as typeof context.drawImage;
+    context.getImageData = vi.fn((_x, _y, w, h) => {
+      const data = new Uint8ClampedArray(w * h * 4).fill(255);
+      const padded = source.src.includes('padded');
+      for (let y = padded ? 100 : 0; y < (padded ? 150 : h); y++)
+        for (let x = padded ? 200 : 0; x < (padded ? 300 : w); x++) {
+          const i = (y * w + x) * 4;
+          data[i] = data[i + 1] = data[i + 2] = 32;
+        }
+      return { data } as ImageData;
+    });
+    const settings = { ...DEFAULT_STUDIO_SETTINGS, mode: 'single' as const };
+    const renderer = new StudioRenderer();
+    for (const path of ['padded', 'tight']) {
+      const product = { ...snapshot.products[0], image: `/uploads/${path}.png` };
+      await renderer.render(
+        studioFrames([product], settings)[0],
+        'story',
+        { ...snapshot, products: [product] },
+        settings,
+      );
+    }
+    expect(destinations).toHaveLength(2);
+    destinations[0].forEach((coordinate, i) =>
+      expect(coordinate).toBeCloseTo(destinations[1][i], 5),
+    );
+    expect(destinations[0][2] / destinations[0][3]).toBeCloseTo(2);
+    renderer.dispose();
+  });
+  it('clips the logo itself to a circle and leaves a readable gap between CTA and Persian phones', async () => {
+    vi.stubGlobal(
+      'Image',
+      class {
+        naturalWidth = 120;
+        naturalHeight = 120;
+        onload: (() => void) | null = null;
+        set src(value: string) {
+          if (value) queueMicrotask(() => this.onload?.());
+        }
+      },
+    );
+    const context = document.createElement('canvas').getContext('2d')!;
+    vi.mocked(HTMLCanvasElement.prototype.getContext).mockReturnValue(context);
+    const clip = vi.spyOn(context, 'clip');
+    const draw = vi.spyOn(context, 'drawImage');
+    const positions: Array<{ text: string; y: number }> = [];
+    context.fillText = (value, _x, y) => {
+      positions.push({ text: value, y });
+    };
+    const settings = {
+      ...DEFAULT_STUDIO_SETTINGS,
+      mode: 'single' as const,
+      showAddress: true,
+      allowMissingImages: true,
+    };
+    const renderer = new StudioRenderer();
+    await renderer.render(
+      studioFrames([snapshot.products[0]], settings)[0],
+      'square',
+      { ...snapshot, branding: { ...snapshot.branding, logo: '/uploads/logo.png' } },
+      settings,
+    );
+    expect(clip).toHaveBeenCalledOnce();
+    expect(draw).toHaveBeenCalledWith(expect.anything(), 0, 0, 120, 120, 936, 48, 84, 84);
+    expect(coords.some(([x, y, w]) => x === 936 && y === 48 && w === 84)).toBe(false);
+    const cta = positions.find((p) => p.text === settings.cta)!;
+    const phone = positions.find((p) => p.text === '۰۹۱۲')!;
+    expect(phone.y - cta.y).toBeGreaterThanOrEqual(46);
+    expect(positions.some((p) => p.text === snapshot.branding.address)).toBe(true);
+    renderer.dispose();
   });
   it('blocks missing photos on strict export unless explicitly allowed, and honors cancellation', async () => {
     const renderer = new StudioRenderer(),

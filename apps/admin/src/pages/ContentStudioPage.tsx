@@ -306,7 +306,7 @@ export default function ContentStudioPage() {
     ['showContacts', 'تلفن، سایت و کانال‌ها'],
     ['showAddress', 'آدرس فروشگاه'],
     ['showDate', 'تاریخ دریافت قیمت و اطلاعات'],
-    ['trimImages', 'حذف حاشیهٔ سفید اضافی عکس‌ها، فقط در خروجی'],
+    ['trimImages', 'یکسان‌سازی کادر عکس‌ها و حذف حاشیهٔ اضافی، فقط در خروجی'],
     ['allowMissingImages', 'اجازهٔ خروجی با جای‌نگهدارِ تصاویر ناموجود'],
   ];
   return (

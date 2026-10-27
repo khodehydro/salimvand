@@ -1,3 +1,4 @@
+import { drawStudioIcon, studioPersianDigits, type StudioIcon } from './icons';
 import {
   STUDIO_FORMATS,
   formatGroupedPersian,
@@ -155,6 +156,39 @@ export class StudioRenderer {
         );
       return Math.min(rows.length, limit) * size * 1.35;
     };
+    const contactLine = (
+      kind: StudioIcon,
+      value: string,
+      y: number,
+      size: number,
+      color: string,
+      weight = 400,
+      center = W / 2,
+      max = 912,
+    ) => {
+      font(size, weight);
+      const width = Math.min(c.measureText(value).width, max);
+      const left = center - (width + 38) / 2;
+      drawStudioIcon(c, kind, left, y - size + 2, 26, color);
+      line(value, left + 38, y, max, size, color, weight, 'left', Math.min(size, 20));
+    };
+    const priceLine: typeof line = (
+      value,
+      x,
+      y,
+      max,
+      size,
+      color,
+      weight = 700,
+      align = 'right',
+      min = size,
+    ) => {
+      if (value === 'استعلام قیمت') {
+        const iconSize = Math.min(28, size);
+        drawStudioIcon(c, 'inquiry', x - iconSize, y - iconSize + 3, iconSize, color);
+        line(value, x - iconSize - 10, y, max - iconSize - 10, size, color, weight, align, min);
+      } else line(value, x, y, max, size, color, weight, align, min);
+    };
     const contain = (
       image: HTMLImageElement,
       x: number,
@@ -171,7 +205,7 @@ export class StudioRenderer {
           // Bounded thumbnail scan: remove only near-white margins, never alter source files.
           try {
             const sample = document.createElement('canvas'),
-              scale = Math.min(1, 256 / Math.max(image.naturalWidth, image.naturalHeight));
+              scale = Math.min(1, 512 / Math.max(image.naturalWidth, image.naturalHeight));
             sample.width = Math.max(1, Math.round(image.naturalWidth * scale));
             sample.height = Math.max(1, Math.round(image.naturalHeight * scale));
             const context = sample.getContext('2d', { willReadFrequently: true })!;
@@ -194,11 +228,10 @@ export class StudioRenderer {
                 }
               }
             if (left < right && top < bottom) {
-              const pad = 5;
-              left = Math.max(0, left - pad);
-              right = Math.min(sample.width, right + pad + 1);
-              top = Math.max(0, top - pad);
-              bottom = Math.min(sample.height, bottom + pad + 1);
+              // Crop to the object, not the source canvas. Padding belongs in the
+              // destination frame so it stays identical at every source resolution.
+              right += 1;
+              bottom += 1;
               crop = {
                 x: (left / sample.width) * image.naturalWidth,
                 y: (top / sample.height) * image.naturalHeight,
@@ -214,6 +247,11 @@ export class StudioRenderer {
           this.crops.set(image, crop);
         }
       }
+      const inset = trim ? 0.02 : 0;
+      x += w * inset;
+      y += h * inset;
+      w *= 1 - inset * 2;
+      h *= 1 - inset * 2;
       const scale = Math.min(w / crop.w, h / crop.h),
         iw = crop.w * scale,
         ih = crop.h * scale;
@@ -259,10 +297,27 @@ export class StudioRenderer {
       }
     }
     const top = tall ? 158 : 48;
-    box(936, top, 84, 84, '#fff', 22);
     const logo = await this.image(snapshot.branding.logo);
-    if (logo) contain(logo, 946, top + 10, 64, 64);
-    else {
+    if (logo) {
+      c.save();
+      c.beginPath();
+      c.arc(978, top + 42, 42, 0, Math.PI * 2);
+      c.clip();
+      const side = Math.min(logo.naturalWidth, logo.naturalHeight);
+      c.drawImage(
+        logo,
+        (logo.naturalWidth - side) / 2,
+        (logo.naturalHeight - side) / 2,
+        side,
+        side,
+        936,
+        top,
+        84,
+        84,
+      );
+      c.restore();
+    } else {
+      box(936, top, 84, 84, '#fff', 42);
       if (snapshot.branding.logo)
         this.warnings.add('لوگوی فروشگاه بارگذاری نشد؛ نام فروشگاه حفظ شد');
       line(snapshot.branding.name[0] || 'س', 978, top + 56, 64, 40, INK, 700, 'center');
@@ -273,15 +328,18 @@ export class StudioRenderer {
     const cars = settings.showVehicles && settings.vehicles.trim();
     const b = snapshot.branding;
     const socials = [
-      b.telegram ? `Telegram: ${b.telegram.replace(/^https?:\/\//i, '').split(/[?#]/)[0]}` : '',
-      b.bale ? `Bale: ${b.bale.replace(/^https?:\/\//i, '').split(/[?#]/)[0]}` : '',
-    ].filter(Boolean);
+      {
+        kind: 'telegram' as const,
+        value: b.telegram.replace(/^https?:\/\//i, '').split(/[?#]/)[0],
+      },
+      { kind: 'bale' as const, value: b.bale.replace(/^https?:\/\//i, '').split(/[?#]/)[0] },
+    ].filter((social) => social.value);
     const footerHeight =
       24 +
       (cars ? 56 : 0) +
-      (settings.cta ? 32 : 0) +
+      (settings.cta ? 46 : 0) +
       (settings.showContacts
-        ? (b.phones ? 40 : 0) + (b.website ? 32 : 0) + socials.length * 28
+        ? (b.phones ? 40 : 0) + (b.website ? 32 : 0) + (socials.length ? 32 : 0)
         : 0) +
       (settings.showAddress && b.address ? 48 : 0) +
       40;
@@ -346,7 +404,7 @@ export class StudioRenderer {
           .join('  ·  ');
         line(meta, 990, nameY + 98, 900, 22, MUTED, 400, 'right', 18);
         if (settings.showVehicles) line(p.vehicles.join('، '), 990, nameY + 132, 900, 22, MUTED);
-        line(
+        priceLine(
           settings.showPrices && v.price
             ? `${v.from ? 'از ' : ''}${formatGroupedPersian(v.price)} ریال`
             : 'استعلام قیمت',
@@ -394,7 +452,7 @@ export class StudioRenderer {
               .filter(Boolean)
               .join(' · ');
             line(meta, right, y + 120, tw, 21, MUTED);
-            line(
+            priceLine(
               settings.showPrices && v.price
                 ? `${v.from ? 'از ' : ''}${formatGroupedPersian(v.price)} ریال`
                 : 'استعلام قیمت',
@@ -428,7 +486,7 @@ export class StudioRenderer {
               .filter(Boolean)
               .join(' · ');
             line(meta, x + w - 18, y + h - 53, w - 36, 17, MUTED, 400, 'right', 16);
-            line(
+            priceLine(
               settings.showPrices && v.price
                 ? `${v.from ? 'از ' : ''}${formatGroupedPersian(v.price)} ریال`
                 : 'استعلام قیمت',
@@ -455,35 +513,42 @@ export class StudioRenderer {
       fy += 56;
     }
     if (settings.cta) {
-      line(settings.cta, 540, fy, 960, 21, foreground, 700, 'center');
-      fy += 32;
+      contactLine('inquiry', settings.cta, fy, 21, foreground, 700);
+      fy += 46;
     }
     if (settings.showContacts) {
       if (b.phones) {
-        line(b.phones, 540, fy, 960, 28, foreground, 700, 'center', 20);
+        contactLine('phone', studioPersianDigits(b.phones), fy, 28, foreground, 700);
         fy += 40;
       }
       if (b.website) {
-        line(
+        contactLine(
+          'website',
           b.website.replace(/^https?:\/\//i, '').replace(/\/$/, ''),
-          60,
           fy,
-          960,
           24,
           foreground,
           700,
-          'left',
-          20,
         );
         fy += 32;
       }
-      for (const social of socials) {
-        line(social, 60, fy, 960, 20, muted, 400, 'left');
-        fy += 28;
-      }
+      socials.forEach((social, i) => {
+        contactLine(
+          social.kind,
+          social.value,
+          fy,
+          20,
+          muted,
+          400,
+          socials.length === 2 ? 780 - i * 480 : 540,
+          socials.length === 2 ? 402 : 912,
+        );
+      });
+      if (socials.length) fy += 32;
     }
     if (settings.showAddress && b.address) {
-      wrap(b.address, 1020, fy, 960, 18, muted, 400, 2);
+      drawStudioIcon(c, 'address', 994, fy - 19, 24, muted);
+      wrap(b.address, 980, fy, 920, 18, muted, 400, 2);
       fy += 48;
     }
     const date = settings.showDate
