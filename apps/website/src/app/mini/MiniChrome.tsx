@@ -6,6 +6,8 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { miniAppPath, type MiniAppPlatform } from '@salimvand/shared';
 import { noteCatalogSpaBack } from '../catalog-return';
 import { MiniLink } from './MiniLink';
+import { MiniSearch } from './MiniSearch';
+import { MiniPhoneBar } from './MiniPhoneBar';
 import { MiniIcon } from './MiniIcon';
 import { MiniExternalLink } from './MiniExternalLink';
 import { canGoBackInsideMini, getMiniSdk, MINI_SDK_URLS } from './mini-sdk';
@@ -15,12 +17,14 @@ export function MiniChrome({
   name,
   logo,
   siteUrl,
+  phone,
   children,
 }: {
   platform: MiniAppPlatform;
   name: string;
   logo: string;
   siteUrl: string;
+  phone?: string;
   children: ReactNode;
 }) {
   const path = usePathname();
@@ -30,6 +34,15 @@ export function MiniChrome({
   const base = miniAppPath(platform);
   const atHome = path === base;
   const [sdkReady, setSdkReady] = useState(0);
+  const [compact, setCompact] = useState(false);
+  useEffect(() => {
+    // Hysteresis prevents header-height changes near the boundary from flickering.
+    const scroll = () =>
+      setCompact((current) => (window.scrollY > 80 ? true : window.scrollY < 16 ? false : current));
+    scroll();
+    window.addEventListener('scroll', scroll, { passive: true });
+    return () => window.removeEventListener('scroll', scroll);
+  }, []);
   const back = useCallback(() => {
     const parent = history.state?.salimvandMiniParent;
     const inside = typeof parent === 'string' && canGoBackInsideMini(base, parent, location.origin);
@@ -115,74 +128,44 @@ export function MiniChrome({
           onReady={() => setSdkReady((value) => value + 1)}
         />
       )}
-      <header className="mini-header">
-        {!atHome && (
-          <button type="button" className="mini-back" aria-label="بازگشت به فهرست" onClick={back}>
-            <MiniIcon name="arrow" />
-          </button>
-        )}
-        <MiniLink className="mini-brand" href={base} label={`${name}، فهرست محصولات`}>
-          <span className="mini-brand-logo">
-            {logo ? <img src={logo} alt="" width={40} height={40} /> : 'س'}
-          </span>
-          <span>
-            <strong>{name}</strong>
-            <small>
-              <i />
-              {platform === 'telegram'
-                ? 'فروشگاه در تلگرام'
-                : platform === 'bale'
-                  ? 'فروشگاه در بله'
-                  : 'کاتالوگ همراه'}
-            </small>
-          </span>
-        </MiniLink>
-        <MiniExternalLink
-          href={siteUrl}
-          platform={platform}
-          className="mini-web-link"
-          label="باز کردن نسخهٔ وب"
-        >
-          <MiniIcon name="globe" />
-        </MiniExternalLink>
+      <header className={`mini-header${compact ? ' is-compact' : ''}`}>
+        <div className="mini-header-brand-row">
+          {!atHome && (
+            <button type="button" className="mini-back" aria-label="بازگشت به فهرست" onClick={back}>
+              <MiniIcon name="arrow" />
+            </button>
+          )}
+          <MiniLink className="mini-brand" href={base} label={`${name}، فهرست محصولات`}>
+            <span className="mini-brand-logo">
+              {logo ? <img src={logo} alt="" width={40} height={40} /> : 'س'}
+            </span>
+            <span>
+              <strong>{name}</strong>
+              <small>
+                <i />
+                {platform === 'telegram'
+                  ? 'فروشگاه در تلگرام'
+                  : platform === 'bale'
+                    ? 'فروشگاه در بله'
+                    : 'کاتالوگ همراه'}
+              </small>
+            </span>
+          </MiniLink>
+          <MiniExternalLink
+            href={siteUrl}
+            platform={platform}
+            className="mini-web-link"
+            label="باز کردن نسخهٔ وب"
+          >
+            <MiniIcon name="globe" />
+          </MiniExternalLink>
+        </div>
+        <MiniSearch base={base} />
       </header>
       <main className="mini-main" id="mini-main">
         {children}
       </main>
-      <nav className="mini-bottom-nav" aria-label="ناوبری فروشگاه">
-        <MiniLink href={base} current={atHome ? 'page' : undefined}>
-          <MiniIcon name="grid" />
-          <span>محصولات</span>
-        </MiniLink>
-        {atHome ? (
-          <button
-            type="button"
-            onClick={() => {
-              const input = document.getElementById('mini-search');
-              if (input) {
-                input.scrollIntoView({ block: 'center', behavior: 'auto' });
-                input.focus();
-              }
-            }}
-          >
-            <MiniIcon name="search" />
-            <span>جست‌وجو</span>
-          </button>
-        ) : (
-          <MiniLink href={`${base}#mini-search`}>
-            <MiniIcon name="search" />
-            <span>جست‌وجو</span>
-          </MiniLink>
-        )}
-
-        <MiniLink
-          href={`${base}/contact`}
-          current={path === `${base}/contact` ? 'page' : undefined}
-        >
-          <MiniIcon name="phone" />
-          <span>ارتباط با ما</span>
-        </MiniLink>
-      </nav>
+      <MiniPhoneBar phone={phone} base={base} />
     </div>
   );
 }

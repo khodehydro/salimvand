@@ -41,29 +41,7 @@ export function MiniFilters({
         apply();
       }}
     >
-      <div className="mini-search-row">
-        <label className="mini-search-field">
-          <MiniIcon name="search" />
-          <input
-            id="mini-search"
-            name="q"
-            type="search"
-            defaultValue={params.q}
-            placeholder="نام قطعه یا شماره فنی…"
-            aria-label="جست‌وجوی محصول"
-            enterKeyHint="search"
-            autoComplete="off"
-          />
-        </label>
-        <button
-          type="submit"
-          className="mini-search-submit"
-          disabled={pending}
-          aria-label="جست‌وجو"
-        >
-          {pending ? '…' : <MiniIcon name="arrow" />}
-        </button>
-      </div>
+      <input type="hidden" name="q" value={params.q || ''} />
       <details className="mini-filter-details" open={active > 0 || undefined}>
         <summary>
           <MiniIcon name="filter" />

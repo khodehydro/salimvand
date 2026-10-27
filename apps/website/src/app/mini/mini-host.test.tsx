@@ -109,9 +109,41 @@ describe('mini host adapters', () => {
     );
     expect(screen.getByTestId('sdk-url').textContent).toBe('https://tapi.bale.ai/miniapp.js');
     expect(host.ready).toHaveBeenCalled();
-    expect(screen.getByRole('link', { name: 'ارتباط با ما' }).getAttribute('href')).toBe(
+    expect(screen.getByRole('link', { name: 'اطلاعات فروشگاه' }).getAttribute('href')).toBe(
       '/mini/bale/contact',
     );
+  });
+  it('compacts the sticky header after scrolling, restores it at the top and cleans up its listener', () => {
+    const remove = vi.spyOn(window, 'removeEventListener');
+    const { container, unmount } = render(
+      <MiniChrome
+        platform="web"
+        name="فروشگاه"
+        logo=""
+        siteUrl="https://shop.test"
+        phone="۰۹۱۲۱۲۳۴۵۶۷"
+      >
+        کاتالوگ
+      </MiniChrome>,
+    );
+    expect(container.querySelector('.mini-bottom-nav')).toBeNull();
+    expect(screen.getAllByRole('searchbox')).toHaveLength(1);
+    expect(screen.getByRole('link', { name: 'تماس با فروشگاه' }).getAttribute('href')).toBe(
+      'tel:09121234567',
+    );
+    expect(container.querySelector('.mini-header')?.classList.contains('is-compact')).toBe(false);
+    vi.stubGlobal('scrollY', 120);
+    fireEvent.scroll(window);
+    expect(container.querySelector('.mini-header')?.classList.contains('is-compact')).toBe(true);
+    vi.stubGlobal('scrollY', 40);
+    fireEvent.scroll(window);
+    expect(container.querySelector('.mini-header')?.classList.contains('is-compact')).toBe(true);
+    vi.stubGlobal('scrollY', 0);
+    fireEvent.scroll(window);
+    expect(container.querySelector('.mini-header')?.classList.contains('is-compact')).toBe(false);
+    unmount();
+    expect(remove).toHaveBeenCalledWith('scroll', expect.any(Function));
+    remove.mockRestore();
   });
   it('uses host external-link methods, rejects script URIs, and keeps real fallback links', () => {
     const host = sdk();

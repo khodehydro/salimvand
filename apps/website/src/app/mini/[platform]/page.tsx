@@ -101,7 +101,9 @@ export default async function MiniCatalog({
           </div>
         )}
       </section>
-      <p className="mini-end-note">برای اطمینان از قیمت و موجودی، با فروشگاه در ارتباط باش.</p>
+      <p className="mini-end-note">
+        <MiniLink href={`${base}/contact`}>اطلاعات تماس، نشانی و ساعت کاری فروشگاه ←</MiniLink>
+      </p>
     </>
   );
 }
